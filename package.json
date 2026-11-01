@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "ios:sync": "npm run build && npx cap sync ios",
-    "ios:open": "npx cap open ios"
+    "ios:open": "npx cap open ios",
+    "build:preview": "vite build --config vite.preview.config.ts"
   },
   "repository": {
     "type": "git",
@@ -37,6 +38,7 @@
     "@capacitor/cli": "^8.6.0",
     "typescript": "~5.9",
     "vite": "^7.3.7",
+    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^3.2.7"
   },
   "private": true,

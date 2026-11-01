@@ -32,3 +32,4 @@ Avant la première soumission :
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) : choix de la stack, structure du code, état, sauvegarde, boucle de jeu
 - [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) : piliers, mécaniques déjà en place et feuille de route
+- [`docs/TESTFLIGHT.md`](docs/TESTFLIGHT.md) : publier sur TestFlight sans Mac (GitHub Actions)

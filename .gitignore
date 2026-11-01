@@ -3,3 +3,4 @@ dist/
 *.log
 .DS_Store
 # Les artefacts iOS sont exclus par ios/.gitignore
+dist-preview/

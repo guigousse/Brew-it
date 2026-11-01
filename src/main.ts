@@ -15,7 +15,7 @@ async function boot() {
   const saves = new SaveManager(createStorage());
   let world: World;
   let offlineEarned = 0;
-  const demo = new URLSearchParams(location.search).has('demo');
+  const demo = new URLSearchParams(location.search).has('demo') || import.meta.env.VITE_DEMO === '1';
   try {
     if (demo) throw new Error('demo');
     const loaded = await saves.load();

@@ -1,0 +1,112 @@
+# Compile l'app iOS sur un Mac GitHub et l'envoie sur TestFlight — aucun Mac personnel requis.
+# Signature entièrement automatique via une clé API App Store Connect (rôle Admin) :
+# Xcode crée lui-même certificat et profil de distribution.
+#
+# Secrets à créer (Settings → Secrets and variables → Actions) :
+#   APPLE_TEAM_ID      Team ID (10 caractères) — developer.apple.com → Membership
+#   ASC_KEY_ID         Key ID de la clé API App Store Connect
+#   ASC_ISSUER_ID      Issuer ID (même page que la clé)
+#   ASC_KEY_P8         contenu complet du fichier AuthKey_XXXX.p8 (lignes BEGIN/END comprises)
+#   IOS_BUNDLE_ID      ex. com.tonnom.brewit (doit correspondre à l'app créée dans App Store Connect)
+name: TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/project-foundation]
+    paths-ignore: ['docs/**', '**/*.md']
+
+concurrency:
+  group: testflight
+  cancel-in-progress: true
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+    steps:
+      - name: Vérifier la configuration
+        id: cfg
+        run: |
+          missing=""
+          for v in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 IOS_BUNDLE_ID; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::TestFlight non configuré, secrets manquants :$missing (voir docs/TESTFLIGHT.md). Build ignoré."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          xcode-version: latest-stable
+
+      - name: Build web + tests
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          npm ci
+          npm test
+          npm run build
+          npx cap sync ios
+
+      - name: Préparer signature et numéro de build
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+          PBX=ios/App/App.xcodeproj/project.pbxproj
+          sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.brewit.game;/PRODUCT_BUNDLE_IDENTIFIER = $IOS_BUNDLE_ID;/g" "$PBX"
+          sed -i '' "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = $APPLE_TEAM_ID;/g" "$PBX"
+          sed -i '' "s/CURRENT_PROJECT_VERSION = 1;/CURRENT_PROJECT_VERSION = ${{ github.run_number }};/g" "$PBX"
+          sed -i '' "s/__TEAM_ID__/$APPLE_TEAM_ID/" ios/ci/ExportOptions.plist
+          grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CURRENT_PROJECT_VERSION" "$PBX" | sort -u
+
+      - name: Archive
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*sign|ARCHIVE" || true
+          test -d "$RUNNER_TEMP/App.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
+
+      - name: Export + envoi sur TestFlight
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist ios/ci/ExportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "### ✅ Build ${{ github.run_number }} envoyé sur TestFlight" >> "$GITHUB_STEP_SUMMARY"
+          echo "Il apparaît dans l'app TestFlight après le traitement Apple (5 à 30 min)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Nettoyer la clé
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
