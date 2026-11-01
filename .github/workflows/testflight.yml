@@ -76,8 +76,10 @@ jobs:
           sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.guigousse.brewit;/PRODUCT_BUNDLE_IDENTIFIER = $IOS_BUNDLE_ID;/g" "$PBX"
           sed -i '' "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = $APPLE_TEAM_ID;/g" "$PBX"
           sed -i '' "s/CURRENT_PROJECT_VERSION = 1;/CURRENT_PROJECT_VERSION = ${{ github.run_number }};/g" "$PBX"
+          APP_VERSION=$(node -p "require('./package.json').version")
+          sed -i '' "s/MARKETING_VERSION = 1.0;/MARKETING_VERSION = $APP_VERSION;/g" "$PBX"
           sed -i '' "s/__TEAM_ID__/$APPLE_TEAM_ID/" ios/ci/ExportOptions.plist
-          grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CURRENT_PROJECT_VERSION" "$PBX" | sort -u
+          grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CURRENT_PROJECT_VERSION|MARKETING_VERSION" "$PBX" | sort -u
 
       - name: Archive
         if: steps.cfg.outputs.ready == 'true'

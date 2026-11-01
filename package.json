@@ -1,6 +1,6 @@
 {
   "name": "brew-it",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Brew It — jeu mobile de gestion/automatisation de brasserie en pixel art",
   "scripts": {
     "dev": "vite --host",
