@@ -4,6 +4,7 @@ import { BUILDINGS, type BuildingType } from '../core/content/buildings';
 import { FLUIDS } from '../core/content/fluids';
 import { ITEMS } from '../core/content/items';
 import { DX, DY, type Dir } from '../core/dir';
+import { currentStep, pendingPlacements } from '../core/tutorial/tutorial';
 import type { World } from '../core/world';
 import { Camera, TILE } from './camera';
 
@@ -147,6 +148,33 @@ export class GameRenderer {
     }
   }
 
+  /** Tutoriel : fantôme clignotant du bâtiment attendu, et contour de la machine à toucher. */
+  private drawTutorial(g: Graphics, world: World): void {
+    const step = currentStep(world);
+    if (!step) return;
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+    for (const t of pendingPlacements(world)) {
+      const def = BUILDINGS[t.type];
+      const s = def.size * TILE;
+      const px = t.x * TILE;
+      const py = t.y * TILE;
+      g.rect(px, py, s, s).fill({ color: def.color, alpha: 0.2 + 0.25 * pulse });
+      g.rect(px - 1, py - 1, s + 2, s + 2).stroke({ width: 1, color: PALETTE.alert, alpha: 0.5 + 0.5 * pulse });
+      if (def.rotatable) this.arrow(g, px, py, t.rot ?? 0, PALETTE.alert);
+    }
+    if (step.focus) {
+      const b = world.at(step.focus.x, step.focus.y);
+      if (b && this.selectedId !== b.id) {
+        const s = BUILDINGS[b.type].size * TILE;
+        g.rect(b.x * TILE - 2, b.y * TILE - 2, s + 4, s + 4).stroke({ width: 1, color: PALETTE.alert, alpha: 0.4 + 0.6 * pulse });
+        // Main qui pointe : petit triangle au-dessus de la machine
+        const cx = b.x * TILE + s / 2;
+        const cy = b.y * TILE - 4 - Math.round(2 * pulse);
+        g.poly([cx, cy, cx - 3, cy - 4, cx + 3, cy - 4]).fill(PALETTE.alert);
+      }
+    }
+  }
+
   /** Petite flèche indiquant le sens d'un convoyeur / tuyau. */
   private arrow(g: Graphics, px: number, py: number, rot: Dir, color: number): void {
     const cx = px + TILE / 2;
@@ -161,6 +189,7 @@ export class GameRenderer {
 
   private drawOverlay(world: World): void {
     const g = this.overlay.clear();
+    this.drawTutorial(g, world);
     if (this.selectedId != null) {
       const b = world.buildings.get(this.selectedId);
       if (b) {

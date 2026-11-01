@@ -143,7 +143,9 @@ export class InputController {
     const tiles = [];
     for (let i = 0; i <= len; i += step) tiles.push({ x: this.start.tx + sx * i, y: this.start.ty + sy * i, rot });
     const w = this.world();
-    const valid = tiles.every((t) => w.grid.canPlace(t.x, t.y, def.size)) && w.money >= def.cost * tiles.length;
+    const checks = tiles.map((t) => w.checkPlace(type, t.x, t.y));
+    const cost = checks.reduce((sum, c) => sum + c.cost, 0);
+    const valid = checks.every((c) => c.ok) && w.money >= cost;
     this.renderer.ghost = { type, tiles, valid };
   }
 
@@ -154,6 +156,7 @@ export class InputController {
     let count = 0;
     let reason: string | undefined;
     for (const t of ghost.tiles) {
+      if (w.at(t.x, t.y)) continue; // en glissant, on peut repasser sur une case déjà construite
       const r = w.place(ghost.type, t.x, t.y, t.rot);
       if (r.ok) count++;
       else reason = r.reason;

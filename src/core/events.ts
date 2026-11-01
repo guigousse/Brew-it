@@ -6,7 +6,11 @@ export type GameEvent =
   | { type: 'batchLost'; buildingId: number; reason: string }
   | { type: 'batchReady'; buildingId: number; batchId: BatchId }
   | { type: 'broken'; buildingId: number }
-  | { type: 'expanded'; level: number };
+  | { type: 'expanded'; level: number }
+  | { type: 'crateDelivered'; buildingId: number; price: number }
+  | { type: 'tutorialStep'; index: number }
+  | { type: 'tutorialDone' }
+  | { type: 'unlocked'; buildings: string[] };
 
 type Listener = (e: GameEvent) => void;
 

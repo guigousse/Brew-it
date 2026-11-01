@@ -7,7 +7,7 @@ const run = (w: World, seconds: number) => {
 
 describe('convoyeurs', () => {
   it('acheminent la livraison jusqu’au concasseur qui produit du malt concassé', () => {
-    const w = new World({ money: 1e4 });
+    const w = new World({ tutorial: false, money: 1e4 });
     w.place('supplier', 0, 0);
     w.place('conveyor', 1, 0, 0);
     w.place('conveyor', 2, 0, 0);
@@ -19,7 +19,7 @@ describe('convoyeurs', () => {
   });
 
   it('respectent l’espacement et la capacité', () => {
-    const w = new World({ money: 1e4 });
+    const w = new World({ tutorial: false, money: 1e4 });
     w.place('supplier', 0, 0);
     const c = w.place('conveyor', 1, 0, 0); // ne mène nulle part : se remplit
     run(w, 10);
@@ -29,7 +29,7 @@ describe('convoyeurs', () => {
   });
 
   it('ne remontent pas un convoyeur orienté vers la source', () => {
-    const w = new World({ money: 1e4 });
+    const w = new World({ tutorial: false, money: 1e4 });
     w.place('supplier', 1, 0);
     const c = w.place('conveyor', 0, 0, 0); // pointe vers la livraison
     run(w, 3);

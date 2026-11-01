@@ -1,32 +1,76 @@
-import { ITEMS } from './items';
-import { STRAINS } from './strains';
+/**
+ * Choix proposés au joueur sur chaque machine : 2 ou 3 options simples et expliquées.
+ * Pas de curseurs : le joueur comprend l'effet de chaque décision de brasseur.
+ * Seuls les paramètres listés ici sont affichés ; les autres sont des réglages internes.
+ */
+export interface ChoiceOption {
+  value: number | string;
+  label: string;
+  /** L'effet sur la bière, en quelques mots. */
+  hint: string;
+}
 
-/** Métadonnées des curseurs de réglage exposés au joueur (l'UI se génère à partir de ceci). */
-export type ParamMeta =
-  | { kind: 'range'; label: string; min: number; max: number; step: number; unit: string }
-  | { kind: 'select'; label: string; options: readonly { value: string; label: string }[] };
+export interface ChoiceMeta {
+  label: string;
+  /** Pourquoi ce choix compte (affiché sous le titre). */
+  why: string;
+  options: readonly ChoiceOption[];
+}
 
-const opts = <T extends Record<string, { name: string }>>(o: T) =>
-  Object.entries(o).map(([value, v]) => ({ value, label: v.name }));
-
-export const PARAMS: Record<string, ParamMeta> = {
-  // empâtage
-  grainKg: { kind: 'range', label: 'Malt', min: 2, max: 15, step: 1, unit: 'kg' },
-  waterL: { kind: 'range', label: 'Eau', min: 8, max: 50, step: 1, unit: 'L' },
-  mashTemp: { kind: 'range', label: 'Température d\'empâtage', min: 58, max: 78, step: 0.5, unit: '°C' },
-  mashTime: { kind: 'range', label: 'Durée d\'empâtage', min: 20, max: 120, step: 5, unit: 'min' },
-  // ébullition
-  volume: { kind: 'range', label: 'Volume par lot', min: 5, max: 50, step: 1, unit: 'L' },
-  hopsItems: { kind: 'range', label: 'Houblon', min: 0, max: 8, step: 1, unit: '× 50 g' },
-  boilTime: { kind: 'range', label: 'Durée d\'ébullition', min: 15, max: 120, step: 5, unit: 'min' },
-  // fermentation
-  strain: { kind: 'select', label: 'Souche de levure', options: opts(STRAINS) },
-  temp: { kind: 'range', label: 'Température', min: 4, max: 35, step: 0.5, unit: '°C' },
-  gardeDays: { kind: 'range', label: 'Temps de garde', min: 0, max: 30, step: 1, unit: 'j' },
-  // transport / divers
-  targetTemp: { kind: 'range', label: 'Consigne de sortie', min: 2, max: 40, step: 1, unit: '°C' },
-  rate: { kind: 'range', label: 'Débit', min: 1, max: 10, step: 0.5, unit: 'L/s' },
-  item: { kind: 'select', label: 'Produit livré', options: opts(ITEMS).filter((o) => !['crushed_malt', 'beer_bottle'].includes(o.value)) },
-  interval: { kind: 'range', label: 'Intervalle', min: 0.5, max: 20, step: 0.5, unit: 's' },
-  basePrice: { kind: 'range', label: 'Prix de base', min: 2, max: 12, step: 0.5, unit: '€' },
+export const CHOICES: Record<string, ChoiceMeta> = {
+  grainKg: {
+    label: 'Quantité de malt',
+    why: 'Plus de malt, c\'est plus de sucre… donc plus d\'alcool.',
+    options: [
+      { value: 4, label: '4 kg', hint: 'Légère' },
+      { value: 5, label: '5 kg', hint: 'Normale' },
+      { value: 6, label: '6 kg', hint: 'Forte' },
+    ],
+  },
+  mashTemp: {
+    label: 'Température d\'empâtage',
+    why: 'Elle décide du type de sucre : la levure les mange plus ou moins bien.',
+    options: [
+      { value: 63, label: '63 °C', hint: 'Sèche' },
+      { value: 66, label: '66 °C', hint: 'Équilibrée' },
+      { value: 69, label: '69 °C', hint: 'Ronde, sucrée' },
+    ],
+  },
+  hopsItems: {
+    label: 'Dose de houblon',
+    why: 'Le houblon apporte l\'amertume et les arômes.',
+    options: [
+      { value: 1, label: '50 g', hint: 'Douce' },
+      { value: 2, label: '100 g', hint: 'Équilibrée' },
+      { value: 4, label: '200 g', hint: 'Très amère' },
+    ],
+  },
+  strain: {
+    label: 'Levure',
+    why: 'Chaque levure donne son caractère à la bière.',
+    options: [
+      { value: 'ale_us', label: 'Ale américaine', hint: 'Nette, laisse parler le houblon' },
+      { value: 'ale_uk', label: 'Ale anglaise', hint: 'Fruitée, ronde' },
+      { value: 'saison', label: 'Saison', hint: 'Épicée, très sèche' },
+    ],
+  },
+  gardeDays: {
+    label: 'Temps de garde',
+    why: 'Après la fermentation, la bière se repose et s\'affine.',
+    options: [
+      { value: 1, label: '1 jour', hint: 'Rapide' },
+      { value: 3, label: '3 jours', hint: 'Bonne' },
+      { value: 7, label: '7 jours', hint: 'Excellente' },
+    ],
+  },
+  item: {
+    label: 'Ingrédient livré',
+    why: 'Chaque livraison achète automatiquement son ingrédient.',
+    options: [
+      { value: 'malt', label: 'Malt', hint: '1,20 € le kg' },
+      { value: 'hops', label: 'Houblon', hint: '2 € les 50 g' },
+      { value: 'yeast', label: 'Levure', hint: '4 € le sachet' },
+      { value: 'bottle', label: 'Bouteilles', hint: '0,30 € pièce' },
+    ],
+  },
 };

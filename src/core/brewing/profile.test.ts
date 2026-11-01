@@ -1,11 +1,11 @@
 import { boil, ferment, mash } from './profile';
 
 describe('formules de brassage', () => {
-  it('empâtage : ~5 kg dans 24 L donne une densité autour de 1.050', () => {
+  it('empâtage : ~5 kg dans 24 L donne une densité autour de 1.045', () => {
     const r = mash({ grainKg: 5, waterL: 24, mashTemp: 66, mashTimeMin: 60 });
     expect(r.volume).toBe(19);
-    expect(r.og).toBeGreaterThan(55);
-    expect(r.og).toBeLessThan(65);
+    expect(r.og).toBeGreaterThan(40);
+    expect(r.og).toBeLessThan(50);
   });
 
   it('empâtage plus chaud → moût moins fermentescible', () => {

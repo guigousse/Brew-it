@@ -3,6 +3,30 @@
 ## Fantasme
 « Je suis parti d'un garage avec une marmite. Aujourd'hui, mon usine tourne toute seule et ma triple fruitée vient de gagner une médaille. »
 
+## Principe d'accessibilité
+Pas de curseurs ni de mode expert. Le joueur réalise **chaque étape réelle du brassage** et prend à chacune **une décision de brasseur simple**, 2 ou 3 options expliquées. Il doit sentir qu'il *sait* brasser, sans jamais affronter un tableau de réglages.
+
+| Étape | Machine | Choix du joueur |
+|---|---|---|
+| Malt | Livraison | — |
+| Concassage | Concasseur | — |
+| Empâtage | Cuve d'empâtage | Malt : 4 / 5 / 6 kg (légère, normale, forte) · Température : 63 / 66 / 69 °C (sèche, équilibrée, ronde) |
+| Ébullition et houblonnage | Cuve d'ébullition | Houblon : 50 / 100 / 200 g (douce, équilibrée, très amère) |
+| Refroidissement | Refroidisseur | — (comprendre le danger des 35 °C) |
+| Fermentation | Fermenteur | Levure : américaine (nette), anglaise (fruitée), saison (épicée) |
+| Garde | Fermenteur | 1 / 3 / 7 jours (rapide, bonne, excellente) |
+| Embouteillage | Embouteilleuse | — |
+| Livraison | Caisse (12 bouteilles) | — |
+
+Les volumes s'adaptent tout seuls : chaque machine traite le lot entier qui arrive de l'étape précédente. L'eau d'empâtage est fixe (24 L), si bien que la quantité de malt règle directement la force de la bière (≈ 4 %, 5 % ou 6,5 %).
+
+## Tutoriel : « Ta première bière » (24 étapes, environ 5 min, 2 min en accéléré)
+Il est guidé par **Gaston**, un brasseur retraité. Le joueur construit lui-même toute la ligne dans le garage : chaque bâtiment est offert, et sa case clignote. Gaston explique le rôle de chaque étape, puis le joueur fait ses choix dans l'inspecteur.
+- Une machine ne lance son premier lot qu'**après** les choix du joueur : la première bière est bien *la sienne*.
+- Pendant les attentes (empâtage, ébullition, fermentation), Gaston commente ce qui se passe et propose d'accélérer le temps.
+- La fin arrive avec la livraison de la **première caisse de 12 bouteilles** au bar du coin. Le profil de la bière s'affiche (alcool, amertume, qualité), et Gaston offre 1 200 €.
+- Il est possible de passer le tutoriel depuis le menu.
+
 ## Piliers
 
 ### 1. La chaîne de production (« Mindustry-like »)
@@ -53,7 +77,7 @@ Il n'y a pas de recette figée : ce sont les **curseurs** qui produisent un prof
 ### 3. La vente et l'expansion
 | Palier | Taille | Coût | Débouché visé |
 |---|---|---|---|
-| Garage | 10×7 | — | Stand de rue (12 bouteilles, ~6 clients/min) |
+| Garage | 10×7 | — | Caisse de livraison au bar du coin, stand de rue |
 | Arrière-cour | 16×11 | 2 500 € | 🔜 Marché local |
 | Entrepôt | 24×16 | 15 000 € | 🔜 Bars (fûts) |
 | Micro-brasserie | 36×24 | 80 000 € | 🔜 Cavistes, épiceries fines |

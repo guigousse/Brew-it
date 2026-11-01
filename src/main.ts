@@ -13,28 +13,21 @@ const AUTOSAVE_SECONDS = 30;
 
 async function boot() {
   const saves = new SaveManager(createStorage());
+  const demo = new URLSearchParams(location.search).has('demo') || import.meta.env.VITE_DEMO === '1';
   let world: World;
   let offlineEarned = 0;
-  const demo = new URLSearchParams(location.search).has('demo') || import.meta.env.VITE_DEMO === '1';
   try {
-    if (demo) throw new Error('demo');
-    const loaded = await saves.load();
-    world = loaded?.world ?? new World();
+    const loaded = demo ? null : await saves.load();
+    world = loaded?.world ?? (demo ? buildReferenceBrewery({ money: 5_000 }) : new World());
     if (loaded && loaded.elapsedSeconds > 5) offlineEarned = simulateOffline(world, loaded.elapsedSeconds).earned;
   } catch (err) {
-    // ?demo : charge la brasserie de référence (pratique pour tester le rendu dans un navigateur).
-    if (!demo) console.error('Sauvegarde illisible, nouvelle partie', err);
-    world = demo ? buildReferenceBrewery({ money: 5_000 }) : new World();
+    console.error('Sauvegarde illisible, nouvelle partie', err);
+    world = new World();
   }
 
   const renderer = new GameRenderer();
   await renderer.init(document.getElementById('game')!);
-  // Cadre la zone constructible entre la barre du haut et la barre d'outils.
-  const fitView = () => {
-    const top = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
-    const bottom = document.querySelector('.toolbar')?.getBoundingClientRect().top ?? renderer.app.screen.height;
-    renderer.camera.fit(world.grid.unlockedW, world.grid.unlockedH, { x: 0, y: top, w: renderer.app.screen.width, h: bottom - top });
-  };
+  let loop = new FixedStepLoop(world);
 
   const input = new InputController(renderer.app.canvas, renderer, () => world, {
     onSelect: (id) => {
@@ -43,20 +36,45 @@ async function boot() {
     },
     onBuilt: (count, reason) => {
       if (count > 0) tapFeedback();
-      else if (reason) hud.toast(reason, 'bad');
+      else if (reason) hud.toast(world.tutorial.done ? reason : 'Touche la case qui clignote', 'bad');
     },
   });
-  const hud = new Hud(document.getElementById('hud')!, () => world, input);
-  world.events.on((e) => {
-    hud.onEvent(e);
-    if (e.type === 'expanded') fitView();
+
+  // Cadre la zone constructible entre la barre du haut et Gaston / la barre d'outils.
+  const fitView = () =>
+    renderer.camera.fit(world.grid.unlockedW, world.grid.unlockedH, {
+      x: 0, y: hud.topInset, w: renderer.app.screen.width, h: hud.bottomInset - hud.topInset,
+    });
+
+  const hud = new Hud(document.getElementById('hud')!, () => world, input, {
+    setSpeed: (s) => (loop.speed = s),
+    getSpeed: () => loop.speed,
+    newGame: () => startWorld(new World()),
+    layoutChanged: () => requestAnimationFrame(fitView),
   });
-  requestAnimationFrame(fitView);
+
+  let unsubscribe = () => {};
+  function startWorld(w: World) {
+    unsubscribe();
+    world = w;
+    loop = new FixedStepLoop(world);
+    renderer.selectedId = null;
+    hud.select(null);
+    unsubscribe = world.events.on((e) => {
+      hud.onEvent(e);
+      if (e.type === 'expanded') fitView();
+      if (e.type === 'crateDelivered' || e.type === 'tutorialDone') tapFeedback(true);
+    });
+    hud.update();
+    requestAnimationFrame(fitView);
+    if (!demo) void saves.save(world);
+  }
+  startWorld(world);
+
   void document.fonts?.ready.then(() => requestAnimationFrame(fitView)); // les polices changent la hauteur des barres
   window.addEventListener('resize', () => requestAnimationFrame(fitView)); // rotation de l'écran
-  if (offlineEarned > 0) hud.toast(`Pendant votre absence : +${offlineEarned.toFixed(0)} €`, 'good');
+  if (offlineEarned > 0) hud.toast(`Pendant ton absence : +${offlineEarned.toFixed(0)} €`, 'good');
 
-  const loop = new FixedStepLoop(world);
   let hudTimer = 0;
   let saveTimer = 0;
   renderer.app.ticker.add((t) => {
@@ -79,19 +97,19 @@ async function boot() {
     () => {
       pausedAt = Date.now();
       renderer.app.ticker.stop();
-      void saves.save(world);
+      if (!demo) void saves.save(world);
     },
     () => {
       if (pausedAt) {
         const { earned } = simulateOffline(world, (Date.now() - pausedAt) / 1000);
-        if (earned > 1) hud.toast(`Pendant votre absence : +${earned.toFixed(0)} €`, 'good');
+        if (earned > 1) hud.toast(`Pendant ton absence : +${earned.toFixed(0)} €`, 'good');
       }
       renderer.app.ticker.start();
     },
   );
 
   // Accès console pour le debug
-  (window as unknown as { brewit: unknown }).brewit = { get world() { return world; }, saves, renderer };
+  (window as unknown as { brewit: unknown }).brewit = { get world() { return world; }, saves, renderer, hud };
 }
 
 void boot();

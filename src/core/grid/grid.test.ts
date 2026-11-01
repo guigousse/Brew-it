@@ -14,7 +14,7 @@ describe('Grid', () => {
   });
 
   it('agrandit la carte sans déplacer les bâtiments existants', () => {
-    const w = new World({ money: 1e6 });
+    const w = new World({ tutorial: false, money: 1e6 });
     const r = w.place('tank', 0, 0);
     expect(w.place('conduit', 12, 0).ok).toBe(false);
     expect(w.expand().ok).toBe(true);
@@ -23,7 +23,7 @@ describe('Grid', () => {
   });
 
   it('calcule les voisins uniques d’un bâtiment multi-cases', () => {
-    const w = new World({ money: 1e6 });
+    const w = new World({ tutorial: false, money: 1e6 });
     const tank = w.place('tank', 1, 1); // occupe (1..2, 1..2)
     w.place('conduit', 3, 1);
     w.place('conduit', 3, 2);
@@ -34,10 +34,10 @@ describe('Grid', () => {
   });
 
   it('débite le coût et rembourse partiellement', () => {
-    const w = new World({ money: 100 });
+    const w = new World({ tutorial: false, money: 100 });
     const r = w.place('supplier', 0, 0);
     expect(w.money).toBe(0);
-    expect(w.place('conveyor', 1, 0)).toEqual({ ok: false, reason: 'Fonds insuffisants' });
+    expect(w.place('conveyor', 1, 0)).toMatchObject({ ok: false, reason: 'Fonds insuffisants' });
     w.remove(r.ok ? r.id! : -1);
     expect(w.money).toBe(75);
   });

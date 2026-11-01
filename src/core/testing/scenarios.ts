@@ -8,7 +8,7 @@ import { World } from '../world';
  *   y2:                                                  [Houbl]                  [Lev.]          [Bout.]
  */
 export function buildReferenceBrewery(opts: { coolers?: boolean; money?: number } = {}): World {
-  const w = new World({ money: 1e9 }); // construction gratuite, le budget est fixé à la fin
+  const w = new World({ money: 1e9, tutorial: false }); // construction gratuite, le budget est fixé à la fin
   w.expand();
   w.expand();
   const place = (...args: Parameters<World['place']>) => {

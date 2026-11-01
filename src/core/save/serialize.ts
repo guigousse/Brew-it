@@ -1,11 +1,13 @@
 import { BatchRegistry, type BatchProfile } from '../brewing/batches';
 import type { Building } from '../building';
+import type { BuildingType } from '../content/buildings';
+import type { TutorialState } from '../tutorial/tutorial';
 import { EXPANSIONS } from '../content/expansions';
 import type { MarketState } from '../economy/market';
 import { World } from '../world';
 import { migrate } from './migrations';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** Format de sauvegarde : JSON pur, versionné. Toute évolution du format = une migration dans migrations.ts. */
 export interface SaveFile {
@@ -22,6 +24,10 @@ export interface SaveFile {
     market: MarketState;
     batches: { next: number; batches: Record<number, BatchProfile> };
     buildings: Building[];
+    stats: World['stats'];
+    tutorial: TutorialState;
+    unlocked: BuildingType[];
+    firstBeer: BatchProfile | null;
   };
 }
 
@@ -40,6 +46,10 @@ export function serialize(world: World, now = Date.now()): SaveFile {
       market: world.market,
       batches: { next: world.batches.next, batches: world.batches.batches },
       buildings: [...world.list],
+      stats: world.stats,
+      tutorial: world.tutorial,
+      unlocked: world.unlocked,
+      firstBeer: world.firstBeer,
     },
   });
 }
@@ -47,11 +57,15 @@ export function serialize(world: World, now = Date.now()): SaveFile {
 export function deserialize(raw: unknown): World {
   const save = migrate(raw);
   const s = save.world;
-  const world = new World({ money: s.money });
+  const world = new World({ money: s.money, tutorial: false });
   world.time = s.time;
   world.tick = s.tick;
   world.rng.state = s.rngState;
   world.market = s.market;
+  world.stats = s.stats;
+  world.tutorial = s.tutorial;
+  world.unlocked = s.unlocked;
+  world.firstBeer = s.firstBeer;
   const reg = new BatchRegistry(s.batches.next, s.batches.batches);
   Object.assign(world.batches, reg);
   for (let i = 1; i <= s.expansion; i++) {

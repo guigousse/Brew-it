@@ -21,7 +21,7 @@ export interface BeltItem extends ItemUnit {
   pos: number;
 }
 
-export type MachinePhase = 'idle' | 'filling' | 'heating' | 'processing' | 'blocked' | 'failed';
+export type MachinePhase = 'idle' | 'filling' | 'heating' | 'processing' | 'cooling' | 'blocked' | 'failed';
 
 export interface MachineState {
   phase: MachinePhase;
@@ -31,8 +31,10 @@ export interface MachineState {
   batch: BatchId | null;
   /** Température du contenu en cours de traitement (cuves chauffées). */
   temp?: number;
-  /** Réglages figés au lancement du lot : bouger un curseur n'affecte que le lot suivant. */
+  /** Réglages figés au lancement du lot : changer un choix n'affecte que le lot suivant. */
   data?: Record<string, number | string>;
+  /** Suivi de l'arrivée du liquide en entrée : on lance le lot quand plus rien n'arrive. */
+  settle?: { amount: number; t: number };
 }
 
 /** Indicateurs d'alerte affichés au-dessus des machines (bitmask). */

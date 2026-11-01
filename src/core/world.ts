@@ -1,7 +1,10 @@
-import { BatchRegistry, type BatchId } from './brewing/batches';
+import { BatchRegistry, type BatchId, type BatchProfile } from './brewing/batches';
 import { createBuilding, type Building } from './building';
 import { BUILDINGS, type BuildingType, type ParamValue } from './content/buildings';
 import { EXPANSIONS, MAX_MAP_HEIGHT, MAX_MAP_WIDTH } from './content/expansions';
+import { EXPANSION_UNLOCKS, STARTER_BUILDINGS } from './content/progression';
+import { tutorialAllowsStart, tutorialPlacement, tutorialUpdate, type TutorialState } from './tutorial/tutorial';
+import type { MachineKind } from './content/buildings';
 import { DX, DY, type Dir } from './dir';
 import { initialMarket, updateMarket, type MarketState } from './economy/market';
 import { EventBus } from './events';
@@ -25,7 +28,19 @@ export interface Neighbor {
 export interface WorldInit {
   money?: number;
   seed?: number;
+  /** Démarre la partie avec le tutoriel (défaut : true). false = tout le contenu de départ débloqué. */
+  tutorial?: boolean;
 }
+
+export interface Stats {
+  brews: number;
+  fermentations: number;
+  bottles: number;
+  crates: number;
+  earned: number;
+}
+
+export const STARTING_MONEY = 300;
 
 export interface CommandResult {
   ok: boolean;
@@ -49,13 +64,22 @@ export class World {
   readonly events = new EventBus();
   market: MarketState = initialMarket();
   rng: Rng;
+  stats: Stats = { brews: 0, fermentations: 0, bottles: 0, crates: 0, earned: 0 };
+  tutorial: TutorialState;
+  /** Bâtiments proposés dans la palette (le contenu se débloque progressivement). */
+  unlocked: BuildingType[];
+  /** Profil de la toute première bière livrée (affiché à la fin du tutoriel). */
+  firstBeer: BatchProfile | null = null;
   /** Ordre de mise à jour stable (ordre de création). */
   private order: Building[] = [];
   private adjCache = new Map<number, Neighbor[]>();
 
   constructor(init: WorldInit = {}) {
-    this.money = init.money ?? 1_500;
+    this.money = init.money ?? STARTING_MONEY;
     this.rng = new Rng(init.seed ?? 0xb33f);
+    const withTutorial = init.tutorial ?? true;
+    this.tutorial = { step: 0, done: !withTutorial, signals: [] };
+    this.unlocked = withTutorial ? [] : [...STARTER_BUILDINGS];
     const stage = EXPANSIONS[0]!;
     this.grid = new Grid(MAX_MAP_WIDTH, MAX_MAP_HEIGHT, stage.width, stage.height);
   }
@@ -108,6 +132,7 @@ export class World {
     updateFluids(this, dt);
     updateHeat(this, dt);
     updateMarket(this.market, this.time, this.rng);
+    if (!this.tutorial.done) tutorialUpdate(this);
     this.time += dt;
     this.tick++;
     if (this.tick % (TICK_RATE * 5) === 0) this.collectBatches();
@@ -115,19 +140,58 @@ export class World {
 
   // ------------------------------------------------------------------ commandes
 
-  place(type: BuildingType, x: number, y: number, rot: Dir = 0, opts: { free?: boolean } = {}): CommandResult {
+  /** Vérifie une construction sans l'effectuer (utilisé aussi pour l'aperçu fantôme). */
+  checkPlace(type: BuildingType, x: number, y: number): CommandResult & { cost: number } {
     const def = BUILDINGS[type];
-    if (!this.grid.canPlace(x, y, def.size)) return { ok: false, reason: 'Emplacement occupé ou verrouillé' };
-    if (!opts.free) {
-      if (this.money < def.cost) return { ok: false, reason: 'Fonds insuffisants' };
-      this.money -= def.cost;
+    if (!this.tutorial.done) {
+      const target = tutorialPlacement(this, type, x, y);
+      if (!target) return { ok: false, reason: 'Suis les indications de Gaston', cost: 0 };
+      if (!this.grid.canPlace(x, y, def.size)) return { ok: false, reason: 'Emplacement occupé', cost: 0 };
+      return { ok: true, cost: 0 }; // constructions offertes pendant le tutoriel
     }
-    const b = createBuilding(this.nextId++, type, x, y, rot);
+    if (!this.grid.canPlace(x, y, def.size)) return { ok: false, reason: 'Emplacement occupé ou verrouillé', cost: def.cost };
+    if (this.money < def.cost) return { ok: false, reason: 'Fonds insuffisants', cost: def.cost };
+    return { ok: true, cost: def.cost };
+  }
+
+  place(type: BuildingType, x: number, y: number, rot: Dir = 0, opts: { free?: boolean } = {}): CommandResult {
+    const check = this.checkPlace(type, x, y);
+    if (!check.ok && !(opts.free && this.tutorial.done && this.grid.canPlace(x, y, BUILDINGS[type].size))) return check;
+    const target = this.tutorial.done ? undefined : tutorialPlacement(this, type, x, y);
+    if (!opts.free) this.money -= check.cost;
+    const b = createBuilding(this.nextId++, type, x, y, target?.rot ?? rot);
+    if (target?.params) Object.assign(b.params, target.params);
     this.insert(b);
+    if (!this.tutorial.done) tutorialUpdate(this);
     return { ok: true, id: b.id };
   }
 
+  /** Signal envoyé par l'interface (ex. « le joueur a ouvert la cuve ») pour le tutoriel. */
+  signal(name: string): void {
+    if (this.tutorial.done || this.tutorial.signals.includes(name)) return;
+    this.tutorial.signals.push(name);
+    tutorialUpdate(this);
+  }
+
+  /** Pendant le tutoriel, une machine attend que le joueur ait fait ses choix avant de lancer son premier lot. */
+  canStart(kind: MachineKind): boolean {
+    return this.tutorial.done || tutorialAllowsStart(this, kind);
+  }
+
+  unlock(types: readonly BuildingType[]): void {
+    const fresh = types.filter((t) => !this.unlocked.includes(t));
+    if (!fresh.length) return;
+    this.unlocked.push(...fresh);
+    this.events.emit({ type: 'unlocked', buildings: fresh });
+  }
+
+  earn(amount: number): void {
+    this.money += amount;
+    this.stats.earned += amount;
+  }
+
   remove(id: number): CommandResult {
+    if (!this.tutorial.done) return { ok: false, reason: 'Impossible pendant le tutoriel' };
     const b = this.buildings.get(id);
     if (!b) return { ok: false, reason: 'Bâtiment introuvable' };
     const def = BUILDINGS[b.type];
@@ -166,6 +230,7 @@ export class World {
   }
 
   expand(): CommandResult {
+    if (!this.tutorial.done) return { ok: false, reason: 'Termine d\'abord le tutoriel' };
     const next = EXPANSIONS[this.expansion + 1];
     if (!next) return { ok: false, reason: 'Taille maximale atteinte' };
     if (this.money < next.cost) return { ok: false, reason: 'Fonds insuffisants' };
@@ -173,6 +238,7 @@ export class World {
     this.expansion++;
     this.grid.unlock(next.width, next.height);
     this.events.emit({ type: 'expanded', level: this.expansion });
+    this.unlock(EXPANSION_UNLOCKS[this.expansion] ?? []);
     return { ok: true };
   }
 

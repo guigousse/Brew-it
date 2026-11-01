@@ -13,7 +13,7 @@ export const TIME_SCALE = {
   brewDay: 20,
 };
 
-const POINTS_PER_KG_PER_L = 307; // ~5 kg de malt dans 23 L à 75 % d'efficacité ≈ 1.050
+const POINTS_PER_KG_PER_L = 230; // 5 kg de malt dans 24 L ≈ 1.045 avant ébullition, ≈ 5 % d'alcool à la fin
 const GRAIN_ABSORPTION_L_PER_KG = 1;
 const HOPS_ALPHA = 0.1;
 const EVAPORATION_PER_HOUR = 0.1;
@@ -41,9 +41,9 @@ export function mash({ grainKg, waterL, mashTemp, mashTimeMin }: MashInput): Mas
   const og = (grainKg * POINTS_PER_KG_PER_L * efficiency) / volume;
   // Basse température → bêta-amylase → moût très fermentescible (bière sèche). Haute → corps, sucres résiduels.
   const fermentability = clamp(0.85 - (mashTemp - 64) * 0.033, 0.5, 0.9);
-  // Un empâtage trop épais (< 2.5 L/kg) ou trop dilué (> 5 L/kg) pénalise la qualité.
+  // Un empâtage trop épais (< 2.5 L/kg) ou trop dilué (> 6.5 L/kg) pénalise la qualité.
   const ratio = waterL / Math.max(grainKg, 0.001);
-  const quality = ratio < 2.5 ? 0.85 : ratio > 5 ? 0.9 : 1;
+  const quality = ratio < 2.5 ? 0.85 : ratio > 6.5 ? 0.9 : 1;
   return { og, fermentability, volume, quality };
 }
 

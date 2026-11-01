@@ -69,7 +69,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .inspector {
   position: absolute; right: 8px; top: calc(var(--safe-top) + 52px); /* recalé en JS sous la barre du haut */ width: min(340px, calc(100vw - 16px));
-  max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 190px); overflow-y: auto;
+  max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 190px); overflow-y: auto; overscroll-behavior: contain;
   background: var(--panel); border: 2px solid var(--border); padding: 8px 10px; touch-action: pan-y;
 }
 .inspector.hidden { display: none; }
@@ -90,3 +90,62 @@ input[type=range] { accent-color: var(--accent); height: 28px; }
 .toast.bad { border-color: var(--bad); }
 .toast.good { border-color: var(--good); }
 @keyframes pop { from { transform: scale(.8); opacity: 0; } }
+
+/* --- Tutoriel : Gaston -------------------------------------------------- */
+.mentor {
+  position: absolute; left: 8px; right: 8px; bottom: calc(var(--toolbar-h, 120px) + 8px);
+  display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: start;
+  background: var(--panel-solid); border: 2px solid var(--accent); padding: 10px;
+  box-shadow: 0 4px 0 #0006; max-width: 640px; margin: 0 auto;
+}
+.mentor.hidden { display: none; }
+.mentor-avatar { width: 56px; height: 56px; image-rendering: pixelated; background: #3b3246; border: 2px solid var(--border); }
+.mentor-body { min-width: 0; display: grid; gap: 4px; }
+.mentor-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.mentor-name { font-family: var(--font-title); font-size: 13px; color: var(--accent); }
+.mentor-chapter { color: var(--dim); font-size: 15px; }
+.mentor-text { margin: 0; font-size: 19px; line-height: 1.2; }
+.mentor-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.mentor-actions:empty { display: none; }
+.btn.primary { background: var(--accent); color: #2b2135; border-color: #ffd36e; font-weight: bold; }
+
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 #f0b03000; } 50% { box-shadow: 0 0 0 3px #f0b030aa; } }
+.pulse { animation: pulse 1s steps(4) infinite; border-color: var(--accent) !important; }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+.palette-empty { color: var(--dim); align-self: center; padding: 8px 4px; }
+
+/* --- Inspecteur : choix de brasseur ------------------------------------- */
+.insp-desc { margin: 2px 0 6px; color: var(--dim); line-height: 1.15; }
+.insp-status { display: grid; gap: 4px; margin-bottom: 8px; }
+.progress { height: 8px; background: #1a1423; border: 1px solid var(--border); }
+.progress-fill { height: 100%; background: var(--good); }
+.needs { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.need { color: var(--dim); }
+.need.ok { color: var(--good); }
+.choice { border: 2px solid var(--border); padding: 6px; margin-bottom: 8px; display: grid; gap: 4px; }
+.choice-label { font-family: var(--font-title); font-size: 12px; }
+.choice-why { color: var(--dim); line-height: 1.15; }
+.choice-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 6px; }
+.option {
+  display: grid; gap: 2px; padding: 8px 6px; min-height: 52px; text-align: center;
+  background: var(--panel-solid); border: 2px solid var(--border); box-shadow: inset -2px -2px 0 #0004;
+}
+.option.active { border-color: var(--accent); background: #3d2f22; }
+.option-label { font-size: 19px; }
+.option-hint { font-size: 15px; color: var(--dim); line-height: 1; }
+.option.active .option-label { color: var(--accent); }
+
+/* --- Menu ---------------------------------------------------------------- */
+.menu {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(320px, calc(100vw - 32px));
+  background: var(--panel-solid); border: 2px solid var(--border); padding: 12px; display: grid; gap: 10px; box-shadow: 0 6px 0 #0008;
+}
+.menu.hidden { display: none; }
+.menu-list { display: grid; gap: 8px; }
+.speed { min-width: 44px; }
+
+@media (max-width: 520px) {
+  .trend { display: none; }
+  .topbar { flex-wrap: nowrap; gap: 8px; }
+  .stage { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+}

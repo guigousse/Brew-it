@@ -1,3 +1,4 @@
+import { EXPANSION_UNLOCKS, STARTER_BUILDINGS } from '../content/progression';
 import { SAVE_VERSION, type SaveFile } from './serialize';
 
 /**
@@ -5,7 +6,19 @@ import { SAVE_VERSION, type SaveFile } from './serialize';
  * Ne jamais modifier une migration publiée : en ajouter une nouvelle.
  */
 const MIGRATIONS: Record<number, (save: any) => any> = {
-  // 1: (s) => ({ ...s, version: 2, world: { ...s.world, nouveauChamp: valeurParDefaut } }),
+  // v1 → v2 : tutoriel, statistiques et déblocages. Les parties du prototype sont considérées
+  // comme ayant terminé le tutoriel, avec tout le contenu de départ débloqué.
+  1: (s) => ({
+    ...s,
+    version: 2,
+    world: {
+      ...s.world,
+      stats: { brews: 0, fermentations: 0, bottles: 0, crates: 0, earned: 0 },
+      tutorial: { step: 0, done: true, signals: [] },
+      unlocked: [...STARTER_BUILDINGS, ...EXPANSION_UNLOCKS.slice(0, s.world.expansion + 1).flat()],
+      firstBeer: null,
+    },
+  }),
 };
 
 export function migrate(raw: unknown): SaveFile {
