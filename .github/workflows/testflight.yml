@@ -7,7 +7,7 @@
 #   ASC_KEY_ID         Key ID de la clé API App Store Connect
 #   ASC_ISSUER_ID      Issuer ID (même page que la clé)
 #   ASC_KEY_P8         contenu complet du fichier AuthKey_XXXX.p8 (lignes BEGIN/END comprises)
-#   IOS_BUNDLE_ID      ex. com.tonnom.brewit (doit correspondre à l'app créée dans App Store Connect)
+#   IOS_BUNDLE_ID      (facultatif) remplace le Bundle ID par défaut com.guigousse.brewit
 name: TestFlight
 
 on:
@@ -29,13 +29,13 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-      IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+      IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID || 'com.guigousse.brewit' }}
     steps:
       - name: Vérifier la configuration
         id: cfg
         run: |
           missing=""
-          for v in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 IOS_BUNDLE_ID; do
+          for v in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
             [ -z "${!v}" ] && missing="$missing $v"
           done
           if [ -n "$missing" ]; then
@@ -73,7 +73,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/keys"
           printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
           PBX=ios/App/App.xcodeproj/project.pbxproj
-          sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.brewit.game;/PRODUCT_BUNDLE_IDENTIFIER = $IOS_BUNDLE_ID;/g" "$PBX"
+          sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.guigousse.brewit;/PRODUCT_BUNDLE_IDENTIFIER = $IOS_BUNDLE_ID;/g" "$PBX"
           sed -i '' "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = $APPLE_TEAM_ID;/g" "$PBX"
           sed -i '' "s/CURRENT_PROJECT_VERSION = 1;/CURRENT_PROJECT_VERSION = ${{ github.run_number }};/g" "$PBX"
           sed -i '' "s/__TEAM_ID__/$APPLE_TEAM_ID/" ios/ci/ExportOptions.plist

@@ -24,7 +24,7 @@ npm run ios:open     # ouvre Xcode → choisir l'équipe de signature → Run su
 ```
 
 Avant la première soumission :
-1. remplacer `appId` dans `capacitor.config.ts` par le Bundle ID créé dans App Store Connect, puis relancer `npx cap sync ios` ;
+1. le Bundle ID est `com.guigousse.brewit` (`capacitor.config.ts`) ;
 2. configurer les icônes et le launch screen dans `ios/App/App/Assets.xcassets` ;
 3. Product → Archive → Distribute → TestFlight.
 

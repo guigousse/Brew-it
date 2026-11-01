@@ -9,12 +9,12 @@ Tout se règle depuis un navigateur. Sur iPhone, Safari en « version ordinateur
 ## 1. Choisir et enregistrer le Bundle ID
 developer.apple.com → Certificates, IDs & Profiles → **Identifiers** → ＋ → App IDs → App
 - Description : `Brew It`
-- Bundle ID (Explicit) : par ex. `com.tonnom.brewit`
+- Bundle ID (Explicit) : `com.guigousse.brewit`
 
 ## 2. Créer l'app dans App Store Connect
 appstoreconnect.apple.com → **Apps** → ＋ → Nouvelle app
 - Plateforme : iOS · Nom : `Brew It` (le nom doit être libre sur l'App Store ; sinon `Brew It – Brasserie`)
-- Langue : Français · Bundle ID : celui de l'étape 1 · SKU : `brewit`
+- Langue : Français · Bundle ID : `com.guigousse.brewit` · UGS (SKU) : `brewit` (référence interne libre, non modifiable ensuite)
 
 ## 3. Créer une clé API App Store Connect
 appstoreconnect.apple.com → **Utilisateurs et accès** → **Intégrations** → Clés API d'équipe → ＋
@@ -33,7 +33,7 @@ github.com/guigousse/brew-it → Settings → Secrets and variables → **Action
 | `ASC_KEY_ID` | Key ID |
 | `ASC_ISSUER_ID` | Issuer ID (UUID) |
 | `ASC_KEY_P8` | tout le contenu du `.p8`, lignes `-----BEGIN PRIVATE KEY-----` et `-----END…` comprises |
-| `IOS_BUNDLE_ID` | le Bundle ID de l'étape 1 |
+| `IOS_BUNDLE_ID` | facultatif : `com.guigousse.brewit` est déjà la valeur par défaut |
 
 ## 5. Lancer le build
 github.com/guigousse/brew-it → **Actions** → TestFlight → Run workflow. Un push sur la branche le relance aussi automatiquement.
