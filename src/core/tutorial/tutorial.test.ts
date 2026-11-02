@@ -2,9 +2,18 @@ import { DEFAULT_CHOICES, type RecipeChoices } from '../brewing/recipe';
 import { STARTER_BUILDINGS } from '../content/progression';
 import { ingredientNeeds } from '../ingredients';
 import { fromJSON, toJSON } from '../save/serialize';
+import { simulateOffline } from '../sim/loop';
 import { World } from '../world';
 import { TUTORIAL_REWARD, TUTORIAL_STEPS } from './steps';
 import { currentStep, skipTutorial, stepText, tutorialPalette } from './tutorial';
+
+/** Un joueur attentif garde ses réserves remplies. */
+function restock(w: World) {
+  if (!w.tutorial.signals.includes('stock:malt')) return;
+  for (const [item, pack] of [['malt', 'malt5'], ['hops', 'hops1'], ['yeast', 'yeast1'], ['bottle', 'bottle12']] as const) {
+    if ((w.stock[item] ?? 0) < 4) w.buyPack(pack);
+  }
+}
 
 /** Joue l'étape en cours comme le ferait un joueur. Renvoie false si elle attend la simulation. */
 function act(w: World, choices: RecipeChoices = DEFAULT_CHOICES): boolean {
@@ -12,9 +21,9 @@ function act(w: World, choices: RecipeChoices = DEFAULT_CHOICES): boolean {
   for (const t of step.places ?? []) w.place(t.type, t.x, t.y, 0);
   if (step.signal === 'recipe:created') w.createRecipe('Blonde de Gaston', choices, { validated: true });
   else if (step.signal === 'stock:malt') w.buyPack('malt5');
-  else if (step.signal?.startsWith('load:') || step.id === 'load_rest') {
-    for (const n of ingredientNeeds(w)) w.loadMissing(n.buildingId);
-  } else if (step.signal) w.signal(step.signal);
+  else if (step.id === 'stock_rest') ['hops1', 'yeast1', 'bottle12'].forEach((p) => w.buyPack(p));
+  else if (step.signal) w.signal(step.signal);
+  restock(w);
   if (step.ack) w.signal(`ack:${step.id}`);
   return !step.until;
 }
@@ -75,24 +84,27 @@ describe('tutoriel', () => {
     expect(mash.machine!.phase).toBe('heating');
   });
 
-  it('le « + » charge depuis le stock, et achète seulement le complément', () => {
+  it('les machines puisent seules dans le stock ; un stock vide les arrête et les signale', () => {
     const w = new World();
     while (currentStep(w)!.id !== 'stock_malt') act(w);
-    const needs = ingredientNeeds(w);
-    expect(needs.map((n) => n.item).sort()).toEqual(['bottle', 'hops', 'malt', 'yeast']);
     expect(w.buyPack('malt5').ok).toBe(true);
-    expect(w.stock.malt).toBe(5);
-    const malt = needs.find((n) => n.item === 'malt')!;
-    const money = w.money;
-    const r = w.loadMissing(malt.buildingId);
-    expect(r).toMatchObject({ ok: true, qty: 5, fromStock: 5, cost: 0 });
-    expect(w.money).toBe(money);
-    expect(w.stock.malt).toBe(0);
-    // Sans stock : le complément est acheté au prix unitaire.
-    const hops = ingredientNeeds(w).find((n) => n.item === 'hops')!;
-    const r2 = w.loadMissing(hops.buildingId);
-    expect(r2.fromStock).toBe(0);
-    expect(w.money).toBeCloseTo(money - hops.total);
+    for (let i = 0; i < 10; i++) w.step();
+    expect(w.stock.malt ?? 0).toBe(0); // le concasseur a pris ses 5 kg
+    const kettle = w.list.find((b) => b.type === 'kettle_mini')!;
+    expect(kettle.starved).toBe('hops'); // pas de houblon en stock
+    expect(w.buyPack('hops1').ok).toBe(true);
+    for (let i = 0; i < 10; i++) w.step();
+    expect(kettle.starved ?? null).toBeNull();
+    expect(kettle.itemsIn!.length).toBeGreaterThan(0);
+  });
+
+  it('la réserve a une capacité, améliorable', () => {
+    const w = new World({ tutorial: false, money: 1e4 });
+    expect(w.stockCap('malt')).toBe(20);
+    expect(w.buyPack('malt25').ok).toBe(false); // ne rentre pas
+    expect(w.upgradeStock('malt').ok).toBe(true);
+    expect(w.stockCap('malt')).toBe(60);
+    expect(w.buyPack('malt25').ok).toBe(true);
   });
 
   it('se termine par la livraison de la première caisse, en moins de 6 minutes de jeu', () => {
@@ -131,10 +143,10 @@ describe('tutoriel', () => {
 
   it('survit à une sauvegarde en plein milieu', () => {
     const w = new World();
-    while (currentStep(w)!.id !== 'load_malt') act(w);
+    while (currentStep(w)!.id !== 'stock_rest') act(w);
     const loaded = fromJSON(toJSON(w));
-    expect(currentStep(loaded)!.id).toBe('load_malt');
-    expect(loaded.stock.malt).toBe(5);
+    expect(currentStep(loaded)!.id).toBe('stock_rest');
+    expect(loaded.tutorial.signals).toContain('stock:malt');
     expect(loaded.activeRecipe!.name).toBe('Blonde de Gaston');
     expect(playTutorial(loaded)).toBeLessThan(360);
   });
@@ -243,7 +255,7 @@ describe('fournée d\'essai et dégustation', () => {
   const runUntil = (w: World, cond: () => boolean, max = 900) => {
     for (let i = 0; i < max * 20 && !cond(); i++) {
       w.step();
-      for (const n of ingredientNeeds(w)) w.loadMissing(n.buildingId);
+      if (i % 20 === 0) for (const p of ['malt5', 'hops1', 'yeast1', 'bottle12']) w.buyPack(p);
     }
   };
 
@@ -276,28 +288,37 @@ describe('fournée d\'essai et dégustation', () => {
   });
 });
 
-describe('réserves', () => {
-  it('une réserve de malt alimente le concasseur voisin, sans icône « + » sur la machine', () => {
-    const w = new World({ tutorial: false, money: 1e4 });
-    w.place('mill', 1, 1);
-    w.place('mash_tun_mini', 2, 1);
-    const s = w.place('storage_1', 0, 1);
-    w.createRecipe('Test', DEFAULT_CHOICES, { validated: true });
-    expect(ingredientNeeds(w).map((n) => n.buildingId)).toContain(s.id);
-    w.buyPack('malt25');
-    w.loadMissing(s.id!);
-    expect(w.buildings.get(s.id!)!.itemsOut!.length).toBe(25 + 5 * 0 + 5); // 25 du stock + 5 achetés pour remplir 30
-    expect(ingredientNeeds(w).some((n) => n.item === 'malt')).toBe(false);
-    for (let i = 0; i < 20 * 10; i++) w.step();
-    expect(w.list.find((b) => b.type === 'mash_tun_mini')!.itemsIn!.length).toBeGreaterThan(0);
+describe('production hors-ligne', () => {
+  it('la brasserie tourne pendant l\'absence ; les gains attendent la récolte', () => {
+    const w = new World({ tutorial: false, money: 1e5 });
+    const put = (t: Parameters<World['place']>[0], x: number, y: number, rot: 0 | 1 | 2 | 3 = 0) => w.place(t, x, y, rot);
+    put('mill', 1, 2); put('mash_tun_mini', 2, 2); put('water_tap', 2, 0); put('conduit', 2, 1, 1);
+    put('conduit', 3, 2); put('conduit', 4, 2); put('kettle_mini', 5, 2); put('cooler', 6, 2); put('conduit', 7, 2);
+    put('fermenter_mini', 8, 2); put('conduit', 8, 3, 1); put('bottler_mini', 8, 4);
+    put('conveyor', 7, 4, 2); put('conveyor', 6, 4, 1); put('crate', 6, 5);
+    w.createRecipe('Blonde', DEFAULT_CHOICES, { validated: true });
+    for (const it of ['malt', 'hops', 'yeast', 'bottle'] as const) for (let i = 0; i < 4; i++) w.upgradeStock(it);
+    for (let i = 0; i < 40; i++) ['malt25', 'hops5', 'yeast5', 'bottle48'].forEach((p) => w.buyPack(p));
+    const money = w.money;
+    const report = simulateOffline(w, 3600)!;
+    expect(report.seconds).toBe(3600);
+    expect(report.crates).toBeGreaterThan(5);
+    expect(report.earned).toBeGreaterThan(0);
+    expect(report.used.malt).toBeGreaterThan(20);
+    expect(w.money).toBe(money); // pas encore récolté
+    const saved = fromJSON(toJSON(w));
+    expect(saved.offline!.earned).toBeCloseTo(report.earned);
+    expect(saved.collectOffline()).toBeCloseTo(report.earned);
+    expect(saved.money).toBeCloseTo(money + report.earned);
+    expect(saved.offline).toBeNull();
   });
 
-  it('changer l\'ingrédient d\'une réserve rend son contenu au stock', () => {
+  it('sans ingrédients, rien ne se produit hors-ligne', () => {
     const w = new World({ tutorial: false, money: 1e4 });
-    const s = w.place('storage_1', 0, 0);
-    w.loadMissing(s.id!);
-    expect(w.setStorageItem(s.id!, 'yeast').ok).toBe(true);
-    expect(w.stock.malt).toBe(30);
-    expect(w.buildings.get(s.id!)!.params.item).toBe('yeast');
+    w.place('mill', 1, 2); w.place('mash_tun_mini', 2, 2); w.place('water_tap', 2, 1);
+    w.createRecipe('Blonde', DEFAULT_CHOICES, { validated: true });
+    const r = simulateOffline(w, 1800)!;
+    expect(r.brews).toBe(0);
+    expect(r.earned).toBe(0);
   });
 });

@@ -54,8 +54,8 @@ describe('sauvegarde', () => {
     await mgr.save(w, 1_000_000);
     const loaded = await mgr.load(1_000_000 + 3_600_000);
     expect(loaded!.elapsedSeconds).toBe(3600);
-    const { simulated } = simulateOffline(loaded!.world, loaded!.elapsedSeconds);
-    expect(simulated).toBe(3600);
+    const report = simulateOffline(loaded!.world, loaded!.elapsedSeconds)!;
+    expect(report.seconds).toBe(3600);
   });
 
   it('refuse une sauvegarde d’une version future', () => {

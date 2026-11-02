@@ -116,19 +116,15 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   },
   {
     id: 'stock_malt', chapter: 'Le fournisseur', signal: 'stock:malt', tab: 'supplier',
-    text: 'Il faut des ingrédients ! Ouvre l\'onglet Fournisseur et achète un sac de malt de 5 kg.',
+    text: 'Il faut des ingrédients ! Ouvre l\'onglet Fournisseur et achète un sac de malt de 5 kg. Il ira dans ta réserve, et les machines s\'y serviront toutes seules.',
   },
   {
-    id: 'load_malt', chapter: 'Le fournisseur', signal: 'load:malt',
-    text: 'Le sac est dans ton stock. Touche le « + » qui clignote au-dessus du concasseur pour le charger.',
-  },
-  {
-    id: 'load_rest', chapter: 'Le fournisseur', tab: 'supplier',
-    until: (w) => ['load:hops', 'load:yeast', 'load:bottle'].every((s) => w.tutorial.signals.includes(s)),
+    id: 'stock_rest', chapter: 'Le fournisseur', tab: 'supplier',
+    until: (w) => ['hops', 'yeast', 'bottle'].every((i) => w.tutorial.signals.includes(`stock:${i}`)),
     text: (w) => {
-      const left = [['load:hops', 'le houblon (marmite d\'ébullition)'], ['load:yeast', 'la levure (dame-jeanne)'], ['load:bottle', 'les bouteilles (embouteilleuse)']]
-        .filter(([s]) => !w.tutorial.signals.includes(s!)).map(([, l]) => l);
-      return `Achète aussi chez le fournisseur ${left.join(', ')}, puis touche chaque « + » pour charger. S'il te manque quelque chose, le « + » complète tout seul.`;
+      const left = [['hops', 'du houblon'], ['yeast', 'de la levure'], ['bottle', 'des bouteilles']]
+        .filter(([i]) => !w.tutorial.signals.includes(`stock:${i}`)).map(([, l]) => l);
+      return `Parfait. Achète aussi ${left.join(', ')}. Surveille tes réserves : si l'une est vide, la machine concernée s'arrête et clignote en rouge.`;
     },
   },
   {

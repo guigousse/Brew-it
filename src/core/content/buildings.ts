@@ -105,22 +105,25 @@ export const BUILDINGS = {
 
   // --- Stockage d'ingrédients (3 niveaux) : alimente automatiquement les appareils voisins ---------
   storage_1: {
+    // Remplacé par les réserves globales du Fournisseur (conservé pour la migration des sauvegardes).
     name: 'Bac de stockage', description: 'Garde un ingrédient au choix et le donne tout seul aux appareils collés à lui.',
-    size: 1, cost: 60, category: 'storage', color: 0xa8743c, maxHealth: MACHINE_HP, rotatable: false, family: 'storage', tier: 1,
+    size: 1, cost: 60, category: 'storage', color: 0xa8743c, maxHealth: MACHINE_HP, rotatable: false, family: 'storage', tier: 1, hidden: true,
     itemsOut: { capacity: 30 },
     machine: 'storage',
     defaultParams: { item: 'malt' },
   },
   storage_2: {
+    // Remplacé par les réserves globales du Fournisseur (conservé pour la migration des sauvegardes).
     name: 'Silo 150', description: 'Silo inox : cinq fois plus de réserve.',
-    size: 2, cost: 500, category: 'storage', color: 0xb3bfcc, maxHealth: MACHINE_HP, rotatable: false, family: 'storage', tier: 2, unlock: PRO,
+    size: 2, cost: 500, category: 'storage', color: 0xb3bfcc, maxHealth: MACHINE_HP, rotatable: false, family: 'storage', tier: 2, unlock: PRO, hidden: true,
     itemsOut: { capacity: 150 },
     machine: 'storage',
     defaultParams: { item: 'malt' },
   },
   storage_3: {
+    // Remplacé par les réserves globales du Fournisseur (conservé pour la migration des sauvegardes).
     name: 'Silo industriel', description: 'Grand silo : de quoi tenir des dizaines de brassins.',
-    size: 2, cost: 2500, category: 'storage', color: 0x8d98a6, maxHealth: MACHINE_HP * 2, rotatable: false, family: 'storage', tier: 3, unlock: INDUSTRIAL,
+    size: 2, cost: 2500, category: 'storage', color: 0x8d98a6, maxHealth: MACHINE_HP * 2, rotatable: false, family: 'storage', tier: 3, unlock: INDUSTRIAL, hidden: true,
     itemsOut: { capacity: 600 },
     machine: 'storage',
     defaultParams: { item: 'malt' },

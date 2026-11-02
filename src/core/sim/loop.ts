@@ -1,4 +1,4 @@
-import { TICK_DT, type World } from '../world';
+import { TICK_DT, type OfflineReport, type World } from '../world';
 
 /**
  * Boucle à pas fixe : la simulation avance toujours par ticks de 1/20 s, quel que soit le framerate.
@@ -28,20 +28,40 @@ export class FixedStepLoop {
   }
 }
 
-export const MAX_OFFLINE_SECONDS = 2 * 3600;
-const OFFLINE_STEP = 0.25;
+export const MAX_OFFLINE_SECONDS = 8 * 3600;
+/** Pas de simulation hors-ligne : assez fin pour que tapis et embouteilleuse gardent leur cadence. */
+const OFFLINE_STEP = 0.5;
 
 /**
- * Production hors-ligne : simule le temps écoulé (plafonné) avec un pas plus grossier.
- * Renvoie l'argent gagné, pour l'écran « Pendant votre absence… ».
+ * Production hors-ligne : simule le temps écoulé (plafonné à 8 h). Les gains ne sont pas versés
+ * directement : ils attendent dans `world.offline` que le joueur les récolte.
  */
-export function simulateOffline(world: World, seconds: number, max = MAX_OFFLINE_SECONDS): { simulated: number; earned: number } {
+export function simulateOffline(world: World, seconds: number, max = MAX_OFFLINE_SECONDS): OfflineReport | null {
   const target = Math.min(seconds, max);
-  const before = world.money;
+  if (target < OFFLINE_STEP) return null;
+  const money = world.money;
+  const stats = { ...world.stats };
+  const stock = { ...world.stock };
   let t = 0;
   while (t + OFFLINE_STEP <= target) {
     world.step(OFFLINE_STEP);
     t += OFFLINE_STEP;
   }
-  return { simulated: t, earned: world.money - before };
+  const earned = world.money - money;
+  world.money = money; // mis de côté jusqu'à la récolte
+  const used: OfflineReport['used'] = {};
+  for (const k of Object.keys(stock) as (keyof typeof stock)[]) {
+    const d = (stock[k] ?? 0) - (world.stock[k] ?? 0);
+    if (d > 0) used[k] = d;
+  }
+  const prev = world.offline;
+  world.offline = {
+    seconds: t + (prev?.seconds ?? 0),
+    earned: earned + (prev?.earned ?? 0),
+    crates: world.stats.crates - stats.crates + (prev?.crates ?? 0),
+    bottles: world.stats.bottles - stats.bottles + (prev?.bottles ?? 0),
+    brews: world.stats.brews - stats.brews + (prev?.brews ?? 0),
+    used,
+  };
+  return world.offline;
 }

@@ -1,9 +1,9 @@
 import { BatchRegistry, type BatchId, type BatchProfile } from './brewing/batches';
-import { createBuilding, type Building } from './building';
+import { Alert, createBuilding, type Building } from './building';
 import { BUILDINGS, kindOf, type BuildingType, type ParamValue } from './content/buildings';
 import { EXPANSIONS, MAX_MAP_HEIGHT, MAX_MAP_WIDTH } from './content/expansions';
 import { STARTER_BUILDINGS, unlockMet } from './content/progression';
-import { findPack } from './content/supplies';
+import { findPack, STOCK_ITEMS, STOCK_LEVELS, STOCK_UPGRADE_COST } from './content/supplies';
 import type { ItemId } from './content/items';
 import { ITEM_PRICES } from './economy/market';
 import { tutorialPlacement, tutorialUpdate, type TutorialState } from './tutorial/tutorial';
@@ -48,6 +48,16 @@ export interface Stats {
 
 export const STARTING_MONEY = 300;
 
+export interface OfflineReport {
+  seconds: number;
+  earned: number;
+  crates: number;
+  bottles: number;
+  brews: number;
+  /** Ingrédients consommés pendant l'absence. */
+  used: Partial<Record<ItemId, number>>;
+}
+
 export interface CommandResult {
   ok: boolean;
   id?: number;
@@ -74,8 +84,12 @@ export class World {
   tutorial: TutorialState;
   /** Bâtiments proposés dans la palette (le contenu se débloque progressivement). */
   unlocked: BuildingType[];
-  /** Stock d'ingrédients achetés chez le fournisseur, prêts à charger dans les machines. */
+  /** Stock d'ingrédients achetés chez le fournisseur ; les machines y puisent automatiquement. */
   stock: Partial<Record<ItemId, number>> = {};
+  /** Niveau de chaque réserve (1 à 5) : fixe sa capacité. */
+  stockLevels: Partial<Record<ItemId, number>> = {};
+  /** Gains de la dernière absence, en attente de récolte. */
+  offline: OfflineReport | null = null;
   /** Brassins sauvegardés par le joueur (on peut toujours revenir à un ancien). */
   recipes: Recipe[] = [];
   /** Dégustation en attente de décision (fin d'une fournée d'essai). */
@@ -140,6 +154,7 @@ export class World {
   // ------------------------------------------------------------------ simulation
 
   step(dt = TICK_DT): void {
+    if (this.tick % 5 === 0) this.autoFeed();
     for (const b of this.order) updateMachine(this, b, dt);
     updateConveyors(this, dt);
     for (const b of this.order) dumpItems(this, b);
@@ -271,13 +286,31 @@ export class World {
     return { ok: true };
   }
 
-  /** Achète un conditionnement chez le fournisseur et le range dans le stock. */
+  stockCap(item: ItemId): number {
+    const levels = STOCK_LEVELS[item];
+    if (!levels) return Infinity;
+    return levels[Math.min(levels.length, this.stockLevels[item] ?? 1) - 1]!;
+  }
+
+  /** Améliore la réserve d'un ingrédient (niveau suivant). */
+  upgradeStock(item: ItemId): CommandResult {
+    const level = this.stockLevels[item] ?? 1;
+    const cost = STOCK_UPGRADE_COST[level - 1];
+    if (cost == null || level >= (STOCK_LEVELS[item]?.length ?? 1)) return { ok: false, reason: 'Niveau maximal atteint' };
+    if (this.money < cost) return { ok: false, reason: 'Fonds insuffisants' };
+    this.money -= cost;
+    this.stockLevels[item] = level + 1;
+    return { ok: true };
+  }
+
+  /** Achète un conditionnement chez le fournisseur et le range dans le stock (dans la limite de la réserve). */
   buyPack(packId: string): CommandResult {
     const found = findPack(packId);
     if (!found) return { ok: false, reason: 'Produit inconnu' };
+    const item = found.supply.item;
+    if ((this.stock[item] ?? 0) + found.pack.qty > this.stockCap(item)) return { ok: false, reason: 'Réserve pleine : améliore-la' };
     if (this.money < found.pack.price) return { ok: false, reason: 'Fonds insuffisants' };
     this.money -= found.pack.price;
-    const item = found.supply.item;
     this.stock[item] = (this.stock[item] ?? 0) + found.pack.qty;
     this.signal(`stock:${item}`);
     return { ok: true };
@@ -304,6 +337,43 @@ export class World {
     for (let i = 0; i < qty; i++) target.push({ item: need.item, batch: null });
     this.signal(`load:${need.item}`);
     return { ok: true, item: need.item, qty, fromStock, cost };
+  }
+
+  /**
+   * Les machines puisent automatiquement dans le stock ce qui leur manque pour le prochain lot.
+   * Si le stock est vide, la machine attend et signale l'ingrédient manquant.
+   */
+  autoFeed(): void {
+    for (const b of this.order) {
+      const need = needOf(this, b);
+      if (!need) {
+        if (b.starved) this.setStarved(b, null);
+        continue;
+      }
+      const have = this.stock[need.item] ?? 0;
+      const qty = Math.min(have, need.missing);
+      if (qty > 0) {
+        this.stock[need.item] = have - qty;
+        for (let i = 0; i < qty; i++) b.itemsIn!.push({ item: need.item, batch: null });
+      }
+      this.setStarved(b, qty < need.missing ? need.item : null);
+    }
+  }
+
+  private setStarved(b: Building, item: ItemId | null): void {
+    if ((b.starved ?? null) === item) return;
+    if (item && !b.starved && !this.order.some((o) => o !== b && o.starved === item)) this.events.emit({ type: 'stockEmpty', item });
+    b.starved = item;
+    if (item) b.alerts |= Alert.StockEmpty;
+    else b.alerts &= ~Alert.StockEmpty;
+  }
+
+  /** Récolte les gains de l'absence. */
+  collectOffline(): number {
+    const earned = this.offline?.earned ?? 0;
+    this.money += earned;
+    this.offline = null;
+    return earned;
   }
 
   /** Change l'ingrédient d'une réserve ; son contenu actuel retourne dans le stock. */

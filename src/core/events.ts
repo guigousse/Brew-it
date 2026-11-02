@@ -11,7 +11,8 @@ export type GameEvent =
   | { type: 'tutorialStep'; index: number }
   | { type: 'tutorialDone' }
   | { type: 'unlocked'; buildings: string[] }
-  | { type: 'tasting'; recipeId: number };
+  | { type: 'tasting'; recipeId: number }
+  | { type: 'stockEmpty'; item: string };
 
 type Listener = (e: GameEvent) => void;
 

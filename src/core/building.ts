@@ -48,6 +48,7 @@ export const Alert = {
   MixedFluids: 1 << 5,
   BatchLost: 1 << 6,
   NoMoney: 1 << 7,
+  StockEmpty: 1 << 8,
 } as const;
 
 /**
@@ -71,6 +72,8 @@ export interface Building {
   itemsOut?: ItemUnit[];
   belt?: BeltItem[];
   machine?: MachineState;
+  /** Ingrédient qui manque dans le stock pour lancer le prochain lot (alerte « stock vide »). */
+  starved?: ItemId | null;
 }
 
 export const emptyTank = (temp = AMBIENT_TEMP): FluidTank => ({ fluid: null, amount: 0, temp, batch: null });

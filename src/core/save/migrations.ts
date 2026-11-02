@@ -60,6 +60,24 @@ const MIGRATIONS: Record<number, (save: any) => any> = {
       },
     };
   },
+  // v5 → v6 : réserves globales à capacité améliorable. Les bacs et silos posés disparaissent :
+  // leur contenu rejoint le stock et leur prix est remboursé.
+  5: (s) => {
+    const stock: Record<string, number> = { ...s.world.stock };
+    let money = s.world.money;
+    const refunds: Record<string, number> = { storage_1: 60, storage_2: 500, storage_3: 2500 };
+    const buildings = s.world.buildings.filter((b: any) => {
+      if (!(b.type in refunds)) return true;
+      for (const u of b.itemsOut ?? []) stock[u.item] = (stock[u.item] ?? 0) + 1;
+      money += refunds[b.type];
+      return false;
+    });
+    return {
+      ...s,
+      version: 6,
+      world: { ...s.world, money, stock, buildings, stockLevels: {}, offline: null, unlocked: s.world.unlocked.filter((t: string) => !(t in refunds)) },
+    };
+  },
 };
 
 export function migrate(raw: unknown): SaveFile {

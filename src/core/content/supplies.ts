@@ -53,6 +53,18 @@ export const SUPPLIES: readonly Supply[] = [
 ];
 
 export const STOCK_ITEMS: readonly ItemId[] = ['malt', 'hops', 'yeast', 'bottle'];
+
+/** Capacité de chaque réserve par niveau (index 0 = niveau 1), et prix pour passer au niveau suivant. */
+export const STOCK_LEVELS: Record<string, readonly number[]> = {
+  malt: [20, 60, 200, 600, 2000],
+  hops: [20, 60, 200, 600, 2000], // sachets de 10 g
+  yeast: [4, 12, 40, 120, 400],
+  bottle: [60, 200, 600, 2000, 6000],
+};
+export const STOCK_UPGRADE_COST: readonly number[] = [150, 600, 2500, 10000];
+export const STOCK_NAMES: Record<string, string> = {
+  malt: 'Réserve de malt', hops: 'Chambre froide à houblon', yeast: 'Frigo à levures', bottle: 'Stock de bouteilles',
+};
 export const findPack = (id: string) => {
   for (const s of SUPPLIES) for (const p of s.packs) if (p.id === id) return { supply: s, pack: p };
   return undefined;
