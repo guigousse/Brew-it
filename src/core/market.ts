@@ -63,18 +63,7 @@ export function glassPrice(level: number, t: Tasting, trends = 0): number {
   return GLASS_PRICE * qualityFactor(t) * (BAR[level - 1]?.priceMult ?? 1) * (1 + 0.15 * trends);
 }
 
-// ------------------------------------------------------------------ décoration, fêtes, publicité
-
-/** Décoration du bar : achats uniques, visibles dans la salle, qui attirent du monde. */
-export const DECOR: readonly { id: string; name: string; cost: number; bonus: number }[] = [
-  { id: 'jukebox', name: 'Juke-box', cost: 300, bonus: 0.15 },
-  { id: 'plants', name: 'Plantes vertes', cost: 1200, bonus: 0.1 },
-  { id: 'darts', name: 'Cible de fléchettes', cost: 5000, bonus: 0.15 },
-  { id: 'pinball', name: 'Flipper', cost: 25000, bonus: 0.2 },
-  { id: 'screen', name: 'Écran géant', cost: 120000, bonus: 0.25 },
-  { id: 'stage', name: 'Petite scène', cost: 600000, bonus: 0.3 },
-  { id: 'sign', name: 'Enseigne lumineuse', cost: 2500000, bonus: 0.35 },
-];
+// ------------------------------------------------------------------ fêtes, publicité
 
 /**
  * Fête au bar : pendant 30 minutes, 50 fois plus de clients. Les fûts vides sont rebranchés automatiquement

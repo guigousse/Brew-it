@@ -8,7 +8,7 @@
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
 import { DEFAULT_LABEL } from '../src/core/label';
 import { Game, simulateOffline } from '../src/core/game';
-import { BAR, DECOR } from '../src/core/market';
+import { BAR } from '../src/core/market';
 import { COMPUTERS } from '../src/core/orders';
 import { MAX_LEVEL, STATION_ORDER, upgradeCost } from '../src/core/stations';
 import { STORAGE } from '../src/core/warehouse';
@@ -102,7 +102,6 @@ function shop() {
       const c = g.tankCost(id);
       if (c != null) options.push({ cost: c, label: `Cuve ${id} ${g.tankCount(id) + 1}`, act: () => g.addTank(id).ok });
     }
-    for (const d of DECOR) if (!g.decor.includes(d.id)) options.push({ cost: d.cost, label: d.name, act: () => g.buyDecor(d.id).ok });
     const pc = COMPUTERS[g.computerLevel];
     if (pc) options.push({ cost: pc.cost, label: `Ordinateur → ${g.computerLevel + 1}`, act: () => g.upgradeComputer().ok });
     const bar = BAR[g.barLevel];

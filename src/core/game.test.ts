@@ -277,16 +277,10 @@ describe('jeu', () => {
     expect(g.startParty().ok).toBe(true);
   });
 
-  it('la décoration attire du monde ; une campagne de pub rend la gamme plus populaire', () => {
+  it('une campagne de pub rend la gamme plus populaire', () => {
     const g = withBeer(1e6);
     const beer = g.beers[0]!;
-    beer.kegs = [20];
-    g.swapKeg(0, beer.id);
     beer.pop = 0.2;
-    const before = g.barRate;
-    expect(g.buyDecor('jukebox').ok).toBe(true);
-    expect(g.buyDecor('jukebox').ok).toBe(false);
-    expect(g.barRate).toBeCloseTo(before * 1.15);
     expect(g.advertise().ok).toBe(true);
     expect(beer.pop).toBeCloseTo(0.3);
     expect(g.advertise().ok).toBe(false); // une seule campagne à la fois

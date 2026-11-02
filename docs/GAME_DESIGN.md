@@ -141,18 +141,6 @@ L'écran du bar est coupé en deux :
 
 Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au sommet, et bien plus au début. Le bar rapporte peu (environ 1 % du chiffre d'affaires) : c'est là que la marque se fait connaître.
 
-**Améliorer le bar** : agrandir (niveau suivant), et installer de la **décoration**. Ce sont des achats uniques, visibles dans la salle, qui attirent du monde.
-
-| Décoration | Prix | Clients |
-|---|---|---|
-| Juke-box | 300 € | +15 % |
-| Plantes vertes | 1 200 € | +10 % |
-| Cible de fléchettes | 5 000 € | +15 % |
-| Flipper | 25 000 € | +20 % |
-| Écran géant | 120 000 € | +25 % |
-| Petite scène (enceintes, micro) | 600 000 € | +30 % |
-| Enseigne lumineuse | 2,5 M€ | +35 % |
-
 **Organiser une fête** (bouton « Fête ») : pendant 30 min, **50 fois plus de clients**. Le personnel de la fête rebranche tout seul les fûts vides avec ceux du stockage : il faut donc **prévoir des fûts d'avance**, car ils se vident très vite. Une fête coûte 100 € au comptoir poussiéreux, puis 1 000 €, 10 000 €, 80 000 € et 600 000 € selon le niveau du bar. Il faut ensuite attendre 6 h avant la suivante. Pendant la fête, des projecteurs de couleur balaient la salle et des confettis tombent.
 
 ## Popularité et tendances

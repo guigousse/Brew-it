@@ -1,7 +1,7 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { MAX_PLAN, MAX_TANKS, TANK_STAGES, type Beer, type Game, type Order } from '../core/game';
-import { AD, BAR, DECOR, kegGlasses, kegLiters, PARTY } from '../core/market';
+import { AD, BAR, kegGlasses, kegLiters, PARTY } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
@@ -298,10 +298,8 @@ export class App {
     this.menuBtn.classList.toggle('ready', emptyTap && kegsReady);
     this.syncKegHits();
     const nextBar = BAR[g.barLevel];
-    const nextDecor = DECOR.find((d) => !g.decor.includes(d.id));
-    const cheapest = Math.min(nextBar?.cost ?? Infinity, nextDecor?.cost ?? Infinity);
-    this.barUpBtn.replaceChildren(h('span', 'side-title', 'Améliorer'), h('span', 'side-sub', Number.isFinite(cheapest) ? moneyShort(cheapest) : 'Au max'));
-    this.barUpBtn.classList.toggle('alert', g.money >= cheapest);
+    this.barUpBtn.replaceChildren(h('span', 'side-title', 'Agrandir'), h('span', 'side-sub', nextBar ? moneyShort(nextBar.cost) : 'Au max'));
+    this.barUpBtn.classList.toggle('alert', !!nextBar && g.money >= nextBar.cost);
     const partySub = g.partying ? `🎉 ${duration(g.partyUntil - g.time)}` : g.time < g.partyReadyAt ? `dans ${duration(g.partyReadyAt - g.time)}` : moneyShort(g.partyCost);
     this.partyBtn.replaceChildren(h('span', 'side-title', 'Fête'), h('span', 'side-sub', partySub));
     this.partyBtn.classList.toggle('alert', g.partying);
@@ -362,7 +360,7 @@ export class App {
     if (!s) return;
     const key = JSON.stringify([
       s, g.level(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer, g.autoBrew,
-      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.decor, g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.format, g.beers.map((b) => b.kegs.length)] : 0,
+      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.format, g.beers.map((b) => b.kegs.length)] : 0,
       s.kind === 'storage' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
     ]);
     if (key === this.sheetKey) return this.refreshLive();
@@ -781,7 +779,7 @@ export class App {
   // --- Bar : l'agrandir (plus de places, de tireuses, une meilleure ambiance)
   private barUpSheet(g: Game): void {
     const lvl = g.bar;
-    const body = this.frameSheet(`Améliorer · ${lvl.name}`);
+    const body = this.frameSheet(`Bar · ${lvl.name}`);
     const next = BAR[g.barLevel];
     const levels = h('div', 'storage-levels');
     for (const [l, tag, cls] of [[lvl, 'Actuel', 'done'], [next, 'Suivant', 'current']] as const) {
@@ -803,29 +801,7 @@ export class App {
       b.dataset.cost = String(next.cost);
       b.disabled = g.money < next.cost;
       body.append(b);
-    }
-    // décoration : achats uniques qui attirent du monde
-    body.append(h('div', 'section-title', 'Décoration'));
-    const list = h('div', 'stock-list');
-    for (const d of DECOR) {
-      const owned = g.decor.includes(d.id);
-      const line = h('div', 'stock-line');
-      line.append(h('span', 'stock-name', d.name), h('span', 'stock-qty', `+${Math.round(d.bonus * 100)} % clients`));
-      if (owned) line.append(h('span', 'tap-state', '✓'));
-      else {
-        const b = this.btn('btn small', moneyShort(d.cost), () => {
-          const r = g.buyDecor(d.id);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`${d.name} installé`, 'good');
-          this.sheetKey = '';
-        });
-        b.dataset.cost = String(d.cost);
-        b.disabled = g.money < d.cost;
-        line.append(b);
-      }
-      list.append(line);
-    }
-    body.append(list);
+    } else body.append(h('p', 'note', 'Niveau maximal'));
   }
 
   /** Organiser une fête : 30 min, 50 fois plus de clients ; il faut avoir prévu des fûts. */

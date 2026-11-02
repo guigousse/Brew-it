@@ -1,7 +1,7 @@
 import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Levels, type Recipe, type Tasting } from './brewing/model';
 import { EventBus } from './events';
 import type { Label } from './label';
-import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, DECOR, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY, PARTY_COST, variety } from './market';
+import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY, PARTY_COST, variety } from './market';
 import { CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, WHOLESALE_KEEP, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
@@ -144,8 +144,6 @@ export class Game {
   trends: Trend[] = [];
   /** Cuves de fermentation et de garde (plusieurs brassins en parallèle). */
   tanks: Partial<Record<StationId, number>> = {};
-  /** Décorations achetées pour le bar. */
-  decor: string[] = [];
   /** Fin de la fête en cours, et instant où l'on pourra en organiser une autre (s de jeu). */
   partyUntil = 0;
   partyReadyAt = 0;
@@ -544,8 +542,7 @@ export class Game {
   /** Clients par minute : 1 toutes les 10 minutes au début, plus avec la popularité, le niveau du bar et la variété. */
   get barRate(): number {
     const beers = new Set(this.flowing.map((t) => t.beerId)).size;
-    const decor = 1 + DECOR.reduce((s, d) => s + (this.decor.includes(d.id) ? d.bonus : 0), 0);
-    return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers)) * decor * (this.partying ? PARTY.mult : 1);
+    return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers)) * (this.partying ? PARTY.mult : 1);
   }
 
   /** Une fête bat son plein. */
@@ -576,15 +573,6 @@ export class Game {
       const b = this.beers.filter((x) => x.kegs.length && x.tasting.quality >= BAR_MIN_QUALITY).sort((a, c) => c.pop - a.pop)[0];
       if (b) this.swapKeg(i, b.id);
     });
-  }
-
-  buyDecor(id: string): CommandResult {
-    const d = DECOR.find((x) => x.id === id);
-    if (!d || this.decor.includes(id)) return { ok: false, reason: 'Déjà installé' };
-    if (this.money < d.cost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= d.cost;
-    this.decor.push(id);
-    return { ok: true };
   }
 
   get adCost(): number {
@@ -986,7 +974,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, decor: this.decor, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1032,7 +1020,7 @@ export class Game {
     g.wholesaleSold ??= 0;
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
-    g.decor ??= [];
+    delete (g as unknown as { decor?: unknown }).decor; // la décoration reviendra plus tard
     g.tanks ??= {};
     g.partyUntil ??= 0;
     g.partyReadyAt ??= 0;
