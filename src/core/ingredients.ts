@@ -1,4 +1,6 @@
 import { countItems, type Building } from './building';
+import { BUILDINGS, kindOf, type BuildingDef } from './content/buildings';
+import { hopsFor, yeastFor } from './systems/machines';
 import { BOTTLE_LITERS, type ItemId } from './content/items';
 import { ITEM_PRICES } from './economy/market';
 import type { World } from './world';
@@ -12,35 +14,42 @@ export interface IngredientNeed {
   total: number;
 }
 
-const BOTTLER_CAPACITY = 60;
 const MIN_BOTTLES = 12; // une caisse
+const scale = (b: Building) => (BUILDINGS[b.type] as BuildingDef).batchScale ?? 1;
 
 function missingFor(world: World, b: Building): { item: ItemId; missing: number } | null {
   const r = world.activeRecipe;
   if (!r || !b.machine) return null;
   const items = b.itemsIn ?? [];
-  switch (b.type) {
+  switch (kindOf(b.type)) {
     case 'mill': {
       // Le concasseur alimente la cuve d'empâtage voisine : il faut assez de malt pour le prochain empâtage.
-      const mashes = world.neighbors(b).filter((n) => n.b.type === 'mash_tun');
+      const mashes = world.neighbors(b).filter((n) => kindOf(n.b.type) === 'mash_tun');
       if (!mashes.length) return null;
+      const want = mashes.reduce((s, n) => s + r.grainKg * scale(n.b), 0);
       const inPipeline =
         countItems(items, 'malt') + countItems(b.itemsOut ?? [], 'crushed_malt') +
         mashes.reduce((s, n) => s + countItems(n.b.itemsIn ?? [], 'crushed_malt'), 0);
-      return { item: 'malt', missing: Math.max(0, r.grainKg - inPipeline) };
+      return { item: 'malt', missing: Math.max(0, want - inPipeline) };
     }
     case 'mash_tun': {
       // Sans concasseur à côté, on achète du malt déjà concassé.
-      if (world.neighbors(b).some((n) => n.b.type === 'mill')) return null;
+      if (world.neighbors(b).some((n) => kindOf(n.b.type) === 'mill')) return null;
       if (b.machine.phase !== 'filling' && b.machine.phase !== 'idle') return null;
-      return { item: 'crushed_malt', missing: Math.max(0, r.grainKg - countItems(items, 'crushed_malt')) };
+      return { item: 'crushed_malt', missing: Math.max(0, r.grainKg * scale(b) - countItems(items, 'crushed_malt')) };
     }
-    case 'kettle':
-      return { item: 'hops', missing: Math.max(0, r.hopsItems - countItems(items, 'hops')) };
-    case 'fermenter':
-      return { item: 'yeast', missing: Math.max(0, 1 - countItems(items, 'yeast')) };
+    case 'kettle': {
+      // Volume attendu : le moût présent, sinon un lot de la taille de la cuve.
+      const liters = b.fluidIn?.amount || 19 * scale(b);
+      return { item: 'hops', missing: Math.max(0, hopsFor(r.hopsItems, liters) - countItems(items, 'hops')) };
+    }
+    case 'fermenter': {
+      const liters = b.fluidIn?.amount || 19 * scale(b);
+      return { item: 'yeast', missing: Math.max(0, yeastFor(liters) - countItems(items, 'yeast')) };
+    }
     case 'bottler': {
-      const want = Math.min(BOTTLER_CAPACITY, Math.max(MIN_BOTTLES, Math.ceil((b.fluidIn?.amount ?? 0) / BOTTLE_LITERS)));
+      const cap = (BUILDINGS[b.type] as BuildingDef).itemsIn!.capacity;
+      const want = Math.min(cap, Math.max(MIN_BOTTLES, Math.ceil((b.fluidIn?.amount ?? 0) / BOTTLE_LITERS)));
       return { item: 'bottle', missing: Math.max(0, want - countItems(items, 'bottle')) };
     }
     default:

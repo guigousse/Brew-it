@@ -33,6 +33,12 @@ const MIGRATIONS: Record<number, (save: any) => any> = {
       production: { recipeId: 1, running: true },
     },
   }),
+  // v3 → v4 : stock d'ingrédients (fournisseur) et matériel miniature débloqué.
+  3: (s) => ({
+    ...s,
+    version: 4,
+    world: { ...s.world, stock: {}, unlocked: [...new Set([...s.world.unlocked, ...STARTER_BUILDINGS])] },
+  }),
 };
 
 export function migrate(raw: unknown): SaveFile {

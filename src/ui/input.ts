@@ -86,7 +86,7 @@ export class InputController {
       this.moved = false;
       this.path = [t];
       this.refreshGhost(t);
-      if (this.tool.kind === 'delete') this.mark(t, true);
+      if (this.tool.kind === 'delete') this.mark(p, true);
     } else if (this.pointers.size === 2) {
       this.start = null; // un 2e doigt annule le geste en cours
       this.renderer.ghost = null;
@@ -122,7 +122,7 @@ export class InputController {
         this.refreshGhost(t);
         break;
       case 'delete':
-        this.mark(t, false);
+        this.mark(p, false);
         break;
     }
   };
@@ -171,7 +171,7 @@ export class InputController {
         return;
       }
     }
-    this.cb.onSelect(w.at(Math.floor(wx / TILE), Math.floor(wy / TILE))?.id ?? null);
+    this.cb.onSelect(this.renderer.hitTest(wx, wy)?.id ?? w.at(Math.floor(wx / TILE), Math.floor(wy / TILE))?.id ?? null);
   }
 
   private pinchState() {
@@ -247,11 +247,14 @@ export class InputController {
   }
 
   /** Mode suppression : toucher bascule la marque rouge ; glisser ajoute des bâtiments. */
-  private mark(t: Tile, toggle: boolean): void {
-    const key = `${t.x},${t.y}`;
+  private mark(p: { x: number; y: number }, toggle: boolean): void {
+    const cam = this.renderer.camera;
+    const wx = (p.x - cam.x) / cam.zoom;
+    const wy = (p.y - cam.y) / cam.zoom;
+    const b = this.renderer.hitTest(wx, wy);
+    const key = b ? String(b.id) : '';
     if (!toggle && key === this.lastMark) return;
     this.lastMark = key;
-    const b = this.world().at(t.x, t.y);
     if (!b) return;
     if (!toggle && this.renderer.deleteSet.has(b.id)) return;
     const set = this.renderer.deleteSet;

@@ -25,8 +25,17 @@ Les volumes s'adaptent tout seuls : chaque machine traite le lot entier qui arri
 - Le brassin est **sauvegardé** et s'applique à toute la ligne. Pour changer de bière, on met la **production en pause** (les lots en cours se terminent), puis on reprend un ancien brassin ou on en compose un nouveau.
 - Le nom suit chaque lot jusqu'aux bouteilles et aux caisses. 🔜 Une étiquette personnalisée sera apposée sur les bouteilles.
 
+## Matériel : du garage à la brasserie pro
+- **Au départ, version miniature** (une case, matériel de garage) : mini-concasseur à manivelle, marmite d'empâtage, marmite d'ébullition sur réchaud, serpentin, dame-jeanne et embouteilleuse manuelle. Les lots font 25 L.
+- **Versions pro** au Magasin, débloquées après 5 caisses livrées : moulin à rouleaux (×2,5), cuves de 50 L (lots ×2, vitesse ×1,3), échangeur à plaques (×3), fermenteur conique et embouteilleuse semi-automatique (×3).
+- Les appareils sont **raccordés par des tuyaux** visibles, comme dans une vraie brasserie.
+
+## Interface
+- **Header :** nom de l'appli, argent, options.
+- **Onglets du bas :** **Magasin** (appareils, agrandissement, suppression), **Fournisseur** (malt, houblon, levure, bouteilles mis en stock) et **Brassins** (production, recettes).
+
 ## Ingrédients
-- Quand une machine manque d'un ingrédient pour le prochain lot, une **icône « + » pulse** au-dessus d'elle : malt pour le concasseur, houblon pour la cuve d'ébullition, levure pour le fermenteur, bouteilles pour l'embouteilleuse. Un toucher achète **exactement ce qui manque** et débite le prix.
+- On achète les ingrédients au **Fournisseur** : ils vont dans le **stock**. Quand une machine en manque pour le prochain lot, une **icône « + » pulse** au-dessus d'elle (malt pour le concasseur, houblon pour la marmite d'ébullition, levure pour le fermenteur, bouteilles pour l'embouteilleuse). Un toucher la charge depuis le stock. S'il n'y en a pas assez, le complément est acheté au prix du fournisseur.
 - 🔜 Des **réserves** (silo à malt, chambre froide à houblon…) rempliront automatiquement les machines voisines. Il faudra quand même les réapprovisionner.
 
 ## Construction

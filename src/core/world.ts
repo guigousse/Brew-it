@@ -2,7 +2,10 @@ import { BatchRegistry, type BatchId, type BatchProfile } from './brewing/batche
 import { createBuilding, type Building } from './building';
 import { BUILDINGS, type BuildingType, type ParamValue } from './content/buildings';
 import { EXPANSIONS, MAX_MAP_HEIGHT, MAX_MAP_WIDTH } from './content/expansions';
-import { EXPANSION_UNLOCKS, STARTER_BUILDINGS } from './content/progression';
+import { STARTER_BUILDINGS, unlockMet } from './content/progression';
+import { findPack } from './content/supplies';
+import type { ItemId } from './content/items';
+import { ITEM_PRICES } from './economy/market';
 import { tutorialPlacement, tutorialUpdate, type TutorialState } from './tutorial/tutorial';
 import type { Recipe, RecipeChoices } from './brewing/recipe';
 import { needOf } from './ingredients';
@@ -70,6 +73,8 @@ export class World {
   tutorial: TutorialState;
   /** Bâtiments proposés dans la palette (le contenu se débloque progressivement). */
   unlocked: BuildingType[];
+  /** Stock d'ingrédients achetés chez le fournisseur, prêts à charger dans les machines. */
+  stock: Partial<Record<ItemId, number>> = {};
   /** Brassins sauvegardés par le joueur (on peut toujours revenir à un ancien). */
   recipes: Recipe[] = [];
   /** Brassin appliqué par la ligne, et production en marche ou en pause. */
@@ -139,6 +144,7 @@ export class World {
     updateHeat(this, dt);
     updateMarket(this.market, this.time, this.rng);
     if (!this.tutorial.done) tutorialUpdate(this);
+    if (this.tick % 20 === 0) this.checkUnlocks();
     this.time += dt;
     this.tick++;
     if (this.tick % (TICK_RATE * 5) === 0) this.collectBatches();
@@ -213,18 +219,49 @@ export class World {
     return { ok: true };
   }
 
-  /** Achète ce qui manque à une machine (icône « + ») et le dépose directement dedans. */
-  buyMissing(id: number): CommandResult & { item?: string; qty?: number; cost?: number } {
+  /** Achète un conditionnement chez le fournisseur et le range dans le stock. */
+  buyPack(packId: string): CommandResult {
+    const found = findPack(packId);
+    if (!found) return { ok: false, reason: 'Produit inconnu' };
+    if (this.money < found.pack.price) return { ok: false, reason: 'Fonds insuffisants' };
+    this.money -= found.pack.price;
+    const item = found.supply.item;
+    this.stock[item] = (this.stock[item] ?? 0) + found.pack.qty;
+    this.signal(`stock:${item}`);
+    return { ok: true };
+  }
+
+  /**
+   * Icône « + » : charge dans la machine ce qui lui manque, en puisant dans le stock.
+   * S'il n'y en a pas assez, le complément est acheté au prix unitaire du fournisseur.
+   */
+  loadMissing(id: number): CommandResult & { item?: ItemId; qty?: number; fromStock?: number; cost?: number } {
     const b = this.buildings.get(id);
     const need = b && needOf(this, b);
     if (!b || !need) return { ok: false, reason: 'Rien à ajouter' };
-    if (this.money < need.unitPrice) return { ok: false, reason: 'Fonds insuffisants' };
-    const qty = Math.min(need.missing, Math.floor(this.money / need.unitPrice + 1e-9));
-    for (let i = 0; i < qty; i++) b.itemsIn!.push({ item: need.item, batch: null });
-    const cost = qty * need.unitPrice;
+    const fromStock = Math.min(this.stock[need.item] ?? 0, need.missing);
+    const unit = ITEM_PRICES[need.item] ?? 1;
+    const affordable = Math.floor(this.money / unit + 1e-9);
+    const bought = Math.min(need.missing - fromStock, affordable);
+    const qty = fromStock + bought;
+    if (qty <= 0) return { ok: false, reason: 'Fonds insuffisants' };
+    this.stock[need.item] = (this.stock[need.item] ?? 0) - fromStock;
+    const cost = bought * unit;
     this.money -= cost;
-    this.signal(`buy:${need.item}`);
-    return { ok: true, item: need.item, qty, cost };
+    for (let i = 0; i < qty; i++) b.itemsIn!.push({ item: need.item, batch: null });
+    this.signal(`load:${need.item}`);
+    return { ok: true, item: need.item, qty, fromStock, cost };
+  }
+
+  /** Débloque les appareils dont la condition est remplie (caisses livrées, agrandissements). */
+  checkUnlocks(): void {
+    if (!this.tutorial.done) return;
+    const stats = { crates: this.stats.crates, expansion: this.expansion };
+    const fresh = (Object.keys(BUILDINGS) as BuildingType[]).filter((t) => {
+      const d = BUILDINGS[t] as { unlock?: { crates?: number; expansion?: number }; hidden?: boolean };
+      return !d.hidden && d.unlock && !this.unlocked.includes(t) && unlockMet(d.unlock, stats);
+    });
+    this.unlock(fresh);
   }
 
   /** Déplace un bâtiment avec son contenu (gratuit). */
@@ -305,7 +342,7 @@ export class World {
     this.expansion++;
     this.grid.unlock(next.width, next.height);
     this.events.emit({ type: 'expanded', level: this.expansion });
-    this.unlock(EXPANSION_UNLOCKS[this.expansion] ?? []);
+    this.checkUnlocks();
     return { ok: true };
   }
 

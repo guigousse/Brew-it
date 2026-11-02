@@ -5,7 +5,7 @@ import { buildReferenceBrewery } from './core/testing/scenarios';
 import { World } from './core/world';
 import { createStorage } from './platform/storage';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
-import { GameRenderer } from './render/renderer';
+import { GameRenderer, WALL_TILES } from './render/renderer';
 import { Hud } from './ui/hud';
 import { InputController } from './ui/input';
 
@@ -39,7 +39,7 @@ async function boot() {
       else if (reason) hud.toast(world.tutorial.done ? reason : 'Touche la case qui clignote', 'bad');
     },
     onBuy: (id) => {
-      hud.buy(id);
+      hud.load(id);
       tapFeedback();
     },
     onDeleteSelectionChanged: () => hud.deleteSelectionChanged(),
@@ -55,7 +55,7 @@ async function boot() {
   const fitView = () =>
     renderer.camera.fit(world.grid.unlockedW, world.grid.unlockedH, {
       x: 0, y: hud.topInset, w: renderer.app.screen.width, h: hud.bottomInset - hud.topInset,
-    });
+    }, 0.96, WALL_TILES);
 
   const hud = new Hud(document.getElementById('hud')!, () => world, input, renderer.deleteSet, {
     setSpeed: (s) => (loop.speed = s),

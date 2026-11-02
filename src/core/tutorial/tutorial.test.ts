@@ -11,9 +11,9 @@ function act(w: World, choices: RecipeChoices = DEFAULT_CHOICES): boolean {
   const step = currentStep(w)!;
   for (const t of step.places ?? []) w.place(t.type, t.x, t.y, 0);
   if (step.signal === 'recipe:created') w.createRecipe('Blonde de Gaston', choices);
-  else if (step.signal?.startsWith('buy:')) {
-    const need = ingredientNeeds(w).find((n) => `buy:${n.item}` === step.signal);
-    if (need) w.buyMissing(need.buildingId);
+  else if (step.signal === 'stock:malt') w.buyPack('malt5');
+  else if (step.signal?.startsWith('load:') || step.id === 'load_rest') {
+    for (const n of ingredientNeeds(w)) w.loadMissing(n.buildingId);
   } else if (step.signal) w.signal(step.signal);
   if (step.ack) w.signal(`ack:${step.id}`);
   return !step.until;
@@ -36,7 +36,7 @@ describe('tutoriel', () => {
     const w = new World();
     expect(currentStep(w)!.id).toBe('intro');
     expect(tutorialPalette(w)).toEqual([]);
-    expect(w.place('mill', 1, 1).ok).toBe(false);
+    expect(w.place('mill', 1, 2).ok).toBe(false);
   });
 
   it('n’autorise que la construction demandée, à l’endroit demandé, gratuitement', () => {
@@ -45,7 +45,7 @@ describe('tutoriel', () => {
     expect(tutorialPalette(w)).toEqual(['mill']);
     expect(w.place('mill', 4, 4).ok).toBe(false);
     const money = w.money;
-    const r = w.place('mill', 1, 1);
+    const r = w.place('mill', 1, 2);
     expect(r.ok).toBe(true);
     expect(w.money).toBe(money);
     expect(currentStep(w)!.id).toBe('mash_tun');
@@ -56,8 +56,8 @@ describe('tutoriel', () => {
   it('impose l’orientation prévue du tapis avec virage, quel que soit le sens du geste', () => {
     const w = new World();
     while (currentStep(w)!.id !== 'conveyor') act(w);
-    const a = w.place('conveyor', 5, 4, 0);
-    const b = w.place('conveyor', 4, 4, 2);
+    const a = w.place('conveyor', 7, 4, 0);
+    const b = w.place('conveyor', 6, 4, 2);
     expect(w.buildings.get(a.id!)!.rot).toBe(2);
     expect(w.buildings.get(b.id!)!.rot).toBe(1);
   });
@@ -66,7 +66,7 @@ describe('tutoriel', () => {
     const w = new World();
     while (currentStep(w)!.id !== 'recipe') act(w);
     expect(ingredientNeeds(w)).toEqual([]); // pas d'icône « + » sans brassin
-    const mash = w.list.find((b) => b.type === 'mash_tun')!;
+    const mash = w.list.find((b) => b.type === 'mash_tun_mini')!;
     mash.itemsIn!.push(...Array.from({ length: 6 }, () => ({ item: 'crushed_malt' as const, batch: null })));
     for (let i = 0; i < 20 * 20; i++) w.step();
     expect(mash.machine!.phase).toBe('filling');
@@ -75,17 +75,24 @@ describe('tutoriel', () => {
     expect(mash.machine!.phase).toBe('heating');
   });
 
-  it('les icônes « + » achètent exactement ce qui manque', () => {
+  it('le « + » charge depuis le stock, et achète seulement le complément', () => {
     const w = new World();
-    while (currentStep(w)!.id !== 'buy_malt') act(w);
+    while (currentStep(w)!.id !== 'stock_malt') act(w);
     const needs = ingredientNeeds(w);
     expect(needs.map((n) => n.item).sort()).toEqual(['bottle', 'hops', 'malt', 'yeast']);
+    expect(w.buyPack('malt5').ok).toBe(true);
+    expect(w.stock.malt).toBe(5);
     const malt = needs.find((n) => n.item === 'malt')!;
-    expect(malt.missing).toBe(DEFAULT_CHOICES.grainKg);
     const money = w.money;
-    w.buyMissing(malt.buildingId);
-    expect(w.money).toBeCloseTo(money - malt.total);
-    expect(ingredientNeeds(w).some((n) => n.item === 'malt')).toBe(false);
+    const r = w.loadMissing(malt.buildingId);
+    expect(r).toMatchObject({ ok: true, qty: 5, fromStock: 5, cost: 0 });
+    expect(w.money).toBe(money);
+    expect(w.stock.malt).toBe(0);
+    // Sans stock : le complément est acheté au prix unitaire.
+    const hops = ingredientNeeds(w).find((n) => n.item === 'hops')!;
+    const r2 = w.loadMissing(hops.buildingId);
+    expect(r2.fromStock).toBe(0);
+    expect(w.money).toBeCloseTo(money - hops.total);
   });
 
   it('se termine par la livraison de la première caisse, en moins de 6 minutes de jeu', () => {
@@ -124,9 +131,10 @@ describe('tutoriel', () => {
 
   it('survit à une sauvegarde en plein milieu', () => {
     const w = new World();
-    while (currentStep(w)!.id !== 'buy_hops') act(w);
+    while (currentStep(w)!.id !== 'load_malt') act(w);
     const loaded = fromJSON(toJSON(w));
-    expect(currentStep(loaded)!.id).toBe('buy_hops');
+    expect(currentStep(loaded)!.id).toBe('load_malt');
+    expect(loaded.stock.malt).toBe(5);
     expect(loaded.activeRecipe!.name).toBe('Blonde de Gaston');
     expect(playTutorial(loaded)).toBeLessThan(360);
   });
@@ -136,6 +144,34 @@ describe('tutoriel', () => {
     skipTutorial(w);
     expect(w.tutorial.done).toBe(true);
     expect(w.place('mill', 0, 0).ok).toBe(true);
+  });
+});
+
+describe('matériel et paliers', () => {
+  it('le matériel pro se débloque après 5 caisses livrées', () => {
+    const w = new World({ tutorial: false });
+    expect(w.unlocked).toContain('mash_tun_mini');
+    expect(w.unlocked).not.toContain('mash_tun');
+    w.stats.crates = 5;
+    w.checkUnlocks();
+    expect(w.unlocked).toEqual(expect.arrayContaining(['mash_tun', 'kettle', 'fermenter', 'bottler', 'mill_2', 'cooler_2', 'stand']));
+  });
+
+  it('une cuve pro brasse des lots deux fois plus gros', () => {
+    const run = (mash: 'mash_tun_mini' | 'mash_tun') => {
+      const w = new World({ tutorial: false, money: 1e5 });
+      w.place('mill', 0, 0);
+      const m = w.place(mash, 1, 0);
+      w.place('water_tap', 1, mash === 'mash_tun' ? 2 : 1);
+      w.createRecipe('Test', DEFAULT_CHOICES);
+      for (const n of ingredientNeeds(w)) w.loadMissing(n.buildingId);
+      for (let i = 0; i < 20 * 120; i++) w.step();
+      return w.buildings.get(m.id!)!.fluid!.amount;
+    };
+    const mini = run('mash_tun_mini');
+    const pro = run('mash_tun');
+    expect(mini).toBeGreaterThan(15);
+    expect(pro).toBeCloseTo(mini * 2, 0);
   });
 });
 

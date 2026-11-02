@@ -21,11 +21,13 @@ export class Camera {
   }
 
   /** Cadre une zone (en cases) dans le rectangle écran visible (hors barres d'interface). */
-  fit(widthTiles: number, heightTiles: number, view: { x: number; y: number; w: number; h: number }, margin = 0.92): void {
-    const z = Math.min((view.w * margin) / (widthTiles * TILE), (view.h * margin) / (heightTiles * TILE));
-    this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, z >= 1 ? Math.floor(z) : Math.floor(z * 4) / 4));
+  fit(widthTiles: number, heightTiles: number, view: { x: number; y: number; w: number; h: number }, margin = 0.94, topTiles = 0): void {
+    const totalH = heightTiles + topTiles;
+    const z = Math.min((view.w * margin) / (widthTiles * TILE), (view.h * margin) / (totalH * TILE));
+    this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, z >= 1 ? Math.floor(z * 2) / 2 : Math.floor(z * 4) / 4));
     this.x = view.x + (view.w - widthTiles * TILE * this.zoom) / 2;
-    this.y = view.y + (view.h - heightTiles * TILE * this.zoom) / 2;
+    // topTiles : rangées au-dessus de y = 0 (le mur du fond) incluses dans le cadrage.
+    this.y = view.y + (view.h - totalH * TILE * this.zoom) / 2 + topTiles * TILE * this.zoom;
     this.apply();
   }
 
@@ -47,7 +49,7 @@ export class Camera {
   }
 
   snapZoom(): void {
-    this.zoom = Math.max(this.minZoom, this.zoom >= 1 ? Math.round(this.zoom) : Math.round(this.zoom * 4) / 4);
+    this.zoom = Math.max(this.minZoom, this.zoom >= 1 ? Math.round(this.zoom * 2) / 2 : Math.round(this.zoom * 4) / 4);
     this.apply();
   }
 

@@ -1,4 +1,4 @@
-import type { BuildingType, ParamValue } from '../content/buildings';
+import { kindOf, type BuildingType, type MachineKind, type ParamValue } from '../content/buildings';
 import type { Dir } from '../dir';
 import { describe } from '../describe';
 import type { World } from '../world';
@@ -29,12 +29,15 @@ export interface TutorialStep {
   focus?: { x: number; y: number };
   /** Action proposée par Gaston dans son panneau (ex. ouvrir l'assistant de brassin). */
   action?: 'recipe';
+  /** Onglet du bas à mettre en avant. */
+  tab?: 'shop' | 'supplier' | 'brews';
   onComplete?: (w: World) => void;
 }
 
-const first = (w: World, type: BuildingType) => w.list.find((b) => b.type === type);
-const statusOf = (w: World, type: BuildingType) => {
-  const b = first(w, type);
+/** Premier appareil d'une famille (miniature ou pro). */
+const first = (w: World, kind: MachineKind) => w.list.find((b) => kindOf(b.type) === kind);
+const statusOf = (w: World, kind: MachineKind) => {
+  const b = first(w, kind);
   return b ? describe(w, b).status : '';
 };
 
@@ -42,85 +45,91 @@ const statusOf = (w: World, type: BuildingType) => {
 export const TUTORIAL_REWARD = 1200;
 
 /**
- * Le tutoriel : construire sa ligne de brassage, composer son brassin, ajouter les ingrédients,
- * puis livrer sa première caisse au bar du coin. Plan du garage (10 × 7) :
+ * Le tutoriel : monter une petite brasserie de garage raccordée par des tuyaux, composer son brassin,
+ * acheter et charger les ingrédients, puis livrer sa première caisse. Plan du garage (10 × 7) :
  *
- *   y0      [Empât ][Ébull ]
- *   y1  [Co][Empât ][Ébull ][R↓]
- *   y2      [Eau]           [Ferm ]
- *   y3                      [Ferm ]
- *   y4          [↓][←]      [Embout]
- *   y5          [Caisse]    [Embout]
+ *   y0          [Robinet]
+ *   y1          [tuyau↓]
+ *   y2  .  [Conc][Empât][→][→][Ébull][Serp→][→][Dame-j.]
+ *   y3                                         [tuyau↓]
+ *   y4                               [tapis↓][←][Embout.]
+ *   y5                               [Caisse]
  */
 export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   {
     id: 'intro', chapter: 'Bienvenue', ack: true,
-    text: 'Salut ! Moi c\'est Gaston, j\'ai brassé pendant quarante ans. Ton garage est parfait pour démarrer. On va monter ta brasserie, brasser ta toute première bière de A à Z, et livrer une caisse de 12 bouteilles au bar du coin.',
+    text: 'Salut ! Moi c\'est Gaston, j\'ai brassé pendant quarante ans. On va monter ta brasserie de garage avec du petit matériel, brasser ta toute première bière de A à Z, et livrer une caisse de 12 bouteilles au bar du coin.',
   },
   {
-    id: 'mill', chapter: 'Le concassage',
-    text: 'Une bière, c\'est de l\'eau, du malt, du houblon et de la levure. Le malt, c\'est de l\'orge qu\'on a fait germer puis sécher. Le concasseur casse ses grains pour libérer l\'amidon. Choisis-le en bas, puis touche la case qui clignote.',
-    places: [{ type: 'mill', x: 1, y: 1 }],
+    id: 'mill', chapter: 'Le concassage', tab: 'shop',
+    text: 'Une bière, c\'est de l\'eau, du malt, du houblon et de la levure. Le malt, c\'est de l\'orge germée puis séchée. Le concasseur casse ses grains pour libérer l\'amidon. Ouvre le Magasin, choisis-le, puis touche la case qui clignote.',
+    places: [{ type: 'mill', x: 1, y: 2 }],
   },
   {
-    id: 'mash_tun', chapter: 'L\'empâtage',
-    text: 'Voici la cuve d\'empâtage : on y fait infuser le malt concassé dans de l\'eau chaude, comme un thé. L\'amidon s\'y transforme en sucre. Pose-la collée au concasseur : les machines voisines se passent tout.',
-    places: [{ type: 'mash_tun', x: 2, y: 0 }],
+    id: 'mash_tun', chapter: 'L\'empâtage', tab: 'shop',
+    text: 'La marmite d\'empâtage : on y fait infuser le malt concassé dans de l\'eau chaude, comme un thé. L\'amidon devient du sucre. Pose-la juste à droite du concasseur, qui la remplira directement.',
+    places: [{ type: 'mash_tun_mini', x: 2, y: 2 }],
   },
   {
-    id: 'water', chapter: 'L\'empâtage',
-    text: 'Une bière, c\'est 90 % d\'eau ! Pose l\'arrivée d\'eau juste sous la cuve.',
-    places: [{ type: 'water_tap', x: 2, y: 2 }],
+    id: 'water', chapter: 'L\'empâtage', tab: 'shop',
+    text: 'Une bière, c\'est 90 % d\'eau ! Installe le robinet contre le mur, puis un tuyau qui descend jusqu\'à la marmite.',
+    places: [{ type: 'water_tap', x: 2, y: 0 }, { type: 'conduit', x: 2, y: 1, rot: 1 }],
   },
   {
-    id: 'kettle', chapter: 'L\'ébullition',
-    text: 'Le liquide sucré qui sort de l\'empâtage s\'appelle le moût. On le fait bouillir une heure pour le stériliser, et c\'est là qu\'on ajoute le houblon. Pose la cuve d\'ébullition.',
-    places: [{ type: 'kettle', x: 4, y: 0 }],
+    id: 'pipe_kettle', chapter: 'L\'ébullition', tab: 'shop',
+    text: 'Le liquide sucré qui sort de l\'empâtage s\'appelle le moût. Trace un tuyau vers la droite : glisse ton doigt sur les deux cases.',
+    places: [{ type: 'conduit', x: 3, y: 2, rot: 0 }, { type: 'conduit', x: 4, y: 2, rot: 0 }],
   },
   {
-    id: 'cooler', chapter: 'Le refroidissement',
-    text: 'Point crucial : après l\'ébullition le moût est à 100 °C, et la levure meurt au-dessus de 35 °C ! Ce refroidisseur fera tomber le moût à 20 °C.',
-    places: [{ type: 'cooler', x: 6, y: 1, rot: 1 }],
+    id: 'kettle', chapter: 'L\'ébullition', tab: 'shop',
+    text: 'Au bout du tuyau, la marmite d\'ébullition : on fait bouillir le moût une heure pour le stériliser, et c\'est là qu\'on ajoute le houblon.',
+    places: [{ type: 'kettle_mini', x: 5, y: 2 }],
   },
   {
-    id: 'fermenter', chapter: 'La fermentation',
-    text: 'Le moût refroidi coule dans le fermenteur. La levure y mange le sucre et fabrique l\'alcool et les bulles. Pose-le sous le refroidisseur.',
-    places: [{ type: 'fermenter', x: 6, y: 2 }],
+    id: 'cooler', chapter: 'Le refroidissement', tab: 'shop',
+    text: 'Point crucial : après l\'ébullition le moût est à 100 °C, et la levure meurt au-dessus de 35 °C ! Branche ce serpentin refroidisseur à la sortie de la marmite.',
+    places: [{ type: 'cooler', x: 6, y: 2, rot: 0 }],
   },
   {
-    id: 'bottler', chapter: 'L\'embouteillage',
-    text: 'Une fois la bière prête, l\'embouteilleuse la met en bouteilles. Pose-la sous le fermenteur.',
-    places: [{ type: 'bottler', x: 6, y: 4 }],
+    id: 'fermenter', chapter: 'La fermentation', tab: 'shop',
+    text: 'Un bout de tuyau, puis la dame-jeanne : la levure y mange le sucre et fabrique l\'alcool et les bulles.',
+    places: [{ type: 'conduit', x: 7, y: 2, rot: 0 }, { type: 'fermenter_mini', x: 8, y: 2 }],
   },
   {
-    id: 'conveyor', chapter: 'La livraison',
-    text: 'Les bouteilles doivent rejoindre la caisse de livraison. Trace un tapis roulant avec un virage : glisse ton doigt sur les cases qui clignotent, vers la gauche puis vers le bas.',
-    places: [{ type: 'conveyor', x: 5, y: 4, rot: 2 }, { type: 'conveyor', x: 4, y: 4, rot: 1 }],
+    id: 'bottler', chapter: 'L\'embouteillage', tab: 'shop',
+    text: 'Quand la bière est prête, elle descend par un tuyau jusqu\'à l\'embouteilleuse.',
+    places: [{ type: 'conduit', x: 8, y: 3, rot: 1 }, { type: 'bottler_mini', x: 8, y: 4 }],
   },
   {
-    id: 'crate', chapter: 'La livraison',
+    id: 'conveyor', chapter: 'La livraison', tab: 'shop',
+    text: 'Les bouteilles partent sur un tapis roulant. Trace-le avec un virage : glisse vers la gauche, puis vers le bas.',
+    places: [{ type: 'conveyor', x: 7, y: 4, rot: 2 }, { type: 'conveyor', x: 6, y: 4, rot: 1 }],
+  },
+  {
+    id: 'crate', chapter: 'La livraison', tab: 'shop',
     text: 'Au bout du tapis, la caisse : dès qu\'elle contient 12 bouteilles, elle part chez le bar du coin.',
-    places: [{ type: 'crate', x: 4, y: 5 }],
+    places: [{ type: 'crate', x: 6, y: 5 }],
   },
   {
     id: 'recipe', chapter: 'Ton brassin', signal: 'recipe:created', action: 'recipe',
     text: 'Ta brasserie est prête ! Maintenant, compose ta recette : c\'est ton brassin. Je t\'explique chaque choix, et tu lui donneras un nom.',
   },
   {
-    id: 'buy_malt', chapter: 'Les ingrédients', signal: 'buy:malt',
-    text: 'La production est lancée, mais il manque les ingrédients ! Touche le sac de malt « + » qui clignote au-dessus du concasseur : il achète juste ce qu\'il faut.',
+    id: 'stock_malt', chapter: 'Le fournisseur', signal: 'stock:malt', tab: 'supplier',
+    text: 'Il faut des ingrédients ! Ouvre l\'onglet Fournisseur et achète un sac de malt de 5 kg.',
   },
   {
-    id: 'buy_hops', chapter: 'Les ingrédients', signal: 'buy:hops',
-    text: 'Parfait. Ajoute aussi le houblon à la cuve d\'ébullition : touche son icône « + ».',
+    id: 'load_malt', chapter: 'Le fournisseur', signal: 'load:malt',
+    text: 'Le sac est dans ton stock. Touche le « + » qui clignote au-dessus du concasseur pour le charger.',
   },
   {
-    id: 'buy_yeast', chapter: 'Les ingrédients', signal: 'buy:yeast',
-    text: 'Puis un sachet de levure pour le fermenteur.',
-  },
-  {
-    id: 'buy_bottles', chapter: 'Les ingrédients', signal: 'buy:bottle',
-    text: 'Et des bouteilles vides pour l\'embouteilleuse. Plus tard, tu pourras acheter des réserves pour que tout ça se remplisse tout seul.',
+    id: 'load_rest', chapter: 'Le fournisseur', tab: 'supplier',
+    until: (w) => ['load:hops', 'load:yeast', 'load:bottle'].every((s) => w.tutorial.signals.includes(s)),
+    text: (w) => {
+      const left = [['load:hops', 'le houblon (marmite d\'ébullition)'], ['load:yeast', 'la levure (dame-jeanne)'], ['load:bottle', 'les bouteilles (embouteilleuse)']]
+        .filter(([s]) => !w.tutorial.signals.includes(s!)).map(([, l]) => l);
+      return `Achète aussi chez le fournisseur ${left.join(', ')}, puis touche chaque « + » pour charger. S'il te manque quelque chose, le « + » complète tout seul.`;
+    },
   },
   {
     id: 'wait_brew', chapter: 'Ça brasse !', fastForward: true,
@@ -130,10 +139,10 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
       const k = first(w, 'kettle')?.machine?.phase;
       const f = first(w, 'fermenter');
       if (f?.machine?.phase === 'failed') return 'Aïe… le moût était trop chaud et la levure est morte. Pas grave, ça arrive aux meilleurs : on recommence avec le prochain brassin.';
-      if (f && f.fluidIn!.amount > 0) return `Le moût refroidi coule dans le fermenteur. ${statusOf(w, 'fermenter')}.`;
+      if (f && f.fluidIn!.amount > 0) return `Le moût refroidi coule dans la dame-jeanne. ${statusOf(w, 'fermenter')}.`;
       if (k === 'heating' || k === 'processing') return `${statusOf(w, 'kettle')}. Ça sent bon le pain chaud et l'herbe coupée !`;
       if (m === 'heating' || m === 'processing') return `${statusOf(w, 'mash_tun')}. Tu peux accélérer le temps si tu veux.`;
-      return 'Le malt passe au concasseur, l\'eau remplit la cuve… Ton brassin démarre !';
+      return 'Le malt passe au concasseur, l\'eau remplit la marmite… Ton brassin démarre !';
     },
   },
   {
@@ -160,7 +169,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
       const b = w.firstBeer;
       const name = b?.name ? `« ${b.name} »` : 'Ta bière';
       const profile = b ? ` ${name} fait ${b.abv.toFixed(1)} % d'alcool, ${Math.round(b.ibu)} d'amertume (IBU), avec une qualité de ${Math.round(b.quality * 100)} %.` : '';
-      return `Ta première caisse est livrée !${profile} Tu sais maintenant brasser de A à Z. Je t'offre ${TUTORIAL_REWARD} € pour lancer ta brasserie. À toi de jouer !`;
+      return `Ta première caisse est livrée !${profile} Je t'offre ${TUTORIAL_REWARD} € pour lancer ta brasserie. Livre des caisses pour débloquer du matériel pro au Magasin !`;
     },
     onComplete: (w) => {
       w.money += TUTORIAL_REWARD;

@@ -1,4 +1,6 @@
 import { countItems, type Building } from './building';
+import { BUILDINGS, kindOf, type BuildingDef } from './content/buildings';
+import { hopsFor, yeastFor } from './systems/machines';
 import { ITEMS, type ItemId } from './content/items';
 import { STRAINS, type StrainId } from './content/strains';
 import { CRATE_SIZE, waterFor } from './systems/machines';
@@ -23,7 +25,8 @@ export function describe(world: World, b: Building): MachineInfo {
   const m = b.machine;
   const needs: MachineInfo['needs'] = [];
   const t = (v: number | undefined) => `${Math.round(v ?? 0)} °C`;
-  switch (b.type) {
+  const scale = (BUILDINGS[b.type] as BuildingDef).batchScale ?? 1;
+  switch (kindOf(b.type) ?? b.type) {
     case 'water_tap':
       return { status: 'Eau du réseau à 12 °C', needs };
     case 'supplier': {
@@ -37,20 +40,21 @@ export function describe(world: World, b: Building): MachineInfo {
     case 'tank':
       return { status: b.fluid?.fluid ? `${b.fluid.amount.toFixed(1)} L à ${t(b.fluid.temp)}` : 'Vide', needs };
     case 'cooler':
+    case 'cooler_2':
       return { status: b.fluid?.fluid ? `Le liquide ressort refroidi (≈ ${t(b.params.targetTemp as number)})` : 'En attente de liquide chaud', needs };
     case 'mill':
       return { status: m?.phase === 'processing' ? 'Concassage du malt' : 'En attente de malt', progress: pct(b), needs };
     case 'mash_tun': {
-      const grain = world.activeRecipe?.grainKg ?? 5;
+      const grain = (world.activeRecipe?.grainKg ?? 5) * scale;
       needs.push({ label: 'Malt concassé', have: countItems(b.itemsIn!, 'crushed_malt'), want: grain, unit: 'kg' });
-      needs.push({ label: 'Eau', have: Math.floor(b.fluidIn!.amount), want: waterFor(grain), unit: 'L' });
+      needs.push({ label: 'Eau', have: Math.floor(b.fluidIn!.amount), want: waterFor(grain) * scale, unit: 'L' });
       if (m?.phase === 'heating') return { status: `L'eau chauffe : ${t(m.temp)} → ${t(Number(m.data?.mashTemp))}`, needs };
       if (m?.phase === 'processing') return { status: 'Empâtage : l\'amidon du malt devient du sucre', progress: pct(b), needs };
       if (m?.phase === 'blocked') return { status: 'Moût prêt : la sortie est bloquée', needs };
       return { status: idleReason(world) ?? 'En attente des ingrédients', needs };
     }
     case 'kettle': {
-      needs.push({ label: 'Houblon', have: countItems(b.itemsIn!, 'hops'), want: world.activeRecipe?.hopsItems ?? 1, unit: '× 50 g' });
+      needs.push({ label: 'Houblon', have: countItems(b.itemsIn!, 'hops'), want: hopsFor(world.activeRecipe?.hopsItems ?? 1, b.fluidIn!.amount || 19 * scale), unit: '× 50 g' });
       if (m?.phase === 'heating') return { status: `Montée à ébullition : ${t(m.temp)}`, needs };
       if (m?.phase === 'processing') return { status: `Ébullition avec ${Math.round(Number(m.data?.hopsGrams ?? 0))} g de houblon`, progress: pct(b), needs };
       if (m?.phase === 'blocked') return { status: 'Moût houblonné prêt : la sortie est bloquée', needs };
@@ -58,7 +62,7 @@ export function describe(world: World, b: Building): MachineInfo {
       return { status: wort > 0 ? `Le moût arrive : ${wort.toFixed(0)} L` : idleReason(world) ?? 'En attente du moût', needs };
     }
     case 'fermenter': {
-      needs.push({ label: 'Levure', have: countItems(b.itemsIn!, 'yeast'), want: 1, unit: 'sachet' });
+      needs.push({ label: 'Levure', have: countItems(b.itemsIn!, 'yeast'), want: yeastFor(b.fluidIn!.amount || 19 * scale), unit: 'sachet' });
       const strain = STRAINS[(world.batches.get(m?.batch ?? null)?.strain ?? world.activeRecipe?.strain ?? 'ale_us') as StrainId]?.name ?? '';
       if (m?.phase === 'processing') {
         const fermenting = m.timer < Number(m.data?.fermentDuration ?? 0);
@@ -87,5 +91,7 @@ export function describe(world: World, b: Building): MachineInfo {
       };
     case 'stand':
       return { status: b.itemsIn!.length ? `Vend aux passants (${b.itemsIn!.length} en stock)` : 'Plus rien à vendre', needs };
+    default:
+      return { status: '', needs };
   }
 }
