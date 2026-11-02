@@ -39,10 +39,10 @@ En bas, au **premier plan**, la ligne d'embouteillage déroule le parcours de ch
 
 Effet des niveaux (1 → 5) :
 - **Volume des lots :** 5, 20, 60, 200, 600 L. Le plus petit appareil fixe la taille du brassin.
-- **Précision des températures :** ± 3, ± 2, ± 0,8, ± 0,2 °C, puis exacte.
+- **Précision :** voir « Précision du matériel et qualité ».
 - **Durée des étapes :** ×1,2, ×1, ×0,8, ×0,6, ×0,4. Une journée de fermentation ou deux journées de garde durent 30 s au niveau 2.
 - **Embouteillage :** 0,7 s, 0,5 s, 0,25 s, 0,08 s, puis 0,02 s par bouteille.
-- **Défauts réduits :** infection au refroidissement (15 %, 10 %, 4 %, 0 %, 0 %), oxydation à l'embouteillage (de 8 % à 0), goût de maïs cuit, astringence, limpidité (bonus aux niveaux 4 et 5).
+- **Défauts réduits :** infection au refroidissement (10 %, 6 %, 2 %, 0, 0), oxydation à l'embouteillage (de 8 % à 0), goût de maïs cuit, astringence, limpidité (bonus aux niveaux 4 et 5).
 - **Prix :** prix de base de l'appareil (60 à 100 €) × 1, 250, 2 500, puis 10 000 pour les niveaux 2 à 5.
 
 **Niveau de la brasserie** : la brasserie prend le niveau de son appareil le moins avancé. Dès que les 7 appareils sont au niveau 2, elle passe niveau 2, et ainsi de suite. Chaque niveau change tout le décor et ouvre de nouveaux distributeurs :
@@ -58,6 +58,33 @@ Effet des niveaux (1 → 5) :
 Une plaque en haut à gauche de la scène montre le niveau. La toucher ouvre la fiche de la brasserie : quels appareils il reste à améliorer, et ce que débloquera le niveau suivant. Le passage de niveau déclenche un éclair et cette fiche.
 
 Le tout premier brassin du tutoriel va 4 fois plus vite et ne peut pas être infecté : Gaston donne un coup de main. Si le joueur n'a plus d'argent, plus de stock et rien en cours, Gaston avance les ingrédients : la partie ne peut jamais se bloquer.
+
+## Précision du matériel et qualité
+Chaque appareil exécute ta recette avec sa propre précision (`src/core/brewing/execution.ts`). La bière obtenue s'écarte donc plus ou moins de ce que tu as réglé.
+
+| Niveau | Températures | Doses (malt, houblon, sucre) | Infection |
+|---|---|---|---|
+| 1 | ± 4,5 °C | ± 30 %, mouture irrégulière | 10 % |
+| 2 | ± 2,5 °C | ± 14 % | 6 % |
+| 3 | ± 1 °C | ± 6 % | 2 % |
+| 4 | ± 0,3 °C | ± 2 % | 0 |
+| 5 | précision moléculaire | exactes | 0 |
+
+- **Les écarts coûtent de la qualité** et sont expliqués à la dégustation, par exemple « Empâtage à 69 °C au lieu de 66 °C : le corps n'est pas celui de ta recette ».
+- **Le matériel rudimentaire ajoute un manque de netteté.** Un tirage « bon ou mauvais jour » par brassin le rend plus ou moins marqué.
+- **Ce que donne la recette de Gaston**, d'après `npm run quality` (Monte-Carlo) :
+
+| Niveau | Résultat typique | Excellente |
+|---|---|---|
+| 1 | surtout Correcte, un quart Médiocre ou pire | 1 % |
+| 2 | surtout Bonne | 24 % |
+| 3 | Bonne ou Excellente | 59 % |
+| 4 et 5 | Excellente | 100 % |
+
+- **Une recette aux réglages limites** reste Correcte ou Bonne jusqu'au niveau 4. Seul le niveau 5 l'amène à Excellente.
+- **Une recette incohérente reste mauvaise**, quel que soit le matériel.
+- **Chaque lot d'une bière de la gamme varie.** La bière prend la dégustation de son dernier lot buvable, et un lot imbuvable est jeté.
+- **Le tout premier brassin, guidé par Gaston, est exact.**
 
 ## Modèle de brassage réaliste (`src/core/brewing/model.ts`)
 | Cause | Effet |

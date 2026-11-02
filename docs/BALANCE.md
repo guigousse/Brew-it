@@ -117,7 +117,7 @@ Après chaque réglage, relancer `npm run balance` et vérifier :
 
 1. **Des commandes spéciales**, par exemple « le caviste veut une IPA Bonne avant ce soir, prime 2 000 € ». Ce serait une raison de revenir qui passe par la recette, pas seulement par l'argent. C'est le meilleur levier pour remplir la moitié des visites sans achat.
 2. **Des notifications locales** : essai prêt à goûter, stockage plein, plafond des 8 h atteint. Elles ramènent le joueur au bon moment.
-3. **Faire peser davantage la qualité.** Aujourd'hui, une bonne recette fait 0,92 au niveau 1 et 1,00 au niveau 5 : les machines apportent du volume, presque pas de qualité.
+3. ~~Faire peser davantage la qualité~~ : c'est fait. La précision du matériel fait varier la qualité de 0,58 en moyenne au niveau 1 à 1,00 au niveau 5 (voir GAME_DESIGN.md et `npm run quality`). Le rythme reste de 28 jours.
 4. **Le palier du niveau 5.** Le volume de 600 L n'arrive qu'avec les 7 machines au niveau 5. C'est le passage le plus lent (J13 à J19). On pourrait donner à chaque machine de niveau 5 un bonus immédiat (vitesse, qualité).
 5. **Une rejouabilité après la fin** (nouvelle brasserie, prestige) pour les joueurs qui finissent en un mois.
 6. **Valider avec de vrais joueurs sur TestFlight** : le joueur simulé achète toujours au mieux, alors qu'un vrai joueur hésite et se trompe de recette. On peut s'attendre à 20 à 30 % de temps en plus.

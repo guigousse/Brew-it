@@ -735,6 +735,9 @@ export class App {
       const ul = h('ul', 'defects');
       for (const d of t.defects) ul.append(h('li', '', d.label));
       card.append(ul);
+      if (t.defects.some((d) => /^(drift|dos|rough|small|infection|oxidation)/.test(d.id))) {
+        card.append(h('p', 'hint', 'Une partie de ces défauts vient de l\'imprécision de tes appareils : plus ils sont avancés, plus ta bière ressemble à ta recette.'));
+      }
     } else card.append(h('p', 'note', 'Aucun défaut : propre, équilibrée, réussie !'));
   }
 

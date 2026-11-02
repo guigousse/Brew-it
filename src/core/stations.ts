@@ -39,13 +39,13 @@ export interface StationDef {
 /** Volume de lot (L) que chaque niveau d'appareil peut traiter : le plus petit fixe la taille du brassin. */
 export const CAPACITY = [0, 5, 20, 60, 200, 600] as const;
 /** Imprécision des températures (± °C) selon le niveau. */
-export const PRECISION = [0, 3, 2, 0.8, 0.2, 0] as const;
+export { TEMP_SPREAD as PRECISION, DOSE_SPREAD } from './brewing/execution';
 /** Multiplicateur de durée selon le niveau. */
 export const SPEED = [0, 1.2, 1, 0.8, 0.6, 0.4] as const;
 /** Secondes par bouteille à l'embouteillage selon le niveau (de la pipette aux robots). */
 export const BOTTLE_S = [0, 0.7, 0.5, 0.25, 0.08, 0.02] as const;
 /** Risque d'infection au refroidissement selon le niveau du refroidisseur. */
-export const INFECTION = [0, 0.15, 0.1, 0.04, 0, 0] as const;
+export const INFECTION = [0, 0.1, 0.06, 0.02, 0, 0] as const;
 /** Pénalité d'oxydation selon le niveau de l'embouteillage. */
 export const OXIDATION = [0, 0.08, 0.05, 0.02, 0, 0] as const;
 /** Multiplicateur de prix pour passer au niveau n (index = niveau visé). */
@@ -66,7 +66,7 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'grainKg', label: 'Malt', min: 1, max: 10, step: 0.5, unit: 'kg' },
       { key: 'crush', label: 'Finesse', min: 1, max: 10, step: 1, unit: '/10' },
     ],
-    perks: ['Lots de 5 L, à la force du poignet', 'Lots de 20 L', 'Lots de 60 L, plus rapide', 'Lots de 200 L, mouture régulière (moins d\'astringence)', 'Lots de 600 L, mouture parfaite, ultra-rapide'],
+    perks: ['Lots de 5 L, malt pesé à ± 30 %, mouture irrégulière', 'Lots de 20 L, malt à ± 14 %', 'Lots de 60 L, malt à ± 6 %, plus rapide', 'Lots de 200 L, malt à ± 2 %, moins d\'astringence', 'Lots de 600 L, pesée et mouture parfaites'],
     baseCost: 60,
   },
   mash: {
@@ -76,7 +76,7 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'mashTemp', label: 'Température', min: 45, max: 85, step: 1, unit: '°C' },
       { key: 'mashTime', label: 'Durée', min: 10, max: 120, step: 5, unit: 'min' },
     ],
-    perks: ['Température ± 3 °C, lots de 5 L', 'Température ± 2 °C, lots de 20 L', 'Température ± 0,8 °C, lots de 60 L', 'Température ± 0,2 °C, lots de 200 L', 'Température exacte, lots de 600 L'],
+    perks: ['Température ± 4,5 °C, lots de 5 L', 'Température ± 2,5 °C, lots de 20 L', 'Température ± 1 °C, lots de 60 L', 'Température ± 0,3 °C, lots de 200 L', 'Précision moléculaire, lots de 600 L'],
     baseCost: 80,
   },
   boil: {
@@ -87,14 +87,14 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'hopsAroma', label: 'Houblon arôme', min: 0, max: 200, step: 5, unit: 'g' },
       { key: 'boilTime', label: 'Durée', min: 5, max: 120, step: 5, unit: 'min' },
     ],
-    perks: ['Petit feu : lots de 5 L', 'Ébullition douce, lots de 20 L', 'Ébullition vigoureuse : moins de goût de maïs cuit, lots de 60 L', 'Vapeur : lots de 200 L, deux fois plus rapide', 'Induction : lots de 600 L, ultra-rapide'],
+    perks: ['Petit feu, houblon dosé à ± 30 %, lots de 5 L', 'Houblon à ± 14 %, lots de 20 L', 'Ébullition vigoureuse (moins de goût de maïs cuit), houblon à ± 6 %, lots de 60 L', 'Vapeur, houblon à ± 2 %, lots de 200 L', 'Induction, dosage exact, lots de 600 L'],
     baseCost: 80,
   },
   cooler: {
     id: 'cooler', step: 'Refroidissement', names: ['Réfrigérant en verre', 'Serpentin', 'Échangeur à plaques', 'Échangeur double étage', 'Cryo-échangeur'],
     description: 'Il faut refroidir le moût avant d\'ajouter la levure : au-dessus de 35 °C, elle meurt.',
     knobs: [{ key: 'pitchTemp', label: 'Température de sortie', min: 5, max: 60, step: 1, unit: '°C' }],
-    perks: ['Très lent : risque d\'infection 15 %', 'Lent : risque 10 %, lots de 20 L', 'Rapide : risque 4 %, lots de 60 L', 'Instantané : aucun risque, lots de 200 L', 'Cryogénique : aucun risque, lots de 600 L'],
+    perks: ['Très lent : risque d\'infection 10 %, ± 4,5 °C', 'Lent : risque 6 %, ± 2,5 °C, lots de 20 L', 'Rapide : risque 2 %, ± 1 °C, lots de 60 L', 'Instantané : aucun risque, lots de 200 L', 'Cryogénique : aucun risque, précision moléculaire, lots de 600 L'],
     baseCost: 70,
   },
   fermenter: {
@@ -105,7 +105,7 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'fermentTemp', label: 'Température', min: 4, max: 36, step: 1, unit: '°C' },
       { key: 'fermentDays', label: 'Durée', min: 1, max: 30, step: 1, unit: 'j' },
     ],
-    perks: ['Température ± 3 °C, lots de 5 L', 'Température ± 2 °C, lots de 20 L', 'Température ± 0,8 °C, lots de 60 L', 'Régulé ± 0,2 °C, lots de 200 L', 'Température exacte, lots de 600 L, 2,5× plus rapide'],
+    perks: ['Température ± 4,5 °C, lots de 5 L', 'Température ± 2,5 °C, lots de 20 L', 'Température ± 1 °C, lots de 60 L', 'Régulé ± 0,3 °C, lots de 200 L', 'Précision moléculaire, lots de 600 L, 2,5× plus rapide'],
     baseCost: 100,
   },
   conditioning: {
@@ -115,14 +115,14 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'gardeTemp', label: 'Température', min: 0, max: 20, step: 1, unit: '°C' },
       { key: 'gardeDays', label: 'Durée', min: 0, max: 30, step: 1, unit: 'j' },
     ],
-    perks: ['Température ± 3 °C, lots de 5 L', 'Température ± 2 °C, lots de 20 L', 'Température ± 0,8 °C, lots de 60 L', 'Garde à froid : bière plus limpide, lots de 200 L', 'Stase : limpidité cristalline, lots de 600 L'],
+    perks: ['Température ± 4,5 °C, lots de 5 L', 'Température ± 2,5 °C, lots de 20 L', 'Température ± 1 °C, lots de 60 L', 'Garde à froid ± 0,3 °C : bière plus limpide, lots de 200 L', 'Stase : limpidité cristalline, lots de 600 L'],
     baseCost: 90,
   },
   bottling: {
     id: 'bottling', step: 'Embouteillage', names: ['Entonnoir et pipette', 'Canne d\'embouteillage', 'Tireuse 4 becs', 'Ligne automatique', 'Ligne robotisée'],
     description: 'On met en bouteille avec un peu de sucre : la levure le transforme en bulles.',
     knobs: [{ key: 'priming', label: 'Sucre', min: 0, max: 16, step: 0.5, unit: 'g/L' }],
-    perks: ['Goutte à goutte : oxydation marquée', 'Lent, léger goût d\'oxydation, lots de 20 L', 'Plus rapide, moins d\'oxydation, lots de 60 L', 'Ligne automatique : aucune oxydation, lots de 200 L', 'Robots : lots de 600 L, ultra-rapide'],
+    perks: ['Goutte à goutte : oxydation marquée, sucre à ± 30 %', 'Lent, léger goût d\'oxydation, sucre à ± 14 %, lots de 20 L', 'Plus rapide, moins d\'oxydation, sucre à ± 6 %, lots de 60 L', 'Ligne automatique : aucune oxydation, lots de 200 L', 'Robots : dosage exact, lots de 600 L, ultra-rapide'],
     baseCost: 70,
   },
 };

@@ -1,4 +1,6 @@
 import { brew, conversion, GASTON_RECIPE, verdictOf, type Actual, type Levels, type Recipe } from './model';
+import { executeAll } from './execution';
+import { Rng } from '../rng';
 
 const L1: Levels = { mill: 1, mash: 1, boil: 1, cooler: 1, fermenter: 1, conditioning: 1, bottling: 1 };
 const L3: Levels = { mill: 4, mash: 4, boil: 4, cooler: 4, fermenter: 4, conditioning: 4, bottling: 4 };
@@ -75,5 +77,49 @@ describe('modèle de brassage', () => {
     const bombs = taste({ priming: 15 });
     expect(ids(bombs)).toContain('bombs');
     expect(bombs.lost).toBeGreaterThan(0);
+  });
+});
+
+describe('précision du matériel', () => {
+  const levels = (lv: number): Levels => ({ mill: lv, mash: lv, boil: lv, cooler: lv, fermenter: lv, conditioning: lv, bottling: lv });
+  const stats = (r: Recipe, lv: number, n = 1500) => {
+    const rng = new Rng(7);
+    let excellent = 0;
+    let poor = 0;
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      const q = brew(r, levels(lv), executeAll(r, levels(lv), () => rng.next())).quality;
+      sum += q;
+      if (verdictOf(q) === 'Excellente') excellent++;
+      if (q < 0.5) poor++;
+    }
+    return { mean: sum / n, excellent: excellent / n, poor: poor / n };
+  };
+
+  it('niveau 1 : beaucoup de bières médiocres, presque jamais excellentes', () => {
+    const s = stats(GASTON_RECIPE, 1);
+    expect(s.excellent).toBeLessThan(0.05);
+    expect(s.poor).toBeGreaterThan(0.15);
+  });
+
+  it('la qualité monte avec le niveau des appareils', () => {
+    const means = [1, 2, 3, 4, 5].map((lv) => stats(GASTON_RECIPE, lv).mean);
+    for (let i = 1; i < 5; i++) expect(means[i]!).toBeGreaterThan(means[i - 1]!);
+  });
+
+  it('niveau 5 : précision moléculaire, une bonne recette est toujours excellente', () => {
+    const s = stats(GASTON_RECIPE, 5);
+    expect(s.excellent).toBe(1);
+  });
+
+  it('niveau 5 ne rattrape pas une recette incohérente', () => {
+    expect(stats({ ...GASTON_RECIPE, mashTemp: 76, fermentTemp: 25, boilTime: 20 }, 5).mean).toBeLessThan(0.3);
+  });
+
+  it('les écarts sont expliqués à la dégustation', () => {
+    const r = GASTON_RECIPE;
+    const t = brew(r, levels(1), { mashTemp: r.mashTemp + 4, pitchTemp: r.pitchTemp, fermentTemp: r.fermentTemp, gardeTemp: r.gardeTemp, infectionRoll: 1, grainKg: r.grainKg * 1.25 });
+    expect(ids(t)).toContain('driftMash');
+    expect(ids(t)).toContain('dosGrain');
   });
 });

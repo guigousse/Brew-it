@@ -5,7 +5,8 @@ export type GameEvent =
   | { type: 'sale'; amount: number }
   | { type: 'distributorAvailable'; id: string }
   | { type: 'upgraded'; station: string; level: number }
-  | { type: 'breweryLevel'; level: number };
+  | { type: 'breweryLevel'; level: number }
+  | { type: 'batchRuined'; beerId: number };
 
 type Listener = (e: GameEvent) => void;
 

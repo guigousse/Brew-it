@@ -52,6 +52,16 @@ export interface Actual {
   gardeTemp: number;
   /** Tirage 0..1 pour le risque d'infection au refroidissement. */
   infectionRoll: number;
+  /** Doses réellement mises (sinon celles de la recette). */
+  grainKg?: number;
+  crush?: number;
+  hopsBitter?: number;
+  hopsAroma?: number;
+  priming?: number;
+  /** Petits défauts cumulés du matériel (pénalité de qualité). */
+  rough?: number;
+  /** Chance du brassin (0 = bon jour, 1 = mauvais jour). */
+  luck?: number;
 }
 
 export interface Tasting {
@@ -94,13 +104,43 @@ const tinseth = (og: number, minutes: number, grams: number, liters: number) =>
 export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
   const defects: Defect[] = [];
   const s = STRAINS[r.strain];
+  // Ce que les appareils ont réellement dosé (imprécision du matériel).
+  const grainKg = a.grainKg ?? r.grainKg;
+  const crush = a.crush ?? r.crush;
+  const hopsBitter = a.hopsBitter ?? r.hopsBitter;
+  const hopsAroma = a.hopsAroma ?? r.hopsAroma;
+  const priming = a.priming ?? r.priming;
+  if ((a.rough ?? 0) >= 0.02) defects.push(defect('rough', 'Manque de netteté : matériel rudimentaire, chaque étape un peu approximative', a.rough ?? 0));
+
+  // --- Écarts entre ta recette et ce que les appareils ont réellement fait (précision du matériel)
+  let small = 0;
+  const drift = (id: string, label: string, penalty: number) => {
+    if (penalty >= 0.025) defects.push(defect(id, label, penalty));
+    else small += penalty;
+  };
+  const deg = (x: number) => `${Math.round(x)} °C`;
+  const pct = (x: number) => `${x > 0 ? '+' : ''}${Math.round(x * 100)} %`;
+  const dMash = a.mashTemp - r.mashTemp;
+  drift('driftMash', `Empâtage à ${deg(a.mashTemp)} au lieu de ${deg(r.mashTemp)} : le corps n'est pas celui de ta recette`, 0.012 * dMash * dMash);
+  const dFerm = a.fermentTemp - r.fermentTemp;
+  drift('driftFerm', `Fermentation à ${deg(a.fermentTemp)} au lieu de ${deg(r.fermentTemp)} : arômes de levure brouillés`, 0.012 * dFerm * dFerm);
+  const dPitch = a.pitchTemp - r.pitchTemp;
+  const dGarde = a.gardeTemp - r.gardeTemp;
+  drift('driftCold', 'Températures de refroidissement et de garde imprécises', 0.004 * dPitch * dPitch + 0.005 * dGarde * dGarde);
+  const fGrain = grainKg / r.grainKg - 1;
+  drift('dosGrain', `Malt mal pesé (${pct(fGrain)}) : densité différente de ta recette`, 1.2 * fGrain * fGrain);
+  const fHops = r.hopsBitter + r.hopsAroma > 0 ? (hopsBitter + hopsAroma) / (r.hopsBitter + r.hopsAroma) - 1 : 0;
+  drift('dosHops', `Houblon mal dosé (${pct(fHops)}) : amertume et arômes déséquilibrés`, 1.0 * fHops * fHops);
+  const fSugar = r.priming > 0 ? priming / r.priming - 1 : 0;
+  drift('dosSugar', `Sucre de refermentation approximatif (${pct(fSugar)}) : bulles irrégulières`, 0.8 * fSugar * fSugar);
+  if (small >= 0.01) defects.push(defect('small', 'Petites imprécisions des appareils', small));
 
   // --- Concassage et empâtage
-  if (r.crush >= 9) defects.push(defect('crush', 'Âpre et astringente : mouture trop fine, la filtration a colmaté', (0.12 + (r.crush - 9) * 0.1) / (lv.mill >= 5 ? 4 : lv.mill >= 4 ? 2 : 1)));
-  const volume = Math.max(1, WATER_L - r.grainKg);
+  if (crush >= 9) defects.push(defect('crush', 'Âpre et astringente : mouture trop fine, la filtration a colmaté', (0.12 + (crush - 9) * 0.1) / (lv.mill >= 5 ? 4 : lv.mill >= 4 ? 2 : 1)));
+  const volume = Math.max(1, WATER_L - grainKg);
   const timeFactor = (1 - Math.exp(-r.mashTime / 25)) / (1 - Math.exp(-60 / 25));
   const converted = clamp(conversion(a.mashTemp) * timeFactor, 0, 1.05);
-  let og = (r.grainKg * POINTS_PER_KG_PER_L * 0.75 * converted * crushEfficiency(r.crush)) / volume;
+  let og = (grainKg * POINTS_PER_KG_PER_L * 0.75 * converted * crushEfficiency(crush)) / volume;
   const fermentability = a.mashTemp <= 62 ? 0.88 : clamp(0.88 - (a.mashTemp - 62) * 0.028, 0.5, 0.88);
   if (converted < 0.4) defects.push(defect('starch', 'Trouble, goût de farine crue : l\'amidon n\'a presque pas été converti en sucre', 0.45));
   else if (converted < 0.7) defects.push(defect('starch', 'Farineuse et trouble : conversion de l\'amidon incomplète', 0.2));
@@ -109,8 +149,8 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
   const evap = 1 - (0.1 * r.boilTime) / 60;
   const boiled = volume * Math.max(0.5, evap);
   og = (og * volume) / boiled;
-  const ibu = tinseth(og, r.boilTime, r.hopsBitter, boiled) + tinseth(og, 5, r.hopsAroma, boiled);
-  const aroma = clamp01(1 - Math.exp(-r.hopsAroma / 40));
+  const ibu = tinseth(og, r.boilTime, hopsBitter, boiled) + tinseth(og, 5, hopsAroma, boiled);
+  const aroma = clamp01(1 - Math.exp(-hopsAroma / 40));
   const dmsLimit = lv.boil >= 3 ? 20 : 30;
   if (r.boilTime < dmsLimit) defects.push(defect('dms', 'Goût de maïs cuit (DMS) : ébullition trop courte', 0.1 + 0.3 * ((dmsLimit - r.boilTime) / dmsLimit)));
 
@@ -121,7 +161,7 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
   }
   if (a.pitchTemp > s.tempMax + 5) defects.push(defect('hotpitch', 'Démarrage trop chaud : notes de solvant dès les premières heures', 0.12));
   const infectionRisk = INFECTION[lv.cooler] ?? 0;
-  if (a.infectionRoll < infectionRisk) defects.push(defect('infection', 'Aigre et vinaigrée : contamination pendant un refroidissement trop lent', 0.5));
+  if (a.infectionRoll < infectionRisk) defects.push(defect('infection', 'Aigre et vinaigrée : contamination pendant un refroidissement trop lent', 0.3));
 
   // --- Fermentation
   let attenuation = clamp(s.attenuation * (fermentability / 0.75), 0.3, 0.95);
@@ -172,7 +212,7 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
   if (abv > 10) defects.push(defect('hot', 'Très forte en alcool, chaude en bouche', 0.1));
 
   // --- Embouteillage et refermentation
-  const co2 = 0.85 + r.priming * 0.27;
+  const co2 = 0.85 + priming * 0.27;
   let lost = 0;
   if (co2 < 1.8) defects.push(defect('flat', 'Plate : pas assez de sucre pour faire les bulles en bouteille', 0.15));
   else if (co2 > 4.2) {

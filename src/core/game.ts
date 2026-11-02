@@ -3,7 +3,8 @@ import { EventBus } from './events';
 import type { Label } from './label';
 import { bottlePrice, DEAL_BONUS, dealCost, DISTRIBUTORS, variety } from './market';
 import { Rng } from './rng';
-import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, PRECISION, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
+import { executeStep } from './brewing/execution';
+import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 
 export const TICK_RATE = 20;
@@ -199,7 +200,6 @@ export class Game {
     let best: Beer | undefined;
     let low = Infinity;
     for (const b of this.beers) {
-      if (b.tasting.quality < DRINKABLE_MIN) continue;
       const n = b.stock + this.pendingBottles(b.id);
       if (n < low) {
         low = n;
@@ -438,16 +438,10 @@ export class Game {
   private enter(b: Batch, stage: number): void {
     const id = STATION_ORDER[stage]!;
     const lv = this.level(id);
-    const noise = () => (this.rng.next() * 2 - 1) * (PRECISION[lv] ?? 2);
     const r = b.recipe;
-    if (id === 'mash') b.actual.mashTemp = r.mashTemp + noise();
-    if (id === 'cooler') {
-      b.actual.pitchTemp = r.pitchTemp + noise();
-      // Le tout premier brassin, Gaston veille au grain : pas d'infection.
-      b.actual.infectionRoll = this.batchesDone === 0 && this.beers.length === 0 ? 1 : this.rng.next();
-    }
-    if (id === 'fermenter') b.actual.fermentTemp = r.fermentTemp + noise();
-    if (id === 'conditioning') b.actual.gardeTemp = r.gardeTemp + noise();
+    // L'appareil exécute l'étape avec sa précision. Le tout premier brassin, Gaston veille au grain : tout est exact.
+    const guided = this.batchesDone === 0 && this.beers.length === 0 && !this.trial;
+    executeStep(id, r, lv, () => this.rng.next(), b.actual, guided);
     b.stage = stage;
     b.elapsed = 0;
     b.waiting = false;
@@ -477,8 +471,10 @@ export class Game {
     }
     this.batches = this.batches.filter((x) => x !== b);
     this.batchesDone++;
-    if (beer) beer.tasting = tasting;
-    this.events.emit({ type: 'batchDone', beerId: beer?.id ?? null, bottles });
+    // Un lot imbuvable est jeté ; sinon la bière prend la dégustation de son dernier lot (le matériel fait varier la qualité).
+    if (beer && tasting.quality >= DRINKABLE_MIN) beer.tasting = tasting;
+    if (beer && tasting.quality < DRINKABLE_MIN) this.events.emit({ type: 'batchRuined', beerId: beer.id });
+    else this.events.emit({ type: 'batchDone', beerId: beer?.id ?? null, bottles });
   }
 
   /** Lot bloqué en fin de ligne faute de place dans le stockage. */
