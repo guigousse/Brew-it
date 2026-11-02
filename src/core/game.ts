@@ -1,7 +1,7 @@
 import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Levels, type Recipe, type Tasting } from './brewing/model';
 import { EventBus } from './events';
 import type { Label } from './label';
-import { BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, glassPrice, kegGlasses, kegLiters, kegSpace, variety } from './market';
+import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, DECOR, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY, PARTY_COST, variety } from './market';
 import { CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, WHOLESALE_KEEP, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
@@ -142,6 +142,13 @@ export class Game {
   barDemand = 0;
   /** Tendances du moment. */
   trends: Trend[] = [];
+  /** Décorations achetées pour le bar. */
+  decor: string[] = [];
+  /** Fin de la fête en cours, et instant où l'on pourra en organiser une autre (s de jeu). */
+  partyUntil = 0;
+  partyReadyAt = 0;
+  /** Fin de la campagne de pub en cours. */
+  adUntil = 0;
   barSold = 0;
   barRevenue = 0;
   /** Commandes en attente sur l'ordinateur. */
@@ -497,7 +504,66 @@ export class Game {
   /** Clients par minute : 1 toutes les 10 minutes au début, plus avec la popularité, le niveau du bar et la variété. */
   get barRate(): number {
     const beers = new Set(this.flowing.map((t) => t.beerId)).size;
-    return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers));
+    const decor = 1 + DECOR.reduce((s, d) => s + (this.decor.includes(d.id) ? d.bonus : 0), 0);
+    return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers)) * decor * (this.partying ? PARTY.mult : 1);
+  }
+
+  /** Une fête bat son plein. */
+  get partying(): boolean {
+    return this.time < this.partyUntil;
+  }
+
+  get partyCost(): number {
+    return PARTY_COST[this.barLevel - 1] ?? PARTY_COST[0];
+  }
+
+  /** Organise une fête au bar : 50 fois plus de clients pendant 30 min ; les fûts vides sont rebranchés tout seuls. */
+  startParty(): CommandResult {
+    if (this.partying) return { ok: false, reason: 'La fête bat déjà son plein' };
+    if (this.time < this.partyReadyAt) return { ok: false, reason: 'Le quartier se remet de la dernière fête' };
+    if (this.money < this.partyCost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= this.partyCost;
+    this.partyUntil = this.time + PARTY.duration;
+    this.partyReadyAt = this.time + PARTY.cooldown;
+    this.refillTaps();
+    return { ok: true };
+  }
+
+  /** Pendant une fête, le personnel rebranche les fûts vides avec ceux du stockage (la bière la plus populaire d'abord). */
+  private refillTaps(): void {
+    this.taps.forEach((t, i) => {
+      if (t.glasses > 0) return;
+      const b = this.beers.filter((x) => x.kegs.length && x.tasting.quality >= BAR_MIN_QUALITY).sort((a, c) => c.pop - a.pop)[0];
+      if (b) this.swapKeg(i, b.id);
+    });
+  }
+
+  buyDecor(id: string): CommandResult {
+    const d = DECOR.find((x) => x.id === id);
+    if (!d || this.decor.includes(id)) return { ok: false, reason: 'Déjà installé' };
+    if (this.money < d.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= d.cost;
+    this.decor.push(id);
+    return { ok: true };
+  }
+
+  get adCost(): number {
+    return AD_COST[this.breweryLevel - 1] ?? AD_COST[0];
+  }
+
+  get advertising(): boolean {
+    return this.time < this.adUntil;
+  }
+
+  /** Campagne de pub : toute la gamme gagne en popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. */
+  advertise(): CommandResult {
+    if (this.advertising) return { ok: false, reason: 'Une campagne est déjà en cours' };
+    if (this.money < this.adCost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= this.adCost;
+    this.adUntil = this.time + AD.duration;
+    for (const b of this.beers) b.pop = Math.min(1, b.pop + AD.pop);
+    this.orderTimer = Math.min(this.orderTimer, 60);
+    return { ok: true };
   }
 
   /** Le bar a quelque chose à servir. */
@@ -783,10 +849,12 @@ export class Game {
    * qui coulent, attiré par les plus populaires et celles dans la tendance. Chaque verre fait connaître la bière.
    */
   private sellBar(dt: number): void {
+    if (this.partying) this.refillTaps();
     if (!this.barServing) return;
-    this.barDemand = Math.min(2, this.barDemand + (this.barRate / 60) * dt);
+    this.barDemand = Math.min(this.partying ? 200 : 2, this.barDemand + (this.barRate / 60) * dt);
     let earned = 0;
     while (this.barDemand >= 1) {
+      if (this.partying && this.taps.some((t) => t.glasses <= 0)) this.refillTaps();
       const flowing = this.flowing;
       if (!flowing.length) break;
       const weight = (t: Tap) => {
@@ -853,7 +921,7 @@ export class Game {
     if (this.orders.length >= this.boardSlots) return;
     this.orderTimer -= dt;
     if (this.orderTimer > 0) return;
-    this.orderTimer = (ORDER_GAP_MIN_S + (ORDER_GAP_MAX_S - ORDER_GAP_MIN_S) * this.rng.next()) / (0.8 + 0.4 * this.brand);
+    this.orderTimer = (ORDER_GAP_MIN_S + (ORDER_GAP_MAX_S - ORDER_GAP_MIN_S) * this.rng.next()) / (0.8 + 0.4 * this.brand) / (this.advertising ? AD.orderBoost : 1);
     const o = drawOrder(this.nextId++, {
       rng: this.rng, time: this.time, breweryLevel: this.breweryLevel, brand: this.brand, beers: this.beers.length,
       storageCap: this.storageCap, kegLiters: kegLiters(this.batchLiters), trends: this.trends,
@@ -878,7 +946,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, decor: this.decor, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -924,6 +992,10 @@ export class Game {
     g.wholesaleSold ??= 0;
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
+    g.decor ??= [];
+    g.partyUntil ??= 0;
+    g.partyReadyAt ??= 0;
+    g.adUntil ??= 0;
     g.queued ??= false;
     g.trial ??= null;
     return g;

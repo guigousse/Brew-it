@@ -91,10 +91,9 @@ Avant les corrections, avec 5 niveaux mais l'ancienne économie, le joueur simul
 
 ```
 Chiffre d'affaires par jour :
-  J1 34k · J5 226k · J10 252k · J15 1,1M · J20 667k · J25 3,4M · J28 5,4M
-Fin : J29 · 95 visites · 62 % sans achat · pire série sans achat : 7 visites
-2 visites par jour : fin J36 · 52 % sans achat · pire série : 4
-Répartition : grossiste ~85 % · commandes ~10 % · bar ~5 %
+  J1 40k · J6 251k · J12 259k · J18 1,2M · J24 765k · J30 4,0M · J33 5,8M
+Fin : J34 · 115 visites · 31 % sans achat · pire série sans achat : 2 visites
+2 visites par jour : fin J42 · 16 % sans achat · pire série : 2
 ```
 
 ## Tableau de commandes, grossiste (v7)
@@ -102,7 +101,8 @@ Répartition : grossiste ~85 % · commandes ~10 % · bar ~5 %
 - Les **contrats et négociations** ont disparu, au profit d'un tableau de commandes variées : moins nombreuses, plus petites au début, et toujours payées le montant annoncé.
 - Le **grossiste automatique** écoule le surplus en continu (au-delà de la moitié du stockage). Sans lui, la production des absences était perdue et la partie dépassait 60 jours.
 - Les **améliorations de l'ordinateur** (places au tableau) remplacent une partie des achats que représentaient les contrats.
-- **Point faible connu : 62 % de visites sans achat** (45 % avec les contrats). En milieu de partie, le seul achat utile est le niveau suivant d'une machine, qui ne rapporte qu'une fois les 7 machines au même niveau. Pistes : des achats intermédiaires (campagnes de pub, décoration, recettes), ou un gain immédiat à chaque machine améliorée.
+- **Achats intermédiaires** : sans contrats, 62 % des visites se passaient sans achat. La décoration du bar, les fêtes et les campagnes de pub ramènent ce chiffre à 31 % (16 % à 2 visites par jour). Le joueur simulé lance une campagne quand il a quatre fois son prix en trop, et une fête quand il a trois fûts d'avance par tireuse.
+- Le **grossiste** est passé de 2,20 € à 2,40 € de base, pour finir vers le J34.
 
 ## Où régler quoi
 
@@ -113,7 +113,8 @@ Répartition : grossiste ~85 % · commandes ~10 % · bar ~5 %
 | Changer le rythme du brassage | `DAY_S`, `SPEED`, `BOTTLE_S` (`src/core/stations.ts`) |
 | Changer la place des bières dans la gamme | `VARIETY` (`market.ts`) et `SLOT_COSTS` (`src/core/warehouse.ts`) |
 | Changer le stockage | `STORAGE` (`warehouse.ts`) |
-| Changer le bar | `BAR`, `BAR_BASE_SHARE`, `GLASS_PRICE`, `kegLiters` (`market.ts`) |
+| Changer le bar | `BAR`, `BAR_BASE_SHARE`, `GLASS_PRICE`, `kegLiters`, `DECOR`, `PARTY`, `PARTY_COST` (`market.ts`) |
+| Changer la publicité | `AD`, `AD_COST` (`market.ts`) |
 | Changer la popularité et les tendances | `POP_PER_GLASS`, `POP_PER_BOTTLE`, `POP_DECAY`, `TREND_*` (`src/core/trends.ts`) |
 | Changer les commandes | `CLIENT_TYPES`, `ORDER_BASE`, `KIND_PAY`, `ORDER_GAP_*`, `ORDER_LIFE_*`, `COMPUTERS` (`src/core/orders.ts`) |
 | Changer le grossiste | `WHOLESALE_PRICE`, `WHOLESALE_KEEP` (`orders.ts`) |

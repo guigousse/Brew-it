@@ -8,7 +8,7 @@
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
 import { DEFAULT_LABEL } from '../src/core/label';
 import { Game, simulateOffline } from '../src/core/game';
-import { BAR } from '../src/core/market';
+import { BAR, DECOR } from '../src/core/market';
 import { COMPUTERS } from '../src/core/orders';
 import { MAX_LEVEL, STATION_ORDER, upgradeCost } from '../src/core/stations';
 import { STORAGE } from '../src/core/warehouse';
@@ -55,7 +55,10 @@ function tendBar() {
   });
   if (!g.beers.length) return;
   const kegs = g.beers.reduce((s, b) => s + b.kegs.length + g.pendingKegs(b.id), 0) + g.plan.filter((p) => p.format === 'keg').length;
-  if (kegs < g.taps.length * 2 && g.plan.length < 2) g.planBrew(g.beers[g.batchesDone % g.beers.length]!.id, 'keg');
+  if (kegs < g.taps.length * 4 && g.plan.length < 2) g.planBrew(g.beers[g.batchesDone % g.beers.length]!.id, 'keg');
+  // une fête quand on a prévu assez de fûts
+  const full = g.beers.reduce((s, b) => s + b.kegs.length, 0);
+  if (full >= g.taps.length * 3 && g.money >= g.partyCost * 2 && g.startParty().ok) buy('Fête', g.partyCost);
 }
 const brandByDay: number[] = [];
 
@@ -95,6 +98,7 @@ function shop() {
       if (lv >= MAX_LEVEL) continue;
       options.push({ cost: upgradeCost(id, lv + 1), label: `${id} → ${lv + 1}`, act: () => g.upgrade(id).ok });
     }
+    for (const d of DECOR) if (!g.decor.includes(d.id)) options.push({ cost: d.cost, label: d.name, act: () => g.buyDecor(d.id).ok });
     const pc = COMPUTERS[g.computerLevel];
     if (pc) options.push({ cost: pc.cost, label: `Ordinateur → ${g.computerLevel + 1}`, act: () => g.upgradeComputer().ok });
     const bar = BAR[g.barLevel];
@@ -105,7 +109,11 @@ function shop() {
     if (slot != null) options.push({ cost: slot, label: `Place gamme ${g.rangeSlots + 1}`, act: () => g.buySlot().ok });
     options.sort((a, b) => a.cost - b.cost);
     const o = options[0];
-    if (!o || o.cost > g.money) return;
+    if (!o || o.cost > g.money) {
+      // de l'argent en trop par rapport au prochain achat : une campagne de pub
+      if (!g.advertising && g.beers.length && g.money >= g.adCost * 4 && g.advertise().ok) buy('Campagne de pub', g.adCost);
+      return;
+    }
     if (!o.act()) return;
     buy(o.label, o.cost);
   }

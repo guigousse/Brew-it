@@ -62,3 +62,29 @@ export const variety = (beers: number) => (beers <= 0 ? 0 : 1 + VARIETY * (beers
 export function glassPrice(level: number, t: Tasting, trends = 0): number {
   return GLASS_PRICE * qualityFactor(t) * (BAR[level - 1]?.priceMult ?? 1) * (1 + 0.15 * trends);
 }
+
+// ------------------------------------------------------------------ décoration, fêtes, publicité
+
+/** Décoration du bar : achats uniques, visibles dans la salle, qui attirent du monde. */
+export const DECOR: readonly { id: string; name: string; cost: number; bonus: number }[] = [
+  { id: 'jukebox', name: 'Juke-box', cost: 300, bonus: 0.15 },
+  { id: 'plants', name: 'Plantes vertes', cost: 1200, bonus: 0.1 },
+  { id: 'darts', name: 'Cible de fléchettes', cost: 5000, bonus: 0.15 },
+  { id: 'pinball', name: 'Flipper', cost: 25000, bonus: 0.2 },
+  { id: 'screen', name: 'Écran géant', cost: 120000, bonus: 0.25 },
+  { id: 'stage', name: 'Petite scène', cost: 600000, bonus: 0.3 },
+  { id: 'sign', name: 'Enseigne lumineuse', cost: 2500000, bonus: 0.35 },
+];
+
+/**
+ * Fête au bar : pendant 30 minutes, 50 fois plus de clients. Les fûts vides sont rebranchés automatiquement
+ * avec ceux du stockage : il faut en avoir prévu d'avance.
+ */
+export const PARTY = { mult: 50, duration: 30 * 60, cooldown: 6 * 3600 } as const;
+/** Prix d'une fête selon le niveau du bar. */
+export const PARTY_COST = [100, 1000, 10000, 80000, 600000] as const;
+
+/** Campagne de pub : la gamme gagne en popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. */
+export const AD = { pop: 0.1, duration: 6 * 3600, orderBoost: 2 } as const;
+/** Prix d'une campagne selon le niveau de la brasserie. */
+export const AD_COST = [150, 2500, 30000, 250000, 2000000] as const;

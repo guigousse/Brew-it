@@ -492,6 +492,7 @@ export class BarRoom extends Room {
     const lv = game.barLevel;
     g.drawImage(this.background(lv, t), 0, 0);
     this.drawBoard(game, lv);
+    this.drawDecor(game.decor, lv, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
     this.drawTaps(labels, game.taps.length, lv);
     this.drawBartender(game, lv, t);
@@ -502,8 +503,76 @@ export class BarRoom extends Room {
       g.fillStyle = `rgba(94,240,255,${0.25 + 0.2 * k})`;
       g.fillRect(COUNTER.x0, COUNTER.front - 1, COUNTER.x1 - COUNTER.x0, 1);
     }
+    if (game.partying) this.party(t);
     this.drawCellar(game, lv, t);
     if (this.selected === 'counter') this.outline(BAR_HIT, t);
+  }
+
+  /** Fête : projecteurs de couleur qui balaient la salle, confettis. */
+  private party(t: number): void {
+    const g = this.g;
+    const cols = ['255,90,208', '94,240,255', '242,193,78', '126,224,129'];
+    for (let i = 0; i < 4; i++) {
+      const x = 20 + i * 40;
+      const sweep = Math.sin(t * 1.6 + i * 1.7) * 40;
+      g.fillStyle = `rgba(${cols[i]},0.13)`;
+      g.beginPath(); g.moveTo(x - 2, 0); g.lineTo(x + 2, 0); g.lineTo(x + sweep + 18, CELLAR_Y); g.lineTo(x + sweep - 18, CELLAR_Y); g.fill();
+    }
+    for (let i = 0; i < 40; i++) {
+      const k = (t * 0.25 + hash(i, 21)) % 1;
+      const x = (hash(i, 22) * ROOM_W + Math.sin(t * 2 + i) * 6 + ROOM_W) % ROOM_W;
+      g.fillStyle = ['#ff5ad0', '#5ef0ff', '#f2c14e', '#7ee081', '#ffffff'][i % 5]!;
+      g.fillRect(Math.round(x), Math.round(k * CELLAR_Y), 2, 1);
+    }
+  }
+
+  /** La décoration achetée pour le bar. */
+  private drawDecor(decor: readonly string[], lv: number, t: number): void {
+    const px = painter(this.g);
+    const has = (id: string) => decor.includes(id);
+    if (has('sign')) {
+      // enseigne lumineuse, au-dessus de l'ardoise
+      const on = Math.floor(t * 1.5) % 6 !== 0;
+      px(60, 16, 40, 12, '#1b1424');
+      this.g.fillStyle = on ? '#ffd860' : '#8a5c14';
+      this.g.font = '9px monospace';
+      this.g.fillText('★ BAR ★', 63, 25);
+    }
+    if (has('screen')) {
+      px(116, 6, 36, 22, '#1b1424'); px(118, 8, 32, 18, '#2c5a3a');
+      px(118 + ((Math.floor(t * 4) * 3) % 30), 14, 2, 2, '#ffffff'); // un match de foot
+      px(133, 8, 1, 18, '#6aa078');
+    }
+    if (has('darts') && lv !== 3) {
+      const g = this.g;
+      for (const [r, c] of [[6, '#1b1424'], [5, '#e8dcc0'], [3, '#2c5a3a'], [1, '#b83a24']] as const) { g.fillStyle = c; g.beginPath(); g.arc(14, 46, r, 0, Math.PI * 2); g.fill(); }
+    }
+    if (has('stage')) {
+      // enceintes et pied de micro
+      for (const x of [0, 152]) { px(x, 60, 8, 14, '#1b1424'); px(x + 2, 62, 4, 4, '#3e3a50'); px(x + 2, 67, 4, 5, '#3e3a50'); }
+      px(150, 92, 1, 20, '#8c88a0'); px(148, 90, 4, 3, '#2c283a');
+    }
+    if (has('jukebox')) {
+      const y = 158;
+      px(2, y, 14, 36, '#6e2a22'); px(3, y + 1, 12, 34, '#b83a24');
+      this.g.fillStyle = '#f2c14e'; this.g.beginPath(); this.g.arc(9, y + 8, 6, Math.PI, 0); this.g.fill();
+      for (let i = 0; i < 3; i++) px(4 + i * 4, y + 12, 2, 10, ['#ff5ad0', '#5ef0ff', '#7ee081'][(i + Math.floor(t * 3)) % 3]!);
+      px(4, y + 26, 10, 6, '#1b1424');
+    }
+    if (has('pinball')) {
+      const y = 168;
+      px(52, y, 14, 18, '#2e5a9a'); px(53, y + 1, 12, 12, '#4e8ad0');
+      px(54 + (Math.floor(t * 5) % 10), y + 3 + (Math.floor(t * 7) % 8), 1, 1, '#ffffff');
+      px(52, y - 8, 14, 8, '#1b1424'); px(53, y - 7, 12, 6, Math.floor(t * 2) % 2 ? '#ff5ad0' : '#f2c14e');
+      px(53, y + 18, 2, 12, '#2c283a'); px(63, y + 18, 2, 12, '#2c283a');
+    }
+    if (has('plants')) {
+      // un grand pot dans le coin
+      px(146, 186, 10, 10, '#a85c26'); px(146, 186, 10, 2, '#c87a44');
+      for (let i = 0; i < 6; i++) px(147 + ((i * 3) % 9), 182 - ((i * 5) % 9), 3, 5, i % 2 ? '#3e9028' : '#6cc040');
+      // une petite plante sur le comptoir
+      px(COUNTER.x0 + 2, COUNTER.top - 5, 5, 5, '#a85c26'); px(COUNTER.x0 + 2, COUNTER.top - 9, 2, 4, '#6cc040'); px(COUNTER.x0 + 5, COUNTER.top - 8, 2, 3, '#3e9028');
+    }
   }
 
   /** Poussière qui danse dans le rai de lumière du comptoir poussiéreux. */

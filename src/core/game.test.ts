@@ -1,8 +1,8 @@
 import { GASTON_RECIPE } from './brewing/model';
 import { Game, simulateOffline } from './game';
 import { DEFAULT_LABEL } from './label';
-import { BAR, kegSpace } from './market';
-import { COMPUTERS, drawOrder, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, type Order } from './orders';
+import { BAR, kegSpace, PARTY } from './market';
+import { COMPUTERS, WHOLESALE_PRICE, drawOrder, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, type Order } from './orders';
 import { Rng } from './rng';
 import { popTarget, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
@@ -252,12 +252,44 @@ describe('jeu', () => {
     const r = g.sellWholesale(beer.id, 30);
     expect(r.ok).toBe(true);
     expect(beer.stock).toBe(20);
-    expect(r.amount! / 30).toBeLessThan(3.2); // une commande paie environ le double
+    expect(r.amount! / 30).toBeLessThanOrEqual(WHOLESALE_PRICE * 1.4); // une commande paie environ le double
     expect(g.money).toBeCloseTo(r.amount!);
     g.autoWholesale = true;
     beer.stock = 100; // plus de la moitié du stockage (120)
     g.step(1);
     expect(beer.stock).toBe(60);
+  });
+
+  it('une fête : 50 fois plus de clients pendant 30 min, les fûts vides sont rebranchés avec ceux du stockage', () => {
+    const g = withBeer(1e4);
+    const beer = g.beers[0]!;
+    beer.pop = 0.5;
+    beer.kegs = [20, 20, 20, 20, 20];
+    const normal = g.barRate;
+    expect(g.startParty().ok).toBe(true);
+    expect(g.taps[0]!.glasses).toBe(20); // un fût est branché d'office
+    expect(g.barRate).toBeCloseTo(normal * PARTY.mult);
+    run(g, 30 * 60 + 1);
+    expect(beer.kegs.length).toBe(0); // la fête a vidé tous les fûts prévus
+    expect(g.partying).toBe(false);
+    expect(g.startParty().ok).toBe(false); // il faut attendre avant la suivante
+    simulateOffline(g, PARTY.cooldown);
+    expect(g.startParty().ok).toBe(true);
+  });
+
+  it('la décoration attire du monde ; une campagne de pub rend la gamme plus populaire', () => {
+    const g = withBeer(1e6);
+    const beer = g.beers[0]!;
+    beer.kegs = [20];
+    g.swapKeg(0, beer.id);
+    beer.pop = 0.2;
+    const before = g.barRate;
+    expect(g.buyDecor('jukebox').ok).toBe(true);
+    expect(g.buyDecor('jukebox').ok).toBe(false);
+    expect(g.barRate).toBeCloseTo(before * 1.15);
+    expect(g.advertise().ok).toBe(true);
+    expect(beer.pop).toBeCloseTo(0.3);
+    expect(g.advertise().ok).toBe(false); // une seule campagne à la fois
   });
 
   it('améliorer l\'ordinateur ajoute une place au tableau des commandes', () => {

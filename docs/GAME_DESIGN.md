@@ -140,6 +140,20 @@ L'écran du bar est coupé en deux :
 
 Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au sommet, et bien plus au début. Le bar rapporte peu (environ 1 % du chiffre d'affaires) : c'est là que la marque se fait connaître.
 
+**Améliorer le bar** : agrandir (niveau suivant), et installer de la **décoration**. Ce sont des achats uniques, visibles dans la salle, qui attirent du monde.
+
+| Décoration | Prix | Clients |
+|---|---|---|
+| Juke-box | 300 € | +15 % |
+| Plantes vertes | 1 200 € | +10 % |
+| Cible de fléchettes | 5 000 € | +15 % |
+| Flipper | 25 000 € | +20 % |
+| Écran géant | 120 000 € | +25 % |
+| Petite scène (enceintes, micro) | 600 000 € | +30 % |
+| Enseigne lumineuse | 2,5 M€ | +35 % |
+
+**Organiser une fête** (bouton « Fête ») : pendant 30 min, **50 fois plus de clients**. Le personnel de la fête rebranche tout seul les fûts vides avec ceux du stockage : il faut donc **prévoir des fûts d'avance**, car ils se vident très vite. Une fête coûte 100 € au comptoir poussiéreux, puis 1 000 €, 10 000 €, 80 000 € et 600 000 € selon le niveau du bar. Il faut ensuite attendre 6 h avant la suivante. Pendant la fête, des projecteurs de couleur balaient la salle et des confettis tombent.
+
 ## Popularité et tendances
 **Popularité d'une bière (0 à 5 ★).** Chaque verre servi au bar, et chaque bouteille livrée sur commande (dans une bien moindre mesure), rapproche sa popularité d'une cible. Cette cible est sa qualité, portée par les tendances qu'elle suit. Sans ventes, la popularité s'érode : elle perd la moitié de sa valeur en 2 jours de jeu.
 
@@ -151,6 +165,8 @@ Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au somme
 **Tendances.** Trois tendances sont actives à la fois. Chacune dure de 8 à 16 h de jeu, puis une autre la remplace. Elles portent sur un style (IPA, lager, saison, blonde, pale ale, bières d'abbaye, fruitée) ou un caractère (léger < 5 %, fort ≥ 7 %, amer, doux, aromatique, limpide, ambré). Une bière dans la tendance vise une popularité plus haute, attire plus de clients au bar et s'y vend 15 % plus cher par tendance suivie.
 
 L'onglet **Tendances** de l'ordinateur montre la popularité de la marque, les tendances du moment (avec les bières de la gamme qui les suivent) et la popularité de chaque bière. Les commandes « style recherché » reprennent souvent une tendance du moment. La fiche d'une bière de la gamme affiche aussi ses étoiles et ses tendances.
+
+**Campagne de pub** (onglet Tendances de l'ordinateur) : toute la gamme gagne 10 % de popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. Une seule campagne à la fois. Prix selon le niveau de la brasserie : 150 €, 2 500 €, 30 000 €, 250 000 €, puis 2 M€.
 
 ## Commandes
 L'ordinateur du stockage (sur le bureau, ou le bouton « Commandes ») a trois onglets : **Commandes**, **Tendances** et **Grossiste**.
@@ -199,7 +215,7 @@ L'ordinateur du stockage (sur le bureau, ou le bouton « Commandes ») a trois o
 | Intelligence logistique | 6 | 3 M€ |
 
 ## Le grossiste
-Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 2,20 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'onglet Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
+Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 2,40 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'onglet Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
 
 ## Gamme : l'étagère
 La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 8 000 €, 50 000 €, 200 000 €, 600 000 €, 3 M€ puis 8 M€.
