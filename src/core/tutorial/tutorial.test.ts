@@ -157,12 +157,22 @@ describe('matériel et paliers', () => {
     expect(w.unlocked).toEqual(expect.arrayContaining(['mash_tun', 'kettle', 'fermenter', 'bottler', 'mill_2', 'cooler_2', 'stand']));
   });
 
-  it('une cuve pro brasse des lots deux fois plus gros', () => {
-    const run = (mash: 'mash_tun_mini' | 'mash_tun') => {
+  it('le matériel industriel demande 20 caisses et l\'Entrepôt', () => {
+    const w = new World({ tutorial: false, money: 1e6 });
+    w.stats.crates = 20;
+    w.checkUnlocks();
+    expect(w.unlocked).not.toContain('mash_tun_3');
+    w.expand();
+    w.expand();
+    expect(w.unlocked).toEqual(expect.arrayContaining(['mill_3', 'mash_tun_3', 'kettle_3', 'cooler_3', 'fermenter_3', 'bottler_3']));
+  });
+
+  it('cuves pro et industrielles : lots ×2 et ×4', () => {
+    const run = (mash: 'mash_tun_mini' | 'mash_tun' | 'mash_tun_3') => {
       const w = new World({ tutorial: false, money: 1e5 });
       w.place('mill', 0, 0);
       const m = w.place(mash, 1, 0);
-      w.place('water_tap', 1, mash === 'mash_tun' ? 2 : 1);
+      w.place('water_tap', 1, { mash_tun_mini: 1, mash_tun: 2, mash_tun_3: 3 }[mash]);
       w.createRecipe('Test', DEFAULT_CHOICES);
       for (const n of ingredientNeeds(w)) w.loadMissing(n.buildingId);
       for (let i = 0; i < 20 * 120; i++) w.step();
@@ -170,8 +180,10 @@ describe('matériel et paliers', () => {
     };
     const mini = run('mash_tun_mini');
     const pro = run('mash_tun');
+    const indus = run('mash_tun_3');
     expect(mini).toBeGreaterThan(15);
     expect(pro).toBeCloseTo(mini * 2, 0);
+    expect(indus).toBeCloseTo(mini * 4, 0);
   });
 });
 

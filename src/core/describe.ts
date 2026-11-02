@@ -41,6 +41,7 @@ export function describe(world: World, b: Building): MachineInfo {
       return { status: b.fluid?.fluid ? `${b.fluid.amount.toFixed(1)} L à ${t(b.fluid.temp)}` : 'Vide', needs };
     case 'cooler':
     case 'cooler_2':
+    case 'cooler_3':
       return { status: b.fluid?.fluid ? `Le liquide ressort refroidi (≈ ${t(b.params.targetTemp as number)})` : 'En attente de liquide chaud', needs };
     case 'mill':
       return { status: m?.phase === 'processing' ? 'Concassage du malt' : 'En attente de malt', progress: pct(b), needs };

@@ -82,6 +82,7 @@ function specText(def: BuildingDef): string {
   if (def.speed && def.speed !== 1 && def.machine !== 'bottler' && def.machine !== 'mill') parts.push(`Vitesse ×${def.speed}`);
   if (def.tier === 1) parts.unshift('Mini');
   if (def.tier === 2) parts.unshift('Pro');
+  if (def.tier === 3) parts.unshift('Industriel');
   return parts.join(' · ');
 }
 
@@ -259,7 +260,7 @@ export class Hud {
     if (inTutorial && !types.length) body.append(h('p', 'hint', 'Écoute Gaston : rien à acheter pour l\'instant.'));
     for (const t of types) {
       const d = BUILDINGS[t] as BuildingDef;
-      const locked = !inTutorial && !w.unlocked.includes(t);
+      const locked = !inTutorial && !!d.unlock && !w.unlocked.includes(t);
       const card = h('button', `card shop-item${locked ? ' locked' : ''}${inTutorial ? ' pulse' : ''}`);
       const pic = h('div', 'card-pic');
       pic.append(pixelImg(spriteCanvas(t, true)));

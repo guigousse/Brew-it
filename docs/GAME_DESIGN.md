@@ -25,9 +25,10 @@ Les volumes s'adaptent tout seuls : chaque machine traite le lot entier qui arri
 - Le brassin est **sauvegardé** et s'applique à toute la ligne. Pour changer de bière, on met la **production en pause** (les lots en cours se terminent), puis on reprend un ancien brassin ou on en compose un nouveau.
 - Le nom suit chaque lot jusqu'aux bouteilles et aux caisses. 🔜 Une étiquette personnalisée sera apposée sur les bouteilles.
 
-## Matériel : du garage à la brasserie pro
+## Matériel : miniature → professionnel → industriel
 - **Au départ, version miniature** (une case, matériel de garage) : mini-concasseur à manivelle, marmite d'empâtage, marmite d'ébullition sur réchaud, serpentin, dame-jeanne et embouteilleuse manuelle. Les lots font 25 L.
 - **Versions pro** au Magasin, débloquées après 5 caisses livrées : moulin à rouleaux (×2,5), cuves de 50 L (lots ×2, vitesse ×1,3), échangeur à plaques (×3), fermenteur conique et embouteilleuse semi-automatique (×3).
+- **Versions industrielles**, débloquées après 20 caisses et une fois le local agrandi jusqu'à l'Entrepôt : broyeur à silo (2 × 2 cases, ×6), cuves de 100 L (3 × 3 cases, lots ×4, vitesse ×1,6), échangeur industriel (15 L/s), fermenteur industriel de 120 L et ligne d'embouteillage (×10).
 - Les appareils sont **raccordés par des tuyaux** visibles, comme dans une vraie brasserie.
 
 ## Interface

@@ -38,7 +38,7 @@ export interface BuildingDef {
   rotatable: boolean;
   /** Famille d'appareils : les paliers d'une même famille font le même travail. */
   family?: string;
-  /** 1 = version miniature de départ, 2 = version pro… */
+  /** 1 = miniature (départ), 2 = professionnel, 3 = industriel. */
   tier?: number;
   /** Taille des lots : ×1 = 24 L d'eau d'empâtage (≈ 19 L de moût). */
   batchScale?: number;
@@ -62,6 +62,7 @@ export interface BuildingDef {
 const TRANSPORT_HP = 60;
 const MACHINE_HP = 200;
 const PRO: Unlock = { crates: 5 };
+const INDUSTRIAL: Unlock = { crates: 20, expansion: 2 };
 
 export const BUILDINGS = {
   // --- Liaisons ----------------------------------------------------------------------------
@@ -200,6 +201,56 @@ export const BUILDINGS = {
     itemsOut: { capacity: 12 },
     machine: 'bottler',
     defaultParams: { interval: 0.4 },
+  },
+
+  // --- Brassage : versions industrielles (à débloquer) ---------------------------------------
+  mill_3: {
+    name: 'Broyeur industriel', description: 'Broyeur à moteur avec trémie : alimente les plus grosses cuves.',
+    size: 2, cost: 2500, category: 'brewing', color: 0x6c7a89, maxHealth: MACHINE_HP, rotatable: false, family: 'mill', tier: 3, speed: 6, unlock: INDUSTRIAL,
+    itemsIn: { capacity: 60, accepts: ['malt'] },
+    itemsOut: { capacity: 60 },
+    machine: 'mill',
+    defaultParams: { interval: 0.15 },
+  },
+  mash_tun_3: {
+    name: 'Cuve d\'empâtage 100 L', description: 'Cuve industrielle à agitateur : lots quatre fois plus gros.',
+    size: 3, cost: 6000, category: 'brewing', color: 0xc47f2c, maxHealth: MACHINE_HP * 2, rotatable: false, family: 'mash_tun', tier: 3, batchScale: 4, speed: 1.6, unlock: INDUSTRIAL,
+    itemsIn: { capacity: 40, accepts: ['crushed_malt'] },
+    fluidIn: { capacity: 120, accepts: ['water'] },
+    fluid: { capacity: 120, maxFlow: 20, heatLoss: 0.002, accepts: [] },
+    machine: 'mash_tun',
+  },
+  kettle_3: {
+    name: 'Cuve d\'ébullition 100 L', description: 'Chaudière vapeur : lots de 100 L, ébullition rapide.',
+    size: 3, cost: 6500, category: 'brewing', color: 0xb5482c, maxHealth: MACHINE_HP * 2, rotatable: false, family: 'kettle', tier: 3, batchScale: 4, speed: 1.6, unlock: INDUSTRIAL,
+    itemsIn: { capacity: 40, accepts: ['hops'] },
+    fluidIn: { capacity: 160, accepts: ['wort'] },
+    fluid: { capacity: 160, maxFlow: 20, heatLoss: 0.002, accepts: [] },
+    machine: 'kettle',
+  },
+  cooler_3: {
+    name: 'Échangeur industriel', description: 'Refroidit de gros débits sans broncher.',
+    size: 1, cost: 1800, category: 'brewing', color: 0x5aa2e8, maxHealth: TRANSPORT_HP * 2, rotatable: true, family: 'cooler', tier: 3, unlock: INDUSTRIAL,
+    fluid: { capacity: 15, maxFlow: 15, directional: true, accepts: 'any' },
+    cooler: { capacity: 60 },
+    defaultParams: { targetTemp: 20 },
+  },
+  fermenter_3: {
+    name: 'Fermenteur industriel 120 L', description: 'Grande cuve cylindro-conique régulée : énormes lots, fermentation rapide.',
+    size: 3, cost: 8000, category: 'brewing', color: 0xd8d0b8, maxHealth: MACHINE_HP * 2, rotatable: false, family: 'fermenter', tier: 3, batchScale: 4, speed: 1.6, unlock: INDUSTRIAL,
+    itemsIn: { capacity: 10, accepts: ['yeast'] },
+    fluidIn: { capacity: 160, accepts: ['hopped_wort'] },
+    fluid: { capacity: 160, maxFlow: 20, heatLoss: 0.002, accepts: [] },
+    machine: 'fermenter',
+  },
+  bottler_3: {
+    name: 'Ligne d\'embouteillage', description: 'Remplisseuse et capsuleuse automatiques : dix fois plus rapide.',
+    size: 3, cost: 7000, category: 'brewing', color: 0x4f9a94, maxHealth: MACHINE_HP * 2, rotatable: false, family: 'bottler', tier: 3, speed: 10, unlock: INDUSTRIAL,
+    itemsIn: { capacity: 240, accepts: ['bottle'] },
+    fluidIn: { capacity: 80, accepts: ['beer'] },
+    itemsOut: { capacity: 24 },
+    machine: 'bottler',
+    defaultParams: { interval: 0.12 },
   },
 
   // --- Vente -----------------------------------------------------------------------------

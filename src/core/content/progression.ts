@@ -16,6 +16,6 @@ export const unlockMet = (u: Unlock | undefined, stats: { crates: number; expans
 export function unlockText(u: Unlock): string {
   const parts: string[] = [];
   if (u.crates) parts.push(`${u.crates} caisses livrées`);
-  if (u.expansion) parts.push('agrandir le local');
+  if (u.expansion) parts.push(`agrandir le local (${['', 'Arrière-cour', 'Entrepôt', 'Micro-brasserie', 'Usine'][u.expansion] ?? ''})`);
   return `Débloqué après : ${parts.join(' et ')}`;
 }

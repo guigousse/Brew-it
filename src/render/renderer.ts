@@ -295,7 +295,7 @@ export class GameRenderer {
       g.rect(cx - 4, cy - 8, 8, 1).fill(0xa8dcff);
       g.rect(cx - 1 + DX[exit]! * 2, cy - 6 + DY[exit]!, 2, 2).fill(0xffffff);
     }
-    if (type === 'cooler' || type === 'cooler_2') {
+    if (type === 'cooler' || type === 'cooler_2' || type === 'cooler_3') {
       const t = Texture.from(coolerCanvas(type));
       // Le serpentin est dessiné au-dessus du tuyau, centré.
       g.texture(t, 0xffffff, px, py - 2, 16, 16);
@@ -349,12 +349,13 @@ export class GameRenderer {
     const busy = m?.phase === 'processing' || m?.phase === 'heating';
     const t = this.t;
     const kind = kindOf(b.type);
-    const pro = (BUILDINGS[b.type] as BuildingDef).tier === 2;
+    const pro = ((BUILDINGS[b.type] as BuildingDef).tier ?? 1) >= 2;
+    const big = (BUILDINGS[b.type] as BuildingDef).tier === 3;
     const midX = box.x + box.w / 2;
     if (kind === 'kettle' && busy) {
       // flammes du réchaud / brûleur
       const fy = box.y + box.h - (pro ? 6 : 5);
-      const n = pro ? 6 : 3;
+      const n = big ? 9 : pro ? 6 : 3;
       for (let i = 0; i < n; i++) {
         const fx = midX - (n * 4) / 2 + i * 4 + 1;
         const h = 2 + Math.round(2 * Math.abs(Math.sin(t * 10 + i * 1.7)));
