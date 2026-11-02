@@ -1,7 +1,8 @@
 import { GASTON_RECIPE } from './brewing/model';
 import { Game, simulateOffline } from './game';
 import { DEFAULT_LABEL } from './label';
-import { BAR, CLIENTS, MAX_PENDING, ORDER_LIFE_S } from './market';
+import { BAR, CLIENTS, kegSpace, MAX_PENDING, ORDER_LIFE_S } from './market';
+import { popTarget, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
 import { STATION_ORDER } from './stations';
 import { STORAGE } from './warehouse';
@@ -81,39 +82,96 @@ describe('jeu', () => {
     expect(g.batchAt('mill')!.beerId).toBeNull(); // l'essai est passé en priorité
   });
 
-  it('le bar sert 1 bouteille par minute de la bière à la carte', () => {
-    const g = withBeer();
-    expect(g.barMenu).toEqual([g.beers[0]!.id]); // la première bière passe à la carte
-    const sold = g.beers[0]!.sold;
-    const money = g.money;
-    run(g, 180);
-    expect(g.beers[0]!.sold - sold).toBeGreaterThanOrEqual(3);
-    expect(g.beers[0]!.sold - sold).toBeLessThanOrEqual(5);
-    expect(g.money).toBeGreaterThan(money);
+  it('un brassin programmé en fûts remplit des fûts de 5 L rangés au stockage', () => {
+    const g = withBeer(1e4);
+    runUntil(g, () => g.batches.length === 0);
+    const beer = g.beers[0]!;
+    const stock = beer.stock;
+    expect(g.planBrew(beer.id, 'keg').ok).toBe(true);
+    g.step();
+    expect(g.plan).toEqual([]);
+    expect(g.batchAt('mill')!.format).toBe('keg');
+    runUntil(g, () => g.batches.length === 0);
+    expect(beer.kegs).toEqual([20]); // lot de 5 L = 1 fût de 20 verres
+    expect(beer.stock).toBe(stock);
+    expect(g.stored).toBe(stock + kegSpace(20)); // environ une caisse
   });
 
-  it('le bar ne sert que ce qui est à la carte ; s\'agrandir ajoute des tireuses et du monde', () => {
+  it('les brassins programmés passent avant le brassage continu, dans l\'ordre', () => {
+    const g = withBeer(1e4);
+    runUntil(g, () => g.batches.length === 0);
+    g.autoBrew = true;
+    g.planBrew(g.beers[0]!.id, 'keg');
+    g.planBrew(g.beers[0]!.id, 'bottle');
+    g.step();
+    expect(g.batchAt('mill')!.format).toBe('keg');
+    expect(g.plan.length).toBe(1);
+  });
+
+  it('le bar sert des verres tirés du fût branché, 1 client toutes les 10 min au début ; il faut changer le fût vide', () => {
+    const g = withBeer(1e4);
+    const beer = g.beers[0]!;
+    expect(g.barServing).toBe(false);
+    expect(g.swapKeg(0, beer.id).ok).toBe(false); // aucun fût plein
+    beer.kegs = [20, 40];
+    expect(g.swapKeg(0, beer.id).ok).toBe(true);
+    expect(beer.kegs).toEqual([20]); // le plus gros fût est branché
+    expect(g.taps[0]).toEqual({ beerId: beer.id, glasses: 40, capacity: 40 });
+    beer.pop = 0;
+    expect(g.barRate).toBeCloseTo(0.1, 1);
+    const money = g.money;
+    run(g, 3600); // 1 h
+    const served = 40 - g.taps[0]!.glasses;
+    expect(served).toBeGreaterThanOrEqual(5);
+    expect(served).toBeLessThanOrEqual(10);
+    expect(g.money).toBeGreaterThan(money);
+    expect(beer.pop).toBeGreaterThan(0); // chaque verre fait connaître la bière
+    g.taps[0]!.glasses = 1;
+    run(g, 3600);
+    expect(g.taps[0]!.glasses).toBe(0);
+    expect(g.barServing).toBe(false); // le fût est vide : il faut le changer à la main
+  });
+
+  it('la popularité fait venir du monde ; elle s\'érode sans ventes', () => {
+    const g = withBeer(1e4);
+    const beer = g.beers[0]!;
+    beer.kegs = [20];
+    g.swapKeg(0, beer.id);
+    beer.pop = 0;
+    const low = g.barRate;
+    beer.pop = 1;
+    expect(g.brand).toBeCloseTo(1);
+    expect(g.barRate).toBeCloseTo(low * 10);
+    g.taps[0]!.glasses = 0;
+    simulateOffline(g, 8 * 3600);
+    expect(beer.pop).toBeLessThan(0.95);
+    expect(beer.pop).toBeGreaterThan(0.8);
+  });
+
+  it('trois tendances à la fois, qui changent avec le temps ; une bière dans la tendance vise plus haut', () => {
+    const g = withBeer(1e4);
+    expect(g.trends.length).toBe(TREND_COUNT);
+    const first = g.trends.map((t) => t.id);
+    simulateOffline(g, 8 * 3600);
+    simulateOffline(g, 8 * 3600);
+    expect(g.trends.length).toBe(TREND_COUNT);
+    expect(g.trends.map((t) => t.id)).not.toEqual(first);
+    const t = g.beers[0]!.tasting;
+    const def = TRENDS.find((d) => d.test(t))!;
+    expect(popTarget(t, [{ id: def.id, until: 1e9 }])).toBeGreaterThan(popTarget(t, []));
+  });
+
+  it('agrandir le bar ajoute des tireuses', () => {
     const g = withBeer(1e6);
-    g.toggleTap(g.beers[0]!.id);
-    expect(g.barMenu).toEqual([]);
-    const sold = g.totalSold;
-    run(g, 120);
-    expect(g.totalSold).toBe(sold);
-    g.buySlot();
-    g.beers.push({ ...g.beers[0]!, id: 999, name: 'Deux', stock: 50 });
-    expect(g.toggleTap(g.beers[0]!.id).ok).toBe(true);
-    expect(g.toggleTap(999).ok).toBe(false); // une seule tireuse au début
-    const one = g.barRate;
+    expect(g.taps.length).toBe(1);
     expect(g.upgradeBar().ok).toBe(true);
-    expect(g.barMenu).toEqual([g.beers[0]!.id, 999]); // la nouvelle tireuse sert la 2e bière
-    expect(g.barRate).toBeCloseTo((one / BAR[0]!.rate) * BAR[1]!.rate * 1.25);
+    expect(g.taps.length).toBe(BAR[1]!.taps);
   });
 
   it('un client sous contrat envoie des commandes ; remplies, elles sont payées aussitôt', () => {
     const g = withBeer(1e4);
     g.totalSold = 100;
     expect(g.sign('epicerie').ok).toBe(true);
-    g.barMenu = []; // le bar ne pioche pas dans le stock
     run(g, 30);
     expect(g.orders.length).toBe(1);
     const o = g.orders[0]!;
@@ -162,6 +220,7 @@ describe('jeu', () => {
     const g = withBeer(1e6);
     g.totalSold = 100;
     g.sign('epicerie');
+    g.storageLevel = 5; // les commandes ne dépassent jamais les 3/4 du stockage
     const one = g.orderSize('epicerie');
     const c1 = g.dealCost('epicerie')!;
     expect(g.negotiate('epicerie').ok).toBe(true);
@@ -193,7 +252,6 @@ describe('jeu', () => {
 
   it('le stockage se remplit ; plein, il bloque l\'embouteillage jusqu\'à l\'agrandissement', () => {
     const g = withBeer(1e4);
-    g.barMenu = []; // personne n'achète
     g.beers[0]!.stock = 110;
     expect(g.storageCap).toBe(120);
     g.loadBeer(g.beers[0]!.id);
@@ -251,10 +309,13 @@ describe('jeu', () => {
 
   it('production hors-ligne : les gains attendent la récolte, la sauvegarde les garde', async () => {
     const g = withBeer(1e4);
-    g.autoBrew = true;
+    runUntil(g, () => g.batches.length === 0);
+    g.beers[0]!.kegs = [60];
+    g.swapKeg(0, g.beers[0]!.id);
+    g.beers[0]!.pop = 1;
     const money = g.money;
     const report = simulateOffline(g, 3600)!;
-    expect(report.sold).toBeGreaterThan(40);
+    expect(report.sold).toBeGreaterThan(50); // 1 client/min pour une marque au sommet
     expect(report.earned).toBeGreaterThan(0);
     expect(g.money).toBeLessThanOrEqual(money);
     const store = new SaveManager(new MemoryStorage());
@@ -279,11 +340,14 @@ describe('jeu', () => {
   it('sauvegardes v4 : le bar du coin devient la pièce Bar, les autres contrats restent', () => {
     const g = withBeer();
     const old = { ...g.toJSON(), version: 4, signed: ['bar', 'epicerie'], deals: { bar: 2 }, demand: { bar: 0.5 } } as Record<string, unknown>;
-    for (const k of ['barLevel', 'barMenu', 'orders', 'orderTimers']) delete old[k];
+    for (const k of ['barLevel', 'taps', 'orders', 'orderTimers', 'trends', 'plan']) delete old[k];
+    old.beers = (old.beers as Record<string, unknown>[]).map(({ kegs: _k, pop: _p, ...b }) => b);
     const loaded = Game.fromJSON(JSON.parse(JSON.stringify(old)));
     expect(loaded.signed).toEqual(['epicerie']);
     expect(loaded.deals).toEqual({});
-    expect(loaded.barMenu).toEqual([g.beers[0]!.id]);
+    expect(loaded.taps).toEqual([{ beerId: null, glasses: 0, capacity: 0 }]);
+    expect(loaded.beers[0]!.kegs).toEqual([]);
+    expect(loaded.beers[0]!.pop).toBeGreaterThan(0);
     expect(loaded.orders).toEqual([]);
     run(loaded, 30);
     expect(loaded.orders.length).toBe(1);

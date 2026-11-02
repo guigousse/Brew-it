@@ -34,6 +34,19 @@ function deliver() {
 }
 let delivered = 0;
 
+/** Le bar : change les fûts vides (la bière la plus populaire d'abord) et programme des brassins en fûts. */
+function tendBar() {
+  g.taps.forEach((t, i) => {
+    if (t.glasses > 0) return;
+    const b = g.beers.filter((x) => x.kegs.length).sort((a, c) => c.pop - a.pop)[0];
+    if (b) g.swapKeg(i, b.id);
+  });
+  if (!g.beers.length) return;
+  const kegs = g.beers.reduce((s, b) => s + b.kegs.length + g.pendingKegs(b.id), 0) + g.plan.filter((p) => p.format === 'keg').length;
+  if (kegs < g.taps.length * 2 && g.plan.length < 2) g.planBrew(g.beers[g.batchesDone % g.beers.length]!.id, 'keg');
+}
+const brandByDay: number[] = [];
+
 function play(seconds: number, during?: () => void) {
   for (let s = 0; s < seconds; s += DT) {
     g.step(DT);
@@ -95,6 +108,7 @@ function shop() {
 function session(minutes: number) {
   if (g.offline) g.collectOffline();
   deliver();
+  tendBar();
   shop();
   while (g.beers.length < g.rangeSlots && newBeer()) buy(`Nouvelle bière (${g.beers.length})`, 0);
   if (g.beers.length) {
@@ -103,6 +117,7 @@ function session(minutes: number) {
   }
   play(minutes * 60, () => {
     if (clock % 10 < DT) deliver();
+    if (clock % 30 < DT) tendBar();
     if (clock % 60 < DT) shop();
   });
   deliver();
@@ -118,6 +133,7 @@ const revenueByDay: number[] = [];
 let completed: number | null = null;
 for (let day = 0; day < DAYS && completed == null; day++) {
   revenueByDay[day] = g.totalRevenue;
+  brandByDay[day] = g.brand;
   for (let i = 0; i < SESSIONS.length; i++) {
     const target = day * 86400 + SESSIONS[i]! * 3600;
     if (target <= clock) continue;
@@ -157,6 +173,7 @@ console.log(revenueByDay.map((r, i) => `J${i + 1} ${Math.round(((revenueByDay[i 
 console.log('\n=== Résumé');
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
+console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.round(b * 100)}`).join(' · '));
 console.log('Bar :', Math.round(g.barRevenue), '€ ·', g.barSold, 'btl · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€');
 console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots, '· contrats', g.signed.length);
 for (const d of CLIENTS) {

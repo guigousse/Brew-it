@@ -2,6 +2,7 @@ import './ui/style.css';
 import { FixedStepLoop, Game, simulateOffline } from './core/game';
 import { SaveManager } from './core/save';
 import { CLIENTS } from './core/market';
+import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { createStorage } from './platform/storage';
 import { App } from './ui/app';
@@ -38,7 +39,8 @@ async function boot() {
     unsubscribe = game.events.on((e) => {
       if (muted) return; // rattrapage hors-ligne : pas de rafale de notifications
       if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
-      if (e.type === 'batchDone' && e.beerId != null) app.toast(`+${e.bottles} bouteilles en stock`, 'good');
+      if (e.type === 'batchDone' && e.beerId != null) app.toast(e.kegs ? `+${e.kegs} fût${e.kegs > 1 ? 's' : ''} au stockage` : `+${e.bottles} bouteilles en stock`, 'good');
+      if (e.type === 'trend') app.toast(`Nouvelle tendance : ${TRENDS.find((t) => t.id === e.id)?.text}`, 'info');
       if (e.type === 'batchRuined') app.toast(`Lot de « ${game.beers.find((b) => b.id === e.beerId)?.name} » raté, jeté`, 'bad');
       if (e.type === 'breweryLevel') {
         app.scene.flash();

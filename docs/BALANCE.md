@@ -90,21 +90,23 @@ Avant les corrections, avec 5 niveaux mais l'ancienne économie, le joueur simul
 ## Résultat (4 visites par jour)
 
 ```
-Contrats : Épicerie J1 · Caviste J4 · Restaurant J6 · Festival J13 · Supermarché J21 · Export J29
+Contrats : Épicerie J1 · Caviste J4 · Restaurant J5 · Festival J11 · Supermarché J19 · Export J28
 Chiffre d'affaires par jour :
-  J2 68k · J5 197k · J8 317k · J13 924k · J16 868k · J26 2,6M · J30 4,0M · J34 4,4M
-Fin : J36 · 120 visites · 48 % sans achat · pire série sans achat : 7 visites
-2 visites par jour : fin J48 · 42 % sans achat · pire série : 6
+  J1 6k · J3 141k · J6 200k · J9 938k · J12 1,4M · J16 721k · J26 1,4M · J28 5,3M · J31 6,6M
+Fin : J33 · 103 visites · 45 % sans achat · pire série sans achat : 4 visites
+2 visites par jour : fin J51 · 48 % sans achat · pire série : 7
+Bar : ~1 % du chiffre d'affaires ; popularité de la marque à 40 % dès le J2, 80 % vers le J5, 90-95 % ensuite
 ```
 
-## Refonte des ventes : bar et commandes
+## Refonte des ventes : bar à fûts, commandes, popularité
 
-Le « Bar du coin » est devenu une pièce, et les distributeurs sont devenus des clients qui envoient des commandes à remplir à la main. Les ventes ont changé de nature :
-- **Le bar** vend en continu, y compris hors ligne : c'est le revenu passif. Ses niveaux 4 et 5 sont forts (90 puis 450 btl/min × variété), pour écouler la production pendant l'absence.
-- **Les commandes** sont le revenu actif : elles paient 40 % de plus, mais n'avancent que quand le joueur les envoie. Elles s'accumulent hors ligne (3 par client au plus). Le stock disponible les limite, d'où un **stockage bien plus grand** (jusqu'à 4 000 caisses).
-- **La négociation** agrandit les commandes (+40 %) et améliore leur prix (+10 %). Sans ce bonus de prix, les négociations de fin de partie ne rapportaient plus rien : une fois le stock épuisé, une commande plus grosse ne fait pas vendre plus.
-
-Par rapport à l'ancienne économie (fin au J33, J42 à 2 visites par jour), la partie est 10 à 15 % plus longue. Elle récompense un peu plus le jeu actif, sans l'imposer : en fin de partie, le bar fait environ 60 % du chiffre d'affaires.
+- **Le bar** tire des fûts brassés à l'atelier et changés à la main. Il démarre à 1 client toutes les 10 minutes. C'est surtout le moteur de la **popularité**, avec un revenu d'appoint, car ses fûts se vident pendant l'absence.
+- **Les commandes** font l'essentiel du revenu. Elles s'écoulent aux visites, avec le stock accumulé pendant l'absence. D'où :
+  - **un stockage très grand** (jusqu'à 12 000 caisses), pour absorber la production de toute une absence ;
+  - **de grosses commandes** (2 h du débit du client), plafonnées aux 3/4 du stockage. Sans ce plafond, le joueur simulé restait bloqué au J1 : des commandes de 162 bouteilles pour un stockage de 120.
+- **La popularité** grossit et accélère les commandes. Elle monte vite avec une bonne bière, et les tendances la font varier.
+- **Le filet de Gaston** a été élargi. Sans vente continue, un joueur sans argent avec un peu de stock pouvait se bloquer : il avance désormais les ingrédients dès que rien ne peut rapporter d'argent.
+- **Les joueurs occasionnels** (2 visites/jour) mettent plus longtemps qu'avant (J51 contre J42). La production est plafonnée à 8 h hors ligne et les commandes n'avancent qu'aux visites. Permettre 4 commandes en attente par client au lieu de 3 n'y change rien.
 
 ## Où régler quoi
 
@@ -116,7 +118,8 @@ Par rapport à l'ancienne économie (fin au J33, J42 à 2 visites par jour), la 
 | Changer la place des bières dans la gamme | `VARIETY` (`market.ts`) et `SLOT_COSTS` (`src/core/warehouse.ts`) |
 | Changer les négociations | `DEAL_BONUS`, `DEAL_PRICE`, `DEAL_COST`, `MAX_DEAL` (`market.ts`) |
 | Changer le stockage | `STORAGE` (`warehouse.ts`) |
-| Changer le bar | `BAR`, `BAR_PRICE` (`market.ts`) |
+| Changer le bar | `BAR`, `BAR_BASE_SHARE`, `GLASS_PRICE`, `kegLiters` (`market.ts`) |
+| Changer la popularité et les tendances | `POP_PER_GLASS`, `POP_PER_BOTTLE`, `POP_DECAY`, `TREND_*` (`src/core/trends.ts`) |
 | Changer les commandes | `ORDER_MINUTES`, `ORDER_GAP_S`, `MAX_PENDING`, `ORDER_LIFE_S`, `ORDER_PREMIUM`, `LIKE_BONUS` (`market.ts`) |
 
 Après chaque réglage, relancer `npm run balance` et vérifier :

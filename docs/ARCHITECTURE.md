@@ -8,7 +8,8 @@ src/
 │   ├── brewing/model.ts  modèle de brassage réaliste (recette + niveaux + températures réelles → dégustation)
 │   ├── brewing/strains.ts levures
 │   ├── stations.ts       les 7 machines : réglages, niveaux, durées
-│   ├── market.ts         clients et commandes, niveaux du bar, prix
+│   ├── market.ts         clients et commandes, niveaux du bar, fûts, prix
+│   ├── trends.ts         tendances du moment et popularité (bières, marque)
 │   ├── warehouse.ts      niveaux du stockage, places de la gamme
 │   ├── game.ts           état de la partie : lots dans la chaîne, gamme, bar, commandes, améliorations, hors-ligne
 │   └── save.ts           sauvegarde JSON (emplacement « brewit-sim-1 »)
@@ -16,7 +17,7 @@ src/
 │   ├── painter.ts        peintre pixel « 32-bit » (palettes, tramage, contours colorés)
 │   ├── sprites.ts        les 21 sprites (7 machines × 3 niveaux) et leurs points d'accroche
 │   ├── scene.ts          l'atelier : la brasserie verticale (canvas 160 × 300 agrandi au pixel près)
-│   ├── rooms.ts          le stockage et le bar, au même format, 5 décors chacun
+│   ├── rooms.ts          le stockage et le bar (salle en haut, cave à fûts en bas), 5 décors chacun
 │   └── bottleArt.ts      bouteilles de l'étagère, caisses
 ├── ui/                   interface DOM : header et onglets de pièces, glissement, barre du bas par pièce, panneaux,
 │                         ordinateur des commandes, dégustation, Gaston

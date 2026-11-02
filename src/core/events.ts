@@ -1,11 +1,12 @@
 /** Événements émis par le jeu, consommés par l'interface (toasts, haptique). */
 export type GameEvent =
-  | { type: 'batchDone'; beerId: number | null; bottles: number }
+  | { type: 'batchDone'; beerId: number | null; bottles: number; kegs: number }
   | { type: 'stage'; batchId: number; stage: number }
   | { type: 'sale'; amount: number }
   | { type: 'clientAvailable'; id: string }
   | { type: 'order'; client: string }
   | { type: 'orderExpired'; client: string }
+  | { type: 'trend'; id: string }
   | { type: 'upgraded'; station: string; level: number }
   | { type: 'breweryLevel'; level: number }
   | { type: 'batchRuined'; beerId: number };

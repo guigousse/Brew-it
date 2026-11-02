@@ -303,3 +303,10 @@ button:disabled { cursor: default; opacity: .5; }
 .order-time { color: var(--dim); white-space: nowrap; }
 .beer-chip { display: flex; align-items: center; gap: 6px; }
 .beer-chip .label-thumb { width: 28px; }
+
+/* --- Popularité et tendances ----------------------------------------------------------- */
+.pop-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.pop-stars { color: var(--accent); letter-spacing: 1px; white-space: nowrap; }
+.trend-chip { font-size: 15px; padding: 0 5px; color: var(--ink); background: var(--good); border: 1px solid var(--ink); white-space: nowrap; }
+.plan-rank { color: var(--dim); width: 18px; }
+.stock-line .pop-line { justify-content: flex-end; }

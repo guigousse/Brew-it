@@ -495,7 +495,8 @@ export class Scene {
     const g = this.g;
     const lv = game.level('bottling');
     const b = game.batchAt('bottling');
-    const n = b?.bottles ?? 0;
+    const keg = b?.format === 'keg';
+    const n = (keg ? b?.kegs : b?.bottles) ?? 0;
     const p = b ? (b.waiting ? 1 : Math.min(1, b.elapsed / Math.max(0.01, b.duration))) : 0;
     const done = p * n;
     const beer = b?.beerId != null ? game.beers.find((x) => x.id === b.beerId) : undefined;
@@ -521,14 +522,15 @@ export class Scene {
         const f = done - k;
         const { x, fill } = bottlePos(f);
         if (x >= cartonX + 2 || x < -8) continue;
-        this.bottle(Math.round(x), belt, fill, x >= labelX && label ? label : null, f >= 1);
+        if (keg) this.keg(Math.round(x), belt, fill, label);
+        else this.bottle(Math.round(x), belt, fill, x >= labelX && label ? label : null, f >= 1);
         if (f >= 0.2 && f < 1) this.pour(fillX, belt, t);
       }
     }
     // carton en bout de ligne
     // bouteilles arrivées au carton : celles dont la position a dépassé son bord
     let inCarton = 0;
-    if (b) for (let k = 0; k < Math.min(n, Math.ceil(done)); k++) if (bottlePos(done - k).x >= cartonX + 2) inCarton++;
+    if (b && !keg) for (let k = 0; k < Math.min(n, Math.ceil(done)); k++) if (bottlePos(done - k).x >= cartonX + 2) inCarton++;
     this.drawCarton(inCarton, label);
   }
 
@@ -573,6 +575,22 @@ export class Scene {
       g.fillRect(x + 2, y + 1, 5, 1);
     }
     if (label) drawMiniLabel(g, label, x + 1, y + 14, 7);
+  }
+
+  /** Un fût de 5 L (11 × 16 px) sur le tapis : la jauge monte sous le bec. */
+  private keg(cx: number, base: number, fill: number, label: import('../core/label').Label | null): void {
+    const g = this.g;
+    const x = cx - 5;
+    const y = base - 16;
+    g.fillStyle = '#465264'; g.fillRect(x, y, 11, 16);
+    g.fillStyle = '#c4d0dc'; g.fillRect(x + 1, y, 9, 16);
+    g.fillStyle = '#ffffff'; g.fillRect(x + 2, y, 1, 16);
+    g.fillStyle = '#98a6b6'; g.fillRect(x, y + 2, 11, 1); g.fillRect(x, y + 13, 11, 1);
+    g.fillStyle = '#2c283a'; g.fillRect(x + 4, y - 2, 3, 2);
+    g.fillStyle = '#1b1424'; g.fillRect(x + 7, y + 4, 2, 8);
+    const h = Math.round(8 * fill);
+    if (h > 0) { g.fillStyle = '#e8a530'; g.fillRect(x + 7, y + 12 - h, 2, h); }
+    if (label && fill >= 1) drawMiniLabel(g, label, x + 1, y + 6, 5);
   }
 
   /** Filet de bière qui coule du bec dans le goulot. */

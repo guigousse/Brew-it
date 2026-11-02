@@ -1,7 +1,8 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { clientById, type Beer, type Game, type Order } from '../core/game';
-import { BAR, barPrice, BAR_MIN_QUALITY, CLIENTS, MAX_DEAL } from '../core/market';
+import { clientById, MAX_PLAN, type Beer, type Format, type Game, type Order } from '../core/game';
+import { BAR, CLIENTS, glassPrice, kegGlasses, kegLiters, MAX_DEAL } from '../core/market';
+import { stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
@@ -42,7 +43,13 @@ const ROOMS: readonly { id: RoomId; name: string }[] = [
   { id: 'bar', name: 'Bar' },
 ];
 
+type PcTab = 'orders' | 'trends' | 'clients';
 type SheetState = { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'storage' | 'bar' | 'barUp' };
+
+const starText = (p: number) => {
+  const n = stars(p);
+  return '★'.repeat(Math.floor(n)) + (n % 1 ? '½' : '') + '☆'.repeat(5 - Math.ceil(n));
+};
 
 const duration = (s: number) => {
   const m = Math.max(0, Math.floor(s / 60));
@@ -93,7 +100,9 @@ export class App {
   private swallowClick = false;
   private roomsDrawUntil = 0;
   /** Fenêtre de l'ordinateur ouverte, onglet affiché, bières choisies pour chaque commande. */
-  private computer: { tab: 'orders' | 'clients'; key: string } | null = null;
+  private computer: { tab: PcTab; key: string } | null = null;
+  /** Zones tactiles des fûts de la cave (leur nombre suit celui des tireuses). */
+  private kegHits: HTMLButtonElement[] = [];
   private picks = new Map<number, number[]>();
   /** Bière choisie sur l'étagère (fiche affichée sous l'étagère). */
   private shelfSel: number | null = null;
@@ -160,13 +169,12 @@ export class App {
     this.storageWrap.append(this.storagePlaque, this.ordersBadge);
     // bar : le comptoir
     this.barWrap.append(this.barRoom.canvas);
-    for (const hit of this.barRoom.hits()) {
-      const el = h('button', 'station-hit');
-      el.setAttribute('aria-label', 'Comptoir');
-      el.onclick = () => this.open({ kind: 'bar' });
-      this.barWrap.append(el);
-      this.roomHits.push({ el, rect: hit.rect });
-    }
+    const counter = this.barRoom.hits(1)[0]!;
+    const counterEl = h('button', 'station-hit');
+    counterEl.setAttribute('aria-label', 'Comptoir');
+    counterEl.onclick = () => this.open({ kind: 'bar' });
+    this.barWrap.append(counterEl);
+    this.roomHits.push({ el: counterEl, rect: counter.rect });
     this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
     this.barWrap.append(this.barPlaque);
     for (const w of [this.sceneWrap, this.storageWrap, this.barWrap]) {
@@ -212,6 +220,7 @@ export class App {
     for (const c of [this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas]) Object.assign(c.style, { width: `${w}px`, height: `${hh}px` });
     const s = this.scale;
     for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
+    this.syncKegHits(true);
     const bp = this.storageRoom.badgePoint;
     Object.assign(this.ordersBadge.style, { left: `${bp.x * s}px`, top: `${bp.y * s}px` });
     this.placeTrack();
@@ -281,8 +290,11 @@ export class App {
       h('span', 'brew-sub', g.orders.length ? `${g.orders.length} en attente${ready ? ` · ${ready} prête${ready > 1 ? 's' : ''}` : ''}` : availableClient ? '✍ Nouveau client' : g.signed.length ? 'Aucune pour l\'instant' : 'Signe un client'),
     );
     this.ordersBtn.classList.toggle('ready', ready > 0 || availableClient);
-    this.menuBtn.replaceChildren(h('span', 'brew-title', 'La carte'), h('span', 'brew-sub', g.barServing ? `${fmtRate(g.barRate)} btl/min` : g.beers.length ? 'À sec !' : 'Rien à servir'));
-    this.menuBtn.classList.toggle('ready', g.barServing);
+    const emptyTap = g.taps.some((t) => t.glasses <= 0);
+    const kegsReady = g.beers.some((b) => b.kegs.length > 0);
+    this.menuBtn.replaceChildren(h('span', 'brew-title', 'Les fûts'), h('span', 'brew-sub', g.barServing ? `${g.glassesLeft} verres · ${fmtRate(g.barRate * 60)} clients/h` : kegsReady ? 'Branche un fût !' : 'Aucun fût plein'));
+    this.menuBtn.classList.toggle('ready', emptyTap && kegsReady);
+    this.syncKegHits();
     const nextBar = BAR[g.barLevel];
     this.barUpBtn.replaceChildren(h('span', 'side-title', 'Agrandir'), h('span', 'side-sub', nextBar ? moneyShort(nextBar.cost) : 'Au max'));
     this.barUpBtn.classList.toggle('alert', !!nextBar && g.money >= nextBar.cost);
@@ -295,7 +307,7 @@ export class App {
     const badges: Record<RoomId, string> = {
       workshop: trial ? '🍺' : '',
       storage: g.orders.length ? String(g.orders.length) : g.storageFull ? '!' : availableClient ? '✍' : '',
-      bar: g.beers.length && !g.barServing && !g.onTap.some((b) => g.pendingBottles(b.id) > 0) ? '!' : '', // à sec, et rien n'arrive
+      bar: emptyTap && kegsReady ? '!' : '', // un fût à changer, et de quoi le remplacer
     };
     for (const [id, tab] of this.navTabs) {
       tab.btn.classList.toggle('active', id === this.room);
@@ -343,8 +355,8 @@ export class App {
     if (!s) return;
     const key = JSON.stringify([
       s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer, g.autoBrew,
-      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.barMenu, Math.floor(g.barSold / 10), g.barLevel] : 0,
-      s.kind === 'storage' ? Math.round(g.productionRate()) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
+      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.format, g.beers.map((b) => b.kegs.length)] : 0,
+      s.kind === 'storage' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
     ]);
     if (key === this.sheetKey) return this.refreshLive();
     this.sheetKey = key;
@@ -447,10 +459,25 @@ export class App {
     const body = this.frameSheet('Brasser');
     const beer = g.beers.find((b) => b.id === g.selectedBeer);
     const card = h('div', 'card');
+    const fmt = g.brewFormat;
+    const kl = kegLiters(g.batchLiters);
+    const nk = Math.floor(g.batchLiters / kl);
+    const units = fmt === 'keg' ? `${nk} fût${nk > 1 ? 's' : ''} de ${kl} L (${kegGlasses(kl)} verres)` : `${Math.floor(g.batchLiters / 0.33)} btl`;
     card.append(
       h('div', 'beer-name', beer ? beer.name : 'Nouvel essai'),
-      h('div', 'stats-line', `${g.batchLiters} L · ${Math.floor(g.batchLiters / 0.33)} btl · ${money(g.brewCost())}`),
+      h('div', 'stats-line', `${g.batchLiters} L · ${units} · ${money(g.brewCost(g.recipe, g.batchLiters, fmt))}`),
     );
+    if (beer) {
+      // bouteilles pour le stock et les commandes, fûts pour le bar
+      const chips = h('div', 'chips');
+      for (const [f, name] of [['bottle', 'Bouteilles'], ['keg', 'Fûts pour le bar']] as const) {
+        chips.append(this.btn(`chip${fmt === f ? ' active' : ''}`, name, () => {
+          g.format = f;
+          this.sheetKey = '';
+        }));
+      }
+      card.append(chips);
+    } else card.append(h('div', 'hint', 'Un essai se met en bouteilles : on goûte la première.'));
     body.append(card);
     const can = g.canBrew();
     const busy = !!g.batchAt('mill');
@@ -462,8 +489,35 @@ export class App {
       this.toast(busy ? 'En file d\'attente' : 'Brassin lancé !', 'good');
       this.close();
     });
-    go.disabled = g.queued || (!can.ok && !(busy && g.money >= g.brewCost()));
+    go.disabled = g.queued || (!can.ok && !(busy && g.money >= g.brewCost(g.recipe, g.batchLiters, fmt)));
     body.append(go);
+    if (beer) {
+      const plan = this.btn('btn', `+ Programmer ce brassin (${fmt === 'keg' ? 'fûts' : 'bouteilles'})`, () => {
+        const r = g.planBrew(beer.id, fmt);
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.toast('Brassin programmé', 'good');
+        this.sheetKey = '';
+      });
+      plan.disabled = g.plan.length >= MAX_PLAN;
+      body.append(plan);
+    }
+    if (g.plan.length) {
+      body.append(h('div', 'section-title', `Programmés · ${g.plan.length}/${MAX_PLAN}`));
+      const list = h('div', 'stock-list');
+      g.plan.forEach((p, i) => {
+        const b = g.beer(p.beerId);
+        if (!b) return;
+        const line = h('div', 'stock-line');
+        const thumb = h('canvas', 'label-thumb');
+        drawLabel(thumb, b.label, b.name);
+        line.append(h('span', 'plan-rank', `${i + 1}.`), thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', p.format === 'keg' ? 'fûts' : 'bouteilles'), this.btn('icon-btn small', '✕', () => {
+          g.unplan(i);
+          this.sheetKey = '';
+        }));
+        list.append(line);
+      });
+      body.append(list, h('p', 'hint', 'Ils partent dans l\'ordre dès que le moulin est libre, avant le brassage continu.'));
+    }
     if (g.beers.length) {
       const auto = h('label', 'toggle');
       const box = h('input');
@@ -473,7 +527,7 @@ export class App {
         g.autoBrew = box.checked;
         this.sheetKey = '';
       };
-      auto.append(box, h('span', '', 'Brassage continu de la gamme'));
+      auto.append(box, h('span', '', 'Brassage continu de la gamme (bouteilles)'));
       body.append(auto);
       if (g.autoBrew && !g.roomForBatch) body.append(h('p', 'note bad', '⏸ Stockage plein'));
     }
@@ -577,7 +631,7 @@ export class App {
         const line = h('div', 'stock-line');
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.stock} btl · ${Math.ceil(b.stock / CRATE)} caisses`));
+        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.stock} btl · ${Math.ceil(b.stock / CRATE)} caisses${b.kegs.length ? ` · ${b.kegs.length} fûts` : ''}`));
         list.append(line);
       }
       body.append(list);
@@ -615,7 +669,8 @@ export class App {
     const card = h('div', 'card beer');
     const head = h('div', 'beer-head');
     head.append(h('span', 'beer-name', b.name), h('span', `verdict ${VERDICT_CLASS[v]}`, v));
-    card.append(head, h('div', 'stats-line', `${t.style} · ${t.abv.toFixed(1)} % · ${Math.round(t.ibu)} IBU · ${b.stock} btl · ${b.sold} vendues`));
+    card.append(head, h('div', 'stats-line', `${t.style} · ${t.abv.toFixed(1)} % · ${Math.round(t.ibu)} IBU · ${b.stock} btl · ${b.kegs.length} fûts · ${b.sold} vendues`));
+    card.append(this.popLine(g, b));
     const actions = h('div', 'row');
     actions.append(this.btn('btn small', b.id === g.selectedBeer ? '✓ Chargée' : 'Charger', () => {
       g.loadBeer(b.id);
@@ -636,30 +691,76 @@ export class App {
     return card;
   }
 
-  // --- Bar : la carte (bières servies, une par tireuse)
+  /** Popularité d'une bière en étoiles, et les tendances qu'elle suit. */
+  private popLine(g: Game, b: Beer): HTMLElement {
+    const line = h('div', 'pop-line');
+    line.append(h('span', 'pop-stars', starText(b.pop)));
+    for (const tr of trendsOf(b.tasting, g.trends)) line.append(h('span', 'trend-chip', `↗ ${tr.short}`));
+    return line;
+  }
+
+  // --- Bar : popularité, affluence et fûts branchés
   private barSheet(g: Game): void {
-    const body = this.frameSheet(`La carte · ${g.barMenu.length}/${g.barTaps} tireuses`);
-    body.append(h('div', 'stats-line strong', `${fmtRate(g.barRate)} btl/min · ${g.barSold.toLocaleString('fr-FR')} servies · ${moneyInt(g.barRevenue)}`));
-    if (!g.beers.length) body.append(h('p', 'hint', 'Garde une bière à l\'atelier pour la servir ici.'));
-    else if (!g.barServing) body.append(h('p', 'note bad', g.onTap.length ? 'À sec : plus rien en stock à servir' : 'Mets une bière à la carte'));
+    const body = this.frameSheet(`Le bar · ${g.bar.name}`);
+    body.append(
+      h('div', 'stats-line strong', `Marque ${starText(g.brand)} · ${fmtRate(g.barRate * 60)} clients/h`),
+      h('div', 'stats-line', `${g.barSold.toLocaleString('fr-FR')} verres servis · ${moneyInt(g.barRevenue)}`),
+    );
+    if (!g.beers.length) body.append(h('p', 'hint', 'Garde une bière à l\'atelier, puis brasse-la en fûts pour la servir ici.'));
+    body.append(h('div', 'section-title', `Tireuses · ${g.taps.length}`));
+    const list = h('div', 'stock-list');
+    g.taps.forEach((tap, i) => {
+      const b = g.beer(tap.beerId);
+      const line = h('button', `stock-line tap-line${tap.glasses > 0 ? ' on' : ''}`);
+      if (b) {
+        const thumb = h('canvas', 'label-thumb');
+        drawLabel(thumb, b.label, b.name);
+        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tap.glasses > 0 ? `${tap.glasses}/${tap.capacity} verres · ${money(glassPrice(g.barLevel, b.tasting, trendsOf(b.tasting, g.trends).length))}` : 'Fût vide'));
+      } else line.append(h('span', 'stock-name', `Tireuse ${i + 1}`), h('span', 'stock-qty', 'Aucun fût'));
+      line.append(h('span', 'tap-state', '⇄'));
+      line.onclick = () => this.openKegSwap(i);
+      list.append(line);
+    });
+    body.append(list);
+    // fûts pleins au stockage
+    const kegs = g.beers.filter((b) => b.kegs.length > 0);
+    body.append(h('div', 'section-title', 'Fûts pleins au stockage'));
+    if (!kegs.length) body.append(h('p', 'hint', 'Aucun. À l\'atelier, choisis « Fûts » au brassage (ou programme un brassin en fûts).'));
+    else body.append(h('div', 'stats-line', kegs.map((b) => `${b.name} × ${b.kegs.length}`).join(' · ')));
+  }
+
+  /** Changer le fût d'une tireuse : on prend un fût plein au stockage. */
+  openKegSwap(i: number): void {
+    const g = this.game();
+    const tap = g.taps[i];
+    if (!tap) return;
+    this.barRoom.selected = `keg${i}`;
+    const card = this.modalCard(`Tireuse ${i + 1} · changer le fût`);
+    const cur = g.beer(tap.beerId);
+    card.append(h('p', 'hint', cur ? (tap.glasses > 0 ? `Branché : ${cur.name}, il reste ${tap.glasses} verres (perdus si tu le changes).` : `Le fût de ${cur.name} est vide.`) : 'Aucun fût branché.'));
     const list = h('div', 'stock-list');
     for (const b of g.beers) {
-      const on = g.barMenu.includes(b.id);
-      const line = h('button', `stock-line tap-line${on ? ' on' : ''}`);
+      const line = h('button', 'stock-line tap-line');
       const thumb = h('canvas', 'label-thumb');
       drawLabel(thumb, b.label, b.name);
-      const ok = b.tasting.quality >= BAR_MIN_QUALITY;
-      line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.stock} btl · ${money(barPrice(g.barLevel, b.tasting))}`), h('span', 'tap-state', on ? '✓' : '+'));
-      line.disabled = !ok || (!on && g.barMenu.length >= g.barTaps);
+      line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.kegs.length} fût${b.kegs.length > 1 ? 's' : ''}${b.kegs.length ? ` de ${Math.max(...b.kegs)} verres` : ''} · ${starText(b.pop)}`));
+      line.disabled = !b.kegs.length;
       line.onclick = () => {
-        const r = g.toggleTap(b.id);
+        const r = g.swapKeg(i, b.id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.toast(`Fût de ${b.name} branché`, 'good');
+        this.barRoom.selected = null;
         this.sheetKey = '';
+        this.closeModal();
       };
       list.append(line);
     }
-    body.append(list);
-    if (g.beers.length > g.barTaps) body.append(h('p', 'hint', 'Plus de tireuses : agrandis le bar.'));
+    card.append(list);
+    if (!g.beers.some((b) => b.kegs.length > 0)) card.append(h('p', 'note bad', 'Aucun fût plein au stockage : brasse en fûts à l\'atelier.'));
+    card.append(this.btn('btn', 'Fermer', () => {
+      this.barRoom.selected = null;
+      this.closeModal();
+    }));
   }
 
   // --- Bar : l'agrandir (plus de places, de tireuses, une meilleure ambiance)
@@ -671,7 +772,7 @@ export class App {
     for (const [l, tag, cls] of [[lvl, 'Actuel', 'done'], [next, 'Suivant', 'current']] as const) {
       if (!l) continue;
       const cell = h('div', `storage-level ${cls}`);
-      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.seats} places · ${l.taps} tireuse${l.taps > 1 ? 's' : ''} · ${l.rate} btl/min · prix ×${l.priceMult.toLocaleString('fr-FR')}`));
+      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.seats} places · ${l.taps} tireuse${l.taps > 1 ? 's' : ''} · jusqu'à ${fmtRate(l.rate * 60)} clients/h · prix ×${l.priceMult.toLocaleString('fr-FR')}`));
       levels.append(cell);
     }
     body.append(levels);
@@ -681,6 +782,7 @@ export class App {
         if (!r.ok) return this.toast(r.reason!, 'bad');
         this.toast(`${next.name} !`, 'good');
         this.barRoom.invalidate();
+        this.syncKegHits();
         this.sheetKey = '';
       });
       b.dataset.cost = String(next.cost);
@@ -692,7 +794,7 @@ export class App {
   // ------------------------------------------------------------------ ordinateur des commandes
 
   /** L'ordinateur du stockage : les commandes des clients (des missions) et les contrats. */
-  openComputer(tab?: 'orders' | 'clients'): void {
+  openComputer(tab?: PcTab): void {
     const g = this.game();
     if (this.room !== 'storage') this.goRoom('storage');
     this.close();
@@ -704,7 +806,7 @@ export class App {
   }
 
   private computerKey(g: Game): string {
-    return JSON.stringify([this.computer?.tab, g.orders.map((o) => o.id), g.beers.map((b) => [b.id, b.stock]), g.signed, g.deals, Math.floor(g.totalSold / 50), g.breweryLevel, [...this.picks]]);
+    return JSON.stringify([this.computer?.tab, g.orders.map((o) => o.id), g.trends, this.computer?.tab === 'trends' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.beers.map((b) => [b.id, b.stock]), g.signed, g.deals, Math.floor(g.totalSold / 50), g.breweryLevel, [...this.picks]]);
   }
 
   /** Reconstruit la fenêtre quand une commande arrive, expire, ou que le stock change. */
@@ -727,7 +829,7 @@ export class App {
     card.replaceChildren();
     const head = h('div', 'sheet-head');
     const tabs = h('div', 'pc-tabs');
-    for (const [id, name] of [['orders', `Commandes${g.orders.length ? ` (${g.orders.length})` : ''}`], ['clients', 'Clients']] as const) {
+    for (const [id, name] of [['orders', `Commandes${g.orders.length ? ` (${g.orders.length})` : ''}`], ['trends', 'Tendances'], ['clients', 'Clients']] as const) {
       tabs.append(this.btn(`pc-tab${st.tab === id ? ' active' : ''}`, name, () => {
         st.tab = id;
         this.renderComputer(card);
@@ -736,6 +838,7 @@ export class App {
     head.append(tabs, this.btn('icon-btn small', '✕', () => this.closeModal()));
     card.append(head);
     if (st.tab === 'orders') this.ordersTab(g, card);
+    else if (st.tab === 'trends') this.trendsTab(g, card);
     else this.clientsTab(g, card);
     card.scrollTop = scroll;
   }
@@ -830,6 +933,37 @@ export class App {
     return card;
   }
 
+  /** Les tendances du moment et la popularité de la marque et de chaque bière. */
+  private trendsTab(g: Game, card: HTMLElement): void {
+    card.append(h('div', 'stats-line strong', `Popularité de la marque : ${starText(g.brand)}`));
+    card.append(h('p', 'hint', 'Une bière gagne en popularité quand on la boit, surtout si elle est bonne et dans la tendance. Une marque populaire attire du monde au bar et reçoit plus de commandes.'));
+    card.append(h('div', 'section-title', 'Tendances du moment'));
+    for (const tr of g.trends) {
+      const def = trendById(tr.id);
+      if (!def) continue;
+      const el = h('div', 'card');
+      const head = h('div', 'beer-head');
+      const left = h('span', 'order-time');
+      left.dataset.expires = String(tr.until);
+      left.textContent = `⏳ ${duration(tr.until - g.time)}`;
+      head.append(h('span', 'beer-name', def.text), left);
+      el.append(head);
+      const fans = g.beers.filter((b) => def.test(b.tasting));
+      el.append(h('div', fans.length ? 'note' : 'hint', fans.length ? `✓ ${fans.map((b) => b.name).join(', ')}` : 'Aucune bière de ta gamme'));
+      card.append(el);
+    }
+    if (g.beers.length) {
+      card.append(h('div', 'section-title', 'Ta gamme'));
+      for (const b of g.beers) {
+        const el = h('div', 'stock-line');
+        const thumb = h('canvas', 'label-thumb');
+        drawLabel(thumb, b.label, b.name);
+        el.append(thumb, h('span', 'stock-name', b.name), this.popLine(g, b));
+        card.append(el);
+      }
+    }
+  }
+
   /** Les clients : contrats à signer, négociations (commandes plus grosses). */
   private clientsTab(g: Game, card: HTMLElement): void {
     card.append(h('div', 'stats-line', `${g.totalSold.toLocaleString('fr-FR')} vendues · ${g.ordersDone} commandes livrées · production ${fmtRate(g.productionRate())} btl/min`));
@@ -899,6 +1033,28 @@ export class App {
     this.placeTrack();
     this.setBottom();
     this.update();
+  }
+
+  /** Une zone tactile par fût de la cave : toucher un fût permet de le changer. */
+  private syncKegHits(force = false): void {
+    const n = this.game().taps.length;
+    if (!force && this.kegHits.length === n) return;
+    for (const el of this.kegHits) {
+      el.remove();
+      this.roomHits = this.roomHits.filter((r) => r.el !== el);
+    }
+    this.kegHits = [];
+    for (const hit of this.barRoom.hits(n).slice(1)) {
+      const i = Number(hit.id.slice(3));
+      const el = h('button', 'station-hit');
+      el.setAttribute('aria-label', `Fût de la tireuse ${i + 1}`);
+      el.onclick = () => this.openKegSwap(i);
+      this.barWrap.append(el);
+      this.kegHits.push(el);
+      this.roomHits.push({ el, rect: hit.rect });
+    }
+    const s = this.scale;
+    for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
   }
 
   private get roomIndex(): number {
@@ -1202,7 +1358,7 @@ export class App {
       1: { text: 'Touche une machine pour la régler.' },
       2: { text: 'Appuie sur « Brasser » pour lancer ton premier brassin.' },
       3: { text: 'Je t\'aide pour celui-ci : ça ira vite. On goûte à la première bouteille !' },
-      4: { text: 'Tes bouteilles vont au stockage, et le bar les vend. Glisse l\'écran pour visiter tes pièces ! Active aussi le brassage continu.', action: 'Compris' },
+      4: { text: 'Tes bouteilles vont au stockage : remplis-y les commandes de l\'ordinateur. Pour le bar, brasse en fûts et branche-les dans sa cave. Glisse l\'écran pour visiter tes pièces !', action: 'Compris' },
     };
     const tip = this.modalOpen || this.openSheet?.kind === 'brew' ? undefined : tips[g.tips];
     this.mentor.classList.toggle('hidden', !tip);
