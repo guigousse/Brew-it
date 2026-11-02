@@ -221,6 +221,24 @@ describe('jeu', () => {
     expect(loaded.deals).toEqual({});
   });
 
+  it('la brasserie prend le niveau de son appareil le moins avancé et ouvre de nouveaux distributeurs', () => {
+    const g = new Game();
+    g.money = 1e9;
+    g.totalSold = 1e7;
+    const levels: number[] = [];
+    g.events.on((e) => e.type === 'breweryLevel' && levels.push(e.level));
+    expect(g.breweryLevel).toBe(1);
+    expect(g.sign('caviste').ok).toBe(false); // il faut le niveau 2
+    for (const id of STATION_ORDER.slice(0, 6)) g.upgrade(id);
+    expect(g.breweryLevel).toBe(1); // l'embouteillage est encore au niveau 1
+    g.upgrade('bottling');
+    expect(g.breweryLevel).toBe(2);
+    expect(g.breweryName).toBe('Garage');
+    expect(levels).toEqual([2]);
+    expect(g.sign('caviste').ok).toBe(true);
+    expect(g.distributorOpen('restaurant')).toBe(false);
+  });
+
   it('chaque distributeur a une commande que le stockage maximal peut contenir', () => {
     for (const d of DISTRIBUTORS) expect(d.order).toBeLessThanOrEqual(600 * 12);
   });

@@ -36,6 +36,11 @@ async function boot() {
     unsubscribe = game.events.on((e) => {
       if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
       if (e.type === 'batchDone' && e.beerId != null) app.toast(`+${e.bottles} bouteilles en stock`, 'good');
+      if (e.type === 'breweryLevel') {
+        app.scene.flash();
+        app.openBrewery(true);
+        tapFeedback(true);
+      }
       if (e.type === 'distributorAvailable') app.toast(`Nouveau distributeur disponible : ${DISTRIBUTORS.find((d) => d.id === e.id)?.name}`, 'good');
     });
     app.update();

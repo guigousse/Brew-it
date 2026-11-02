@@ -256,3 +256,12 @@ button:disabled { cursor: default; opacity: .5; }
 .deal-pips { display: flex; gap: 3px; }
 .deal-pips .pip { width: 12px; height: 12px; background: var(--ink); border: 2px solid #5c4a6e; }
 .deal-pips .pip.on { background: var(--accent); border-color: var(--accent-dark); }
+
+/* --- Plaque et fiche de la brasserie ------------------------------------------------ */
+.plaque { font-family: var(--font-title); font-size: 11px; color: var(--accent); z-index: 2; }
+.brewery-list { display: grid; gap: 4px; }
+.brewery-row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 8px; padding: 2px 8px; background: var(--panel-2); border: 2px solid var(--ink); cursor: pointer; }
+.brewery-row.ok { opacity: .6; }
+.brewery-pic { width: auto; height: 30px; justify-self: center; }
+.brewery-state { color: var(--accent); }
+.brewery-row.ok .brewery-state { color: var(--good); }

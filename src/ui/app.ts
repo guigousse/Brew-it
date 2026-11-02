@@ -2,7 +2,7 @@ import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { type Beer, type Game } from '../core/game';
 import { DISTRIBUTORS, MAX_DEAL, bottlePrice } from '../core/market';
-import { CAPACITY, MAX_LEVEL, PRECISION, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
+import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, PRECISION, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
@@ -47,6 +47,8 @@ export class App {
   private sceneWrap = h('div', 'scene-wrap');
   private overlays = new Map<StationId, { btn: HTMLButtonElement; label: HTMLElement; bar: HTMLElement; text: HTMLElement }>();
   private tasteBtn = h('button', 'taste-btn hidden', '🍺 Goûter');
+  /** Plaque du niveau de la brasserie, en haut à gauche de la scène. */
+  private plaque = h('button', 'map-btn plaque');
   private announcedTaste = -1;
   private bottom = h('nav', 'bottombar');
   private brewBtn = h('button', 'brew-btn');
@@ -92,7 +94,8 @@ export class App {
       this.overlays.set(id, { btn, label, bar, text });
     }
     this.tasteBtn.onclick = () => this.openTasting();
-    this.sceneWrap.append(this.tasteBtn);
+    this.plaque.onclick = () => this.openBrewery();
+    this.sceneWrap.append(this.plaque, this.tasteBtn);
     this.stage.append(this.sceneWrap);
 
     // barre du bas
@@ -168,6 +171,7 @@ export class App {
   update(): void {
     const g = this.game();
     this.moneyEl.textContent = moneyInt(g.money);
+    this.plaque.textContent = `★ ${g.breweryLevel} · ${g.breweryName}`;
     const can = g.canBrew();
     const sub = g.autoBrew ? '⟳ En continu' : can.ok ? (g.broke ? 'Offert par Gaston' : `${g.batchLiters} L · ${moneyInt(g.brewCost())}`) : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants';
     this.brewBtn.replaceChildren(h('span', 'brew-title', 'Brasser'), h('span', 'brew-sub', sub));
@@ -184,7 +188,7 @@ export class App {
       this.toast('La première bouteille sort : goûte-la !', 'good');
       this.onTasteReady?.();
     }
-    const available = DISTRIBUTORS.some((d) => !g.signed.includes(d.id) && g.totalSold >= d.unlockSold);
+    const available = DISTRIBUTORS.some((d) => !g.signed.includes(d.id) && g.distributorOpen(d.id));
     this.salesBtn.replaceChildren(h('span', 'side-title', 'Ventes'), h('span', 'side-sub', available ? '✍ Nouveau contrat' : `${g.totalSold} vendues`));
     this.salesBtn.classList.toggle('alert', available);
     this.renderSheet();
@@ -546,7 +550,7 @@ export class App {
     body.append(balance);
     for (const d of DISTRIBUTORS) {
       const signed = g.signed.includes(d.id);
-      const unlocked = g.totalSold >= d.unlockSold;
+      const unlocked = g.distributorOpen(d.id);
       const card = h('div', `card distributor${signed ? ' signed' : unlocked ? ' available' : ' locked'}`);
       const head = h('div', 'beer-head');
       head.append(h('span', 'beer-name', d.name), h('span', `verdict ${signed ? 'v-good' : unlocked ? 'v-top' : 'v-meh'}`, signed ? 'Sous contrat' : unlocked ? 'Disponible' : '🔒'));
@@ -587,11 +591,16 @@ export class App {
         b.disabled = g.money < d.fee;
         card.append(b);
       } else {
-        const bar = h('div', 'progress');
-        const fill = h('div', 'progress-fill');
-        fill.style.width = `${Math.min(100, (g.totalSold / d.unlockSold) * 100)}%`;
-        bar.append(fill);
-        card.append(h('div', 'hint', `Vends ${d.unlockSold.toLocaleString('fr-FR')} bouteilles pour le débloquer (${g.totalSold.toLocaleString('fr-FR')}/${d.unlockSold.toLocaleString('fr-FR')})`), bar);
+        const lvOk = g.breweryLevel >= d.level;
+        card.append(h('div', lvOk ? 'note' : 'note bad', `${lvOk ? '✓' : '✗'} Brasserie niveau ${d.level} : ${BREWERY_NAMES[d.level - 1]}${lvOk ? '' : ` (tous les appareils au niveau ${d.level})`}`));
+        const soldOk = g.totalSold >= d.unlockSold;
+        if (d.unlockSold > 0) {
+          const bar = h('div', 'progress');
+          const fill = h('div', 'progress-fill');
+          fill.style.width = `${Math.min(100, (g.totalSold / d.unlockSold) * 100)}%`;
+          bar.append(fill);
+          card.append(h('div', soldOk ? 'note' : 'hint', `${soldOk ? '✓' : '✗'} ${d.unlockSold.toLocaleString('fr-FR')} bouteilles vendues (${Math.min(g.totalSold, d.unlockSold).toLocaleString('fr-FR')}/${d.unlockSold.toLocaleString('fr-FR')})`), bar);
+        }
       }
       body.append(card);
     }
@@ -748,6 +757,34 @@ export class App {
       this.closeModal();
       this.toast(`+${moneyInt(o.earned)} récoltés`, 'good');
     }));
+  }
+
+  /** Fiche de la brasserie : son niveau, ce qui manque pour le suivant et ce qu'il débloque. */
+  openBrewery(levelUp = false): void {
+    const g = this.game();
+    const lv = g.breweryLevel;
+    const card = this.modalCard(levelUp ? 'Ta brasserie grandit !' : 'Ta brasserie');
+    card.append(h('div', 'verdict big v-top', `★ ${lv} · ${g.breweryName}`));
+    const opened = DISTRIBUTORS.filter((d) => d.level === lv && d.level > 1);
+    if (levelUp && opened.length) card.append(h('p', 'note', `Nouveaux clients possibles : ${opened.map((d) => d.name).join(', ')} (onglet Ventes).`));
+    if (lv < MAX_LEVEL) {
+      card.append(h('div', 'section-title', `Pour passer au niveau ${lv + 1} : ${BREWERY_NAMES[lv]}`), h('p', 'hint', `Tous tes appareils doivent atteindre le niveau ${lv + 1}.`));
+      const list = h('div', 'brewery-list');
+      for (const id of STATION_ORDER) {
+        const ok = g.level(id) > lv;
+        const row = h('div', `brewery-row${ok ? ' ok' : ''}`);
+        row.append(img(stationCanvas(id, g.level(id)), 'pix brewery-pic'), h('span', '', STATIONS[id].step), h('span', 'brewery-state', ok ? '✓' : `niv. ${g.level(id)}`));
+        row.onclick = () => {
+          this.closeModal();
+          this.open({ kind: 'station', id });
+        };
+        list.append(row);
+      }
+      const next = DISTRIBUTORS.filter((d) => d.level === lv + 1);
+      card.append(list);
+      if (next.length) card.append(h('p', 'hint', `Ce niveau ouvrira : ${next.map((d) => d.name).join(', ')}.`));
+    } else card.append(h('p', 'note', 'Niveau maximal : ta brasserie est un laboratoire du futur !'));
+    card.append(this.btn('btn primary', 'Fermer', () => this.closeModal()));
   }
 
   private openOptions(): void {

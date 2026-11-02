@@ -56,7 +56,7 @@ function shop() {
   for (let k = 0; k < 200; k++) {
     const options: { cost: number; label: string; act: () => boolean }[] = [];
     for (const d of DISTRIBUTORS) {
-      if (g.signed.includes(d.id) || g.totalSold < d.unlockSold) continue;
+      if (g.signed.includes(d.id) || !g.distributorOpen(d.id)) continue;
       options.push({ cost: d.fee, label: `Contrat ${d.name}`, act: () => g.sign(d.id).ok });
     }
     for (const id of STATION_ORDER) {

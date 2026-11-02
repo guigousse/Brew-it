@@ -45,6 +45,18 @@ Effet des niveaux (1 → 5) :
 - **Défauts réduits :** infection au refroidissement (15 %, 10 %, 4 %, 0 %, 0 %), oxydation à l'embouteillage (de 8 % à 0), goût de maïs cuit, astringence, limpidité (bonus aux niveaux 4 et 5).
 - **Prix :** prix de base de l'appareil (60 à 100 €) × 1, 250, 2 500, puis 10 000 pour les niveaux 2 à 5.
 
+**Niveau de la brasserie** : la brasserie prend le niveau de son appareil le moins avancé. Dès que les 7 appareils sont au niveau 2, elle passe niveau 2, et ainsi de suite. Chaque niveau change tout le décor et ouvre de nouveaux distributeurs :
+
+| Niveau | Décor | Ouvre |
+|---|---|---|
+| 1 · Labo d'alchimiste | cave en pierre, poutres, bougies, lucarne au clair de lune, bocaux | Bar du coin, Épicerie fine |
+| 2 · Garage | mur de briques, fenêtres hautes, passerelles en caillebotis | Caviste |
+| 3 · Microbrasserie | carreaux blancs, poutres en bois, baies en arc, ardoise, sol en tomettes | Restaurant, Festival |
+| 4 · Usine | tôle ondulée, verrière, poutres rouges, bandes de sécurité, béton | Supermarché |
+| 5 · Labo du futur | panneaux blancs, néons cyan, baie sur la ville de nuit | Export |
+
+Une plaque en haut à gauche de la scène montre le niveau. La toucher ouvre la fiche de la brasserie : quels appareils il reste à améliorer, et ce que débloquera le niveau suivant. Le passage de niveau déclenche un éclair et cette fiche.
+
 Le tout premier brassin du tutoriel va 4 fois plus vite et ne peut pas être infecté : Gaston donne un coup de main. Si le joueur n'a plus d'argent, plus de stock et rien en cours, Gaston avance les ingrédients : la partie ne peut jamais se bloquer.
 
 ## Modèle de brassage réaliste (`src/core/brewing/model.ts`)
@@ -62,17 +74,17 @@ Le tout premier brassin du tutoriel va 4 fois plus vite et ne peut pas être inf
 | Sucre de refermentation | Plate (< 1,8 vol), débordante (> 3,2 vol), puis bouteilles qui explosent (> 4,2 vol) |
 
 ## Distributeurs
-Le Bar du coin est sous contrat dès le départ. Les suivants se débloquent selon le nombre de bouteilles vendues, puis se signent contre un droit d'entrée.
+Le Bar du coin est sous contrat dès le départ. Les suivants demandent **un niveau de brasserie et un nombre de bouteilles vendues**, puis se signent contre un droit d'entrée.
 
-| Distributeur | Débloqué à | Signature | Commandes | Lot | Aime |
+| Distributeur | Brasserie · vendues | Signature | Commandes | Lot | Aime |
 |---|---|---|---|---|---|
 | Bar du coin | — | — | 1/min | 1 | tout ce qui est buvable |
-| Épicerie fine | 60 btl | 200 € | 2/min | 6 | qualité Correcte min. |
-| Caviste | 8 000 | 25 000 € | 4/min | 12 | bières aromatiques |
-| Restaurant | 60 000 | 120 000 € | 8/min | 24 | limpides et légères |
-| Festival | 150 000 | 350 000 € | 18/min | 60 | bières fortes |
-| Supermarché | 600 000 | 900 000 € | 45/min | 240 | gros volumes, petits prix |
-| Export | 2 500 000 | 4 000 000 € | 110/min | 480 | bières excellentes |
+| Épicerie fine | niv. 1 · 60 btl | 200 € | 2/min | 6 | qualité Correcte min. |
+| Caviste | niv. 2 · 8 000 | 25 000 € | 4/min | 12 | bières aromatiques |
+| Restaurant | niv. 3 · 60 000 | 120 000 € | 8/min | 24 | limpides et légères |
+| Festival | niv. 3 · 150 000 | 350 000 € | 18/min | 60 | bières fortes |
+| Supermarché | niv. 4 · 600 000 | 900 000 € | 45/min | 240 | gros volumes, petits prix |
+| Export | niv. 5 · 2 500 000 | 4 000 000 € | 110/min | 480 | bières excellentes |
 
 - **Commandes par lots** : une commande ne part que si une bière qui convient en a assez en stock. Il faut donc un stockage assez grand pour les gros clients.
 - **Variété** : chaque bière supplémentaire de la gamme qui plaît au distributeur augmente ses commandes de 25 %.

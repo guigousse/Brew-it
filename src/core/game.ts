@@ -3,7 +3,7 @@ import { EventBus } from './events';
 import type { Label } from './label';
 import { bottlePrice, DEAL_BONUS, dealCost, DISTRIBUTORS, variety } from './market';
 import { Rng } from './rng';
-import { CAPACITY, MAX_LEVEL, PRECISION, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
+import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, PRECISION, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 
 export const TICK_RATE = 20;
@@ -110,6 +110,21 @@ export class Game {
 
   get levels(): Levels {
     return Object.fromEntries(STATION_ORDER.map((id) => [id, this.level(id)])) as unknown as Levels;
+  }
+
+  /** Niveau de la brasserie : celui de son appareil le moins avancé. */
+  get breweryLevel(): number {
+    return Math.min(...STATION_ORDER.map((id) => this.level(id)));
+  }
+
+  get breweryName(): string {
+    return BREWERY_NAMES[this.breweryLevel - 1]!;
+  }
+
+  /** Un distributeur peut être signé : assez de bouteilles vendues et une brasserie du bon niveau. */
+  distributorOpen(id: string): boolean {
+    const d = DISTRIBUTORS.find((x) => x.id === id);
+    return !!d && this.totalSold >= d.unlockSold && this.breweryLevel >= d.level;
   }
 
   /** Taille d'un brassin : le plus petit appareil fixe le volume. */
@@ -243,9 +258,11 @@ export class Game {
     if (lv >= MAX_LEVEL) return { ok: false, reason: 'Niveau maximal' };
     const cost = upgradeCost(id, lv + 1);
     if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    const before = this.breweryLevel;
     this.money -= cost;
     this.stations[id].level = lv + 1;
     this.events.emit({ type: 'upgraded', station: id, level: lv + 1 });
+    if (this.breweryLevel > before) this.events.emit({ type: 'breweryLevel', level: this.breweryLevel });
     return { ok: true };
   }
 
@@ -324,6 +341,7 @@ export class Game {
   sign(id: string): CommandResult {
     const d = DISTRIBUTORS.find((x) => x.id === id);
     if (!d || this.signed.includes(id)) return { ok: false, reason: 'Déjà signé' };
+    if (this.breweryLevel < d.level) return { ok: false, reason: `Ta brasserie doit d'abord passer au niveau ${d.level} (${BREWERY_NAMES[d.level - 1]})` };
     if (this.totalSold < d.unlockSold) return { ok: false, reason: `Vends d'abord ${d.unlockSold} bouteilles` };
     if (this.money < d.fee) return { ok: false, reason: 'Pas assez d\'argent' };
     this.money -= d.fee;
@@ -503,7 +521,7 @@ export class Game {
 
   private announce(): void {
     for (const d of DISTRIBUTORS) {
-      if (this.signed.includes(d.id) || this.announced.has(d.id) || this.totalSold < d.unlockSold) continue;
+      if (this.signed.includes(d.id) || this.announced.has(d.id) || !this.distributorOpen(d.id)) continue;
       this.announced.add(d.id);
       this.events.emit({ type: 'distributorAvailable', id: d.id });
     }

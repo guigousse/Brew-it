@@ -15,6 +15,8 @@ export interface KnobDef {
 }
 
 export const MAX_LEVEL = 5;
+/** La brasserie prend le niveau de son appareil le moins avancé : son décor change et de nouveaux clients s'ouvrent. */
+export const BREWERY_NAMES = ['Labo d\'alchimiste', 'Garage', 'Microbrasserie', 'Usine', 'Labo du futur'] as const;
 type Five<T> = readonly [T, T, T, T, T];
 
 export interface StationDef {
