@@ -457,6 +457,10 @@ export const SPRITES: Record<StationId, SpriteDef[]> = {
 };
 
 const cache = new Map<string, HTMLCanvasElement>();
+/** Vide le cache : iOS peut effacer les canvas hors écran quand l'app reste longtemps en arrière-plan. */
+export function clearSpriteCache(): void {
+  cache.clear();
+}
 export function stationCanvas(id: StationId, level: number): HTMLCanvasElement {
   const key = `${id}|${level}`;
   let c = cache.get(key);

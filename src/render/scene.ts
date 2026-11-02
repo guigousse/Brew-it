@@ -5,7 +5,7 @@
 import type { Game } from '../core/game';
 import { STATION_ORDER, type StationId } from '../core/stations';
 import { PAL } from './painter';
-import { SPRITES, stationCanvas, type Pt, type Rect } from './sprites';
+import { clearSpriteCache, SPRITES, stationCanvas, type Pt, type Rect } from './sprites';
 import { drawMiniLabel } from './labelArt';
 
 export const SCENE_W = 160;
@@ -92,6 +92,28 @@ export class Scene {
     return { x: LINE.fillX, y: LINE.top - 6 };
   }
 
+  private checkedAt = 0;
+
+  /**
+   * Oublie les images en cache (décors, appareils) pour les redessiner. Nécessaire au retour d'arrière-plan :
+   * iOS libère la mémoire des canvas hors écran, qui deviennent vides (seul ce qui est redessiné à chaque image restait visible).
+   */
+  invalidate(): void {
+    this.bgs.clear();
+    clearSpriteCache();
+  }
+
+  /** Le décor en cache a-t-il été effacé par le système ? (il est entièrement opaque : un pixel transparent = perdu) */
+  private cacheLost(level: number): boolean {
+    const bg = this.bgs.get(level);
+    if (!bg) return false;
+    try {
+      return bg.getContext('2d')!.getImageData(0, 0, 1, 1).data[3] === 0;
+    } catch {
+      return true;
+    }
+  }
+
   /** Éclair blanc quand la brasserie change de niveau (et donc de décor). */
   flash(): void {
     this.flashAt = performance.now() / 1000;
@@ -99,6 +121,11 @@ export class Scene {
 
   draw(game: Game, t: number): void {
     const g = this.g;
+    if (t - this.checkedAt > 1) {
+      this.checkedAt = t;
+      if (this.cacheLost(game.breweryLevel)) this.invalidate();
+    }
+    g.imageSmoothingEnabled = false; // réinitialisé si le contexte est restauré
     g.drawImage(this.background(game.breweryLevel), 0, 0);
     this.drawPipes(game, t);
     for (const id of STATION_ORDER) if (id !== 'bottling') this.drawStation(game, id, t);

@@ -78,6 +78,7 @@ async function boot() {
     },
     () => {
       if (!pausedAt) return;
+      app.scene.invalidate();
       simulateOffline(game, (Date.now() - pausedAt) / 1000);
       last = performance.now();
       if (game.offline) app.openOffline();
