@@ -90,18 +90,22 @@ Avant les corrections, avec 5 niveaux mais l'ancienne économie, le joueur simul
 ## Résultat (4 visites par jour)
 
 ```
-Chiffre d'affaires par jour (sans long palier) :
-  J1 28k · J5 102k · J10 150k · J15 404k · J20 949k · J25 1,6M · J28 6,3M · J31 9,5M
-Fin : J31 · 118 visites · 34 % sans achat · pire série sans achat : 3 visites
-2 visites par jour : fin J43 · 15 % sans achat · pire série : 2
-(décoration du bar retirée pour l'instant : elle reviendra plus tard)
+Fin : J33 · 125 visites · 30 % sans achat · pire série sans achat : 3 visites
+2 visites par jour : fin J45 · 13 % sans achat · pire série : 2
+Popularité de la marque : ~30 % au début, 50-60 % en milieu de partie, 70 % et plus en fin
 ```
+
+## Finesse et popularité plus exigeantes
+
+- **Finesse** : la note est plafonnée par la finesse de la recette. Une recette sans défaut ne dépasse plus 14/20 si elle n'est pas affinée. Au-dessus de 18/20, tout doit être juste.
+- **Popularité** : sa cible suit la qualité au carré (ou presque), elle est plafonnée par le niveau de la brasserie, et elle monte trois fois moins vite. Une bière « Bonne » d'un garage ne dépasse plus 2,5 ★.
+- Une marque moins populaire est moins bien payée : le grossiste remonte à 1,60 € pour garder la fin vers le J33.
 
 ## Volume progressif et cuves en parallèle
 
 - Chaque appareil amélioré grossit **tout de suite** les brassins (1/7 du palier suivant) : il n'y a plus de longs paliers où l'on attend que les 7 appareils soient au même niveau.
 - Les **cuves en parallèle** (fermentation et garde) multiplient la cadence. D'abord trop bon marché, elles faisaient finir le jeu en 8 jours. Elles coûtent désormais le prix de l'appareil du niveau suivant × le nombre de cuves, et améliorer un appareil coûte autant de fois que de cuves.
-- Pour compenser la production plus forte, le **grossiste** est descendu à 1,50 € de base.
+- Pour compenser la production plus forte, le **grossiste** est descendu à 1,50 € de base (puis remonté à 1,60 €, voir plus haut).
 
 ## Tableau de commandes, grossiste (v7)
 
@@ -121,7 +125,8 @@ Fin : J31 · 118 visites · 34 % sans achat · pire série sans achat : 3 visite
 | Changer le stockage | `STORAGE` (`warehouse.ts`) |
 | Changer le bar | `BAR`, `BAR_BASE_SHARE`, `GLASS_PRICE`, `kegLiters`, `PARTY`, `PARTY_COST` (`market.ts`) |
 | Changer la publicité | `AD`, `AD_COST` (`market.ts`) |
-| Changer la popularité et les tendances | `POP_PER_GLASS`, `POP_PER_BOTTLE`, `POP_DECAY`, `TREND_*` (`src/core/trends.ts`) |
+| Changer la popularité et les tendances | `popTarget`, `POP_CAP`, `POP_PER_GLASS`, `POP_PER_BOTTLE`, `POP_DECAY`, `TREND_*` (`src/core/trends.ts`) |
+| Changer la finesse | fin de `brew()` et `finish()` (`src/core/brewing/model.ts`) |
 | Changer les commandes | `CLIENT_TYPES`, `ORDER_BASE`, `KIND_PAY`, `ORDER_GAP_*`, `ORDER_LIFE_*`, `COMPUTERS` (`src/core/orders.ts`) |
 | Changer le grossiste | `WHOLESALE_PRICE`, `WHOLESALE_KEEP` (`orders.ts`) |
 

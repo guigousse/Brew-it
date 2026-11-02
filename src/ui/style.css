@@ -326,3 +326,4 @@ button:disabled { cursor: default; opacity: .5; }
 .modal-card > * { min-width: 0; }
 .card > * { min-width: 0; }
 .bottombar.three { grid-template-columns: 1fr 1fr 1.4fr; }
+.defects.tips { color: var(--dim); }

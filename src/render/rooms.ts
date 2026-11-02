@@ -300,7 +300,16 @@ export class StorageRoom extends Room {
       for (let i = 0; i < 70; i++) px(Math.floor(hash(i, 1) * W), top + Math.floor(hash(i, 2) * (ROOM_H - top)), 1, 1, '#585c62');
       g.fillStyle = 'rgba(20,16,24,0.35)'; g.beginPath(); g.ellipse(120, 270, 16, 5, 0, 0, Math.PI * 2); g.fill(); // tache d'huile
     } else if (lv === 2) {
-      for (let y = top; y < ROOM_H; y += 8) for (let x = ((y - top) / 8) % 2 ? -8 : 0; x < W; x += 16) { px(x, y, 15, 7, '#7a6a5a'); px(x, y, 15, 1, '#9a8a76'); }
+      // terre battue et vieux pavés, plus sombres et plus chauds que les murs de pierre
+      px(0, top, W, ROOM_H - top, '#4a3424');
+      for (let i = 0; i < 70; i++) {
+        const x = Math.floor(hash(i, 31) * W);
+        const y = top + 4 + Math.floor(hash(i, 32) * (ROOM_H - top - 6));
+        const w = 6 + Math.floor(hash(i, 33) * 6);
+        px(x, y, w, 3, '#5e4430'); px(x, y, w, 1, '#6e5038'); px(x, y + 3, w, 1, '#2e2016');
+      }
+      // plinthe au pied du mur
+      px(0, top, W, 3, '#2e2622'); px(0, top + 3, W, 1, '#1e1814');
     } else if (lv === 3) {
       px(0, top, W, ROOM_H - top, '#b8c4ce');
       for (let x = 0; x < W; x += 6) px(x, top, 1, ROOM_H - top, '#a4b0bc');
@@ -407,9 +416,9 @@ export class StorageRoom extends Room {
       const cy = y - 12 - Math.floor(i / 4) * 12;
       drawCrate(g, cx, cy, 11, { beer, count: 12 });
     }
-    // film étirable
+    // film étirable, autour des caisses posées
     g.fillStyle = 'rgba(255,255,255,0.12)';
-    g.fillRect(x + 1, y - 12 * Math.ceil(n / 4) - 1, 50, 12 * Math.ceil(n / 4) + 1);
+    g.fillRect(x + 1, y - 12 * Math.ceil(n / 4) - 1, 12 * Math.min(4, n) + 2, 12 * Math.ceil(n / 4) + 1);
   }
 }
 

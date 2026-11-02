@@ -74,6 +74,10 @@ export interface Tasting {
   clarity: number; // 0..1
   co2: number; // volumes de CO2
   quality: number;
+  /** Finesse (0 à 1) : au-delà de l'absence de défauts, à quel point la bière est parfaitement réglée. */
+  finesse?: number;
+  /** Ce qui manque pour gagner en finesse. */
+  tips?: string[];
   defects: Defect[];
   /** Part des bouteilles perdues (bouteilles qui explosent). */
   lost: number;
@@ -222,11 +226,30 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
   const oxidation = OXIDATION[lv.bottling] ?? 0;
   if (oxidation > 0) defects.push(defect('oxidation', 'Goût de carton : oxydation', oxidation));
 
-  return finish({ og, fg, abv, ibu, aroma, fruity, clarity, co2, defects, lost, strain: r.strain });
+  // --- Finesse : ce qui sépare une bonne bière d'une grande bière (au-delà de 18/20, tout doit être juste)
+  const near = (x: number, ideal: number, tol: number) => Math.exp(-(((x - ideal) / tol) ** 2));
+  const idealFerm = s.tempMin + 0.35 * (s.tempMax - s.tempMin);
+  const idealCo2 = r.strain === 'saison' ? 3 : r.strain === 'lager' ? 2.6 : 2.3;
+  const parts: [number, string][] = [
+    [near(a.mashTemp, 66, 1.5), 'Empâtage : vise 66 °C pour un corps équilibré'],
+    [near(t, idealFerm, 1.2), `Fermentation : un peu plus fraîche (vers ${Math.round(idealFerm)} °C) pour un goût plus net`],
+    [near(co2, idealCo2, 0.25), `Bulles : ajuste le sucre pour une pétillance juste (${idealCo2.toString().replace('.', ',')} vol.)`],
+    [Math.min(1, r.gardeDays / (s.gardeNeeded * 2)) * (a.gardeTemp <= 3 ? 1 : a.gardeTemp <= 6 ? 0.75 : 0.45), 'Garde : plus longue et plus froide (2 °C)'],
+    [bugu < 0.4 ? near(bugu, 0.4, 0.2) : bugu > 1.2 ? near(bugu, 1.2, 0.25) : 1, 'Équilibre : ajuste le houblon amer par rapport au malt'],
+    [Math.min(1, r.boilTime / 75), 'Ébullition : un peu plus longue (75 min)'],
+  ];
+  const finesse = Math.pow(parts.reduce((p, [v]) => p * Math.max(0.01, v), 1), 1 / parts.length);
+  const tips = parts.filter(([v]) => v < 0.85).sort((x, y) => x[0] - y[0]).map(([, label]) => label);
+
+  return finish({ og, fg, abv, ibu, aroma, fruity, clarity, co2, defects, lost, strain: r.strain, finesse, tips });
 }
 
+/**
+ * Qualité : 1 moins les défauts, plafonnée par la finesse. Sans finesse, une bière sans défaut plafonne à 14/20 ;
+ * il faut une finesse de 0,8 pour 18/20, et une bière parfaite en tout point pour 20/20.
+ */
 function finish(x: Omit<Tasting, 'quality' | 'style' | 'color'> & { strain: StrainId }): Tasting {
-  const quality = clamp01(1 - x.defects.reduce((s, d) => s + d.penalty, 0));
+  const quality = Math.min(clamp01(1 - x.defects.reduce((s, d) => s + d.penalty, 0)), 0.7 + 0.3 * Math.pow(x.finesse ?? 0, 2));
   const { strain, ...rest } = x;
   return { ...rest, quality, style: styleOf(x.abv, x.ibu, x.aroma, x.fruity, strain), color: colorOf(x.og) };
 }

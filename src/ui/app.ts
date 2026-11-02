@@ -1256,6 +1256,13 @@ export class App {
       for (const d of t.defects) ul.append(h('li', '', d.label));
       card.append(ul);
     } else card.append(h('p', 'note', 'Aucun défaut'));
+    // au-delà des défauts : ce qui manque pour une grande bière
+    if (t.tips?.length && t.quality >= 0.6) {
+      card.append(h('div', 'section-title', 'Pour plus de finesse'));
+      const ul = h('ul', 'defects tips');
+      for (const tip of t.tips.slice(0, 3)) ul.append(h('li', '', tip));
+      card.append(ul);
+    }
   }
 
   openOffline(): void {

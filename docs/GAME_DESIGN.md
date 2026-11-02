@@ -84,14 +84,16 @@ Chaque appareil exécute ta recette avec sa propre précision (`src/core/brewing
 
 - **Les écarts coûtent de la qualité** et sont expliqués à la dégustation, par exemple « Empâtage à 69 °C au lieu de 66 °C : le corps n'est pas celui de ta recette ».
 - **Le matériel rudimentaire ajoute un manque de netteté.** Un tirage « bon ou mauvais jour » par brassin le rend plus ou moins marqué.
+- **La finesse** : au-delà de l'absence de défauts, une grande bière est parfaitement réglée. Six points comptent : empâtage vers 66 °C ; fermentation dans le bas de la plage de la levure ; pétillance juste pour le style (2,3 vol., 2,6 pour une lager, 3 pour une saison) ; garde longue et froide (2 °C, deux fois la durée minimale) ; équilibre entre amertume et malt ; ébullition d'au moins 75 min. La finesse **plafonne** la note : 14/20 sans finesse, 18/20 pour une finesse de 0,8, et 20/20 seulement pour une bière parfaite en tout point (avec un matériel assez précis pour tenir les réglages). La dégustation indique « Pour plus de finesse » ce qu'il faut affiner. C'est la base des futurs concours de bières.
 - **Ce que donne la recette de Gaston**, d'après `npm run quality` (Monte-Carlo) :
 
 | Niveau | Résultat typique | Excellente |
 |---|---|---|
-| 1 | surtout Correcte, un quart Médiocre ou pire | 1 % |
-| 2 | surtout Bonne | 24 % |
-| 3 | Bonne ou Excellente | 59 % |
-| 4 et 5 | Excellente | 100 % |
+| 1 | surtout Correcte, un quart Médiocre ou pire | 0 % |
+| 2 | surtout Bonne | 8 % |
+| 3 | Bonne ou Excellente | 31 % |
+| 4 | Excellente aux trois quarts | 76 % |
+| 5 | Excellente, mais plafonnée à 17/20 par sa finesse | 100 % |
 
 - **Une recette aux réglages limites** reste Correcte ou Bonne jusqu'au niveau 4. Seul le niveau 5 l'amène à Excellente.
 - **Une recette incohérente reste mauvaise**, quel que soit le matériel.
@@ -144,7 +146,17 @@ Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au somme
 **Organiser une fête** (bouton « Fête ») : pendant 30 min, **50 fois plus de clients**. Le personnel de la fête rebranche tout seul les fûts vides avec ceux du stockage : il faut donc **prévoir des fûts d'avance**, car ils se vident très vite. Une fête coûte 100 € au comptoir poussiéreux, puis 1 000 €, 10 000 €, 80 000 € et 600 000 € selon le niveau du bar. Il faut ensuite attendre 6 h avant la suivante. Pendant la fête, des projecteurs de couleur balaient la salle et des confettis tombent.
 
 ## Popularité et tendances
-**Popularité d'une bière (0 à 5 ★).** Chaque verre servi au bar, et chaque bouteille livrée sur commande (dans une bien moindre mesure), rapproche sa popularité d'une cible. Cette cible est sa qualité, portée par les tendances qu'elle suit. Sans ventes, la popularité s'érode : elle perd la moitié de sa valeur en 2 jours de jeu.
+**Popularité d'une bière (0 à 5 ★).** Chaque verre servi au bar (+0,4 % de l'écart à la cible) et chaque bouteille livrée sur commande (vingt fois moins) rapprochent sa popularité d'une **cible**. Cette cible dépend fortement de la qualité : ((qualité − 0,3) / 0,7) puissance 1,6, +10 % par tendance suivie.
+
+| Verdict | Cible |
+|---|---|
+| Correcte (0,6) | 1 ★ environ |
+| Bonne (0,75) | 2 ★ environ |
+| Excellente (0,9) | 4 ★ environ |
+| Parfaite (1) | 5 ★ |
+
+- **La notoriété de la brasserie plafonne la cible** : 1,5 ★ au labo d'alchimiste, puis 2,5 ★ au garage, 3 ★ en microbrasserie, 4 ★ à l'usine et 5 ★ au labo du futur.
+- **Sans ventes, la popularité s'érode** : elle perd la moitié de sa valeur en 2 jours de jeu.
 
 **Popularité de la marque** : c'est la moyenne de la gamme pondérée par la popularité de chaque bière ; une nouvelle bière inconnue ne la fait donc pas chuter. Elle fixe :
 - l'affluence du bar ;
@@ -204,7 +216,7 @@ L'ordinateur du stockage (sur le bureau, ou le bouton « Commandes ») a trois o
 | Intelligence logistique | 6 | 3 M€ |
 
 ## Le grossiste
-Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 1,50 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'onglet Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
+Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 1,60 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'onglet Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
 
 ## Gamme : l'étagère
 La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 8 000 €, 50 000 €, 200 000 €, 600 000 €, 3 M€ puis 8 M€.
@@ -217,7 +229,7 @@ Les bouteilles embouteillées rejoignent le stockage en caisses de 12. Quand il 
 | Niveau | Décor | Capacité | Prix |
 |---|---|---|---|
 | Coin du garage | briques, ampoule nue, planches sur parpaings, vieux moniteur | 10 caisses (120 btl) | — |
-| Cave voûtée | pierre, voûte, lanternes, dalles | 60 caisses | 250 € |
+| Cave voûtée | murs de pierre, voûte, lanternes, sol de terre battue et de pavés | 60 caisses | 250 € |
 | Chambre froide | panneaux isothermes, givre, brume au sol, écran plat | 400 caisses | 8 000 € |
 | Entrepôt | tôle, verrière, racks à palettes orange | 2 500 caisses | 120 000 € |
 | Plateforme logistique | néons, bras robotisé, terminal holographique | 12 000 caisses | 1 M€ |

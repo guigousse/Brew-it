@@ -57,14 +57,20 @@ export const trendFactor = (t: Tasting, active: readonly Trend[]) => 1 + 0.3 * t
 // ------------------------------------------------------------------ popularité
 
 /**
- * Popularité visée par une bière qui se boit : sa qualité, portée par les tendances (plafonnée à 1).
- * Chaque verre ou bouteille vendu rapproche sa popularité de cette cible ; sans ventes, elle s'érode.
+ * Popularité visée par une bière qui se boit : elle dépend fortement de sa qualité (une bière simplement
+ * « Bonne » plafonne vers 2 à 3 étoiles), un peu des tendances, et ne dépasse jamais ce que permet la notoriété
+ * de la brasserie (`cap`, selon son niveau). Chaque verre ou bouteille vendu en rapproche la bière ; sans ventes, elle s'érode.
  */
-export const popTarget = (t: Tasting, active: readonly Trend[]) => clamp01(t.quality * (0.75 + 0.25 * trendFactor(t, active)));
+export function popTarget(t: Tasting, active: readonly Trend[], cap = 1): number {
+  const q = clamp01((t.quality - 0.3) / 0.7);
+  return Math.min(cap, clamp01(Math.pow(q, 1.6) * (1 + 0.1 * trendsOf(t, active).length)));
+}
+/** Notoriété maximale selon le niveau de la brasserie : un labo de garage ne peut pas être célèbre dans le monde entier. */
+export const POP_CAP = [0.3, 0.5, 0.6, 0.8, 1] as const;
 /** Rapprochement de la cible par verre servi au bar (le bouche-à-oreille). */
-export const POP_PER_GLASS = 0.012;
+export const POP_PER_GLASS = 0.004;
 /** … par bouteille livrée sur commande (moins visible). */
-export const POP_PER_BOTTLE = 0.0006;
+export const POP_PER_BOTTLE = 0.0002;
 /** Érosion de la popularité : elle perd la moitié de sa valeur en 2 jours de jeu sans aucune vente. */
 export const POP_DECAY = Math.LN2 / (2 * 86400);
 

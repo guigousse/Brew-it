@@ -7,7 +7,7 @@ import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
-import { brandPopularity, gainPop, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
+import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
 export const TICK_RATE = 20;
 export const TICK_DT = 1 / TICK_RATE;
@@ -589,7 +589,7 @@ export class Game {
     if (this.money < this.adCost) return { ok: false, reason: 'Pas assez d\'argent' };
     this.money -= this.adCost;
     this.adUntil = this.time + AD.duration;
-    for (const b of this.beers) b.pop = Math.min(1, b.pop + AD.pop);
+    for (const b of this.beers) b.pop = Math.max(b.pop, Math.min(this.popCap, b.pop + AD.pop));
     this.orderTimer = Math.min(this.orderTimer, 60);
     return { ok: true };
   }
@@ -602,6 +602,16 @@ export class Game {
   /** Verres restant dans tous les fûts branchés. */
   get glassesLeft(): number {
     return this.flowing.reduce((s, t) => s + t.glasses, 0);
+  }
+
+  /** Notoriété maximale de la brasserie (selon son niveau). */
+  get popCap(): number {
+    return POP_CAP[this.breweryLevel - 1] ?? 1;
+  }
+
+  /** Popularité que peut viser une bière de la gamme. */
+  popTarget(b: Beer): number {
+    return popTarget(b.tasting, this.trends, this.popCap);
   }
 
   /** Les tendances que suit une bière. */
@@ -698,7 +708,7 @@ export class Game {
       beer.sold += n;
       beer.revenue += (n / units) * o.reward;
       // une commande fait connaître la bière (une commande de prestige, beaucoup)
-      beer.pop = gainPop(beer.pop, popTarget(beer.tasting, this.trends), o.kind === 'prestige' ? 60 : o.kind === 'keg' ? n * 40 : n, POP_PER_BOTTLE);
+      beer.pop = gainPop(beer.pop, this.popTarget(beer), o.kind === 'prestige' ? 60 : o.kind === 'keg' ? n * 40 : n, POP_PER_BOTTLE);
     }
     this.totalSold += units;
     this.totalRevenue += o.reward;
@@ -897,7 +907,7 @@ export class Game {
       tap.glasses--;
       beer.sold++;
       beer.revenue += price;
-      beer.pop = gainPop(beer.pop, popTarget(beer.tasting, this.trends), 1, POP_PER_GLASS);
+      beer.pop = gainPop(beer.pop, this.popTarget(beer), 1, POP_PER_GLASS);
       this.totalSold++;
       this.totalRevenue += price;
       this.barSold++;
