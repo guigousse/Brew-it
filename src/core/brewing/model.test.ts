@@ -1,7 +1,7 @@
 import { brew, conversion, GASTON_RECIPE, verdictOf, type Actual, type Levels, type Recipe } from './model';
 
 const L1: Levels = { mill: 1, mash: 1, boil: 1, cooler: 1, fermenter: 1, conditioning: 1, bottling: 1 };
-const L3: Levels = { mill: 3, mash: 3, boil: 3, cooler: 3, fermenter: 3, conditioning: 3, bottling: 3 };
+const L3: Levels = { mill: 4, mash: 4, boil: 4, cooler: 4, fermenter: 4, conditioning: 4, bottling: 4 };
 const exact = (r: Recipe, roll = 0.99): Actual => ({ mashTemp: r.mashTemp, pitchTemp: r.pitchTemp, fermentTemp: r.fermentTemp, gardeTemp: r.gardeTemp, infectionRoll: roll });
 const taste = (patch: Partial<Recipe> = {}, lv = L3) => {
   const r = { ...GASTON_RECIPE, ...patch };

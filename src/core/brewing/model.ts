@@ -5,6 +5,7 @@
  */
 import { clamp, clamp01 } from '../math';
 import { STRAINS, YEAST_DEATH_TEMP, type StrainId } from './strains';
+import { INFECTION, OXIDATION } from '../stations';
 
 export interface Defect {
   id: string;
@@ -32,7 +33,7 @@ export interface Recipe {
   priming: number; // g/L de sucre de refermentation en bouteille
 }
 
-/** Niveau (1 à 3) de chaque appareil : il module précision, risques et finesse. */
+/** Niveau (1 à 5) de chaque appareil : il module précision, risques et finesse. */
 export interface Levels {
   mill: number;
   mash: number;
@@ -95,7 +96,7 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
   const s = STRAINS[r.strain];
 
   // --- Concassage et empâtage
-  if (r.crush >= 9) defects.push(defect('crush', 'Âpre et astringente : mouture trop fine, la filtration a colmaté', (0.12 + (r.crush - 9) * 0.1) / (lv.mill >= 3 ? 2 : 1)));
+  if (r.crush >= 9) defects.push(defect('crush', 'Âpre et astringente : mouture trop fine, la filtration a colmaté', (0.12 + (r.crush - 9) * 0.1) / (lv.mill >= 5 ? 4 : lv.mill >= 4 ? 2 : 1)));
   const volume = Math.max(1, WATER_L - r.grainKg);
   const timeFactor = (1 - Math.exp(-r.mashTime / 25)) / (1 - Math.exp(-60 / 25));
   const converted = clamp(conversion(a.mashTemp) * timeFactor, 0, 1.05);
@@ -110,7 +111,7 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
   og = (og * volume) / boiled;
   const ibu = tinseth(og, r.boilTime, r.hopsBitter, boiled) + tinseth(og, 5, r.hopsAroma, boiled);
   const aroma = clamp01(1 - Math.exp(-r.hopsAroma / 40));
-  const dmsLimit = lv.boil >= 2 ? 20 : 30;
+  const dmsLimit = lv.boil >= 3 ? 20 : 30;
   if (r.boilTime < dmsLimit) defects.push(defect('dms', 'Goût de maïs cuit (DMS) : ébullition trop courte', 0.1 + 0.3 * ((dmsLimit - r.boilTime) / dmsLimit)));
 
   // --- Refroidissement et ensemencement
@@ -119,7 +120,7 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
     return finish({ og, fg: og, abv: 0, ibu, aroma, fruity: 0, clarity: 0.2, co2: 0, defects, lost: 0, strain: r.strain });
   }
   if (a.pitchTemp > s.tempMax + 5) defects.push(defect('hotpitch', 'Démarrage trop chaud : notes de solvant dès les premières heures', 0.12));
-  const infectionRisk = [0, 0.12, 0.04, 0][lv.cooler] ?? 0;
+  const infectionRisk = INFECTION[lv.cooler] ?? 0;
   if (a.infectionRoll < infectionRisk) defects.push(defect('infection', 'Aigre et vinaigrée : contamination pendant un refroidissement trop lent', 0.5));
 
   // --- Fermentation
@@ -161,7 +162,7 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
   }
   if (r.strain === 'lager' && a.gardeTemp > 12) defects.push(defect('sulfur', 'Lager gardée trop chaude : notes soufrées', 0.15));
   const cold = a.gardeTemp <= 4 ? 1 : a.gardeTemp <= 10 ? 0.5 : 0;
-  const clarity = clamp01(0.35 + 0.35 * cold + 0.2 * Math.min(1, r.gardeDays / 7) + (lv.conditioning >= 3 ? 0.1 : 0) - (converted < 0.7 ? 0.3 : 0));
+  const clarity = clamp01(0.35 + 0.35 * cold + 0.2 * Math.min(1, r.gardeDays / 7) + (lv.conditioning >= 5 ? 0.2 : lv.conditioning >= 4 ? 0.1 : 0) - (converted < 0.7 ? 0.3 : 0));
 
   // --- Équilibre
   const bugu = og > 0 ? ibu / og : 0;
@@ -178,7 +179,7 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
     defects.push(defect('bombs', 'Des bouteilles explosent ! Beaucoup trop de sucre de refermentation', 0.35));
     lost = 0.4;
   } else if (co2 > 3.2) defects.push(defect('gushing', 'La mousse déborde à l\'ouverture : trop de sucre de refermentation', 0.15));
-  const oxidation = [0, 0.05, 0.02, 0][lv.bottling] ?? 0;
+  const oxidation = OXIDATION[lv.bottling] ?? 0;
   if (oxidation > 0) defects.push(defect('oxidation', 'Léger goût de carton : un peu d\'oxygène à l\'embouteillage', oxidation));
 
   return finish({ og, fg, abv, ibu, aroma, fruity, clarity, co2, defects, lost, strain: r.strain });

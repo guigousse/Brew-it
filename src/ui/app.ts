@@ -1,8 +1,8 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { type Beer, type Game } from '../core/game';
-import { DISTRIBUTORS, bottlePrice } from '../core/market';
-import { CAPACITY, PRECISION, STATION_ORDER, STATIONS, type StationId } from '../core/stations';
+import { DISTRIBUTORS, MAX_DEAL, bottlePrice } from '../core/market';
+import { CAPACITY, MAX_LEVEL, PRECISION, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
@@ -20,6 +20,7 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 };
 const money = (v: number) => `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: v % 1 ? 2 : 0 })} €`;
 const moneyInt = (v: number) => `${Math.floor(v).toLocaleString('fr-FR')} €`;
+const fmtRate = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: v < 10 ? 1 : 0 });
 const VERDICT_CLASS: Record<string, string> = { Imbuvable: 'v-bad', Médiocre: 'v-meh', Correcte: 'v-ok', Bonne: 'v-good', Excellente: 'v-top' };
 
 function img(canvas: HTMLCanvasElement, cls = 'pix'): HTMLImageElement {
@@ -45,7 +46,6 @@ export class App {
   private stage = h('main', 'stage');
   private sceneWrap = h('div', 'scene-wrap');
   private overlays = new Map<StationId, { btn: HTMLButtonElement; label: HTMLElement; bar: HTMLElement; text: HTMLElement }>();
-  private speedBtn = h('button', 'map-btn');
   private tasteBtn = h('button', 'taste-btn hidden', '🍺 Goûter');
   private announcedTaste = -1;
   private bottom = h('nav', 'bottombar');
@@ -91,9 +91,8 @@ export class App {
       this.sceneWrap.append(btn, label);
       this.overlays.set(id, { btn, label, bar, text });
     }
-    this.speedBtn.onclick = () => this.cb.setSpeed(({ 1: 2, 2: 4, 4: 1 } as Record<number, number>)[this.cb.getSpeed()] ?? 1);
     this.tasteBtn.onclick = () => this.openTasting();
-    this.sceneWrap.append(this.speedBtn, this.tasteBtn);
+    this.sceneWrap.append(this.tasteBtn);
     this.stage.append(this.sceneWrap);
 
     // barre du bas
@@ -169,10 +168,10 @@ export class App {
   update(): void {
     const g = this.game();
     this.moneyEl.textContent = moneyInt(g.money);
-    this.speedBtn.textContent = `⏩ ×${this.cb.getSpeed()}`;
     const can = g.canBrew();
-    this.brewBtn.replaceChildren(h('span', 'brew-title', 'Brasser'), h('span', 'brew-sub', can.ok ? `${g.batchLiters} L · ${moneyInt(g.brewCost())}` : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants'));
-    this.brewBtn.classList.toggle('ready', can.ok);
+    const sub = g.autoBrew ? '⟳ En continu' : can.ok ? (g.broke ? 'Offert par Gaston' : `${g.batchLiters} L · ${moneyInt(g.brewCost())}`) : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants';
+    this.brewBtn.replaceChildren(h('span', 'brew-title', 'Brasser'), h('span', 'brew-sub', sub));
+    this.brewBtn.classList.toggle('ready', can.ok && !g.autoBrew);
     const trial = g.tastable;
     this.rangeBtn.replaceChildren(h('span', 'side-title', 'Gamme'), h('span', 'side-sub', `${g.beers.length}/${g.rangeSlots} bières`));
     const capCrates = STORAGE[g.storageLevel - 1]!.crates;
@@ -220,7 +219,7 @@ export class App {
     if (!s) return;
     const key = JSON.stringify([
       s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.signed, g.selectedBeer, g.autoBrew,
-      Math.floor(g.totalSold / 10), g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch] : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
+      Math.floor(g.totalSold / 10), g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'sales' ? [g.deals, Math.round(g.demandRate), Math.round(g.productionRate())] : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
     ]);
     if (key === this.sheetKey) return this.refreshLive();
     this.sheetKey = key;
@@ -241,7 +240,7 @@ export class App {
   /** Met à jour sans reconstruire ce qui dépend de l'argent. */
   private refreshLive(): void {
     const g = this.game();
-    this.sheet.querySelectorAll<HTMLButtonElement>('[data-cost]').forEach((b) => (b.disabled = g.money < Number(b.dataset.cost) || b.dataset.blocked === '1'));
+    this.sheet.querySelectorAll<HTMLButtonElement>('[data-cost]').forEach((b) => (b.disabled = g.money < Number(b.dataset.cost)));
   }
 
   private frameSheet(title: string, icon?: HTMLCanvasElement): HTMLElement {
@@ -268,9 +267,9 @@ export class App {
     const def = STATIONS[id];
     const lv = g.level(id);
     const body = this.frameSheet(`${def.names[lv - 1]}`, stationCanvas(id, lv));
-    body.append(h('div', 'step-tag', `${def.step} · niveau ${lv}/3`), h('p', 'hint', def.description));
+    body.append(h('div', 'step-tag', `${def.step} · niveau ${lv}/${MAX_LEVEL}`), h('p', 'hint', def.description));
     const batch = g.batchAt(id);
-    if (batch) body.append(h('p', 'note', `Un brassin est en cours ici. Tes réglages s'appliqueront au prochain brassin.`));
+    if (batch) body.append(h('p', 'note', 'Un brassin est en cours ici. Tes réglages s\'appliqueront au prochain brassin.'));
     if (def.strain) {
       const row = h('div', 'chips');
       const desc = h('div', 'hint strain-desc', STRAINS[g.recipe.strain].description);
@@ -293,15 +292,15 @@ export class App {
     const up = h('div', 'card upgrade');
     up.append(h('div', 'section-title', 'Améliorer'));
     const levels = h('div', 'levels');
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= MAX_LEVEL; i++) {
       const cell = h('div', `level${i === lv ? ' current' : i < lv ? ' done' : ''}`);
       cell.append(img(stationCanvas(id, i), 'pix level-pic'), h('div', 'level-name', def.names[i - 1]!), h('div', 'level-perk', def.perks[i - 1]!));
       levels.append(cell);
     }
     up.append(levels);
     up.append(h('div', 'hint', `Volume ${CAPACITY[lv]} L · précision ± ${String(PRECISION[lv]).replace('.', ',')} °C`));
-    if (lv < 3) {
-      const cost = def.upgradeCost[lv - 1]!;
+    if (lv < MAX_LEVEL) {
+      const cost = upgradeCost(id, lv + 1);
       const b = this.btn('btn primary', `Passer au niveau ${lv + 1} : ${def.names[lv]} · ${moneyInt(cost)}`, () => {
         const r = g.upgrade(id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
@@ -309,12 +308,9 @@ export class App {
         this.sheetKey = '';
       });
       b.dataset.cost = String(cost);
-      if (batch) {
-        b.dataset.blocked = '1';
-        up.append(h('p', 'hint', 'Attends que l\'appareil soit vide pour l\'améliorer.'));
-      }
-      b.disabled = g.money < cost || !!batch;
+      b.disabled = g.money < cost;
       up.append(b);
+      if (batch) up.append(h('p', 'hint', 'Le brassin en cours continue pendant l\'installation.'));
     } else up.append(h('p', 'note', 'Niveau maximal atteint.'));
     body.append(up);
   }
@@ -332,26 +328,29 @@ export class App {
     );
     body.append(card);
     const can = g.canBrew();
-    const go = this.btn('btn primary big', can.ok ? 'Lancer le brassin' : can.reason!, () => {
-      const r = g.brew();
+    const busy = !!g.batchAt('mill');
+    const label = g.queued ? 'En attente du moulin…' : can.ok ? (g.broke ? 'Lancer (Gaston avance les ingrédients)' : 'Lancer le brassin') : busy ? 'Lancer dès que le moulin est libre' : can.reason!;
+    const go = this.btn('btn primary big', label, () => {
+      const r = busy ? g.queueBrew() : g.brew();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       if (g.tips === 2 || g.tips === 1) g.tips = 3;
-      this.toast('Brassin lancé : suis-le descendre !', 'good');
+      this.toast(busy ? 'Ton brassin passera au prochain tour du moulin.' : 'Brassin lancé : suis-le descendre !', 'good');
       this.close();
     });
-    go.disabled = !can.ok;
+    go.disabled = g.queued || (!can.ok && !(busy && g.money >= g.brewCost()));
     body.append(go);
-    if (beer) {
+    if (g.beers.length) {
       const auto = h('label', 'toggle');
       const box = h('input');
       box.type = 'checkbox';
       box.checked = g.autoBrew;
       box.onchange = () => {
         g.autoBrew = box.checked;
-        this.toast(box.checked ? 'Brassage automatique activé' : 'Brassage automatique arrêté', 'info');
+        this.toast(box.checked ? 'Brassage continu activé' : 'Brassage continu arrêté', 'info');
+        this.sheetKey = '';
       };
-      auto.append(box, h('span', '', `Brasser « ${beer.name} » en continu`));
-      body.append(auto, h('p', 'hint', 'Un nouveau brassin démarre dès que le moulin est libre, tant que tu as de quoi payer les ingrédients et de la place dans le stockage. Ça continue même quand l\'appli est fermée.'));
+      auto.append(box, h('span', '', 'Brasser toute ma gamme en continu'));
+      body.append(auto, h('p', 'hint', 'Dès que le moulin est libre, on relance la bière de ta gamme qui a le moins de bouteilles, tant que tu as de quoi payer les ingrédients et de la place dans le stockage. Ça continue même quand l\'appli est fermée. Un essai que tu lances passe toujours en priorité.'));
       if (g.autoBrew && !g.roomForBatch) body.append(h('p', 'note bad', 'En pause : le stockage sera plein avec les brassins déjà en route. Vends ou agrandis ton stockage.'));
     }
     if (g.beers.length) {
@@ -529,7 +528,17 @@ export class App {
   // --- Ventes
   private salesSheet(g: Game): void {
     const body = this.frameSheet('Ventes');
-    body.append(h('div', 'stats-line strong', `${g.totalSold} bouteilles vendues · ${moneyInt(g.totalRevenue)} de chiffre d'affaires`));
+    body.append(h('div', 'stats-line strong', `${g.totalSold.toLocaleString('fr-FR')} bouteilles vendues · ${moneyInt(g.totalRevenue)} de chiffre d'affaires`));
+    const demand = g.demandRate;
+    const prod = g.productionRate();
+    const balance = h('div', 'card');
+    balance.append(
+      h('div', 'stats-line', `Commandes : ${fmtRate(demand)} btl/min · ta ligne peut en faire ${fmtRate(prod)} btl/min`),
+      h('p', demand > prod * 1.05 ? 'note bad' : 'hint', demand > prod * 1.05
+        ? 'Ta production ne suit pas : améliore tes appareils (le plus petit fixe le volume, le plus lent la cadence).'
+        : 'Ta ligne suit la demande : signe ou négocie des contrats pour vendre plus.'),
+    );
+    body.append(balance);
     for (const d of DISTRIBUTORS) {
       const signed = g.signed.includes(d.id);
       const unlocked = g.totalSold >= d.unlockSold;
@@ -537,11 +546,31 @@ export class App {
       const head = h('div', 'beer-head');
       head.append(h('span', 'beer-name', d.name), h('span', `verdict ${signed ? 'v-good' : unlocked ? 'v-top' : 'v-meh'}`, signed ? 'Sous contrat' : unlocked ? 'Disponible' : '🔒'));
       card.append(head, h('p', 'hint', d.description));
-      card.append(h('div', 'stats-line', `${d.rate} bouteilles/min · ${money(d.price * 0.6)}–${money(d.price * 1.4)} la bouteille · qualité min. ${verdictOf(d.minQuality)}`));
+      card.append(h('div', 'stats-line', `${signed ? fmtRate(g.orderRate(d.id)) : d.rate} btl/min · commandes de ${d.order} · ${money(d.price * 0.6)}–${money(d.price * 1.4)} la bouteille · qualité min. ${verdictOf(d.minQuality)}`));
+      if (d.order > g.storageCap) card.append(h('p', 'note bad', `Ton stockage (${g.storageCap} btl) est trop petit pour ses commandes de ${d.order} bouteilles.`));
       if (d.likes) card.append(h('div', 'note', `Aime : ${d.likes.label} (+30 %)`));
       if (signed) {
         const best = g.beers.filter((b) => b.tasting.quality >= d.minQuality);
         card.append(h('div', 'hint', best.length ? `Achète : ${best.map((b) => `${b.name} (${money(bottlePrice(d, b.tasting))})`).join(', ')}` : 'Aucune bière de ta gamme ne lui convient.'));
+        if (best.length > 1) card.append(h('div', 'hint', `Variété : ${best.length} bières qui lui plaisent, il commande plus.`));
+        const lvl = g.deals[d.id] ?? 0;
+        const pips = h('div', 'deal-pips');
+        for (let i = 0; i < MAX_DEAL; i++) pips.append(h('span', `pip${i < lvl ? ' on' : ''}`));
+        const row = h('div', 'deal-row');
+        row.append(h('span', 'section-title', 'Volume négocié'), pips);
+        card.append(row);
+        const cost = g.dealCost(d.id);
+        if (cost != null) {
+          const nb = this.btn('btn small', `Négocier +40 % de commandes · ${moneyInt(cost)}`, () => {
+            const r = g.negotiate(d.id);
+            if (!r.ok) return this.toast(r.reason!, 'bad');
+            this.toast(`${d.name} commandera plus !`, 'good');
+            this.sheetKey = '';
+          });
+          nb.dataset.cost = String(cost);
+          nb.disabled = g.money < cost;
+          card.append(nb);
+        }
       } else if (unlocked) {
         const b = this.btn('btn primary', `Signer le contrat · ${moneyInt(d.fee)}`, () => {
           const r = g.sign(d.id);
@@ -557,7 +586,7 @@ export class App {
         const fill = h('div', 'progress-fill');
         fill.style.width = `${Math.min(100, (g.totalSold / d.unlockSold) * 100)}%`;
         bar.append(fill);
-        card.append(h('div', 'hint', `Vends ${d.unlockSold} bouteilles pour le débloquer (${g.totalSold}/${d.unlockSold})`), bar);
+        card.append(h('div', 'hint', `Vends ${d.unlockSold.toLocaleString('fr-FR')} bouteilles pour le débloquer (${g.totalSold.toLocaleString('fr-FR')}/${d.unlockSold.toLocaleString('fr-FR')})`), bar);
       }
       body.append(card);
     }
@@ -729,7 +758,18 @@ export class App {
       fresh.dataset.confirm = '1';
       fresh.textContent = 'Sûr ? Ta brasserie sera effacée. Toucher pour confirmer';
     });
-    card.append(fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
+    // Accélération du temps : réservée aux tests (elle fausserait l'équilibrage du jeu).
+    const speed = h('div', 'card');
+    const chips = h('div', 'chips');
+    for (const v of [1, 2, 4, 10]) {
+      const c = this.btn(`chip${this.cb.getSpeed() === v ? ' active' : ''}`, `×${v}`, () => {
+        this.cb.setSpeed(v);
+        chips.querySelectorAll('.chip').forEach((x) => x.classList.toggle('active', x === c));
+      });
+      chips.append(c);
+    }
+    speed.append(h('div', 'section-title', 'Mode test : vitesse du temps'), h('p', 'hint', 'Pour essayer le jeu plus vite. En partie normale, laisse ×1.'), chips);
+    card.append(speed, fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
   private modalCard(title: string): HTMLElement {
@@ -760,8 +800,8 @@ export class App {
       0: { text: 'Salut, moi c\'est Gaston ! Voici ta brasserie : le malt entre en haut, la bière sort en bas, en bouteilles. J\'ai déjà réglé les machines avec ma recette de blonde.', action: 'Continuer' },
       1: { text: 'Touche une machine pour voir ses réglages et ses améliorations.' },
       2: { text: 'Quand tu es prêt, appuie sur « Brasser » en bas pour lancer ton premier brassin.' },
-      3: { text: 'Ton brassin descend de machine en machine. Tu peux accélérer le temps avec ⏩. Dès que la première bouteille sort, on la goûte !' },
-      4: { text: 'Ta bière est dans ta gamme, étiquetée, et le bar du coin l\'achète. Relance des brassins (ou active le brassage continu), puis améliore tes machines pour brasser plus et mieux !', action: 'Compris' },
+      3: { text: 'Ton brassin descend de machine en machine. Pour ce premier, je donne un coup de main : ça ira vite ! Dès que la première bouteille sort, on la goûte.' },
+      4: { text: 'Ta bière est dans ta gamme et le bar du coin l\'achète. Active le brassage continu (bouton Brasser) : ta brasserie tournera même quand tu fermes l\'appli. Reviens régulièrement améliorer ta verrerie et signer des contrats !', action: 'Compris' },
     };
     const tip = this.modalOpen || this.openSheet?.kind === 'brew' ? undefined : tips[g.tips];
     this.mentor.classList.toggle('hidden', !tip);

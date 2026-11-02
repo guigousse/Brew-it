@@ -272,7 +272,7 @@ export class Scene {
     // ombre portée sur la passerelle
     g.fillStyle = 'rgba(0,0,0,0.3)';
     g.fillRect(r.x + 3, SLOTS[id as Exclude<StationId, 'bottling'>].floor, r.w - 4, 2);
-    if (def.flame && active && id === 'boil') this.flames(r.x + def.flame.x, r.y + def.flame.y, def.flame.w, t);
+    if (def.flame && active) this.flames(r.x + def.flame.x, r.y + def.flame.y, def.flame.w, t);
     g.drawImage(stationCanvas(id, lv), r.x, r.y);
 
     // liquide visible dans le hublot
@@ -447,55 +447,87 @@ export class Scene {
     const x = LINE.fillX;
     const top = LINE.top;
     const P = PAL;
+    const px = (xx: number, yy: number, w: number, h: number, c: string) => {
+      g.fillStyle = c;
+      g.fillRect(xx, yy, w, h);
+    };
     if (lv === 1) {
-      // seau sur étagère + tuyau + canne
-      g.fillStyle = P.wd[4]!; g.fillRect(x - 28, top + 26, 24, 3);
-      g.fillStyle = P.pl[2]!; g.fillRect(x - 25, top + 10, 16, 16);
-      g.fillStyle = P.pl[0]!; g.fillRect(x - 25, top + 10, 4, 16);
-      g.fillStyle = P.pl[4]!; g.fillRect(x - 13, top + 10, 4, 16);
-      g.fillStyle = P.pl[1]!; g.fillRect(x - 26, top + 8, 18, 3);
-      g.fillStyle = P.st[3]!;
-      g.fillRect(x - 9, top + 22, 9, 2);
-      g.fillRect(x, top + 22, 2, 18);
-    } else {
-      const w = lv === 2 ? 34 : 44;
-      const body = lv === 2 ? P.st : P.tl;
-      g.fillStyle = '#1b1424'; g.fillRect(x - w / 2 - 1, top - 1, w + 2, 36);
-      for (let i = 0; i < w; i++) {
-        const k = i / w;
-        g.fillStyle = body[k < 0.15 ? 2 : k < 0.3 ? 1 : k < 0.75 ? 2 : 4]!;
-        g.fillRect(x - w / 2 + i, top, 1, 34);
-      }
-      g.fillStyle = body[0]!; g.fillRect(x - w / 2, top, w, 1);
-      // panneau de commande
-      g.fillStyle = '#2c283a'; g.fillRect(x + w / 2 - 12, top + 6, 9, 9);
-      g.fillStyle = '#7cff9c'; g.fillRect(x + w / 2 - 10, top + 8, 5, 2);
-      g.fillStyle = active && Math.floor(t * 4) % 2 ? '#6cc040' : '#3e9028'; g.fillRect(x + w / 2 - 10, top + 12, 1, 1);
-      g.fillStyle = '#e85a3a'; g.fillRect(x + w / 2 - 6, top + 12, 1, 1);
-      // becs
-      const nozzles = lv === 2 ? [-12, -4, 4, 12] : [-16, -8, 0, 8, 16];
-      for (const dx of nozzles) {
-        g.fillStyle = P.st[4]!; g.fillRect(x + dx - 1, top + 34, 3, dx === 0 ? 6 : 4);
-        g.fillStyle = P.st[1]!; g.fillRect(x + dx - 1, top + 34, 1, dx === 0 ? 6 : 4);
-      }
-      if (lv === 2) { g.fillStyle = P.st[4]!; g.fillRect(x - 1, top + 34, 3, 6); }
+      // support de labo, ballon renversé et entonnoir au-dessus du goulot
+      px(x - 26, top + 66, 14, 3, P.ir[3]!); px(x - 26, top + 66, 14, 1, P.ir[1]!);
+      px(x - 21, top + 4, 2, 62, P.st[3]!); px(x - 21, top + 4, 1, 62, P.st[1]!);
+      px(x - 19, top + 20, 18, 2, P.br[2]!); px(x - 19, top + 8, 12, 2, P.br[2]!);
+      g.fillStyle = P.gl[3]!; g.beginPath(); g.arc(x - 6, top + 6, 7, 0, Math.PI * 2); g.fill();
+      g.fillStyle = P.beer[2]!; g.beginPath(); g.arc(x - 6, top + 6, 5, 0, Math.PI * 2); g.fill();
+      px(x - 8, top + 12, 3, 8, P.gl[3]!);
+      for (let j = 0; j < 6; j++) px(x - 5 + j / 2, top + 22 + j, 10 - j, 1, P.gl[j < 2 ? 1 : 2]!);
+      px(x, top + 28, 1, 8, P.gl[3]!);
+      return;
     }
+    if (lv === 2) {
+      // seau sur étagère + tuyau + canne
+      px(x - 28, top + 26, 24, 3, P.wd[4]!);
+      px(x - 25, top + 10, 16, 16, P.pl[2]!);
+      px(x - 25, top + 10, 4, 16, P.pl[0]!);
+      px(x - 13, top + 10, 4, 16, P.pl[4]!);
+      px(x - 26, top + 8, 18, 3, P.pl[1]!);
+      px(x - 9, top + 22, 9, 2, P.st[3]!);
+      px(x, top + 22, 2, 18, P.st[3]!);
+      return;
+    }
+    const fut = lv === 5;
+    const w = lv === 3 ? 34 : 44;
+    const body = lv === 3 ? P.st : lv === 4 ? P.tl : (['#ffffff', '#f4f8fc', '#dce6f0', '#b8c6d6', '#8a9ab0', '#5a6a82'] as const);
+    px(x - w / 2 - 1, top - 1, w + 2, 36, '#1b1424');
+    for (let i = 0; i < w; i++) {
+      const k = i / w;
+      px(x - w / 2 + i, top, 1, 34, body[k < 0.15 ? 2 : k < 0.3 ? 1 : k < 0.75 ? 2 : 4]!);
+    }
+    px(x - w / 2, top, w, 1, body[0]!);
+    if (fut) {
+      px(x - w / 2, top + 30, w, 1, '#5ef0ff');
+      px(x - w / 2 + 3, top + 5, 16, 10, '#0c1420');
+      for (let i = 0; i < 14; i++) px(x - w / 2 + 4 + i, top + 10 + Math.round(Math.sin(i * 0.9 + t * 4) * 3), 1, 1, '#5ef0ff');
+    }
+    // panneau de commande
+    px(x + w / 2 - 12, top + 6, 9, 9, '#2c283a');
+    px(x + w / 2 - 10, top + 8, 5, 2, fut ? '#5ef0ff' : '#7cff9c');
+    px(x + w / 2 - 10, top + 12, 1, 1, active && Math.floor(t * 4) % 2 ? '#6cc040' : '#3e9028');
+    px(x + w / 2 - 6, top + 12, 1, 1, '#e85a3a');
+    // becs (ou pinces robotisées)
+    const nozzles = lv === 3 ? [-12, -4, 4, 12] : [-16, -8, 0, 8, 16];
+    for (const dx of nozzles) {
+      const reach = dx === 0 ? 6 : 4;
+      px(x + dx - 1, top + 34, 3, reach, fut ? '#8a9ab0' : P.st[4]!);
+      px(x + dx - 1, top + 34, 1, reach, fut ? '#ffffff' : P.st[1]!);
+      if (fut) px(x + dx, top + 34 + reach, 1, 1, '#5ef0ff');
+    }
+    if (lv === 3) px(x - 1, top + 34, 3, 6, P.st[4]!);
   }
 
   private drawLabeler(lv: number, active: boolean, t: number): void {
     const g = this.g;
     const x = LINE.labelX;
     const top = LINE.top + 16;
+    if (lv === 1) {
+      // étiquetage à la main : pot de colle et pinceau sur un tabouret
+      g.fillStyle = PAL.wd[3]!; g.fillRect(x - 6, top + 30, 12, 3); g.fillRect(x - 5, top + 33, 2, 13); g.fillRect(x + 3, top + 33, 2, 13);
+      g.fillStyle = PAL.gl[2]!; g.fillRect(x - 4, top + 22, 7, 8);
+      g.fillStyle = '#f6ecd6'; g.fillRect(x - 3, top + 25, 5, 4);
+      g.fillStyle = PAL.wd[1]!; g.fillRect(x + 1, top + 14, 1, 10);
+      return;
+    }
+    const fut = lv === 5;
     // rouleau d'étiquettes et bras
     g.fillStyle = '#1b1424'; g.fillRect(x - 9, top - 1, 18, 26);
-    g.fillStyle = lv === 3 ? PAL.br[2]! : PAL.ir[2]!; g.fillRect(x - 8, top, 16, 24);
-    g.fillStyle = lv === 3 ? PAL.br[0]! : PAL.ir[0]!; g.fillRect(x - 8, top, 16, 1);
+    g.fillStyle = fut ? '#dce6f0' : lv === 4 ? PAL.br[2]! : PAL.ir[2]!; g.fillRect(x - 8, top, 16, 24);
+    g.fillStyle = fut ? '#ffffff' : lv === 4 ? PAL.br[0]! : PAL.ir[0]!; g.fillRect(x - 8, top, 16, 1);
+    if (fut) { g.fillStyle = '#5ef0ff'; g.fillRect(x - 8, top + 20, 16, 1); }
     const a = active ? t * 6 : 0;
     g.fillStyle = '#f6ecd6';
     g.beginPath(); g.arc(x, top + 9, 5, 0, Math.PI * 2); g.fill();
     g.fillStyle = '#bdb59e';
     g.fillRect(Math.round(x + Math.cos(a) * 3), Math.round(top + 9 + Math.sin(a) * 3), 1, 1);
-    g.fillStyle = '#6c6884'; g.fillRect(x - 1, top + 24, 3, 22);
+    g.fillStyle = fut ? '#8a9ab0' : '#6c6884'; g.fillRect(x - 1, top + 24, 3, 22);
     g.fillStyle = '#f6ecd6'; g.fillRect(x - 3, top + 40, 2, 6);
   }
 
