@@ -343,18 +343,37 @@ describe('jeu', () => {
     expect(g.keepTrial('Ratée', DEFAULT_LABEL).ok).toBe(false);
   });
 
-  it('5 niveaux : on améliore même pendant un brassin ; le plus petit appareil fixe le volume', () => {
+  it('5 niveaux : on améliore même pendant un brassin ; chaque appareil amélioré grossit déjà les brassins', () => {
     const g = new Game();
     g.money = 1e9;
     g.brew();
     expect(g.upgrade('mill').ok).toBe(true); // appareil occupé : pas besoin d'attendre
-    expect(g.batchLiters).toBe(5);
-    for (const lv of [20, 60, 200, 600]) {
+    expect(g.batchLiters).toBe(7); // 5 L + 1/7 du palier suivant (20 L)
+    for (const id of STATION_ORDER.slice(1)) g.upgrade(id);
+    expect(g.batchLiters).toBe(20); // les 7 au niveau 2
+    for (const lv of [60, 200, 600]) {
       for (const id of STATION_ORDER) g.upgrade(id);
-      if (lv === 20) g.upgrade('mill'); // déjà un niveau d'avance
-      expect(g.batchLiters).toBe(Math.min(lv, 600));
+      expect(g.batchLiters).toBe(lv);
     }
     expect(g.upgrade('mill').ok).toBe(false); // niveau 5 = maximum
+  });
+
+  it('des cuves en parallèle : plusieurs brassins fermentent en même temps', () => {
+    const g = withBeer(1e6);
+    runUntil(g, () => g.batches.length === 0);
+    expect(g.tankCount('fermenter')).toBe(1);
+    expect(g.tankCost('mill')).toBeNull();
+    const cost = g.tankCost('fermenter')!;
+    expect(g.addTank('fermenter').ok).toBe(true);
+    expect(g.tankCost('fermenter')!).toBeGreaterThan(cost);
+    g.addTank('conditioning');
+    const solo = new Game().productionRate(g.recipe);
+    expect(g.productionRate(g.recipe)).toBeGreaterThan(solo * 1.5);
+    g.autoBrew = true;
+    runUntil(g, () => g.batchesAt('fermenter').length === 2, 3000);
+    expect(g.batchesAt('fermenter').length).toBe(2);
+    for (let i = 0; i < 5; i++) g.addTank('fermenter');
+    expect(g.tankCount('fermenter')).toBe(4); // 4 cuves au plus
   });
 
   it('plus d\'argent ni de stock : Gaston avance les ingrédients', () => {

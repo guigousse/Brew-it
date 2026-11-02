@@ -132,7 +132,7 @@ export const KIND_LABEL: Record<OrderKind, string> = {
 };
 
 /** Grossiste : il reprend n'importe quelle bouteille buvable, à moitié prix environ d'une commande. */
-export const WHOLESALE_PRICE = 2.4;
+export const WHOLESALE_PRICE = 1.5;
 /** Vente automatique : le grossiste reprend ce qui dépasse cette part du stockage (le reste attend les commandes). */
 export const WHOLESALE_KEEP = 0.5;
 export const wholesalePrice = (t: Pick<Tasting, 'quality'>) => WHOLESALE_PRICE * (0.6 + 0.8 * t.quality);

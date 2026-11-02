@@ -96,7 +96,11 @@ function shop() {
     for (const id of STATION_ORDER) {
       const lv = g.level(id);
       if (lv >= MAX_LEVEL) continue;
-      options.push({ cost: upgradeCost(id, lv + 1), label: `${id} → ${lv + 1}`, act: () => g.upgrade(id).ok });
+      options.push({ cost: g.upgradeCost(id), label: `${id} → ${lv + 1}`, act: () => g.upgrade(id).ok });
+    }
+    for (const id of ['fermenter', 'conditioning'] as const) {
+      const c = g.tankCost(id);
+      if (c != null) options.push({ cost: c, label: `Cuve ${id} ${g.tankCount(id) + 1}`, act: () => g.addTank(id).ok });
     }
     for (const d of DECOR) if (!g.decor.includes(d.id)) options.push({ cost: d.cost, label: d.name, act: () => g.buyDecor(d.id).ok });
     const pc = COMPUTERS[g.computerLevel];
@@ -140,7 +144,7 @@ function session(minutes: number) {
   shop();
 }
 
-const done = () => STATION_ORDER.every((id) => g.level(id) >= MAX_LEVEL) && g.storageLevel >= STORAGE.length && g.nextSlotCost == null && g.barLevel >= BAR.length && g.computerLevel >= COMPUTERS.length;
+const done = () => STATION_ORDER.every((id) => g.level(id) >= MAX_LEVEL) && g.storageLevel >= STORAGE.length && g.nextSlotCost == null && g.barLevel >= BAR.length && g.computerLevel >= COMPUTERS.length && g.tankCost('fermenter') == null && g.tankCost('conditioning') == null;
 
 // Première session : le tutoriel, un peu plus long (20 min).
 session(20);

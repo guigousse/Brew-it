@@ -142,6 +142,8 @@ export class Game {
   barDemand = 0;
   /** Tendances du moment. */
   trends: Trend[] = [];
+  /** Cuves de fermentation et de garde (plusieurs brassins en parallèle). */
+  tanks: Partial<Record<StationId, number>> = {};
   /** Décorations achetées pour le bar. */
   decor: string[] = [];
   /** Fin de la fête en cours, et instant où l'on pourra en organiser une autre (s de jeu). */
@@ -194,7 +196,45 @@ export class Game {
 
   /** Taille d'un brassin : le plus petit appareil fixe le volume. */
   get batchLiters(): number {
-    return Math.min(...STATION_ORDER.map((id) => CAPACITY[this.level(id)] ?? 20));
+    // Le moins avancé fixe le palier ; chaque appareil déjà au-dessus apporte tout de suite 1/7 du palier suivant.
+    const min = this.breweryLevel;
+    const base = CAPACITY[min] ?? 600;
+    const next = CAPACITY[min + 1];
+    if (next == null) return base;
+    const ahead = STATION_ORDER.filter((id) => this.level(id) > min).length;
+    return Math.round(base + ((next - base) * ahead) / STATION_ORDER.length);
+  }
+
+  /** Cuves d'une étape : plusieurs brassins peuvent fermenter ou se garder en même temps. */
+  tankCount(id: StationId): number {
+    return TANK_STAGES.includes(id) ? (this.tanks[id] ?? 1) : 1;
+  }
+
+  /** Prix d'une cuve de plus : celui de l'appareil du niveau suivant, × le nombre de cuves déjà installées (null : impossible ou au maximum). */
+  tankCost(id: StationId): number | null {
+    if (!TANK_STAGES.includes(id) || this.tankCount(id) >= MAX_TANKS) return null;
+    return upgradeCost(id, Math.min(MAX_LEVEL, this.level(id) + 1)) * this.tankCount(id);
+  }
+
+  /** Prix de l'amélioration d'un appareil : toutes ses cuves sont améliorées ensemble. */
+  upgradeCost(id: StationId): number {
+    return upgradeCost(id, this.level(id) + 1) * this.tankCount(id);
+  }
+
+  /** Ajoute une cuve de fermentation ou de garde. */
+  addTank(id: StationId): CommandResult {
+    const cost = this.tankCost(id);
+    if (cost == null) return { ok: false, reason: 'Plus de place pour une cuve' };
+    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= cost;
+    this.tanks[id] = this.tankCount(id) + 1;
+    return { ok: true };
+  }
+
+  /** Lots présents dans un appareil (plusieurs pour les cuves en parallèle). */
+  batchesAt(id: StationId): Batch[] {
+    const i = STATION_ORDER.indexOf(id);
+    return this.batches.filter((b) => b.stage === i);
   }
 
   /** Prix de la prochaine place dans la gamme (null : étagère complète). */
@@ -365,7 +405,7 @@ export class Game {
   upgrade(id: StationId): CommandResult {
     const lv = this.level(id);
     if (lv >= MAX_LEVEL) return { ok: false, reason: 'Niveau maximal' };
-    const cost = upgradeCost(id, lv + 1);
+    const cost = this.upgradeCost(id);
     if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
     const before = this.breweryLevel;
     this.money -= cost;
@@ -456,7 +496,7 @@ export class Game {
   /** Cadence maximale de la ligne (bouteilles/min) : un brassin par passage dans l'appareil le plus lent. */
   productionRate(r: Recipe = this.nextAutoBeer()?.recipe ?? this.recipe): number {
     const liters = this.batchLiters;
-    const slowest = Math.max(...STATION_ORDER.map((id) => stationDuration(id, r, this.level(id), liters)));
+    const slowest = Math.max(...STATION_ORDER.map((id) => stationDuration(id, r, this.level(id), liters) / this.tankCount(id)));
     return (Math.floor(liters / BOTTLE_L) / slowest) * 60;
   }
 
@@ -778,7 +818,7 @@ export class Game {
       }
       return this.store(b);
     }
-    if (this.batches.some((o) => o.stage === next)) return; // appareil suivant occupé
+    if (this.batches.filter((o) => o.stage === next).length >= this.tankCount(STATION_ORDER[next]!)) return; // appareil suivant occupé
     this.enter(b, next);
   }
 
@@ -946,7 +986,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, decor: this.decor, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, decor: this.decor, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -993,6 +1033,7 @@ export class Game {
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
     g.decor ??= [];
+    g.tanks ??= {};
     g.partyUntil ??= 0;
     g.partyReadyAt ??= 0;
     g.adUntil ??= 0;
@@ -1004,6 +1045,9 @@ export class Game {
 
 /** Brassins programmés au plus. */
 export const MAX_PLAN = 6;
+/** Étapes lentes où l'on peut ajouter des cuves en parallèle, et leur nombre maximal. */
+export const TANK_STAGES: readonly StationId[] = ['fermenter', 'conditioning'];
+export const MAX_TANKS = 4;
 
 export const sameRecipe = (a: Recipe, b: Recipe) => (Object.keys(a) as (keyof Recipe)[]).every((k) => a[k] === b[k]);
 

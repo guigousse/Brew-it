@@ -49,7 +49,8 @@ En bas, au **premier plan**, la ligne d'embouteillage déroule le parcours de ch
 | Embouteillage | Sucre de refermentation (g/L) | Entonnoir et pipette → canne → tireuse 4 becs → ligne automatique → ligne robotisée |
 
 Effet des niveaux (1 → 5) :
-- **Volume des lots :** 5, 20, 60, 200, 600 L. Le plus petit appareil fixe la taille du brassin.
+- **Volume des lots :** 5, 20, 60, 200, 600 L. L'appareil le moins avancé fixe le palier, mais chaque appareil déjà au-dessus apporte tout de suite 1/7 du palier suivant : une amélioration rapporte dès qu'elle est faite (par exemple, 7 L au lieu de 5 avec un seul appareil au niveau 2).
+- **Cuves en parallèle :** la fermentation et la garde, les étapes lentes, peuvent avoir jusqu'à 4 cuves. Plusieurs brassins, de bières différentes, y travaillent alors en même temps, et les cuves supplémentaires apparaissent en rangée derrière la principale. Une cuve de plus coûte le prix de l'appareil du niveau suivant × le nombre de cuves déjà installées. Améliorer l'appareil améliore toutes ses cuves : son prix est multiplié par le nombre de cuves.
 - **Précision :** voir « Précision du matériel et qualité ».
 - **Durée des étapes :** ×1,2, ×1, ×0,8, ×0,6, ×0,4. Une journée de fermentation ou deux journées de garde durent 30 s au niveau 2.
 - **Embouteillage :** 0,7 s, 0,5 s, 0,25 s, 0,08 s, puis 0,02 s par bouteille.
@@ -215,7 +216,7 @@ L'ordinateur du stockage (sur le bureau, ou le bouton « Commandes ») a trois o
 | Intelligence logistique | 6 | 3 M€ |
 
 ## Le grossiste
-Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 2,40 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'onglet Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
+Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 1,50 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'onglet Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
 
 ## Gamme : l'étagère
 La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 8 000 €, 50 000 €, 200 000 €, 600 000 €, 3 M€ puis 8 M€.

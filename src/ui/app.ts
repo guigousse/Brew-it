@@ -1,6 +1,6 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { MAX_PLAN, type Beer, type Game, type Order } from '../core/game';
+import { MAX_PLAN, MAX_TANKS, TANK_STAGES, type Beer, type Game, type Order } from '../core/game';
 import { AD, BAR, DECOR, kegGlasses, kegLiters, PARTY } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
@@ -258,9 +258,11 @@ export class App {
       o.label.style.left = `${(r.x + r.w / 2) * s}px`;
       o.label.style.top = `${Math.max(0, r.y * s - 18)}px`;
       const pct = batch ? Math.min(1, batch.elapsed / Math.max(0.01, batch.duration)) : 0;
+      const many = g.tankCount(id) > 1 ? g.batchesAt(id).length : 0;
       o.text.textContent = batch
         ? id === 'bottling' && g.bottlingBlocked ? 'Stockage plein ⏸'
         : id === 'bottling' && g.tastable === batch ? 'À goûter ⏸'
+        : many > 1 ? `${STATIONS[id].step} · ${many} cuves`
         : batch.waiting ? `${STATIONS[id].step} ⏸` : `${STATIONS[id].step} · ${Math.round(pct * 100)} %`
         : STATIONS[id].step;
       o.label.classList.toggle('blocked', id === 'bottling' && g.bottlingBlocked);
@@ -359,7 +361,7 @@ export class App {
     this.sheet.classList.toggle('hidden', !s);
     if (!s) return;
     const key = JSON.stringify([
-      s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer, g.autoBrew,
+      s, g.level(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer, g.autoBrew,
       g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.decor, g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.format, g.beers.map((b) => b.kegs.length)] : 0,
       s.kind === 'storage' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
     ]);
@@ -431,6 +433,24 @@ export class App {
       knobs.append(createKnob({ label: k.label, min: k.min, max: k.max, step: k.step, unit: k.unit, value: g.recipe[k.key] as number, onChange: (v) => g.setParam(k.key, v) }));
     }
     body.append(knobs);
+    // cuves en parallèle (fermentation, garde)
+    const tankCost = g.tankCost(id);
+    if (TANK_STAGES.includes(id)) {
+      const row = h('div', 'deal-row');
+      row.append(h('span', 'stats-line strong', `Cuves : ${g.tankCount(id)}/${MAX_TANKS}`));
+      if (tankCost != null) {
+        const b = this.btn('btn small', `+ 1 cuve · ${moneyShort(tankCost)}`, () => {
+          const r = g.addTank(id);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          this.toast('Nouvelle cuve installée', 'good');
+          this.sheetKey = '';
+        });
+        b.dataset.cost = String(tankCost);
+        b.disabled = g.money < tankCost;
+        row.append(b);
+      }
+      body.append(row);
+    }
     // amélioration
     const up = h('div', 'card upgrade');
     up.append(h('div', 'section-title', 'Améliorer'));
@@ -445,7 +465,7 @@ export class App {
     if (lv < MAX_LEVEL) levels.append(h('div', 'level-arrow', '➜'), cell(lv + 1, `Suivant · niv. ${lv + 1}`, 'current'));
     up.append(levels);
     if (lv < MAX_LEVEL) {
-      const cost = upgradeCost(id, lv + 1);
+      const cost = g.upgradeCost(id);
       const b = this.btn('btn primary', `Améliorer · ${moneyInt(cost)}`, () => {
         const r = g.upgrade(id);
         if (!r.ok) return this.toast(r.reason!, 'bad');

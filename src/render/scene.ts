@@ -56,6 +56,8 @@ export class Scene {
   private g: CanvasRenderingContext2D;
   /** Décor de chaque niveau de brasserie (mis en cache). */
   private bgs = new Map<number, HTMLCanvasElement>();
+  /** Copies assombries des cuves, pour les cuves supplémentaires (en retrait). */
+  private shaded = new Map<string, HTMLCanvasElement>();
   private flashAt = -99;
   /** Instant (s) du dernier transfert vers chaque étape, pour animer le liquide dans les tuyaux. */
   private flows = new Map<number, number>();
@@ -100,6 +102,7 @@ export class Scene {
    */
   invalidate(): void {
     this.bgs.clear();
+    this.shaded.clear();
     clearSpriteCache();
   }
 
@@ -112,6 +115,23 @@ export class Scene {
     } catch {
       return true;
     }
+  }
+
+  private shadedSprite(id: StationId, lv: number): HTMLCanvasElement {
+    const key = `${id}${lv}`;
+    let c = this.shaded.get(key);
+    if (c) return c;
+    const src = stationCanvas(id, lv);
+    c = document.createElement('canvas');
+    c.width = src.width;
+    c.height = src.height;
+    const g = c.getContext('2d')!;
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(20,14,28,0.4)';
+    g.fillRect(0, 0, c.width, c.height);
+    this.shaded.set(key, c);
+    return c;
   }
 
   /** Éclair blanc quand la brasserie change de niveau (et donc de décor). */
@@ -413,6 +433,20 @@ export class Scene {
     g.fillStyle = 'rgba(0,0,0,0.3)';
     g.fillRect(r.x + 3, SLOTS[id as Exclude<StationId, 'bottling'>].floor, r.w - 4, 2);
     if (def.flame && active) this.flames(r.x + def.flame.x, r.y + def.flame.y, def.flame.w, t);
+    // cuves en parallèle : rangée de cuves en retrait, derrière la principale
+    const tanks = game.tankCount(id);
+    if (tanks > 1) {
+      const busy = game.batchesAt(id).length;
+      for (let k = tanks - 1; k >= 1; k--) {
+        const dx = (id === 'fermenter' ? 11 : -11) * k;
+        g.drawImage(this.shadedSprite(id, lv), r.x + dx, r.y - 2 * k);
+        // une cuve qui travaille : un voyant vert
+        if (k < busy) {
+          g.fillStyle = Math.floor(t * 2 + k) % 2 ? '#7cff9c' : '#3e9028';
+          g.fillRect(r.x + dx + Math.floor(r.w / 2), r.y - 2 * k + 3, 2, 2);
+        }
+      }
+    }
     g.drawImage(stationCanvas(id, lv), r.x, r.y);
 
     // liquide visible dans le hublot

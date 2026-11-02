@@ -90,11 +90,17 @@ Avant les corrections, avec 5 niveaux mais l'ancienne économie, le joueur simul
 ## Résultat (4 visites par jour)
 
 ```
-Chiffre d'affaires par jour :
-  J1 40k · J6 251k · J12 259k · J18 1,2M · J24 765k · J30 4,0M · J33 5,8M
-Fin : J34 · 115 visites · 31 % sans achat · pire série sans achat : 2 visites
-2 visites par jour : fin J42 · 16 % sans achat · pire série : 2
+Chiffre d'affaires par jour (sans long palier) :
+  J1 28k · J5 102k · J10 150k · J15 404k · J20 949k · J25 1,6M · J28 6,3M · J31 9,5M
+Fin : J33 · 124 visites · 32 % sans achat · pire série sans achat : 3 visites
+2 visites par jour : fin J45 · 22 % sans achat · pire série : 2
 ```
+
+## Volume progressif et cuves en parallèle
+
+- Chaque appareil amélioré grossit **tout de suite** les brassins (1/7 du palier suivant) : il n'y a plus de longs paliers où l'on attend que les 7 appareils soient au même niveau.
+- Les **cuves en parallèle** (fermentation et garde) multiplient la cadence. D'abord trop bon marché, elles faisaient finir le jeu en 8 jours. Elles coûtent désormais le prix de l'appareil du niveau suivant × le nombre de cuves, et améliorer un appareil coûte autant de fois que de cuves.
+- Pour compenser la production plus forte, le **grossiste** est descendu à 1,50 € de base.
 
 ## Tableau de commandes, grossiste (v7)
 
@@ -102,7 +108,6 @@ Fin : J34 · 115 visites · 31 % sans achat · pire série sans achat : 2 visite
 - Le **grossiste automatique** écoule le surplus en continu (au-delà de la moitié du stockage). Sans lui, la production des absences était perdue et la partie dépassait 60 jours.
 - Les **améliorations de l'ordinateur** (places au tableau) remplacent une partie des achats que représentaient les contrats.
 - **Achats intermédiaires** : sans contrats, 62 % des visites se passaient sans achat. La décoration du bar, les fêtes et les campagnes de pub ramènent ce chiffre à 31 % (16 % à 2 visites par jour). Le joueur simulé lance une campagne quand il a quatre fois son prix en trop, et une fête quand il a trois fûts d'avance par tireuse.
-- Le **grossiste** est passé de 2,20 € à 2,40 € de base, pour finir vers le J34.
 
 ## Où régler quoi
 
