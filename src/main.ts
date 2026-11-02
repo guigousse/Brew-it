@@ -1,132 +1,87 @@
 import './ui/style.css';
-import { SaveManager } from './core/save/storage';
-import { FixedStepLoop, simulateOffline } from './core/sim/loop';
-import { buildReferenceBrewery } from './core/testing/scenarios';
-import { World } from './core/world';
-import { ingredientNeeds } from './core/ingredients';
-import { createStorage } from './platform/storage';
+import { FixedStepLoop, Game, simulateOffline } from './core/game';
+import { SaveManager } from './core/save';
+import { DISTRIBUTORS } from './core/market';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
-import { GameRenderer, WALL_TILES } from './render/renderer';
-import { Hud } from './ui/hud';
-import { InputController } from './ui/input';
+import { createStorage } from './platform/storage';
+import { App } from './ui/app';
 
-const AUTOSAVE_SECONDS = 30;
+const AUTOSAVE_SECONDS = 20;
 
 async function boot() {
   const saves = new SaveManager(createStorage());
-  const demo = new URLSearchParams(location.search).has('demo') || import.meta.env.VITE_DEMO === '1';
-  let world: World;
-  let offlineEarned = 0;
+  let game: Game;
   try {
-    const loaded = demo ? null : await saves.load();
-    world = loaded?.world ?? (demo ? buildReferenceBrewery({ money: 5_000 }) : new World());
-    if (loaded && loaded.elapsedSeconds > 5) offlineEarned = simulateOffline(world, loaded.elapsedSeconds).earned;
+    const loaded = await saves.load();
+    game = loaded?.game ?? new Game();
+    if (loaded) simulateOffline(game, loaded.elapsedSeconds);
   } catch (err) {
     console.error('Sauvegarde illisible, nouvelle partie', err);
-    world = new World();
+    game = new Game();
   }
+  let loop = new FixedStepLoop(() => game);
 
-  const renderer = new GameRenderer();
-  await renderer.init(document.getElementById('game')!);
-  let loop = new FixedStepLoop(world);
-
-  const input = new InputController(renderer.app.canvas, renderer, () => world, {
-    onSelect: (id) => {
-      hud.select(id);
-      renderer.selectedId = id;
-    },
-    onBuilt: (count, reason) => {
-      if (count > 0) tapFeedback();
-      else if (reason) hud.toast(world.tutorial.done ? reason : 'Touche la case qui clignote', 'bad');
-    },
-    onBuy: (id) => {
-      hud.load(id);
-      tapFeedback();
-    },
-    onDeleteSelectionChanged: () => hud.deleteSelectionChanged(),
-    onMoved: (ok, reason) => {
-      if (ok) {
-        tapFeedback();
-        hud.setTool({ kind: 'none' });
-      } else if (reason) hud.toast(reason, 'bad');
-    },
-  });
-
-  // Cadre la zone constructible entre la barre du haut et Gaston / la barre d'outils.
-  const fitView = () =>
-    renderer.camera.fit(world.grid.unlockedW, world.grid.unlockedH, {
-      x: 0, y: hud.topInset, w: renderer.app.screen.width, h: hud.bottomInset - hud.topInset,
-    }, 0.96, WALL_TILES);
-
-  const hud = new Hud(document.getElementById('hud')!, () => world, input, renderer.deleteSet, {
-    setSpeed: (s) => (loop.speed = s),
+  const app = new App(document.getElementById('app')!, () => game, {
     getSpeed: () => loop.speed,
-    newGame: () => startWorld(new World()),
-    layoutChanged: () => requestAnimationFrame(fitView),
+    setSpeed: (s) => (loop.speed = s),
+    newGame: () => start(new Game()),
   });
 
   let unsubscribe = () => {};
-  function startWorld(w: World) {
+  function start(g: Game) {
     unsubscribe();
-    world = w;
-    loop = new FixedStepLoop(world);
-    renderer.selectedId = null;
-    hud.select(null);
-    unsubscribe = world.events.on((e) => {
-      hud.onEvent(e);
-      if (e.type === 'expanded') fitView();
-      if (e.type === 'crateDelivered' || e.type === 'tutorialDone') tapFeedback(true);
+    game = g;
+    loop = new FixedStepLoop(() => game);
+    unsubscribe = game.events.on((e) => {
+      if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
+      if (e.type === 'tasting') {
+        tapFeedback(true);
+        app.openTasting();
+      }
+      if (e.type === 'batchDone' && e.beerId != null) app.toast(`+${e.bottles} bouteilles en stock`, 'good');
+      if (e.type === 'distributorAvailable') app.toast(`Nouveau distributeur disponible : ${DISTRIBUTORS.find((d) => d.id === e.id)?.name}`, 'good');
     });
-    hud.update();
-    if (world.tasting) hud.openTasting(world.tasting.recipeId);
-    requestAnimationFrame(fitView);
-    if (!demo) void saves.save(world);
+    app.update();
+    if (game.offline) app.openOffline();
+    void saves.save(game);
   }
-  startWorld(world);
+  start(game);
 
-  void document.fonts?.ready.then(() => requestAnimationFrame(fitView)); // les polices changent la hauteur des barres
-  window.addEventListener('resize', () => requestAnimationFrame(fitView)); // rotation de l'écran
-  if (offlineEarned > 0) hud.toast(`Pendant ton absence : +${offlineEarned.toFixed(0)} €`, 'good');
-
-  let hudTimer = 0;
+  let last = performance.now();
+  let uiTimer = 0;
   let saveTimer = 0;
-  renderer.app.ticker.add((t) => {
-    const dt = t.deltaMS / 1000;
+  const frame = (now: number) => {
+    const dt = (now - last) / 1000;
+    last = now;
     loop.advance(dt);
-    renderer.selectedId = hud.selectedId;
-    renderer.draw(world);
-    if ((hudTimer += dt) > 0.25) {
-      hudTimer = 0;
-      hud.update();
+    app.frame(now / 1000);
+    if ((uiTimer += dt) > 0.25) {
+      uiTimer = 0;
+      app.update();
     }
     if ((saveTimer += dt) > AUTOSAVE_SECONDS) {
       saveTimer = 0;
-      if (!demo) void saves.save(world);
+      void saves.save(game);
     }
-  });
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 
   let pausedAt = 0;
   onAppLifecycle(
     () => {
       pausedAt = Date.now();
-      renderer.app.ticker.stop();
-      if (!demo) void saves.save(world);
+      void saves.save(game);
     },
     () => {
-      if (pausedAt) {
-        const { earned } = simulateOffline(world, (Date.now() - pausedAt) / 1000);
-        if (earned > 1) hud.toast(`Pendant ton absence : +${earned.toFixed(0)} €`, 'good');
-      }
-      renderer.app.ticker.start();
+      if (!pausedAt) return;
+      simulateOffline(game, (Date.now() - pausedAt) / 1000);
+      last = performance.now();
+      if (game.offline) app.openOffline();
     },
   );
 
-  // Accès console pour le debug
-  (window as unknown as { brewit: unknown }).brewit = {
-    get world() { return world; }, saves, renderer, hud,
-    /** Debug : charge tous les ingrédients manquants. */
-    loadAll: () => ingredientNeeds(world).forEach((n) => world.loadMissing(n.buildingId)),
-  };
+  (window as unknown as { brewit: unknown }).brewit = { get game() { return game; }, app, saves };
 }
 
 void boot();

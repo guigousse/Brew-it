@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
-import type { SaveStorage } from '../core/save/storage';
+import type { SaveStorage } from '../core/save';
 
 /**
  * iOS : fichiers JSON dans Library/ (sauvegardé par iCloud Backup, invisible dans l'app Fichiers).

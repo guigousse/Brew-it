@@ -1,450 +1,273 @@
 /**
- * Sprites pixel art 16-bit, vue de face, dessinés pixel par pixel sur un canvas à résolution native
- * (palette limitée, ombrage par bandes, contour sombre automatique). Les mêmes canvas servent de
- * textures Pixi et d'aperçus dans le magasin.
+ * Sprites des appareils, vue de face, 3 niveaux chacun : du matériel de garage à l'équipement industriel.
+ * Chaque sprite décrit aussi ses points d'accroche (entrée, sortie, hublot de niveau, brûleur, vapeur).
  */
-import type { BuildingType } from '../core/content/buildings';
+import type { StationId } from '../core/stations';
+import { Painter, PAL } from './painter';
 
-// ---------------------------------------------------------------- palette
-export const PAL = {
-  outline: '#1b1424',
-  shadow: '#00000040',
-  cu: ['#ffe0a8', '#f5b76a', '#d4853a', '#9a5424', '#5e3016'], // cuivre : reflet → ombre
-  st: ['#ffffff', '#e2e8ef', '#b3bfcc', '#7c8796', '#4c5462'], // inox
-  wd: ['#f0c088', '#d4955a', '#a86a35', '#6e4220'], // bois
-  rd: ['#ff9a7a', '#e8553a', '#a8301f'],
-  bl: ['#a8dcff', '#5aa2e8', '#2e62a8'],
-  gr: ['#b8f08a', '#6cc04a', '#3a7a2a'],
-  tl: ['#8fe0d4', '#4fb0a4', '#2c7068'], // turquoise (embouteilleuse)
-  ir: ['#6c6680', '#4a4458', '#2e2a38'], // fonte
-  gl: ['#e4fff8', '#b4e6dc', '#7cbcb4', '#4e8a84'], // verre
-  pl: ['#fffcf0', '#e8e2cf', '#bdb59c'], // plastique / papier
-  gold: '#f2c14e',
-  beer: ['#ffd76a', '#e8a530', '#b06f18'],
-  brick: ['#b85a44', '#96442f', '#6f3022', '#d8c8b0'],
-};
+export interface Rect { x: number; y: number; w: number; h: number }
+export interface Pt { x: number; y: number }
 
-// ---------------------------------------------------------------- peintre
-class Painter {
-  readonly c: HTMLCanvasElement;
-  private g: CanvasRenderingContext2D;
-  constructor(readonly w: number, readonly h: number) {
-    this.c = document.createElement('canvas');
-    this.c.width = w;
-    this.c.height = h;
-    this.g = this.c.getContext('2d')!;
-  }
-  rect(x: number, y: number, w: number, h: number, color: string) {
-    this.g.fillStyle = color;
-    this.g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
-  }
-  px(x: number, y: number, color: string) {
-    this.rect(x, y, 1, 1, color);
-  }
-  hl(x: number, y: number, w: number, color: string) {
-    this.rect(x, y, w, 1, color);
-  }
-  vl(x: number, y: number, h: number, color: string) {
-    this.rect(x, y, 1, h, color);
-  }
-  /** Ellipse pleine au pixel près (pas d'anticrénelage). */
-  ellipse(cx: number, cy: number, rx: number, ry: number, color: string) {
-    for (let y = -ry; y <= ry; y++) {
-      const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry + 0.25))));
-      this.hl(cx - half, cy + y, half * 2 + 1, color);
-    }
-  }
-  /** Corps cylindrique vu de face : bandes claires à gauche, reflet, ombre à droite. */
-  cylinder(x: number, y: number, w: number, h: number, s: readonly string[]) {
-    for (let i = 0; i < w; i++) {
-      const t = (i + 0.5) / w;
-      const c = t < 0.12 ? s[2]! : t < 0.3 ? s[1]! : t < 0.4 ? s[0]! : t < 0.68 ? s[2]! : t < 0.86 ? s[3]! : s[4] ?? s[3]!;
-      this.vl(x + i, y, h, c);
-    }
-  }
-  /** Bandeau horizontal (cerclage) qui suit l'ombrage du cylindre. */
-  band(x: number, y: number, w: number, s: readonly string[]) {
-    for (let i = 0; i < w; i++) {
-      const t = (i + 0.5) / w;
-      this.px(x + i, y, t < 0.35 ? s[1]! : t < 0.75 ? s[2]! : s[3]!);
-    }
-  }
-  /** Contour sombre automatique autour des pixels opaques (style 16-bit). */
-  outline(color = PAL.outline) {
-    const img = this.g.getImageData(0, 0, this.w, this.h);
-    const a = (x: number, y: number) => (x < 0 || y < 0 || x >= this.w || y >= this.h ? 0 : img.data[(y * this.w + x) * 4 + 3]!);
-    const pts: [number, number][] = [];
-    for (let y = 0; y < this.h; y++)
-      for (let x = 0; x < this.w; x++) {
-        if (a(x, y) > 0) continue;
-        if (a(x - 1, y) > 200 || a(x + 1, y) > 200 || a(x, y - 1) > 200 || a(x, y + 1) > 200) pts.push([x, y]);
-      }
-    for (const [x, y] of pts) this.px(x, y, color);
-  }
-}
-
-// ---------------------------------------------------------------- éléments communs
-function legs(p: Painter, x0: number, x1: number, y: number, h: number, s = PAL.ir) {
-  p.rect(x0, y, 2, h, s[1]!);
-  p.rect(x1, y, 2, h, s[1]!);
-  p.vl(x0, y, h, s[0]!);
-  p.vl(x1, y, h, s[0]!);
-}
-function valve(p: Painter, x: number, y: number) {
-  p.rect(x, y, 3, 2, PAL.st[3]!);
-  p.px(x + 1, y - 1, PAL.rd[1]!);
-  p.hl(x, y - 2, 3, PAL.rd[1]!);
-}
-function gauge(p: Painter, x: number, y: number) {
-  p.ellipse(x, y, 2, 2, PAL.st[1]!);
-  p.px(x, y, PAL.rd[2]!);
-  p.px(x + 1, y - 1, PAL.rd[2]!);
-}
-function thermometer(p: Painter, x: number, y: number, h: number) {
-  p.rect(x, y, 2, h, PAL.pl[0]!);
-  p.rect(x, y + Math.floor(h / 2), 2, h - Math.floor(h / 2), PAL.rd[1]!);
-}
-
-// ---------------------------------------------------------------- sprites
-type Draw = (p: Painter) => void;
-
-interface SpriteDef {
+export interface SpriteDef {
   w: number;
   h: number;
-  draw: Draw;
+  draw: (p: Painter) => void;
+  /** Hublot où l'on voit le liquide. */
+  window?: Rect;
+  inlet: Pt;
+  outlet: Pt;
+  flame?: Rect;
+  steam?: Pt;
 }
 
-const SPRITES: Partial<Record<BuildingType, SpriteDef>> = {
-  // Mini-concasseur : moulin à manivelle en bois
-  mill: { w: 16, h: 24, draw: (p) => {
-    legs(p, 3, 11, 17, 6, PAL.wd);
-    p.rect(3, 11, 10, 7, PAL.wd[1]!); p.hl(3, 11, 10, PAL.wd[0]!); p.hl(3, 17, 10, PAL.wd[3]!);
-    p.rect(5, 13, 6, 3, PAL.ir[1]!); p.hl(5, 14, 6, PAL.ir[0]!); // rouleaux
-    for (let i = 0; i < 6; i++) p.hl(2 + i / 2, 3 + i, 12 - i, i % 2 ? PAL.wd[1]! : PAL.wd[2]!); // trémie
-    p.hl(2, 2, 12, PAL.wd[0]!);
-    p.rect(4, 3, 8, 2, PAL.beer[1]!); p.px(5, 3, PAL.beer[0]!); p.px(9, 3, PAL.beer[0]!); // grains
-    p.rect(13, 13, 2, 1, PAL.ir[1]!); p.vl(14, 9, 5, PAL.ir[1]!); p.rect(14, 8, 2, 2, PAL.rd[1]!); // manivelle
-    p.rect(10, 18, 3, 3, PAL.st[3]!); // goulotte
-    p.outline();
-  } },
-  mill_2: { w: 16, h: 26, draw: (p) => {
-    legs(p, 3, 11, 20, 5);
-    p.cylinder(2, 12, 12, 9, PAL.st); p.hl(2, 12, 12, PAL.st[0]!);
-    p.rect(4, 14, 4, 4, PAL.bl[1]!); p.px(4, 14, PAL.bl[0]!); // moteur
-    p.px(10, 15, PAL.gr[1]!); p.px(12, 15, PAL.rd[1]!);
-    for (let i = 0; i < 7; i++) p.band(1 + i / 2, 4 + i, 14 - i, PAL.st);
-    p.hl(1, 3, 14, PAL.st[0]!);
-    p.outline();
-  } },
+const P = PAL;
 
-  // Marmite d'empâtage : faitout inox avec thermomètre et robinet
-  mash_tun_mini: { w: 16, h: 22, draw: (p) => {
-    p.rect(2, 19, 12, 2, PAL.ir[1]!); // socle
-    p.cylinder(2, 7, 12, 12, PAL.st);
-    p.ellipse(7.5, 7, 6, 2, PAL.st[1]!); p.ellipse(7.5, 6, 5, 1, PAL.st[2]!);
-    p.rect(6, 3, 3, 2, PAL.ir[1]!); // poignée du couvercle
-    p.hl(0, 10, 2, PAL.ir[1]!); p.hl(14, 10, 2, PAL.ir[1]!); // anses
-    p.band(2, 12, 12, PAL.st);
-    thermometer(p, 4, 9, 6);
-    p.rect(13, 16, 3, 2, PAL.st[3]!); p.px(15, 15, PAL.rd[1]!); // robinet
+// ------------------------------------------------------------------ concassage
+const MILL: SpriteDef[] = [
+  { w: 30, h: 38, inlet: { x: 15, y: 2 }, outlet: { x: 25, y: 33 }, draw: (p) => {
+    p.legs(3, 24, 22, 15, P.wd);
+    p.rect(1, 20, 28, 3, P.wd[2]!); p.hl(1, 20, 28, P.wd[0]!); p.hl(1, 22, 28, P.wd[4]!); // plateau
+    for (let i = 0; i < 9; i++) p.rect(5 + i / 2, 3 + i, 20 - i, 1, i % 2 ? P.wd[2]! : P.wd[3]!); // trémie
+    p.rect(4, 2, 22, 2, P.wd[1]!);
+    p.rect(7, 3, 16, 3, P.malt[2]!); p.px(9, 3, P.malt[0]!); p.px(14, 4, P.malt[0]!); p.px(19, 3, P.malt[0]!);
+    p.cylinder(9, 12, 12, 8, P.st); // corps du moulin
+    p.rect(21, 14, 4, 2, P.ir[2]!); p.vl(24, 9, 6, P.ir[2]!); p.rect(23, 7, 3, 3, P.rd[2]!); p.px(23, 7, P.rd[0]!); // manivelle
+    p.cylinder(20, 27, 9, 9, P.pl); p.hl(20, 27, 9, P.pl[0]!); p.rect(21, 28, 7, 2, P.malt[3]!); // seau
     p.outline();
   } },
-  mash_tun: { w: 32, h: 44, draw: (p) => {
-    legs(p, 5, 25, 36, 7);
-    p.cylinder(3, 10, 26, 27, PAL.cu);
-    p.ellipse(15.5, 10, 13, 4, PAL.cu[1]!); p.ellipse(15.5, 9, 10, 2, PAL.cu[0]!);
-    p.rect(13, 3, 6, 4, PAL.cu[2]!); p.hl(13, 3, 6, PAL.cu[0]!); // trou d'homme
-    for (const y of [16, 26, 34]) p.band(3, y, 26, PAL.cu);
-    gauge(p, 22, 20);
-    thermometer(p, 7, 18, 9);
-    valve(p, 28, 31);
+  { w: 36, h: 42, inlet: { x: 18, y: 2 }, outlet: { x: 30, y: 38 }, draw: (p) => {
+    p.legs(5, 28, 27, 14);
+    for (let i = 0; i < 10; i++) p.rect(4 + i / 2, 2 + i, 28 - i, 1, p.shadeAt(0.5, P.st, 0, i)); // trémie inox
+    for (let i = 0; i < 10; i++) for (let x = 0; x < 28 - i; x++) p.px(4 + i / 2 + x, 2 + i, p.shadeAt((x + 0.5) / (28 - i), P.st, x, i));
+    p.rect(9, 3, 18, 2, P.malt[2]!);
+    p.cylinder(6, 12, 24, 15, P.st); p.band(6, 12, 24, P.st); p.rivets(6, 25, 24, 3, P.st);
+    p.rect(9, 16, 8, 6, P.ir[3]!); p.rect(10, 17, 6, 1, P.ir[1]!); // rouleaux
+    p.cylinder(22, 15, 10, 8, P.bl); p.hl(22, 15, 10, P.bl[0]!); p.rect(32, 17, 2, 4, P.ir[2]!); // moteur
+    p.rect(28, 30, 4, 8, P.st[3]!); p.vl(28, 30, 8, P.st[1]!); // goulotte
     p.outline();
   } },
+  { w: 44, h: 50, inlet: { x: 22, y: 2 }, outlet: { x: 37, y: 46 }, draw: (p) => {
+    p.legs(6, 35, 36, 13);
+    p.cylinder(10, 0, 24, 10, P.st); p.dome(10, 0, 24, 3, P.st); p.rivets(10, 8, 24, 4, P.st); // silo
+    p.cone(8, 10, 28, 10, P.st, 10);
+    p.cylinder(5, 20, 34, 17, P.st); p.band(5, 20, 34, P.st); p.band(5, 34, 34, P.st);
+    p.panel(8, 24, 10, 8);
+    p.cylinder(22, 23, 14, 9, P.bl); p.hl(22, 23, 14, P.bl[0]!); p.rect(36, 25, 3, 5, P.ir[2]!);
+    p.rect(35, 37, 5, 9, P.st[3]!); p.vl(35, 37, 9, P.st[1]!);
+    p.outline();
+  } },
+];
 
-  // Marmite d'ébullition sur réchaud à gaz
-  kettle_mini: { w: 16, h: 24, draw: (p) => {
-    p.rect(2, 18, 12, 2, PAL.ir[1]!); legs(p, 2, 12, 20, 3); // réchaud
-    p.hl(3, 17, 10, PAL.ir[0]!);
-    p.cylinder(2, 6, 12, 11, PAL.cu);
-    p.ellipse(7.5, 6, 6, 2, PAL.cu[1]!); p.ellipse(7.5, 6, 4, 1, PAL.cu[3]!);
-    p.hl(0, 9, 2, PAL.ir[1]!); p.hl(14, 9, 2, PAL.ir[1]!);
-    p.band(2, 11, 12, PAL.cu);
-    p.rect(13, 14, 3, 2, PAL.st[3]!); // sortie
+// ------------------------------------------------------------------ empâtage
+const MASH: SpriteDef[] = [
+  { w: 34, h: 34, window: { x: 5, y: 12, w: 3, h: 14 }, inlet: { x: 17, y: 4 }, outlet: { x: 31, y: 28 }, draw: (p) => {
+    p.rect(2, 8, 30, 24, P.bl[2]!); p.rect(3, 9, 28, 22, P.bl[1]!); p.rect(3, 9, 6, 22, P.bl[0]!); p.rect(27, 9, 4, 22, P.bl[3]!); // glacière
+    p.rect(1, 4, 32, 5, P.pl[1]!); p.hl(1, 4, 32, P.pl[0]!); p.hl(1, 8, 32, P.pl[3]!); // couvercle
+    p.rect(13, 2, 8, 2, P.pl[3]!);
+    p.rect(4, 11, 5, 16, P.pl[2]!); // hublot (rempli par la scène)
+    p.thermometer(22, 12, 9);
+    p.rect(31, 26, 3, 3, P.st[3]!); p.px(33, 25, P.rd[2]!); // robinet
     p.outline();
   } },
-  kettle: { w: 32, h: 48, draw: (p) => {
-    p.rect(4, 42, 24, 3, PAL.ir[1]!); legs(p, 5, 25, 44, 3);
-    p.cylinder(3, 16, 26, 26, PAL.cu);
-    for (let i = 0; i < 6; i++) p.band(3 + i * 2, 15 - i, 26 - i * 4, PAL.cu); // dôme
-    p.cylinder(13, 1, 6, 9, PAL.cu); p.hl(12, 1, 8, PAL.cu[0]!); // cheminée des vapeurs
-    for (const y of [22, 34]) p.band(3, y, 26, PAL.cu);
-    gauge(p, 9, 27);
-    valve(p, 28, 37);
+  { w: 44, h: 48, window: { x: 8, y: 16, w: 3, h: 17 }, inlet: { x: 22, y: 3 }, outlet: { x: 41, y: 38 }, draw: (p) => {
+    p.legs(6, 35, 39, 9);
+    p.cylinder(3, 10, 38, 30, P.st); p.dome(3, 3, 38, 8, P.st);
+    p.band(3, 14, 38, P.st); p.band(3, 36, 38, P.st);
+    p.rect(19, 1, 6, 3, P.st[3]!); p.hl(19, 1, 6, P.st[1]!);
+    p.rect(7, 15, 5, 19, P.st[4]!);
+    p.thermometer(30, 18, 10); p.gauge(17, 22);
+    p.rect(14, 40, 16, 4, P.ir[3]!); p.hl(14, 40, 16, P.ir[1]!); p.px(16, 42, P.rd[2]!); // résistance
+    p.rect(40, 37, 4, 3, P.st[3]!); p.valveWheel(42, 35);
     p.outline();
   } },
+  { w: 52, h: 58, window: { x: 9, y: 20, w: 3, h: 22 }, inlet: { x: 26, y: 8 }, outlet: { x: 49, y: 46 }, draw: (p) => {
+    p.legs(7, 42, 48, 9);
+    p.cylinder(3, 16, 46, 33, P.cu); p.dome(3, 7, 46, 10, P.cu);
+    for (const y of [20, 32, 44]) p.band(3, y, 46, P.cu);
+    p.rivets(3, 26, 46, 4, P.cu);
+    p.cylinder(20, 0, 12, 7, P.bl); p.hl(20, 0, 12, P.bl[0]!); p.vl(26, 7, 3, P.st[3]!); // moteur d'agitateur
+    p.rect(8, 19, 5, 24, P.cu[5]!);
+    p.gauge(36, 28); p.gauge(36, 38); p.panel(18, 35, 12, 9);
+    p.rect(49, 45, 3, 3, P.st[3]!); p.valveWheel(50, 43);
+    p.outline();
+  } },
+];
 
-  // Dame-jeanne en verre avec barboteur (le liquide est dessiné par-dessus, selon son niveau)
-  fermenter_mini: { w: 16, h: 24, draw: (p) => {
-    p.ellipse(7.5, 16, 7, 6, PAL.gl[2]!);
-    p.ellipse(6.5, 15, 5, 4, PAL.gl[1]!);
-    p.rect(4, 13, 2, 4, PAL.gl[0]!); // reflet
-    p.rect(5, 6, 6, 5, PAL.gl[2]!); p.rect(6, 6, 2, 5, PAL.gl[1]!); // col
-    p.rect(5, 4, 6, 2, PAL.wd[2]!); // bouchon
-    p.vl(7, 1, 3, PAL.pl[1]!); p.rect(6, 0, 3, 2, PAL.pl[0]!); // barboteur
-    p.rect(1, 20, 14, 2, PAL.wd[1]!); p.hl(1, 20, 14, PAL.wd[0]!); // panier en osier
+// ------------------------------------------------------------------ ébullition
+const BOIL: SpriteDef[] = [
+  { w: 34, h: 40, window: { x: 6, y: 12, w: 3, h: 12 }, inlet: { x: 17, y: 5 }, outlet: { x: 31, y: 24 }, flame: { x: 9, y: 33, w: 16, h: 4 }, steam: { x: 17, y: 5 }, draw: (p) => {
+    p.rect(4, 31, 26, 3, P.ir[2]!); p.hl(4, 31, 26, P.ir[0]!); p.legs(5, 26, 33, 6); // réchaud
+    p.cylinder(3, 8, 28, 22, P.st);
+    p.ellipse(16, 8, 14, 3, P.st[2]!); p.ellipse(16, 8, 11, 2, P.st[4]!);
+    p.hl(0, 12, 3, P.ir[2]!); p.hl(31, 12, 3, P.ir[2]!); // anses
+    p.band(3, 18, 28, P.st);
+    p.rect(5, 11, 5, 14, P.st[4]!);
+    p.rect(31, 23, 3, 3, P.st[3]!);
     p.outline();
   } },
-  fermenter: { w: 32, h: 50, draw: (p) => {
-    legs(p, 4, 26, 38, 11, PAL.st);
-    p.vl(15, 40, 9, PAL.st[3]!);
-    for (let i = 0; i < 8; i++) p.band(3 + i * 1.5, 31 + i, 26 - i * 3, PAL.st); // cône
-    p.cylinder(3, 9, 26, 22, PAL.st);
-    for (let i = 0; i < 5; i++) p.band(3 + i * 2, 8 - i, 26 - i * 4, PAL.st); // dôme
-    for (const y of [14, 18, 22]) p.band(3, y, 26, [PAL.bl[0]!, PAL.bl[1]!, PAL.bl[1]!, PAL.bl[2]!]); // double enveloppe glycol
-    gauge(p, 22, 27);
-    valve(p, 14, 46);
-    p.rect(9, 2, 4, 3, PAL.st[3]!); // évent
+  { w: 42, h: 50, window: { x: 7, y: 18, w: 3, h: 16 }, inlet: { x: 21, y: 10 }, outlet: { x: 39, y: 34 }, flame: { x: 10, y: 43, w: 22, h: 4 }, steam: { x: 21, y: 0 }, draw: (p) => {
+    p.rect(4, 41, 34, 3, P.ir[2]!); p.hl(4, 41, 34, P.ir[0]!); p.legs(5, 33, 43, 6);
+    p.cylinder(3, 14, 36, 27, P.st); p.dome(3, 8, 36, 7, P.st);
+    p.cylinder(18, 0, 7, 9, P.st); p.hl(17, 0, 9, P.st[1]!); // cheminée
+    p.band(3, 18, 36, P.st); p.band(3, 36, 36, P.st);
+    p.rect(6, 17, 5, 18, P.st[4]!);
+    p.gauge(28, 24);
+    p.rect(38, 33, 4, 3, P.st[3]!); p.valveWheel(40, 31);
     p.outline();
   } },
+  { w: 50, h: 60, window: { x: 8, y: 26, w: 3, h: 20 }, inlet: { x: 25, y: 18 }, outlet: { x: 47, y: 44 }, flame: { x: 10, y: 53, w: 30, h: 4 }, steam: { x: 25, y: 0 }, draw: (p) => {
+    p.rect(4, 51, 42, 3, P.ir[2]!); p.hl(4, 51, 42, P.ir[0]!); p.legs(6, 40, 53, 6);
+    p.cylinder(3, 22, 44, 30, P.cu); p.dome(3, 12, 44, 11, P.cu);
+    p.cylinder(21, 0, 9, 13, P.cu); p.hl(19, 0, 13, P.cu[0]!); p.hl(19, 1, 13, P.cu[4]!); // cheminée
+    for (const y of [26, 38, 48]) p.band(3, y, 44, P.cu);
+    p.rect(7, 25, 5, 22, P.cu[5]!);
+    p.rect(36, 16, 10, 3, P.st[3]!); p.vl(45, 16, 12, P.st[3]!); // vapeur
+    p.panel(22, 33, 12, 9); p.gauge(16, 31);
+    p.rect(47, 43, 3, 3, P.st[3]!); p.valveWheel(48, 41);
+    p.outline();
+  } },
+];
 
-  // Embouteilleuse manuelle : établi + capsuleuse
-  bottler_mini: { w: 16, h: 22, draw: (p) => {
-    legs(p, 1, 13, 15, 6, PAL.wd);
-    p.rect(0, 13, 16, 3, PAL.wd[1]!); p.hl(0, 13, 16, PAL.wd[0]!);
-    p.vl(11, 2, 11, PAL.ir[1]!); p.rect(9, 2, 6, 2, PAL.rd[1]!); p.rect(10, 6, 3, 2, PAL.ir[0]!); // capsuleuse
-    p.rect(2, 9, 2, 4, PAL.beer[2]!); p.px(2, 8, PAL.beer[2]!); // bouteilles
-    p.rect(5, 9, 2, 4, PAL.beer[2]!); p.px(5, 8, PAL.beer[2]!);
-    p.rect(11, 9, 2, 4, PAL.gl[2]!);
+// ------------------------------------------------------------------ refroidissement
+const COOLER: SpriteDef[] = [
+  { w: 28, h: 26, inlet: { x: 3, y: 6 }, outlet: { x: 25, y: 21 }, draw: (p) => {
+    p.cylinder(2, 6, 24, 18, P.pl); p.ellipse(14, 6, 12, 2, P.water[1]!); // seau d'eau froide
+    for (let i = 0; i < 4; i++) p.ellipse(14, 10 + i * 3, 8, 1, P.cu[i % 2 ? 2 : 3]!); // serpentin
+    p.rect(1, 4, 3, 3, P.cu[3]!); p.rect(24, 20, 4, 3, P.cu[3]!);
     p.outline();
   } },
-  bottler: { w: 32, h: 36, draw: (p) => {
-    p.rect(2, 16, 28, 18, PAL.tl[1]!); p.hl(2, 16, 28, PAL.tl[0]!); p.vl(29, 16, 18, PAL.tl[2]!);
-    p.rect(4, 20, 8, 6, PAL.ir[2]!); p.px(5, 21, PAL.gr[1]!); p.px(7, 21, PAL.rd[1]!); p.px(9, 21, PAL.gold); // panneau
-    p.rect(15, 20, 12, 10, PAL.st[3]!);
-    p.rect(3, 10, 26, 6, PAL.st[2]!); p.hl(3, 10, 26, PAL.st[0]!);
-    for (let i = 0; i < 6; i++) { p.rect(5 + i * 4, 6, 2, 4, PAL.st[3]!); p.vl(5 + i * 4, 3, 3, PAL.st[2]!); } // becs
-    p.rect(6, 1, 20, 2, PAL.st[3]!);
+  { w: 30, h: 30, inlet: { x: 3, y: 8 }, outlet: { x: 27, y: 24 }, draw: (p) => {
+    p.rect(4, 4, 22, 24, P.bl[3]!); p.rect(5, 5, 20, 22, P.st[2]!);
+    for (let x = 6; x < 24; x += 2) p.vl(x, 6, 20, P.st[0]!);
+    p.rect(4, 3, 22, 3, P.bl[2]!); p.hl(4, 3, 22, P.bl[0]!);
+    p.rect(0, 7, 4, 3, P.st[3]!); p.rect(26, 23, 4, 3, P.st[3]!);
     p.outline();
   } },
+  { w: 32, h: 36, inlet: { x: 2, y: 8 }, outlet: { x: 29, y: 30 }, draw: (p) => {
+    for (const ox of [3, 17]) {
+      p.rect(ox, 4, 12, 26, P.bl[3]!); p.rect(ox + 1, 5, 10, 24, P.st[2]!);
+      for (let x = ox + 2; x < ox + 11; x += 2) p.vl(x, 6, 22, P.st[0]!);
+      p.rect(ox, 3, 12, 3, P.bl[2]!);
+    }
+    p.rect(13, 12, 6, 3, P.bl[3]!); p.rect(13, 22, 6, 3, P.bl[3]!);
+    p.panel(10, 31, 12, 5);
+    p.rect(0, 7, 3, 3, P.st[3]!); p.rect(29, 29, 3, 3, P.st[3]!);
+    p.outline();
+  } },
+];
 
-  // --- Paliers industriels (3 × 3 cases, broyeur 2 × 2) -------------------------------
-  mill_3: { w: 32, h: 44, draw: (p) => {
-    legs(p, 4, 26, 34, 9);
-    p.rect(3, 22, 26, 13, PAL.st[2]!); p.hl(3, 22, 26, PAL.st[0]!); p.vl(28, 22, 13, PAL.st[3]!);
-    p.cylinder(5, 25, 10, 8, PAL.bl); p.hl(5, 25, 10, PAL.bl[0]!); // moteur
-    p.rect(18, 25, 8, 6, PAL.ir[2]!); p.px(19, 26, PAL.gr[1]!); p.px(21, 26, PAL.rd[1]!); p.px(23, 26, PAL.gold);
-    for (let i = 0; i < 10; i++) p.band(4 + i, 6 + i, 24 - i * 2, PAL.st); // trémie
-    p.cylinder(6, 0, 20, 6, PAL.st); p.hl(6, 0, 20, PAL.st[0]!); // silo
-    p.rect(13, 35, 6, 4, PAL.st[3]!); // sortie
+// ------------------------------------------------------------------ fermentation
+const FERMENTER: SpriteDef[] = [
+  { w: 30, h: 34, window: { x: 5, y: 12, w: 3, h: 16 }, inlet: { x: 15, y: 5 }, outlet: { x: 27, y: 28 }, steam: { x: 15, y: 0 }, draw: (p) => {
+    p.cylinder(3, 8, 24, 25, P.pl); p.rect(2, 6, 26, 3, P.pl[1]!); p.hl(2, 6, 26, P.pl[0]!);
+    p.band(3, 18, 24, P.pl);
+    p.rect(14, 1, 3, 5, P.gl[2]!); p.rect(13, 0, 5, 2, P.gl[1]!); // barboteur
+    p.rect(4, 11, 5, 18, P.pl[3]!);
+    p.rect(27, 27, 3, 3, P.st[3]!);
     p.outline();
   } },
-  mash_tun_3: { w: 48, h: 66, draw: (p) => {
-    legs(p, 6, 40, 56, 9);
-    p.vl(23, 58, 7, PAL.ir[1]!);
-    p.cylinder(3, 16, 42, 41, PAL.cu);
-    for (let i = 0; i < 6; i++) p.band(3 + i * 2, 15 - i, 42 - i * 4, PAL.cu);
-    for (const y of [22, 32, 42, 52]) p.band(3, y, 42, PAL.cu);
-    p.cylinder(19, 2, 10, 8, PAL.bl); p.hl(19, 2, 10, PAL.bl[0]!); p.vl(24, 0, 2, PAL.st[3]!); // moteur d'agitateur
-    p.hl(0, 12, 48, PAL.ir[1]!); p.hl(0, 9, 48, PAL.ir[0]!); // passerelle
-    for (let x = 0; x < 48; x += 6) p.vl(x, 9, 4, PAL.ir[0]!);
-    gauge(p, 36, 28); gauge(p, 36, 38);
-    thermometer(p, 9, 26, 12);
-    valve(p, 44, 51);
+  { w: 38, h: 56, window: { x: 7, y: 14, w: 3, h: 18 }, inlet: { x: 19, y: 4 }, outlet: { x: 19, y: 53 }, steam: { x: 26, y: 0 }, draw: (p) => {
+    p.legs(4, 31, 38, 17, P.st);
+    p.cylinder(3, 8, 32, 26, P.st); p.dome(3, 3, 32, 6, P.st);
+    p.cone(3, 34, 32, 12, P.st, 6);
+    p.band(3, 12, 32, P.st); p.band(3, 30, 32, P.st);
+    p.rect(25, 0, 3, 4, P.gl[2]!);
+    p.rect(6, 13, 5, 20, P.st[4]!);
+    p.gauge(26, 22);
+    p.rect(17, 46, 5, 3, P.st[3]!); p.valveWheel(19, 50);
     p.outline();
   } },
-  kettle_3: { w: 48, h: 70, draw: (p) => {
-    p.rect(5, 62, 38, 4, PAL.ir[1]!); legs(p, 7, 39, 65, 4);
-    p.cylinder(3, 26, 42, 36, PAL.cu);
-    for (let i = 0; i < 10; i++) p.band(3 + i * 2, 25 - i, 42 - i * 4, PAL.cu);
-    p.cylinder(20, 0, 8, 17, PAL.cu); p.hl(18, 0, 12, PAL.cu[0]!); p.hl(18, 1, 12, PAL.cu[3]!); // cheminée
-    p.rect(34, 18, 10, 3, PAL.st[3]!); p.vl(43, 18, 10, PAL.st[3]!); // conduite vapeur
-    for (const y of [34, 46, 56]) p.band(3, y, 42, PAL.cu);
-    gauge(p, 10, 40); gauge(p, 16, 40);
-    p.rect(30, 38, 10, 8, PAL.ir[2]!); p.px(32, 40, PAL.gr[1]!); p.px(35, 40, PAL.rd[1]!); // panneau
-    valve(p, 44, 57);
+  { w: 46, h: 66, window: { x: 8, y: 16, w: 3, h: 22 }, inlet: { x: 23, y: 4 }, outlet: { x: 23, y: 63 }, steam: { x: 32, y: 0 }, draw: (p) => {
+    p.legs(5, 38, 46, 19, P.st);
+    p.cylinder(3, 9, 40, 32, P.st); p.dome(3, 3, 40, 7, P.st);
+    p.cone(3, 41, 40, 14, P.st, 8);
+    for (const y of [14, 20, 26, 32]) { p.band(3, y, 40, P.bl); }
+    p.rect(31, 0, 3, 4, P.gl[2]!);
+    p.rect(7, 15, 5, 24, P.st[4]!);
+    p.panel(28, 35, 12, 8);
+    p.rect(21, 55, 5, 3, P.st[3]!); p.valveWheel(23, 59);
     p.outline();
   } },
-  fermenter_3: { w: 48, h: 78, draw: (p) => {
-    legs(p, 5, 41, 60, 17, PAL.st);
-    p.vl(23, 62, 15, PAL.st[3]!);
-    for (let i = 0; i < 12; i++) p.band(3 + i * 1.6, 48 + i, 42 - i * 3.2, PAL.st);
-    p.cylinder(3, 12, 42, 36, PAL.st);
-    for (let i = 0; i < 7; i++) p.band(3 + i * 2, 11 - i, 42 - i * 4, PAL.st);
-    for (const y of [18, 24, 30, 36, 42]) p.band(3, y, 42, [PAL.bl[0]!, PAL.bl[1]!, PAL.bl[1]!, PAL.bl[2]!]);
-    for (let y = 8; y < 60; y += 4) p.hl(44, y, 3, PAL.ir[0]!); // échelle
-    p.vl(44, 8, 52, PAL.ir[1]!); p.vl(47, 8, 52, PAL.ir[1]!);
-    gauge(p, 34, 40);
-    valve(p, 22, 74);
-    p.rect(14, 2, 6, 4, PAL.st[3]!);
-    p.outline();
-  } },
-  bottler_3: { w: 48, h: 46, draw: (p) => {
-    p.rect(0, 30, 48, 6, PAL.ir[1]!); p.hl(0, 30, 48, PAL.ir[0]!); legs(p, 2, 44, 36, 9); // convoyeur
-    for (let i = 0; i < 9; i++) { p.rect(3 + i * 5, 25, 3, 5, PAL.beer[2]!); p.rect(4 + i * 5, 23, 1, 2, PAL.beer[2]!); p.px(4 + i * 5, 22, PAL.gold); }
-    p.rect(4, 4, 28, 18, PAL.tl[1]!); p.hl(4, 4, 28, PAL.tl[0]!); p.vl(31, 4, 18, PAL.tl[2]!);
-    for (let i = 0; i < 8; i++) p.vl(7 + i * 3, 18, 5, PAL.st[3]!); // becs
-    p.rect(8, 7, 20, 6, PAL.gl[1]!); p.hl(8, 7, 20, PAL.gl[0]!); // hublot
-    p.rect(34, 2, 12, 24, PAL.st[2]!); p.hl(34, 2, 12, PAL.st[0]!); // armoire de commande
-    p.rect(36, 6, 8, 5, PAL.ir[2]!); p.px(37, 7, PAL.gr[1]!); p.px(40, 7, PAL.rd[1]!); p.px(42, 9, PAL.gold);
-    p.outline();
-  } },
+];
 
-  // --- Réserves d'ingrédients
-  storage_1: { w: 16, h: 18, draw: (p) => {
-    p.rect(1, 4, 14, 13, PAL.wd[1]!); p.hl(1, 4, 14, PAL.wd[0]!);
-    for (const y of [8, 12]) p.hl(1, y, 14, PAL.wd[2]!);
-    p.vl(1, 4, 13, PAL.wd[2]!); p.vl(14, 4, 13, PAL.wd[3]!);
-    p.rect(2, 2, 12, 2, PAL.wd[3]!); // bord du bac
-    p.rect(5, 9, 6, 5, PAL.pl[0]!); // étiquette
+// ------------------------------------------------------------------ garde
+const CONDITIONING: SpriteDef[] = [
+  { w: 26, h: 34, window: { x: 6, y: 14, w: 14, h: 12 }, inlet: { x: 13, y: 4 }, outlet: { x: 23, y: 28 }, draw: (p) => {
+    p.ellipse(13, 21, 11, 10, P.gl[3]!); p.ellipse(12, 20, 9, 8, P.gl[2]!); p.rect(6, 15, 3, 8, P.gl[0]!);
+    p.rect(9, 5, 8, 6, P.gl[3]!); p.rect(10, 5, 3, 6, P.gl[1]!);
+    p.rect(9, 3, 8, 2, P.wd[3]!);
+    p.rect(2, 27, 22, 5, P.wd[2]!); for (let x = 3; x < 24; x += 3) p.vl(x, 27, 5, P.wd[4]!); // osier
+    p.rect(23, 27, 3, 3, P.st[3]!);
     p.outline();
   } },
-  storage_2: { w: 32, h: 50, draw: (p) => {
-    legs(p, 5, 25, 40, 9, PAL.st);
-    for (let i = 0; i < 9; i++) p.band(4 + i * 1.5, 32 + i, 24 - i * 3, PAL.st); // trémie
-    p.cylinder(4, 8, 24, 24, PAL.st);
-    for (let i = 0; i < 5; i++) p.band(4 + i * 2, 7 - i, 24 - i * 4, PAL.st);
-    p.rect(19, 12, 4, 16, PAL.ir[2]!); // jauge (remplie par-dessus)
-    p.rect(10, 16, 8, 8, PAL.pl[0]!); // étiquette
-    p.rect(14, 46, 4, 3, PAL.st[3]!);
+  { w: 36, h: 50, window: { x: 6, y: 14, w: 3, h: 20 }, inlet: { x: 18, y: 4 }, outlet: { x: 33, y: 40 }, draw: (p) => {
+    p.legs(5, 28, 42, 7, P.st);
+    p.cylinder(3, 8, 30, 35, P.st); p.dome(3, 3, 30, 6, P.st);
+    for (const y of [12, 24, 36]) p.band(3, y, 30, P.st);
+    p.rect(5, 13, 5, 22, P.st[4]!);
+    p.gauge(24, 20); p.thermometer(23, 27, 8);
+    p.rect(33, 39, 3, 3, P.st[3]!);
     p.outline();
   } },
-  storage_3: { w: 32, h: 62, draw: (p) => {
-    legs(p, 4, 26, 52, 9, PAL.ir);
-    for (let i = 0; i < 9; i++) p.band(3 + i * 1.5, 44 + i, 26 - i * 3, PAL.st);
-    p.cylinder(3, 8, 26, 36, PAL.st);
-    for (const y of [16, 26, 36]) p.band(3, y, 26, PAL.st);
-    for (let i = 0; i < 5; i++) p.band(3 + i * 2, 7 - i, 26 - i * 4, [PAL.rd[0]!, PAL.rd[1]!, PAL.rd[1]!, PAL.rd[2]!]);
-    for (let y = 8; y < 52; y += 4) p.hl(29, y, 3, PAL.ir[0]!); // échelle
-    p.vl(29, 8, 44, PAL.ir[1]!); p.vl(31, 8, 44, PAL.ir[1]!);
-    p.rect(20, 12, 4, 26, PAL.ir[2]!);
-    p.rect(9, 20, 8, 8, PAL.pl[0]!);
-    p.rect(14, 58, 4, 3, PAL.st[3]!);
+  { w: 44, h: 56, window: { x: 8, y: 16, w: 3, h: 22 }, inlet: { x: 20, y: 4 }, outlet: { x: 41, y: 44 }, draw: (p) => {
+    p.legs(6, 34, 48, 7, P.st);
+    p.cylinder(3, 9, 36, 40, P.pl); p.dome(3, 3, 36, 7, P.pl); // isolation blanche
+    for (const y of [14, 28, 42]) p.band(3, y, 36, P.st);
+    p.rect(7, 15, 5, 24, P.st[4]!);
+    p.rect(30, 30, 14, 12, P.st[3]!); p.hl(30, 30, 14, P.st[1]!); // groupe froid
+    for (let y = 32; y < 41; y += 2) p.hl(32, y, 10, P.st[4]!);
+    p.px(41, 31, P.bl[1]!);
+    p.gauge(22, 22);
     p.outline();
   } },
+];
 
-  crate: { w: 16, h: 14, draw: (p) => {
-    p.rect(1, 3, 14, 10, PAL.wd[1]!);
-    p.hl(1, 3, 14, PAL.wd[0]!); p.hl(1, 7, 14, PAL.wd[2]!); p.hl(1, 12, 14, PAL.wd[3]!);
-    p.vl(1, 3, 10, PAL.wd[2]!); p.vl(14, 3, 10, PAL.wd[3]!);
-    p.rect(5, 9, 6, 2, PAL.wd[3]!); // poignée
+// ------------------------------------------------------------------ embouteillage (sprite = machine, la scène dessine les bouteilles)
+const BOTTLING: SpriteDef[] = [
+  { w: 60, h: 32, inlet: { x: 10, y: 4 }, outlet: { x: 58, y: 22 }, draw: (p) => {
+    p.legs(3, 52, 20, 11, P.wd);
+    p.rect(0, 18, 60, 3, P.wd[2]!); p.hl(0, 18, 60, P.wd[0]!); p.hl(0, 20, 60, P.wd[4]!);
+    p.cylinder(3, 4, 14, 14, P.pl); p.rect(3, 3, 14, 2, P.pl[1]!); // seau d'embouteillage
+    p.rect(16, 13, 10, 1, P.pl[3]!); p.vl(25, 9, 5, P.st[3]!); // tuyau + canne
+    p.vl(40, 5, 13, P.ir[2]!); p.rect(36, 4, 10, 3, P.rd[2]!); p.rect(38, 9, 5, 3, P.ir[1]!); // capsuleuse
     p.outline();
   } },
-  water_tap: { w: 16, h: 22, draw: (p) => {
-    p.rect(3, 0, 10, 14, PAL.st[2]!); p.hl(3, 0, 10, PAL.st[1]!); // plaque murale
-    p.cylinder(6, 0, 4, 16, PAL.cu); // conduite
-    p.rect(4, 6, 8, 2, PAL.rd[1]!); p.hl(4, 6, 8, PAL.rd[0]!); // volant
-    p.rect(5, 16, 6, 3, PAL.st[3]!); p.hl(5, 16, 6, PAL.st[1]!); // sortie
+  { w: 80, h: 38, inlet: { x: 10, y: 3 }, outlet: { x: 78, y: 28 }, draw: (p) => {
+    p.legs(4, 72, 28, 9);
+    p.rect(0, 25, 80, 4, P.ir[2]!); p.hl(0, 25, 80, P.ir[0]!); // convoyeur
+    p.rect(14, 2, 40, 14, P.st[2]!); p.hl(14, 2, 40, P.st[0]!); p.vl(53, 2, 14, P.st[4]!);
+    for (let i = 0; i < 4; i++) { p.rect(18 + i * 9, 16, 3, 4, P.st[3]!); p.px(19 + i * 9, 20, P.st[4]!); } // 4 becs
+    p.cylinder(2, 4, 10, 12, P.st); // réservoir
+    p.panel(58, 6, 12, 10);
     p.outline();
   } },
-  tank: { w: 32, h: 42, draw: (p) => {
-    legs(p, 5, 25, 36, 5, PAL.st);
-    p.cylinder(3, 8, 26, 29, PAL.st);
-    for (let i = 0; i < 4; i++) p.band(3 + i * 2, 7 - i, 26 - i * 4, PAL.st);
-    for (const y of [16, 28]) p.band(3, y, 26, PAL.st);
-    valve(p, 28, 33);
+  { w: 120, h: 42, inlet: { x: 10, y: 3 }, outlet: { x: 118, y: 31 }, draw: (p) => {
+    p.legs(4, 112, 32, 9);
+    p.rect(0, 29, 120, 4, P.ir[2]!); p.hl(0, 29, 120, P.ir[0]!);
+    p.cylinder(2, 2, 12, 16, P.st);
+    p.rect(18, 4, 34, 16, P.tl[2]!); p.hl(18, 4, 34, P.tl[0]!); p.vl(51, 4, 16, P.tl[4]!); // remplisseuse
+    p.ellipse(35, 12, 10, 4, P.st[2]!); for (let i = 0; i < 6; i++) p.rect(24 + i * 4, 20, 2, 4, P.st[3]!);
+    p.rect(58, 6, 18, 14, P.st[2]!); p.hl(58, 6, 18, P.st[0]!); p.rect(63, 20, 8, 4, P.rd[2]!); // capsuleuse
+    p.rect(82, 8, 16, 12, P.br[2]!); p.hl(82, 8, 16, P.br[0]!); p.rect(85, 12, 10, 4, P.pl[0]!); // étiqueteuse
+    p.panel(102, 6, 14, 12);
     p.outline();
   } },
-  pump: { w: 16, h: 14, draw: (p) => {
-    p.rect(2, 10, 12, 3, PAL.ir[1]!);
-    p.cylinder(3, 3, 9, 7, PAL.bl); p.rect(11, 5, 3, 3, PAL.st[3]!);
-    p.outline();
-  } },
-  stand: { w: 32, h: 36, draw: (p) => {
-    p.vl(2, 8, 26, PAL.wd[2]!); p.vl(29, 8, 26, PAL.wd[2]!);
-    for (let i = 0; i < 8; i++) p.rect(i * 4, 2, 4, 8, i % 2 ? PAL.pl[0]! : PAL.rd[1]!);
-    for (let i = 0; i < 8; i++) p.rect(i * 4 + 1, 10, 2, 2, i % 2 ? PAL.pl[0]! : PAL.rd[1]!);
-    p.rect(1, 22, 30, 12, PAL.wd[1]!); p.hl(1, 22, 30, PAL.wd[0]!); p.hl(1, 28, 30, PAL.wd[2]!);
-    p.outline();
-  } },
-  supplier: { w: 16, h: 16, draw: (p) => {
-    p.rect(1, 12, 14, 3, PAL.wd[2]!);
-    p.rect(2, 4, 6, 8, PAL.pl[1]!); p.rect(8, 3, 6, 9, PAL.pl[2]!);
-    p.outline();
-  } },
+];
+
+export const SPRITES: Record<StationId, SpriteDef[]> = {
+  mill: MILL, mash: MASH, boil: BOIL, cooler: COOLER, fermenter: FERMENTER, conditioning: CONDITIONING, bottling: BOTTLING,
 };
 
-/** Liaisons (tuyaux, tapis) : dessinées dynamiquement, aperçu fixe pour le magasin. */
-const PREVIEWS: Partial<Record<BuildingType, SpriteDef>> = {
-  conduit: { w: 16, h: 16, draw: (p) => {
-    p.rect(0, 7, 16, 4, PAL.st[2]!); p.hl(0, 7, 16, PAL.st[0]!); p.hl(0, 10, 16, PAL.st[3]!);
-    p.rect(0, 6, 2, 6, PAL.st[3]!); p.rect(14, 6, 2, 6, PAL.st[3]!);
-    p.outline();
-  } },
-  conveyor: { w: 16, h: 16, draw: (p) => {
-    p.rect(0, 6, 16, 4, PAL.ir[1]!); p.hl(0, 6, 16, PAL.ir[0]!);
-    for (let x = 1; x < 16; x += 4) p.px(x, 7, PAL.ir[2]!);
-    legs(p, 2, 12, 10, 4);
-    p.outline();
-  } },
-  cooler: { w: 16, h: 16, draw: (p) => drawCoil(p, 0) },
-  cooler_2: { w: 16, h: 16, draw: (p) => drawPlates(p) },
-  cooler_3: { w: 16, h: 16, draw: (p) => drawPlates(p, true) },
-};
-
-function drawCoil(p: Painter, _phase: number) {
-  p.rect(0, 9, 3, 3, PAL.cu[2]!); p.rect(13, 9, 3, 3, PAL.cu[2]!);
-  for (let i = 0; i < 4; i++) p.ellipse(4 + i * 2.6, 9, 2, 4, PAL.cu[(i % 2) + 1]!);
-  p.outline();
-}
-function drawPlates(p: Painter, big = false) {
-  p.rect(0, 9, 3, 3, PAL.st[3]!); p.rect(13, 9, 3, 3, PAL.st[3]!);
-  const top = big ? 0 : 3;
-  p.rect(2, top, 12, 15 - top, big ? PAL.bl[2]! : PAL.st[2]!);
-  for (let x = 3; x < 14; x += 2) p.vl(x, top + 1, 13 - top, big ? PAL.bl[0]! : PAL.st[0]!);
-  p.rect(2, top, 12, 2, big ? PAL.rd[1]! : PAL.bl[1]!);
-  p.outline();
-}
-
-// ---------------------------------------------------------------- accès
 const cache = new Map<string, HTMLCanvasElement>();
-
-/** Sprite de face d'un bâtiment (ou aperçu pour les liaisons). */
-export function spriteCanvas(type: BuildingType, preview = false): HTMLCanvasElement | null {
-  const def = (preview ? PREVIEWS[type] ?? SPRITES[type] : SPRITES[type]);
-  if (!def) return null;
-  const key = `${type}|${preview}`;
+export function stationCanvas(id: StationId, level: number): HTMLCanvasElement {
+  const key = `${id}|${level}`;
   let c = cache.get(key);
   if (!c) {
+    const def = SPRITES[id][level - 1]!;
     const p = new Painter(def.w, def.h);
     def.draw(p);
     c = p.c;
     cache.set(key, c);
   }
   return c;
-}
-
-export function spriteSize(type: BuildingType): { w: number; h: number } | null {
-  const def = SPRITES[type];
-  return def ? { w: def.w, h: def.h } : null;
-}
-
-/** Petits éléments de décor du serpentin et de l'échangeur, posés sur le tuyau. */
-export function coolerCanvas(type: 'cooler' | 'cooler_2' | 'cooler_3'): HTMLCanvasElement {
-  return spriteCanvas(type, true)!;
-}
-
-/** Petites icônes d'ingrédients pour l'interface (fournisseur, stock). */
-export function itemCanvas(item: string): HTMLCanvasElement {
-  const key = `item|${item}`;
-  let c = cache.get(key);
-  if (c) return c;
-  const p = new Painter(12, 12);
-  switch (item) {
-    case 'malt':
-      p.rect(2, 3, 8, 8, PAL.pl[1]!); p.rect(3, 4, 6, 6, PAL.pl[0]!); p.rect(4, 1, 4, 2, PAL.wd[2]!);
-      p.px(5, 7, PAL.beer[1]!); p.px(7, 6, PAL.beer[1]!); p.px(6, 8, PAL.beer[1]!);
-      break;
-    case 'hops':
-      p.ellipse(6, 7, 3, 4, PAL.gr[1]!); p.px(5, 5, PAL.gr[0]!); p.px(6, 8, PAL.gr[2]!); p.vl(6, 1, 2, PAL.gr[2]!);
-      break;
-    case 'yeast':
-      p.rect(3, 2, 6, 9, PAL.pl[0]!); p.rect(3, 6, 6, 2, PAL.gold); p.hl(3, 2, 6, PAL.pl[2]!);
-      break;
-    case 'bottle':
-      p.rect(4, 5, 4, 6, PAL.beer[2]!); p.rect(5, 2, 2, 3, PAL.beer[2]!); p.rect(5, 1, 2, 1, PAL.gold); p.rect(4, 7, 4, 2, PAL.pl[0]!);
-      break;
-  }
-  p.outline();
-  cache.set(key, p.c);
-  return p.c;
 }

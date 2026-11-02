@@ -10,8 +10,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "ios:sync": "npm run build && npx cap sync ios",
-    "ios:open": "npx cap open ios",
-    "build:preview": "vite build --config vite.preview.config.ts"
+    "ios:open": "npx cap open ios"
   },
   "repository": {
     "type": "git",
@@ -31,14 +30,12 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.6.0",
     "@fontsource/silkscreen": "^5.3.0",
-    "@fontsource/vt323": "^5.3.0",
-    "pixi.js": "^8.22.0"
+    "@fontsource/vt323": "^5.3.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",
     "typescript": "~5.9",
     "vite": "^7.3.7",
-    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^3.2.7"
   },
   "private": true,

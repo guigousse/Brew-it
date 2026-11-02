@@ -1,7 +1,8 @@
 # Brew It 🍺
 
-Jeu mobile de gestion et d'automatisation de brasserie en pixel art : on part d'un garage et on finit avec une usine.
-On construit des chaînes de production (convoyeurs, tuyaux, cuves), on règle librement ses recettes et on vend sur un marché qui change.
+Simulation de brassage en pixel art, en portrait : toute la brasserie tient sur un écran, du moulin à l'embouteillage.
+On règle chaque machine pour créer ses bières, on goûte, on construit sa gamme et on la vend à des distributeurs ;
+chaque machine s'améliore sur 3 niveaux pour brasser plus et mieux.
 
 **Plateforme prioritaire : iOS (App Store).** Android viendra ensuite avec le même code.
 
@@ -9,7 +10,7 @@ On construit des chaînes de production (convoyeurs, tuyaux, cuves), on règle l
 
 ```bash
 npm install
-npm run dev          # http://localhost:5173 — ajouter ?demo pour charger une brasserie complète
+npm run dev          # http://localhost:5173
 npm test             # tests de la simulation (Vitest)
 npm run typecheck
 ```
