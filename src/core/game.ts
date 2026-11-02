@@ -1,5 +1,6 @@
 import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Levels, type Recipe, type Tasting } from './brewing/model';
 import { EventBus } from './events';
+import type { Label } from './label';
 import { bottlePrice, DISTRIBUTORS } from './market';
 import { Rng } from './rng';
 import { CAPACITY, PRECISION, STATION_ORDER, STATIONS, stationDuration, type StationId } from './stations';
@@ -22,6 +23,7 @@ export interface Beer {
   stock: number;
   sold: number;
   revenue: number;
+  label: Label;
 }
 
 export interface Batch {
@@ -37,13 +39,10 @@ export interface Batch {
   /** Étape terminée, en attente que l'appareil suivant se libère. */
   waiting: boolean;
   actual: Partial<Actual>;
-}
-
-/** Essai terminé, en attente de décision (ajouter à la gamme ou jeter). */
-export interface Pending {
-  recipe: Recipe;
-  tasting: Tasting;
-  bottles: number;
+  /** Dégustation, connue dès l'entrée à l'embouteillage (toutes les étapes sont faites). */
+  tasting?: Tasting;
+  /** Bouteilles produites par ce lot (après pertes éventuelles). */
+  bottles?: number;
 }
 
 export interface CommandResult {
@@ -78,7 +77,6 @@ export class Game {
   autoBrew = false;
   batches: Batch[] = [];
   beers: Beer[] = [];
-  pending: Pending[] = [];
   signed: string[] = ['bar'];
   totalSold = 0;
   totalRevenue = 0;
@@ -177,22 +175,41 @@ export class Game {
     return { ok: true };
   }
 
-  /** Ajoute l'essai dégusté à la gamme, avec ses bouteilles. */
-  addToRange(name: string): CommandResult {
-    const p = this.pending[0];
-    if (!p) return { ok: false, reason: 'Aucun essai à goûter' };
-    if (p.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable : personne ne l\'achètera' };
+  /** Essai en cours d'embouteillage dont la première bouteille est sortie : on peut le goûter. */
+  get tastable(): Batch | undefined {
+    const b = this.batchAt('bottling');
+    if (!b || b.beerId != null || !b.tasting) return undefined;
+    const done = b.waiting ? 1 : b.elapsed / Math.max(0.01, b.duration);
+    return done * (b.bottles ?? 1) >= 1 ? b : undefined;
+  }
+
+  /** Garder l'essai : il entre dans la gamme avec son nom et son étiquette ; ses bouteilles sont étiquetées. */
+  keepTrial(name: string, label: Label): CommandResult {
+    const b = this.tastable;
+    if (!b?.tasting) return { ok: false, reason: 'Aucun essai à garder' };
+    if (b.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable : personne ne l\'achètera' };
     if (this.beers.length >= this.rangeSlots) return { ok: false, reason: 'Ta gamme est pleine : signe un nouveau distributeur ou retire une bière' };
-    const beer: Beer = { id: this.nextId++, name: name.trim() || `Bière n°${this.beers.length + 1}`, recipe: p.recipe, tasting: p.tasting, stock: p.bottles, sold: 0, revenue: 0 };
+    const beer: Beer = {
+      id: this.nextId++, name: name.trim() || `Bière n°${this.beers.length + 1}`, recipe: b.recipe, tasting: b.tasting,
+      stock: 0, sold: 0, revenue: 0, label: { ...label },
+    };
     this.beers.push(beer);
-    this.pending.shift();
-    // Si les réglages actuels sont ceux de cet essai, ils deviennent ceux de la nouvelle bière.
+    b.beerId = beer.id;
     if (sameRecipe(this.recipe, beer.recipe)) this.selectedBeer = beer.id;
     return { ok: true };
   }
 
-  discardPending(): void {
-    this.pending.shift();
+  /** Recommencer : l'essai est jeté, l'embouteillage se libère. */
+  discardTrial(): CommandResult {
+    const b = this.tastable ?? this.batchAt('bottling');
+    if (!b || b.beerId != null) return { ok: false, reason: 'Aucun essai à jeter' };
+    this.batches = this.batches.filter((x) => x !== b);
+    return { ok: true };
+  }
+
+  setLabel(beerId: number, label: Label): void {
+    const beer = this.beers.find((b) => b.id === beerId);
+    if (beer) beer.label = { ...label };
   }
 
   removeBeer(id: number): void {
@@ -240,7 +257,11 @@ export class Game {
       b.waiting = true;
     }
     const next = b.stage + 1;
-    if (next >= STATION_ORDER.length) return this.finish(b);
+    if (next >= STATION_ORDER.length) {
+      // Un essai attend la décision du joueur (garder ou recommencer) avant de sortir de la ligne.
+      if (b.beerId == null) return;
+      return this.finish(b);
+    }
     if (this.batches.some((o) => o.stage === next)) return; // appareil suivant occupé
     this.enter(b, next);
   }
@@ -261,22 +282,23 @@ export class Game {
     b.stage = stage;
     b.elapsed = 0;
     b.waiting = false;
-    b.duration = stationDuration(id, r, lv, b.liters);
+    if (id === 'bottling') {
+      b.tasting = brew(r, this.levels, b.actual as Actual);
+      b.bottles = Math.floor((b.liters / BOTTLE_L) * (1 - b.tasting.lost));
+    }
+    b.duration = stationDuration(id, r, lv, b.bottles != null ? b.bottles * BOTTLE_L : b.liters);
     this.events.emit({ type: 'stage', batchId: b.id, stage });
   }
 
   private finish(b: Batch): void {
     this.batches = this.batches.filter((x) => x !== b);
-    const tasting = brew(b.recipe, this.levels, b.actual as Actual);
-    const bottles = Math.floor((b.liters / BOTTLE_L) * (1 - tasting.lost));
+    const tasting = b.tasting ?? brew(b.recipe, this.levels, b.actual as Actual);
+    const bottles = b.bottles ?? Math.floor((b.liters / BOTTLE_L) * (1 - tasting.lost));
     this.batchesDone++;
-    const beer = b.beerId != null ? this.beers.find((x) => x.id === b.beerId) : undefined;
+    const beer = this.beers.find((x) => x.id === b.beerId);
     if (beer) {
       beer.stock += tasting.quality >= DRINKABLE_MIN ? bottles : 0;
       beer.tasting = tasting;
-    } else {
-      this.pending.push({ recipe: b.recipe, tasting, bottles });
-      this.events.emit({ type: 'tasting' });
     }
     this.events.emit({ type: 'batchDone', beerId: beer?.id ?? null, bottles });
   }
@@ -325,8 +347,8 @@ export class Game {
 
   toJSON() {
     return {
-      version: 1, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
-      selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, beers: this.beers, pending: this.pending,
+      version: 2, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
+      selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, beers: this.beers,
       signed: this.signed, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
       nextId: this.nextId, demand: this.demand, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
@@ -334,7 +356,7 @@ export class Game {
 
   static fromJSON(raw: unknown): Game {
     const s = raw as ReturnType<Game['toJSON']>;
-    if (!s || s.version !== 1) throw new Error('Sauvegarde incompatible');
+    if (!s || s.version !== 2) throw new Error('Sauvegarde incompatible');
     const g = new Game();
     Object.assign(g, { ...s, rng: new Rng(s.rng), announced: new Set(s.announced) });
     return g;

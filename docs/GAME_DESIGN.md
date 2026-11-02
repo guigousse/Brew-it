@@ -7,16 +7,24 @@ Un seul écran en **portrait** montre toute la brasserie. Le procédé descend d
 
 Le joueur crée ses bières en **réglant les machines** (des molettes à tourner), brasse, goûte le résultat, ajoute les réussites à sa **gamme** et les **vend** à des distributeurs. Il améliore chaque machine individuellement, sur **3 niveaux**, pour brasser **mieux** (précision, moins de défauts) et **plus** (volume, vitesse).
 
-Le rendu est en pixel art détaillé, de style « 32-bit » : palettes riches, tramage, contours colorés et animations (flammes, vapeur, bulles, liquide dans les tuyaux, bouteilles sur le convoyeur).
+Le rendu est en pixel art détaillé, de style « 32-bit » : palettes riches, tramage, contours colorés et animations (flammes, vapeur, bulles, liquide dans les tuyaux). Les appareils sont serrés sur 3 niveaux de passerelles.
+
+En bas, au **premier plan**, la ligne d'embouteillage déroule le parcours de chaque bouteille :
+- elle arrive vide ;
+- elle se remplit sous le bec, et l'on voit le niveau monter ;
+- elle est capsulée, puis étiquetée ;
+- elle est rangée dans un carton, qui se ferme une fois rempli de 12 bouteilles ;
+- une palette de cartons montre le stock.
 
 ## Boucle de jeu
 1. **Régler** : toucher une machine ouvre ses réglages.
 2. **Brasser** : les ingrédients sont achetés automatiquement au lancement. Le lot descend de machine en machine, chaque machine ne traitant qu'un lot à la fois, si bien que plusieurs brassins peuvent s'enchaîner.
-3. **Goûter** : à la sortie d'un essai, la dégustation affiche un verdict (d'Imbuvable à Excellente), une note sur 20, le style, l'alcool, l'amertume, la couleur, l'arôme, la limpidité, les bulles, et les **défauts expliqués**.
-4. **Gamme** : un essai buvable peut être ajouté à la gamme, avec un nom. Une bière de la gamme peut ensuite être rebrassée, à la main ou **en continu**, et ses bouteilles vont dans son stock.
-5. **Vendre** : les distributeurs sous contrat achètent en continu les bières qui leur conviennent.
-6. **Progresser** : signer des distributeurs ajoute des places dans la gamme, et améliorer les machines augmente le volume et la qualité.
-7. **Hors ligne** : la brasserie continue de tourner (jusqu'à 8 h). Au retour, la fenêtre « Pendant ton absence » permet de récolter les gains.
+3. **Goûter** : dès que la **première bouteille** d'un essai sort de la remplisseuse, un bouton **« Goûter »** apparaît au-dessus de la ligne. La dégustation affiche un verdict (d'Imbuvable à Excellente), une note sur 20, le style, l'alcool, l'amertume, la couleur, l'arôme, la limpidité, les bulles, et les **défauts expliqués**. Le joueur choisit alors **Garder** ou **Recommencer**, ce qui jette le brassin et libère la ligne. Un essai sans décision attend en fin de ligne.
+4. **Nommer et étiqueter** : garder une bière ouvre l'**éditeur d'étiquette**, avec le nom, la forme (rectangle, ovale, écusson, banderole), la couleur de fond, le motif (rayures, pois, losanges, vagues, damier, soleil) et sa couleur, l'emblème (houblon, épi, tonneau, étoile, couronne, ancre, montagne), la police et la couleur du texte. Un aperçu en direct montre l'étiquette et une bouteille. Ensuite, **chaque bouteille est étiquetée en fin de ligne avant d'être mise en carton**.
+5. **Gamme** : une bière de la gamme peut être rebrassée, à la main ou **en continu**, et ses bouteilles étiquetées vont dans son stock. L'étiquette reste modifiable.
+6. **Vendre** : les distributeurs sous contrat achètent en continu les bières qui leur conviennent.
+7. **Progresser** : signer des distributeurs ajoute des places dans la gamme, et améliorer les machines augmente le volume et la qualité.
+8. **Hors ligne** : la brasserie continue de tourner (jusqu'à 8 h). Au retour, la fenêtre « Pendant ton absence » permet de récolter les gains.
 
 ## Les machines et leurs réglages
 | Étape | Réglages | Niveaux 1 → 3 |

@@ -180,10 +180,31 @@ button:disabled { cursor: default; opacity: .5; }
 .mentor-body .btn { justify-self: start; }
 
 /* --- Notifications ----------------------------------------------------------------------- */
-.toasts { position: absolute; z-index: 11; left: 50%; transform: translateX(-50%); bottom: calc(var(--bottom-h, 86px) + 10px); display: grid; gap: 6px; pointer-events: none; width: max-content; max-width: calc(100vw - 24px); }
-.toast { background: var(--panel); border: 2px solid var(--ink); box-shadow: inset 0 0 0 2px #5c4a6e; padding: 6px 12px; animation: pop .2s steps(3); }
+.toasts { position: absolute; z-index: 11; left: 50%; transform: translateX(-50%); top: calc(var(--top-h, 60px) + 8px); display: grid; gap: 6px; pointer-events: none; width: max-content; max-width: calc(100vw - 24px); }
+.toast { background: #2a2035f0; border: 2px solid var(--ink); box-shadow: inset 0 0 0 2px #5c4a6e; padding: 4px 10px; font-size: 17px; animation: pop .2s steps(3); }
 .toast.bad { box-shadow: inset 0 0 0 2px var(--bad); }
 .toast.good { box-shadow: inset 0 0 0 2px var(--good); }
 @keyframes pop { from { transform: scale(.8); opacity: 0; } }
 @keyframes pulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.25); } }
 @media (prefers-reduced-motion: reduce) { .side-btn.alert { animation: none; } }
+
+/* --- Bouton Goûter sur la ligne d'embouteillage ----------------------------------- */
+.taste-btn {
+  position: absolute; transform: translate(-50%, -100%); z-index: 2; padding: 6px 12px; font-family: var(--font-title); font-size: 13px;
+  background: var(--accent); color: var(--ink); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #ffe7a0, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008;
+  animation: bob 0.8s steps(2) infinite;
+}
+.taste-btn.hidden { display: none; }
+@keyframes bob { 50% { transform: translate(-50%, calc(-100% - 3px)); } }
+
+/* --- Éditeur d'étiquette ------------------------------------------------------------- */
+.label-preview { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 10px; background: #3a2c2c; border: 2px solid var(--ink); }
+.label-big { width: 240px; height: 152px; image-rendering: pixelated; max-width: 62vw; height: auto; }
+.bottle-preview { position: relative; width: 44px; height: 132px; background: linear-gradient(90deg, #4a2c14, #7a4a24 30%, #5a3a20 70%, #3a200c); border: 3px solid #1a0c06; border-radius: 14px 14px 6px 6px; clip-path: polygon(34% 0, 66% 0, 66% 22%, 100% 34%, 100% 100%, 0 100%, 0 34%, 34% 22%); }
+.bottle-preview::before { content: ''; position: absolute; left: 34%; right: 34%; top: 0; height: 6px; background: var(--accent); }
+.label-on-bottle { position: absolute; left: 2px; right: 2px; top: 58px; width: calc(100% - 4px); height: auto; image-rendering: pixelated; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch { width: 30px; height: 30px; padding: 0; border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #ffffff40; }
+.swatch.active { outline: 3px solid var(--accent); outline-offset: 1px; }
+.label-thumb { width: 48px; height: auto; image-rendering: pixelated; flex-shrink: 0; }
+.beer-title { display: flex; align-items: center; gap: 8px; min-width: 0; }

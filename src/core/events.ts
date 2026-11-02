@@ -1,6 +1,5 @@
 /** Événements émis par le jeu, consommés par l'interface (toasts, haptique). */
 export type GameEvent =
-  | { type: 'tasting' }
   | { type: 'batchDone'; beerId: number | null; bottles: number }
   | { type: 'stage'; batchId: number; stage: number }
   | { type: 'sale'; amount: number }

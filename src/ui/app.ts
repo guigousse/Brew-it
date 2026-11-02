@@ -5,6 +5,8 @@ import { DISTRIBUTORS, bottlePrice } from '../core/market';
 import { CAPACITY, PRECISION, STATION_ORDER, STATIONS, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
+import { drawLabel } from '../render/labelArt';
+import { DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
 
@@ -42,6 +44,8 @@ export class App {
   private sceneWrap = h('div', 'scene-wrap');
   private overlays = new Map<StationId, { btn: HTMLButtonElement; label: HTMLElement; bar: HTMLElement; text: HTMLElement }>();
   private speedBtn = h('button', 'map-btn');
+  private tasteBtn = h('button', 'taste-btn hidden', '🍺 Goûter');
+  private announcedTaste = -1;
   private bottom = h('nav', 'bottombar');
   private brewBtn = h('button', 'brew-btn');
   private rangeBtn = h('button', 'side-btn');
@@ -54,6 +58,8 @@ export class App {
   private sheetKey = '';
   private mentorKey = '';
   private scale = 2;
+  /** Appelé quand une première bouteille d'essai est prête (haptique). */
+  onTasteReady?: () => void;
 
   constructor(private root: HTMLElement, private game: () => Game, private cb: AppCallbacks) {
     // header
@@ -81,7 +87,8 @@ export class App {
       this.overlays.set(id, { btn, label, bar, text });
     }
     this.speedBtn.onclick = () => this.cb.setSpeed(({ 1: 2, 2: 4, 4: 1 } as Record<number, number>)[this.cb.getSpeed()] ?? 1);
-    this.sceneWrap.append(this.speedBtn);
+    this.tasteBtn.onclick = () => this.openTasting();
+    this.sceneWrap.append(this.speedBtn, this.tasteBtn);
     this.stage.append(this.sceneWrap);
 
     // barre du bas
@@ -142,6 +149,12 @@ export class App {
     }
   }
 
+  private placeTaste(): void {
+    const p = this.scene.tastePoint;
+    this.tasteBtn.style.left = `${p.x * this.scale}px`;
+    this.tasteBtn.style.top = `${p.y * this.scale}px`;
+  }
+
   /** Rafraîchissement de l'interface DOM (≈ 4 Hz). */
   update(): void {
     const g = this.game();
@@ -151,8 +164,15 @@ export class App {
     this.brewBtn.replaceChildren(h('span', 'brew-title', 'Brasser'), h('span', 'brew-sub', can.ok ? `${g.batchLiters} L · ${moneyInt(g.brewCost())}` : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants'));
     this.brewBtn.classList.toggle('ready', can.ok);
     const stock = g.beers.reduce((s, b) => s + b.stock, 0);
-    this.rangeBtn.replaceChildren(h('span', 'side-title', 'Ma gamme'), h('span', 'side-sub', g.pending.length ? '🍺 À goûter !' : `${g.beers.length}/${g.rangeSlots} · ${stock} btl`));
-    this.rangeBtn.classList.toggle('alert', g.pending.length > 0);
+    const trial = g.tastable;
+    this.rangeBtn.replaceChildren(h('span', 'side-title', 'Ma gamme'), h('span', 'side-sub', `${g.beers.length}/${g.rangeSlots} · ${stock} btl`));
+    this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen);
+    this.placeTaste();
+    if (trial && trial.id !== this.announcedTaste) {
+      this.announcedTaste = trial.id;
+      this.toast('La première bouteille sort : goûte-la !', 'good');
+      this.onTasteReady?.();
+    }
     const available = DISTRIBUTORS.some((d) => !g.signed.includes(d.id) && g.totalSold >= d.unlockSold);
     this.salesBtn.replaceChildren(h('span', 'side-title', 'Ventes'), h('span', 'side-sub', available ? '✍ Nouveau contrat' : `${g.totalSold} vendues`));
     this.salesBtn.classList.toggle('alert', available);
@@ -186,7 +206,7 @@ export class App {
     const s = this.openSheet;
     this.sheet.classList.toggle('hidden', !s);
     if (!s) return;
-    const key = JSON.stringify([s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.pending.length, g.signed, g.selectedBeer, g.autoBrew, Math.floor(g.totalSold / 10), g.batchLiters, s.kind === 'brew' ? g.canBrew().ok : 0]);
+    const key = JSON.stringify([s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.signed, g.selectedBeer, g.autoBrew, Math.floor(g.totalSold / 10), g.batchLiters, s.kind === 'brew' ? g.canBrew().ok : 0]);
     if (key === this.sheetKey) return this.refreshLive();
     this.sheetKey = key;
     const scroll = this.sheet.querySelector('.sheet-body')?.scrollTop ?? 0;
@@ -329,9 +349,9 @@ export class App {
   // --- Ma gamme
   private rangeSheet(g: Game): void {
     const body = this.frameSheet(`Ma gamme · ${g.beers.length}/${g.rangeSlots}`);
-    if (g.pending.length) {
+    if (g.tastable) {
       const banner = h('div', 'card banner');
-      banner.append(h('div', 'beer-name', `${g.pending.length} essai${g.pending.length > 1 ? 's' : ''} à goûter`), this.btn('btn primary', 'Goûter', () => this.openTasting()));
+      banner.append(h('div', 'beer-name', 'Un essai sort de la ligne'), this.btn('btn primary', 'Goûter', () => this.openTasting()));
       body.append(banner);
     }
     if (!g.beers.length) body.append(h('p', 'hint', 'Ta gamme est vide. Brasse un essai réussi pour y ajouter ta première bière.'));
@@ -344,7 +364,11 @@ export class App {
     const v = verdictOf(t.quality);
     const card = h('div', `card beer${b.id === g.selectedBeer ? ' selected' : ''}`);
     const head = h('div', 'beer-head');
-    head.append(h('span', 'beer-name', b.name), h('span', `verdict ${VERDICT_CLASS[v]}`, v));
+    const thumb = h('canvas', 'label-thumb');
+    drawLabel(thumb, b.label, b.name);
+    const title = h('div', 'beer-title');
+    title.append(thumb, h('span', 'beer-name', b.name));
+    head.append(title, h('span', `verdict ${VERDICT_CLASS[v]}`, v));
     card.append(head, h('div', 'stats-line', `${t.style} · ${t.abv.toFixed(1)} % · ${Math.round(t.ibu)} IBU · ${t.color}`), h('div', 'stats-line strong', `Stock : ${b.stock} bouteilles · vendues : ${b.sold} · ${moneyInt(b.revenue)}`));
     const actions = h('div', 'row');
     actions.append(this.btn('btn small', b.id === g.selectedBeer ? 'Réglages chargés' : 'Charger ses réglages', () => {
@@ -352,6 +376,12 @@ export class App {
       this.sheetKey = '';
     }));
     actions.append(this.btn('btn small', 'Fiche', () => this.openTastingView(b.name, t)));
+    actions.append(this.btn('btn small', 'Étiquette', () => this.openLabelEditor(b.name, b.label, (name, label) => {
+      b.name = name.trim() || b.name;
+      g.setLabel(b.id, label);
+      this.sheetKey = '';
+      this.closeModal();
+    })));
     actions.append(this.btn('btn small bad', 'Retirer', () => {
       g.removeBeer(b.id);
       this.sheetKey = '';
@@ -399,38 +429,93 @@ export class App {
 
   // ------------------------------------------------------------------ fenêtres
 
-  /** Dégustation de l'essai le plus ancien en attente. */
+  /** Dégustation de la première bouteille d'un essai : garder (nom + étiquette) ou recommencer. */
   openTasting(): void {
     const g = this.game();
-    const p = g.pending[0];
-    if (!p) return;
-    const t = p.tasting;
+    const b = g.tastable;
+    if (!b?.tasting) return;
+    const t = b.tasting;
     const card = this.modalCard('Dégustation');
     this.tastingBody(card, t);
-    card.append(h('div', 'stats-line', `${p.bottles} bouteilles`));
+    card.append(h('div', 'stats-line', `${b.bottles} bouteilles dans ce brassin`));
     const ok = t.quality >= DRINKABLE_MIN;
     const full = g.beers.length >= g.rangeSlots;
-    if (ok && !full) {
-      const input = h('input', 'name-input');
-      input.maxLength = 28;
-      input.placeholder = 'Nom de ta bière';
-      input.value = g.beers.length ? '' : 'Blonde de Gaston';
-      card.append(h('div', 'section-title', 'Ajouter à ma gamme'), input, this.btn('btn primary big', 'Ajouter à ma gamme', () => {
-        const r = g.addToRange(input.value);
+    const keep = this.btn('btn primary big', ok ? (full ? 'Gamme pleine' : 'Garder cette bière') : 'Imbuvable', () => {
+      this.openLabelEditor(g.beers.length ? '' : 'Blonde de Gaston', { ...DEFAULT_LABEL }, (name, label) => {
+        const r = g.keepTrial(name, label);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         if (g.tips <= 4) g.tips = 4;
         this.closeModal();
-        this.toast('Ajoutée à ta gamme : le bar commence à l\'acheter !', 'good');
+        this.toast('Ta bière entre dans ta gamme : les bouteilles sont étiquetées !', 'good');
         this.sheetKey = '';
-        if (g.pending.length) this.openTasting();
-      }));
-    } else card.append(h('p', 'note bad', ok ? 'Ta gamme est pleine : retire une bière ou signe un distributeur pour faire de la place.' : 'Imbuvable : impossible à vendre. Ajuste les réglages et retente.'));
-    card.append(this.btn('btn bad', 'Jeter ce brassin', () => {
-      g.discardPending();
+      });
+    });
+    keep.disabled = !ok || full;
+    if (full && ok) card.append(h('p', 'note bad', 'Ta gamme est pleine : retire une bière ou signe un distributeur.'));
+    card.append(keep, this.btn('btn bad', 'Recommencer (jeter ce brassin)', () => {
+      g.discardTrial();
       this.closeModal();
+      this.toast('Brassin jeté : ajuste tes réglages et relance.', 'info');
       this.sheetKey = '';
-      if (g.pending.length) this.openTasting();
     }));
+  }
+
+  /** Éditeur d'étiquette : forme, fond, motif, couleurs, emblème, police ; aperçu en direct. */
+  openLabelEditor(name: string, initial: Label, onDone: (name: string, label: Label) => void): void {
+    const label: Label = { ...initial };
+    const card = this.modalCard('Ton étiquette');
+    const preview = h('div', 'label-preview');
+    const big = h('canvas', 'label-big');
+    const bottle = h('div', 'bottle-preview');
+    const small = h('canvas', 'label-on-bottle');
+    bottle.append(small);
+    preview.append(big, bottle);
+    const input = h('input', 'name-input');
+    input.maxLength = 22;
+    input.placeholder = 'Nom de ta bière';
+    input.value = name;
+    const redraw = () => {
+      drawLabel(big, label, input.value);
+      drawLabel(small, label, input.value);
+    };
+    input.oninput = redraw;
+    card.append(preview, h('div', 'section-title', 'Nom'), input);
+    const chooser = <K extends keyof Label>(title: string, key: K, options: { id: Label[K]; name: string }[]) => {
+      const row = h('div', 'chips');
+      for (const o of options) {
+        const c = this.btn(`chip${label[key] === o.id ? ' active' : ''}`, o.name, () => {
+          label[key] = o.id;
+          row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('active', x === c));
+          redraw();
+        });
+        row.append(c);
+      }
+      card.append(h('div', 'section-title', title), row);
+    };
+    const colors = (title: string, key: 'bg' | 'patternColor' | 'textColor') => {
+      const row = h('div', 'swatches');
+      for (const col of LABEL_COLORS) {
+        const sw = this.btn(`swatch${label[key] === col ? ' active' : ''}`, '', () => {
+          label[key] = col;
+          row.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x === sw));
+          redraw();
+        });
+        sw.style.background = col;
+        sw.setAttribute('aria-label', col);
+        row.append(sw);
+      }
+      card.append(h('div', 'section-title', title), row);
+    };
+    chooser('Forme', 'shape', SHAPES);
+    colors('Fond', 'bg');
+    chooser('Motif', 'pattern', PATTERNS);
+    colors('Couleur du motif', 'patternColor');
+    chooser('Emblème', 'emblem', EMBLEMS);
+    chooser('Police du nom', 'font', FONTS);
+    colors('Couleur du texte et du contour', 'textColor');
+    card.append(this.btn('btn primary big', 'Valider l\'étiquette', () => onDone(input.value, label)));
+    redraw();
+    void document.fonts?.ready.then(redraw);
   }
 
   private openTastingView(name: string, t: Tasting): void {
@@ -526,8 +611,8 @@ export class App {
       0: { text: 'Salut, moi c\'est Gaston ! Voici ta brasserie : le malt entre en haut, la bière sort en bas, en bouteilles. J\'ai déjà réglé les machines avec ma recette de blonde.', action: 'Continuer' },
       1: { text: 'Touche une machine pour voir ses réglages et ses améliorations.' },
       2: { text: 'Quand tu es prêt, appuie sur « Brasser » en bas pour lancer ton premier brassin.' },
-      3: { text: 'Ton brassin descend de machine en machine. Tu peux accélérer le temps avec ⏩. À la fin, on goûtera !' },
-      4: { text: 'Ta bière est dans ta gamme et le bar du coin l\'achète. Relance des brassins (ou active le brassage continu), puis améliore tes machines pour brasser plus et mieux !', action: 'Compris' },
+      3: { text: 'Ton brassin descend de machine en machine. Tu peux accélérer le temps avec ⏩. Dès que la première bouteille sort, on la goûte !' },
+      4: { text: 'Ta bière est dans ta gamme, étiquetée, et le bar du coin l\'achète. Relance des brassins (ou active le brassage continu), puis améliore tes machines pour brasser plus et mieux !', action: 'Compris' },
     };
     const tip = this.modalOpen || this.openSheet?.kind === 'brew' ? undefined : tips[g.tips];
     this.mentor.classList.toggle('hidden', !tip);

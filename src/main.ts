@@ -27,6 +27,7 @@ async function boot() {
     newGame: () => start(new Game()),
   });
 
+  app.onTasteReady = () => tapFeedback(true);
   let unsubscribe = () => {};
   function start(g: Game) {
     unsubscribe();
@@ -34,10 +35,6 @@ async function boot() {
     loop = new FixedStepLoop(() => game);
     unsubscribe = game.events.on((e) => {
       if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
-      if (e.type === 'tasting') {
-        tapFeedback(true);
-        app.openTasting();
-      }
       if (e.type === 'batchDone' && e.beerId != null) app.toast(`+${e.bottles} bouteilles en stock`, 'good');
       if (e.type === 'distributorAvailable') app.toast(`Nouveau distributeur disponible : ${DISTRIBUTORS.find((d) => d.id === e.id)?.name}`, 'good');
     });
