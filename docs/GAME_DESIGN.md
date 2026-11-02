@@ -30,10 +30,11 @@ En bas, au **premier plan**, la ligne d'embouteillage déroule le parcours de ch
 4. **Nommer et étiqueter** : garder une bière ouvre l'**éditeur d'étiquette**, avec le nom, la forme (rectangle, ovale, écusson, banderole), la couleur de fond, le motif (rayures, pois, losanges, vagues, damier, soleil) et sa couleur, l'emblème (houblon, épi, tonneau, étoile, couronne, ancre, montagne), la police et la couleur du texte. Un aperçu en direct montre l'étiquette et une bouteille. Ensuite, **chaque bouteille est étiquetée en fin de ligne avant d'être mise en carton**.
 5. **Gamme** : une bière de la gamme peut être rebrassée à la main. Le **brassage continu** fait tourner toute la gamme (la bière qui a le moins de bouteilles d'abord). Un essai lancé par le joueur passe toujours en priorité, et s'il trouve le moulin occupé, il attend son tour. L'étiquette reste modifiable.
 6. **Vendre**, de deux façons :
-   - les **clients** sous contrat envoient des **commandes** sur l'ordinateur du stockage. On les remplit avec les bouteilles qui conviennent et on les envoie : elles sont payées aussitôt. C'est le gros du chiffre d'affaires ;
+   - des **commandes** arrivent sur l'ordinateur du stockage, envoyées par une clientèle variée. On les remplit et on les envoie : elles sont payées aussitôt, et bien mieux que le reste ;
+   - le **grossiste** reprend automatiquement le surplus, à petit prix ;
    - le **bar** sert des verres tirés des **fûts** branchés dans sa cave, même appli fermée. Il fait surtout connaître la marque.
    Chaque brassin se fait **en bouteilles ou en fûts**, et on peut **programmer les prochains brassins**.
-7. **Progresser** : améliorer les machines (volume, cadence, qualité), agrandir le stockage et le bar, signer et négocier des contrats, ouvrir de nouvelles places dans la gamme. On peut améliorer une machine même pendant un brassin.
+7. **Progresser** : améliorer les machines (volume, cadence, qualité), agrandir le stockage, le bar et l'ordinateur, ouvrir de nouvelles places dans la gamme. On peut améliorer une machine même pendant un brassin.
 8. **Hors ligne** : la brasserie et le bar continuent de tourner (jusqu'à 8 h), tant que les fûts branchés ne sont pas vides. Les commandes s'accumulent sur l'ordinateur et le stock s'entasse pour les remplir. Au retour, la fenêtre « Pendant ton absence » permet de récolter les gains du bar.
 
 ## Les machines et leurs réglages
@@ -57,13 +58,13 @@ Effet des niveaux (1 → 5) :
 
 **Niveau de la brasserie** : la brasserie prend le niveau de son appareil le moins avancé. Dès que les 7 appareils sont au niveau 2, elle passe niveau 2, et ainsi de suite. Chaque niveau change tout le décor et ouvre de nouveaux clients :
 
-| Niveau | Décor | Ouvre |
+| Niveau | Décor | Nouveaux clients (selon la popularité) |
 |---|---|---|
-| 1 · Labo d'alchimiste | cave en pierre, poutres, bougies, lucarne au clair de lune, bocaux | Épicerie fine |
-| 2 · Garage | mur de briques, fenêtres hautes, passerelles en caillebotis | Caviste |
-| 3 · Microbrasserie | carreaux blancs, poutres en bois, baies en arc, ardoise, sol en tomettes | Restaurant, Festival |
-| 4 · Usine | tôle ondulée, verrière, poutres rouges, bandes de sécurité, béton | Supermarché |
-| 5 · Labo du futur | panneaux blancs, néons cyan, baie sur la ville de nuit | Export |
+| 1 · Labo d'alchimiste | cave en pierre, poutres, bougies, lucarne au clair de lune, bocaux | particuliers, bistrots, épiceries fines |
+| 2 · Garage | mur de briques, fenêtres hautes, passerelles en caillebotis | cavistes, restaurants |
+| 3 · Microbrasserie | carreaux blancs, poutres en bois, baies en arc, ardoise, sol en tomettes | fêtes de village, festivals |
+| 4 · Usine | tôle ondulée, verrière, poutres rouges, bandes de sécurité, béton | supermarchés, grandes tables |
+| 5 · Labo du futur | panneaux blancs, néons cyan, baie sur la ville de nuit | export |
 
 Une plaque en haut à gauche de la scène montre le niveau. La toucher ouvre la fiche de la brasserie : quels appareils il reste à améliorer, et ce que débloquera le niveau suivant. Le passage de niveau déclenche un éclair et cette fiche.
 
@@ -144,42 +145,61 @@ Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au somme
 
 **Popularité de la marque** : c'est la moyenne de la gamme pondérée par la popularité de chaque bière ; une nouvelle bière inconnue ne la fait donc pas chuter. Elle fixe :
 - l'affluence du bar ;
-- la taille des commandes, de ×0,6 pour une marque inconnue à ×1,4 au sommet ;
-- leur fréquence, d'environ deux fois moins souvent à 1,4 fois plus souvent.
+- le paiement des commandes (×0,8 à ×1,2) et leur fréquence (jusqu'à 1,5 fois plus souvent) ;
+- l'arrivée de nouveaux profils de clients.
 
 **Tendances.** Trois tendances sont actives à la fois. Chacune dure de 8 à 16 h de jeu, puis une autre la remplace. Elles portent sur un style (IPA, lager, saison, blonde, pale ale, bières d'abbaye, fruitée) ou un caractère (léger < 5 %, fort ≥ 7 %, amer, doux, aromatique, limpide, ambré). Une bière dans la tendance vise une popularité plus haute, attire plus de clients au bar et s'y vend 15 % plus cher par tendance suivie.
 
-L'onglet **Tendances** de l'ordinateur montre la popularité de la marque, les tendances du moment avec leur temps restant et les bières de la gamme qui les suivent, puis la popularité de chaque bière. La fiche d'une bière de la gamme affiche aussi ses étoiles et ses tendances.
+L'onglet **Tendances** de l'ordinateur montre la popularité de la marque, les tendances du moment (avec les bières de la gamme qui les suivent) et la popularité de chaque bière. Les commandes « style recherché » reprennent souvent une tendance du moment. La fiche d'une bière de la gamme affiche aussi ses étoiles et ses tendances.
 
-## Clients et commandes
-L'ordinateur du stockage (sur le bureau, ou le bouton « Commandes ») ouvre une fenêtre à trois onglets : Commandes, Tendances et Clients.
+## Commandes
+L'ordinateur du stockage (sur le bureau, ou le bouton « Commandes ») a trois onglets : **Commandes**, **Tendances** et **Grossiste**.
 
-**Commandes** : les clients sous contrat envoient ponctuellement des commandes, comme des missions. Chacune indique :
-- un nombre de bouteilles ;
-- une qualité minimale ;
-- parfois un style exigé (♥), mieux payé ;
-- un délai : elle expire au bout de 4 h.
+**Le tableau des commandes.** Il compte un nombre limité de places : 2 au début, 6 au plus, une de plus par amélioration de l'ordinateur. Une nouvelle commande arrive toutes les 30 à 60 minutes de jeu, un peu plus souvent quand la marque est connue, tant qu'il reste une place. Une commande reste valable 8 à 12 h (2 h pour une urgente). Refuser une commande libère sa place, sans pénalité.
 
-On coche les bières qui conviennent (les plus en stock sont présélectionnées), puis on envoie. Le paiement est immédiat. On peut aussi refuser une commande.
+**Une clientèle variée, sans contrats.** Chaque commande vient d'un client tiré au hasard parmi les profils ouverts. De nouveaux profils se présentent à mesure que la brasserie grandit et que la marque se fait connaître (« Nouveaux clients : les festivals »).
 
-- Un client envoie une commande toutes les 4 à 8 min environ, et en garde **3 en attente au plus** : elles s'accumulent pendant l'absence.
-- Taille d'une commande : 2 h du débit du client (arrondi à la demi-caisse), +40 % par niveau de négociation, × la popularité de la marque (de 0,6 à 1,4). Elle ne dépasse jamais les trois quarts du stockage.
-- Prix par bouteille : prix du client × (0,6 + 0,8 × qualité) × 1,4 (livraison groupée) × 1,3 si le style est exigé × (1 + 10 % par niveau de négociation).
-- Sur l'écran de l'ordinateur, une enveloppe clignote quand une commande attend, et la pastille de l'onglet Stockage indique leur nombre. Quand une commande peut être remplie, ses caisses attendent, filmées sur la palette.
+| Profil | Brasserie · popularité | Exemples | Commandes |
+|---|---|---|---|
+| Particuliers | ★1 | Anniversaire de Lucie, Mariage de Paul & Inès | classiques, style, fûts, urgentes |
+| Bistrots | ★1 | Bistrot Chez Lulu, Le Zinc | classiques, style, fûts, urgentes |
+| Épiceries fines | ★1 · 15 % | Épicerie Le Panier | classiques, style, assortiments |
+| Cavistes | ★2 · 30 % | Le Houblon d'Or | style, assortiments, prestige |
+| Restaurants | ★2 · 40 % | Brasserie de la Gare | classiques, style, urgentes |
+| Fêtes de village | ★3 · 40 % | Comité des fêtes, Club de rugby | fûts, classiques, urgentes |
+| Festivals | ★3 · 60 % | Festival Rock en Fût | fûts, style |
+| Supermarchés | ★4 · 50 % | Hypermarché du Rond-Point | classiques, assortiments |
+| Grandes tables | ★4 · 80 % | Le Grand Cerf (étoilé) | prestige, style |
+| Export | ★5 · 70 % | Importateur de Tokyo, Pub de Dublin | style, assortiments, prestige |
 
-**Clients** : on y signe les contrats, puis on les négocie. Un client demande un niveau de brasserie et un nombre de bouteilles vendues, puis se signe contre un droit d'entrée.
+**Les types de commandes**
 
-| Client | Brasserie · vendues | Signature | Débit de réf. | Prix | Aime |
-|---|---|---|---|---|---|
-| Épicerie fine | dès le départ | 50 € | 2/min | 3,60 € | qualité Correcte min. |
-| Caviste | niv. 2 · 6 000 | 25 000 € | 4/min | 5 € | bières aromatiques |
-| Restaurant | niv. 3 · 50 000 | 120 000 € | 8/min | 4,20 € | limpides et légères |
-| Festival | niv. 3 · 120 000 | 350 000 € | 18/min | 3,20 € | bières fortes |
-| Supermarché | niv. 4 · 500 000 | 900 000 € | 45/min | 2,20 € | gros volumes, petits prix |
-| Export | niv. 5 · 2 000 000 | 3 000 000 € | 110/min | 3,60 € | bières excellentes |
+| Type | Demande | Paiement |
+|---|---|---|
+| Commande | des bouteilles d'une qualité minimale | ×1 |
+| Style recherché | un style ou un caractère, souvent une tendance du moment | ×1,3 |
+| Fûts | des fûts pleins, pour une fête | ×1,15 |
+| Assortiment | 2 ou 3 bières différentes, en parts égales | ×1,25 |
+| Urgent | délai de 2 h, quantité réduite | ×1,5 |
+| Prestige | qualité « Excellente », petite quantité, gros bond de popularité | ×2,5 |
 
-- **Négociation** : 5 niveaux par contrat. Prix : 0,25, 0,5, 0,9, 1,5 puis 2,5 × le droit d'entrée (150 € minimum).
-- L'ancien « Bar du coin » est devenu la pièce Bar. Les sauvegardes précédentes sont reprises : ses contrats et négociations disparaissent, et les autres clients commencent à envoyer des commandes.
+- **Quantités à la mesure de la brasserie** : 6 à 24 bouteilles au niveau 1, puis de plus en plus. Une commande ne dépasse jamais les trois quarts du stockage.
+- **Le paiement est fixe et annoncé.** Il dépend du volume, du client et du type de commande, et augmente avec la popularité de la marque (×0,8 à ×1,2).
+- **On envoie en un geste.** Les bières qui conviennent sont choisies d'office (les plus en stock) ; « Changer » permet d'en choisir d'autres.
+- **Une commande livrée fait connaître les bières envoyées**, une commande de prestige beaucoup.
+
+**L'ordinateur**
+
+| Niveau | Places au tableau | Prix |
+|---|---|---|
+| Vieux minitel | 2 | — |
+| PC d'occasion | 3 | 1 500 € |
+| Poste de bureau | 4 | 40 000 € |
+| Logiciel de gestion | 5 | 400 000 € |
+| Intelligence logistique | 6 | 3 M€ |
+
+## Le grossiste
+Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 2,20 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'onglet Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
 
 ## Gamme : l'étagère
 La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 8 000 €, 50 000 €, 200 000 €, 600 000 €, 3 M€ puis 8 M€.

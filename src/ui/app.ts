@@ -1,7 +1,8 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { clientById, MAX_PLAN, type Beer, type Format, type Game, type Order } from '../core/game';
-import { BAR, CLIENTS, glassPrice, kegGlasses, kegLiters, MAX_DEAL } from '../core/market';
+import { MAX_PLAN, type Beer, type Game, type Order } from '../core/game';
+import { BAR, kegGlasses, kegLiters } from '../core/market';
+import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
@@ -43,7 +44,7 @@ const ROOMS: readonly { id: RoomId; name: string }[] = [
   { id: 'bar', name: 'Bar' },
 ];
 
-type PcTab = 'orders' | 'trends' | 'clients';
+type PcTab = 'orders' | 'trends' | 'wholesale';
 type SheetState = { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'storage' | 'bar' | 'barUp' };
 
 const starText = (p: number) => {
@@ -103,6 +104,8 @@ export class App {
   private computer: { tab: PcTab; key: string } | null = null;
   /** Zones tactiles des fûts de la cave (leur nombre suit celui des tireuses). */
   private kegHits: HTMLButtonElement[] = [];
+  /** Commandes dont on modifie le choix des bières. */
+  private editing = new Set<number>();
   private picks = new Map<number, number[]>();
   /** Bière choisie sur l'étagère (fiche affichée sous l'étagère). */
   private shelfSel: number | null = null;
@@ -275,24 +278,19 @@ export class App {
     this.moneyEl.textContent = moneyInt(g.money);
     this.plaque.textContent = `★ ${g.breweryLevel} · ${g.breweryName}`;
     const can = g.canBrew();
-    const sub = g.autoBrew ? '⟳ En continu' : can.ok ? (g.broke ? 'Offert par Gaston' : `${g.batchLiters} L · ${moneyInt(g.brewCost())}`) : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants';
+    const sub = g.plan.length ? `${g.plan.length} programmé${g.plan.length > 1 ? 's' : ''}` : g.autoBrew ? '⟳ En continu' : can.ok ? (g.broke ? 'Offert par Gaston' : moneyInt(g.brewCost())) : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants';
     this.brewBtn.replaceChildren(h('span', 'brew-title', 'Brasser'), h('span', 'brew-sub', sub));
     this.brewBtn.classList.toggle('ready', can.ok && !g.autoBrew);
     const trial = g.tastable;
-    this.rangeBtn.replaceChildren(h('span', 'side-title', 'Gamme'), h('span', 'side-sub', `${g.beers.length}/${g.rangeSlots} bières`));
-    const capCrates = STORAGE[g.storageLevel - 1]!.crates;
-    this.stockBtn.replaceChildren(h('span', 'side-title', 'Stock'), h('span', 'side-sub', g.storageFull ? 'Plein !' : `${Math.ceil(g.stored / CRATE)}/${capCrates} caisses`));
+    this.rangeBtn.replaceChildren(h('span', 'side-title', 'Gamme'), h('span', 'side-sub', `${g.beers.length}/${g.rangeSlots}`));
+    this.stockBtn.replaceChildren(h('span', 'side-title', 'Stock'), h('span', 'side-sub', g.storageFull ? 'Plein !' : `${Math.round((g.stored / g.storageCap) * 100)} %`));
     this.stockBtn.classList.toggle('alert', g.bottlingBlocked);
     const ready = g.readyOrders.length;
-    const availableClient = CLIENTS.some((c) => !g.signed.includes(c.id) && g.clientOpen(c.id));
-    this.ordersBtn.replaceChildren(
-      h('span', 'brew-title', 'Commandes'),
-      h('span', 'brew-sub', g.orders.length ? `${g.orders.length} en attente${ready ? ` · ${ready} prête${ready > 1 ? 's' : ''}` : ''}` : availableClient ? '✍ Nouveau client' : g.signed.length ? 'Aucune pour l\'instant' : 'Signe un client'),
-    );
-    this.ordersBtn.classList.toggle('ready', ready > 0 || availableClient);
+    this.ordersBtn.replaceChildren(h('span', 'brew-title', 'Commandes'), h('span', 'brew-sub', g.orders.length ? `${g.orders.length}${ready ? ` · ${ready} prête${ready > 1 ? 's' : ''}` : ''}` : '—'));
+    this.ordersBtn.classList.toggle('ready', ready > 0);
     const emptyTap = g.taps.some((t) => t.glasses <= 0);
     const kegsReady = g.beers.some((b) => b.kegs.length > 0);
-    this.menuBtn.replaceChildren(h('span', 'brew-title', 'Les fûts'), h('span', 'brew-sub', g.barServing ? `${g.glassesLeft} verres · ${fmtRate(g.barRate * 60)} clients/h` : kegsReady ? 'Branche un fût !' : 'Aucun fût plein'));
+    this.menuBtn.replaceChildren(h('span', 'brew-title', 'Les fûts'), h('span', 'brew-sub', g.barServing ? `${g.glassesLeft} verres` : kegsReady ? 'Branche un fût !' : 'Vides'));
     this.menuBtn.classList.toggle('ready', emptyTap && kegsReady);
     this.syncKegHits();
     const nextBar = BAR[g.barLevel];
@@ -306,7 +304,7 @@ export class App {
     // pastilles des onglets de pièces
     const badges: Record<RoomId, string> = {
       workshop: trial ? '🍺' : '',
-      storage: g.orders.length ? String(g.orders.length) : g.storageFull ? '!' : availableClient ? '✍' : '',
+      storage: g.orders.length ? String(g.orders.length) : g.storageFull ? '!' : '',
       bar: emptyTap && kegsReady ? '!' : '', // un fût à changer, et de quoi le remplacer
     };
     for (const [id, tab] of this.navTabs) {
@@ -462,22 +460,22 @@ export class App {
     const fmt = g.brewFormat;
     const kl = kegLiters(g.batchLiters);
     const nk = Math.floor(g.batchLiters / kl);
-    const units = fmt === 'keg' ? `${nk} fût${nk > 1 ? 's' : ''} de ${kl} L (${kegGlasses(kl)} verres)` : `${Math.floor(g.batchLiters / 0.33)} btl`;
+    const units = fmt === 'keg' ? `${nk} fût${nk > 1 ? 's' : ''} de ${kegGlasses(kl)} verres` : `${Math.floor(g.batchLiters / 0.33)} btl`;
     card.append(
       h('div', 'beer-name', beer ? beer.name : 'Nouvel essai'),
-      h('div', 'stats-line', `${g.batchLiters} L · ${units} · ${money(g.brewCost(g.recipe, g.batchLiters, fmt))}`),
+      h('div', 'stats-line', `${units} · ${moneyInt(g.brewCost(g.recipe, g.batchLiters, fmt))}`),
     );
     if (beer) {
       // bouteilles pour le stock et les commandes, fûts pour le bar
       const chips = h('div', 'chips');
-      for (const [f, name] of [['bottle', 'Bouteilles'], ['keg', 'Fûts pour le bar']] as const) {
+      for (const [f, name] of [['bottle', 'Bouteilles'], ['keg', 'Fûts']] as const) {
         chips.append(this.btn(`chip${fmt === f ? ' active' : ''}`, name, () => {
           g.format = f;
           this.sheetKey = '';
         }));
       }
       card.append(chips);
-    } else card.append(h('div', 'hint', 'Un essai se met en bouteilles : on goûte la première.'));
+    }
     body.append(card);
     const can = g.canBrew();
     const busy = !!g.batchAt('mill');
@@ -492,7 +490,7 @@ export class App {
     go.disabled = g.queued || (!can.ok && !(busy && g.money >= g.brewCost(g.recipe, g.batchLiters, fmt)));
     body.append(go);
     if (beer) {
-      const plan = this.btn('btn', `+ Programmer ce brassin (${fmt === 'keg' ? 'fûts' : 'bouteilles'})`, () => {
+      const plan = this.btn('btn', '+ Programmer', () => {
         const r = g.planBrew(beer.id, fmt);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         this.toast('Brassin programmé', 'good');
@@ -510,13 +508,13 @@ export class App {
         const line = h('div', 'stock-line');
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        line.append(h('span', 'plan-rank', `${i + 1}.`), thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', p.format === 'keg' ? 'fûts' : 'bouteilles'), this.btn('icon-btn small', '✕', () => {
+        line.append(h('span', 'plan-rank', `${i + 1}.`), thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', p.format === 'keg' ? 'Fûts' : 'Btl'), this.btn('icon-btn small', '✕', () => {
           g.unplan(i);
           this.sheetKey = '';
         }));
         list.append(line);
       });
-      body.append(list, h('p', 'hint', 'Ils partent dans l\'ordre dès que le moulin est libre, avant le brassage continu.'));
+      body.append(list);
     }
     if (g.beers.length) {
       const auto = h('label', 'toggle');
@@ -527,7 +525,7 @@ export class App {
         g.autoBrew = box.checked;
         this.sheetKey = '';
       };
-      auto.append(box, h('span', '', 'Brassage continu de la gamme (bouteilles)'));
+      auto.append(box, h('span', '', 'Brassage continu'));
       body.append(auto);
       if (g.autoBrew && !g.roomForBatch) body.append(h('p', 'note bad', '⏸ Stockage plein'));
     }
@@ -618,7 +616,7 @@ export class App {
     const body = this.frameSheet(`Stockage · ${lvl.name}`);
     const capCrates = lvl.crates;
     const crates = Math.ceil(g.stored / CRATE);
-    body.append(h('div', 'stats-line strong', `${g.stored} / ${g.storageCap} bouteilles · ${crates} / ${capCrates} caisses de ${CRATE}`));
+    body.append(h('div', 'stats-line strong', `${crates} / ${capCrates} caisses`));
     const bar = h('div', 'progress');
     const fill = h('div', `progress-fill${g.storageFull ? ' full' : ''}`);
     fill.style.width = `${Math.min(100, (g.stored / g.storageCap) * 100)}%`;
@@ -631,7 +629,7 @@ export class App {
         const line = h('div', 'stock-line');
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.stock} btl · ${Math.ceil(b.stock / CRATE)} caisses${b.kegs.length ? ` · ${b.kegs.length} fûts` : ''}`));
+        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.stock} btl${b.kegs.length ? ` · ${b.kegs.length} fûts` : ''}`));
         list.append(line);
       }
       body.append(list);
@@ -645,7 +643,7 @@ export class App {
     for (const [l, tag, cls] of [[lvl, 'Actuel', 'done'], [next, 'Suivant', 'current']] as const) {
       if (!l) continue;
       const cell = h('div', `storage-level ${cls}`);
-      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.crates} caisses · ${l.crates * CRATE} btl`));
+      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.crates.toLocaleString('fr-FR')} caisses`));
       levels.append(cell);
     }
     up.append(levels);
@@ -669,7 +667,7 @@ export class App {
     const card = h('div', 'card beer');
     const head = h('div', 'beer-head');
     head.append(h('span', 'beer-name', b.name), h('span', `verdict ${VERDICT_CLASS[v]}`, v));
-    card.append(head, h('div', 'stats-line', `${t.style} · ${t.abv.toFixed(1)} % · ${Math.round(t.ibu)} IBU · ${b.stock} btl · ${b.kegs.length} fûts · ${b.sold} vendues`));
+    card.append(head, h('div', 'stats-line', `${t.style} · ${t.abv.toFixed(1)} % · ${b.stock} btl${b.kegs.length ? ` · ${b.kegs.length} fûts` : ''}`));
     card.append(this.popLine(g, b));
     const actions = h('div', 'row');
     actions.append(this.btn('btn small', b.id === g.selectedBeer ? '✓ Chargée' : 'Charger', () => {
@@ -702,12 +700,7 @@ export class App {
   // --- Bar : popularité, affluence et fûts branchés
   private barSheet(g: Game): void {
     const body = this.frameSheet(`Le bar · ${g.bar.name}`);
-    body.append(
-      h('div', 'stats-line strong', `Marque ${starText(g.brand)} · ${fmtRate(g.barRate * 60)} clients/h`),
-      h('div', 'stats-line', `${g.barSold.toLocaleString('fr-FR')} verres servis · ${moneyInt(g.barRevenue)}`),
-    );
-    if (!g.beers.length) body.append(h('p', 'hint', 'Garde une bière à l\'atelier, puis brasse-la en fûts pour la servir ici.'));
-    body.append(h('div', 'section-title', `Tireuses · ${g.taps.length}`));
+    body.append(h('div', 'stats-line strong', `Marque ${starText(g.brand)} · ${fmtRate(g.barRate * 60)} clients/h`));
     const list = h('div', 'stock-list');
     g.taps.forEach((tap, i) => {
       const b = g.beer(tap.beerId);
@@ -715,18 +708,14 @@ export class App {
       if (b) {
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tap.glasses > 0 ? `${tap.glasses}/${tap.capacity} verres · ${money(glassPrice(g.barLevel, b.tasting, trendsOf(b.tasting, g.trends).length))}` : 'Fût vide'));
-      } else line.append(h('span', 'stock-name', `Tireuse ${i + 1}`), h('span', 'stock-qty', 'Aucun fût'));
+        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tap.glasses > 0 ? `${tap.glasses}/${tap.capacity} verres` : 'Vide'));
+      } else line.append(h('span', 'stock-name', `Tireuse ${i + 1}`), h('span', 'stock-qty', '—'));
       line.append(h('span', 'tap-state', '⇄'));
       line.onclick = () => this.openKegSwap(i);
       list.append(line);
     });
     body.append(list);
-    // fûts pleins au stockage
-    const kegs = g.beers.filter((b) => b.kegs.length > 0);
-    body.append(h('div', 'section-title', 'Fûts pleins au stockage'));
-    if (!kegs.length) body.append(h('p', 'hint', 'Aucun. À l\'atelier, choisis « Fûts » au brassage (ou programme un brassin en fûts).'));
-    else body.append(h('div', 'stats-line', kegs.map((b) => `${b.name} × ${b.kegs.length}`).join(' · ')));
+    if (!g.beers.some((b) => b.kegs.length)) body.append(h('p', 'hint', 'Aucun fût plein : brasse en « Fûts » à l\'atelier.'));
   }
 
   /** Changer le fût d'une tireuse : on prend un fût plein au stockage. */
@@ -735,15 +724,14 @@ export class App {
     const tap = g.taps[i];
     if (!tap) return;
     this.barRoom.selected = `keg${i}`;
-    const card = this.modalCard(`Tireuse ${i + 1} · changer le fût`);
-    const cur = g.beer(tap.beerId);
-    card.append(h('p', 'hint', cur ? (tap.glasses > 0 ? `Branché : ${cur.name}, il reste ${tap.glasses} verres (perdus si tu le changes).` : `Le fût de ${cur.name} est vide.`) : 'Aucun fût branché.'));
+    const card = this.modalCard('Changer le fût');
+    if (tap.glasses > 0) card.append(h('p', 'hint', `Il reste ${tap.glasses} verres, ils seront perdus.`));
     const list = h('div', 'stock-list');
     for (const b of g.beers) {
       const line = h('button', 'stock-line tap-line');
       const thumb = h('canvas', 'label-thumb');
       drawLabel(thumb, b.label, b.name);
-      line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.kegs.length} fût${b.kegs.length > 1 ? 's' : ''}${b.kegs.length ? ` de ${Math.max(...b.kegs)} verres` : ''} · ${starText(b.pop)}`));
+      line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.kegs.length} fût${b.kegs.length > 1 ? 's' : ''}`));
       line.disabled = !b.kegs.length;
       line.onclick = () => {
         const r = g.swapKeg(i, b.id);
@@ -756,7 +744,7 @@ export class App {
       list.append(line);
     }
     card.append(list);
-    if (!g.beers.some((b) => b.kegs.length > 0)) card.append(h('p', 'note bad', 'Aucun fût plein au stockage : brasse en fûts à l\'atelier.'));
+    if (!g.beers.some((b) => b.kegs.length > 0)) card.append(h('p', 'note bad', 'Aucun fût plein : brasse en « Fûts » à l\'atelier.'));
     card.append(this.btn('btn', 'Fermer', () => {
       this.barRoom.selected = null;
       this.closeModal();
@@ -772,7 +760,7 @@ export class App {
     for (const [l, tag, cls] of [[lvl, 'Actuel', 'done'], [next, 'Suivant', 'current']] as const) {
       if (!l) continue;
       const cell = h('div', `storage-level ${cls}`);
-      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.seats} places · ${l.taps} tireuse${l.taps > 1 ? 's' : ''} · jusqu'à ${fmtRate(l.rate * 60)} clients/h · prix ×${l.priceMult.toLocaleString('fr-FR')}`));
+      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.taps} tireuse${l.taps > 1 ? 's' : ''} · ${l.seats} places`));
       levels.append(cell);
     }
     body.append(levels);
@@ -793,20 +781,18 @@ export class App {
 
   // ------------------------------------------------------------------ ordinateur des commandes
 
-  /** L'ordinateur du stockage : les commandes des clients (des missions) et les contrats. */
-  openComputer(tab?: PcTab): void {
-    const g = this.game();
+  /** L'ordinateur du stockage : le tableau des commandes, les tendances et le grossiste. */
+  openComputer(tab: PcTab = 'orders'): void {
     if (this.room !== 'storage') this.goRoom('storage');
     this.close();
     const card = this.modalCard('');
     card.classList.add('computer');
-    const t = tab ?? (g.signed.length ? 'orders' : 'clients');
-    this.computer = { tab: t, key: '' };
+    this.computer = { tab, key: '' };
     this.renderComputer(card);
   }
 
   private computerKey(g: Game): string {
-    return JSON.stringify([this.computer?.tab, g.orders.map((o) => o.id), g.trends, this.computer?.tab === 'trends' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.beers.map((b) => [b.id, b.stock]), g.signed, g.deals, Math.floor(g.totalSold / 50), g.breweryLevel, [...this.picks]]);
+    return JSON.stringify([this.computer?.tab, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.orders.map((o) => o.id), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10)]), [...this.picks]]);
   }
 
   /** Reconstruit la fenêtre quand une commande arrive, expire, ou que le stock change. */
@@ -815,10 +801,7 @@ export class App {
     const card = this.modal.querySelector<HTMLElement>('.modal-card.computer');
     if (!card) return;
     if (this.computerKey(this.game()) !== this.computer.key) this.renderComputer(card);
-    else {
-      card.querySelectorAll<HTMLButtonElement>('[data-cost]').forEach((b) => (b.disabled = this.game().money < Number(b.dataset.cost)));
-      card.querySelectorAll<HTMLElement>('[data-expires]').forEach((el) => (el.textContent = `⏳ ${duration(Number(el.dataset.expires) - this.game().time)}`));
-    }
+    else card.querySelectorAll<HTMLElement>('[data-expires]').forEach((el) => (el.textContent = `⏳ ${duration(Number(el.dataset.expires) - this.game().time)}`));
   }
 
   private renderComputer(card: HTMLElement): void {
@@ -829,7 +812,7 @@ export class App {
     card.replaceChildren();
     const head = h('div', 'sheet-head');
     const tabs = h('div', 'pc-tabs');
-    for (const [id, name] of [['orders', `Commandes${g.orders.length ? ` (${g.orders.length})` : ''}`], ['trends', 'Tendances'], ['clients', 'Clients']] as const) {
+    for (const [id, name] of [['orders', 'Commandes'], ['trends', 'Tendances'], ['wholesale', 'Grossiste']] as const) {
       tabs.append(this.btn(`pc-tab${st.tab === id ? ' active' : ''}`, name, () => {
         st.tab = id;
         this.renderComputer(card);
@@ -839,66 +822,70 @@ export class App {
     card.append(head);
     if (st.tab === 'orders') this.ordersTab(g, card);
     else if (st.tab === 'trends') this.trendsTab(g, card);
-    else this.clientsTab(g, card);
+    else this.wholesaleTab(g, card);
     card.scrollTop = scroll;
   }
 
   private ordersTab(g: Game, card: HTMLElement): void {
-    if (!g.signed.length) {
-      card.append(h('p', 'hint', 'Aucun client pour l\'instant. Signe un contrat : ses commandes arriveront ici.'));
-      card.append(this.btn('btn primary', 'Voir les clients', () => {
-        this.computer!.tab = 'clients';
-        this.renderComputer(card);
-      }));
-      return;
-    }
-    if (!g.orders.length) {
-      card.append(h('p', 'hint', 'Pas de commande en attente. Tes clients en envoient régulièrement, même quand tu n\'es pas là.'));
-      return;
-    }
-    // les plus urgentes d'abord
-    for (const o of [...g.orders].sort((a, b) => a.expires - b.expires)) card.append(this.orderCard(g, o));
-    // ménage des sélections de commandes disparues
     for (const id of this.picks.keys()) if (!g.orders.some((o) => o.id === id)) this.picks.delete(id);
+    if (!g.orders.length) card.append(h('p', 'hint', 'Aucune commande. La prochaine arrive bientôt.'));
+    for (const o of [...g.orders].sort((a, b) => a.expires - b.expires)) card.append(this.orderCard(g, o));
+    // l'ordinateur : une place de plus au tableau à chaque niveau
+    const next = COMPUTERS[g.computerLevel];
+    const foot = h('div', 'pc-foot');
+    foot.append(h('span', 'hint', `${COMPUTERS[g.computerLevel - 1]!.name} · ${g.orders.length}/${g.boardSlots} places`));
+    if (next) {
+      const b = this.btn('btn small', `+1 place · ${moneyShort(next.cost)}`, () => {
+        const r = g.upgradeComputer();
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.toast(`${next.name} installé`, 'good');
+        this.computer!.key = '';
+        this.refreshComputer();
+      });
+      b.disabled = g.money < next.cost;
+      foot.append(b);
+    }
+    card.append(foot);
   }
 
-  /** Une commande : ce qu'elle demande, les bières qui conviennent (à cocher), et l'envoi. */
+  /** Une commande : qui, quoi, combien elle paie ; on coche les bières, on envoie. */
   private orderCard(g: Game, o: Order): HTMLElement {
-    const c = clientById(o.client)!;
-    const ok = g.suitable(o);
-    // première ouverture : on présélectionne les bières les plus en stock jusqu'à remplir la commande
-    if (!this.picks.has(o.id)) {
-      const sorted = [...ok].sort((a, b) => b.stock - a.stock);
-      const pick: number[] = [];
-      let n = 0;
-      for (const b of sorted) {
-        if (n >= o.qty || b.stock <= 0) break;
-        pick.push(b.id);
-        n += b.stock;
-      }
-      this.picks.set(o.id, pick);
-    }
+    if (!this.picks.has(o.id)) this.picks.set(o.id, g.autoPick(o));
     const pick = this.picks.get(o.id)!;
     const q = g.quote(o, pick);
-    const card = h('div', `card order${q.filled >= o.qty ? ' banner' : ''}`);
+    const card = h('div', `card order kind-${o.kind}${q.ok ? ' banner' : ''}`);
     const head = h('div', 'beer-head');
     const left = h('span', 'order-time');
     left.dataset.expires = String(o.expires);
     left.textContent = `⏳ ${duration(o.expires - g.time)}`;
-    head.append(h('span', 'beer-name', c.name), left);
+    head.append(h('span', 'beer-name', o.client), left);
     card.append(head);
-    card.append(h('div', 'stats-line strong', `${o.qty} bouteilles · min. ${verdictOf(c.minQuality)}${o.like ? ` · ♥ ${c.likes!.label}` : ''}`));
-    card.append(h('div', 'stats-line', `Jusqu'à ${moneyInt(g.orderValue(o))} selon la qualité`));
-    if (!ok.length) card.append(h('p', 'note bad', o.like ? 'Aucune bière de ta gamme n\'a ce style' : 'Aucune bière de ta gamme n\'est assez bonne'));
-    else {
+    const ask = h('div', 'order-ask');
+    if (o.kind !== 'classic') ask.append(h('span', `kind-tag kind-${o.kind}`, KIND_LABEL[o.kind]));
+    ask.append(h('span', '', orderAsk(o)));
+    card.append(ask);
+    const ok = g.suitable(o);
+    const avail = (b: Beer) => (o.kind === 'keg' ? b.kegs.length : b.stock);
+    if (!ok.length) card.append(h('p', 'note bad', 'Aucune bière de ta gamme ne convient'));
+    else if (q.ok && !this.editing.has(o.id)) {
+      // les bières choisies d'office ; on peut changer
+      const line = h('div', 'order-pick');
+      line.append(h('span', 'hint', `→ ${q.take.map((t) => t.beer.name).join(', ')}`));
+      if (ok.length > 1) line.append(this.btn('btn small', 'Changer', () => {
+        this.editing.add(o.id);
+        this.computer!.key = '';
+        this.refreshComputer();
+      }));
+      card.append(line);
+    } else {
       const chips = h('div', 'chips');
       for (const b of ok) {
         const on = pick.includes(b.id);
         const chip = h('button', `chip beer-chip${on ? ' active' : ''}`);
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        chip.append(thumb, h('span', '', `${b.name} · ${b.stock}`));
-        chip.disabled = !on && b.stock <= 0;
+        chip.append(thumb, h('span', '', `${b.name} · ${avail(b)}`));
+        chip.disabled = !on && avail(b) <= 0;
         chip.onclick = () => {
           this.picks.set(o.id, on ? pick.filter((x) => x !== b.id) : [...pick, b.id]);
           this.refreshComputer();
@@ -906,38 +893,30 @@ export class App {
         chips.append(chip);
       }
       card.append(chips);
-      const bar = h('div', 'progress');
-      const fill = h('div', 'progress-fill');
-      fill.style.width = `${Math.min(100, (q.filled / o.qty) * 100)}%`;
-      bar.append(fill);
-      card.append(bar);
     }
     const row = h('div', 'row');
-    const send = this.btn('btn primary', q.filled >= o.qty ? `Envoyer · ${moneyInt(q.amount)}` : `${q.filled}/${o.qty} bouteilles`, () => {
+    const send = this.btn('btn primary', q.ok ? `Envoyer · ${moneyInt(o.reward)}` : `${moneyInt(o.reward)} · stock insuffisant`, () => {
       const r = g.fulfill(o.id, pick);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       this.picks.delete(o.id);
-      this.toast(`Commande envoyée : +${moneyInt(r.amount!)}`, 'good');
+      this.toast(`+${moneyInt(r.amount!)}`, 'good');
       this.onSent?.();
       this.sheetKey = '';
       this.refreshComputer();
     });
-    send.disabled = q.filled < o.qty;
-    const decline = this.btn('btn small bad', 'Refuser', () => {
+    send.disabled = !q.ok;
+    row.append(send, this.btn('btn small bad', 'Refuser', () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
       this.refreshComputer();
-    });
-    row.append(send, decline);
+    }));
     card.append(row);
     return card;
   }
 
-  /** Les tendances du moment et la popularité de la marque et de chaque bière. */
+  /** La popularité de la marque et les tendances du moment. */
   private trendsTab(g: Game, card: HTMLElement): void {
-    card.append(h('div', 'stats-line strong', `Popularité de la marque : ${starText(g.brand)}`));
-    card.append(h('p', 'hint', 'Une bière gagne en popularité quand on la boit, surtout si elle est bonne et dans la tendance. Une marque populaire attire du monde au bar et reçoit plus de commandes.'));
-    card.append(h('div', 'section-title', 'Tendances du moment'));
+    card.append(h('div', 'stats-line strong', `Ta marque : ${starText(g.brand)}`));
     for (const tr of g.trends) {
       const def = trendById(tr.id);
       if (!def) continue;
@@ -949,72 +928,44 @@ export class App {
       head.append(h('span', 'beer-name', def.text), left);
       el.append(head);
       const fans = g.beers.filter((b) => def.test(b.tasting));
-      el.append(h('div', fans.length ? 'note' : 'hint', fans.length ? `✓ ${fans.map((b) => b.name).join(', ')}` : 'Aucune bière de ta gamme'));
+      if (fans.length) el.append(h('div', 'note', `✓ ${fans.map((b) => b.name).join(', ')}`));
       card.append(el);
     }
-    if (g.beers.length) {
-      card.append(h('div', 'section-title', 'Ta gamme'));
-      for (const b of g.beers) {
-        const el = h('div', 'stock-line');
-        const thumb = h('canvas', 'label-thumb');
-        drawLabel(thumb, b.label, b.name);
-        el.append(thumb, h('span', 'stock-name', b.name), this.popLine(g, b));
-        card.append(el);
-      }
+    for (const b of g.beers) {
+      const el = h('div', 'stock-line');
+      const thumb = h('canvas', 'label-thumb');
+      drawLabel(thumb, b.label, b.name);
+      el.append(thumb, h('span', 'stock-name', b.name), h('span', 'pop-stars', starText(b.pop)));
+      card.append(el);
     }
   }
 
-  /** Les clients : contrats à signer, négociations (commandes plus grosses). */
-  private clientsTab(g: Game, card: HTMLElement): void {
-    card.append(h('div', 'stats-line', `${g.totalSold.toLocaleString('fr-FR')} vendues · ${g.ordersDone} commandes livrées · production ${fmtRate(g.productionRate())} btl/min`));
-    for (const d of CLIENTS) {
-      const signed = g.signed.includes(d.id);
-      const unlocked = g.clientOpen(d.id);
-      const el = h('div', `card client${signed ? ' signed' : unlocked ? ' available' : ' locked'}`);
-      const head = h('div', 'beer-head');
-      head.append(h('span', 'beer-name', d.name), h('span', `verdict ${signed ? 'v-good' : unlocked ? 'v-top' : 'v-meh'}`, signed ? '✓' : unlocked ? 'Disponible' : '🔒'));
-      el.append(head, h('div', 'hint', d.description));
-      el.append(h('div', 'stats-line', `Commandes de ${g.orderSize(d.id)} btl · min. ${verdictOf(d.minQuality)}${d.likes ? ` · ♥ ${d.likes.label}` : ''}`));
-      if (g.orderSize(d.id) > g.storageCap) el.append(h('p', 'note bad', 'Stockage trop petit pour ses commandes'));
-      if (signed) {
-        const lvl = g.deals[d.id] ?? 0;
-        const pips = h('div', 'deal-pips');
-        for (let i = 0; i < MAX_DEAL; i++) pips.append(h('span', `pip${i < lvl ? ' on' : ''}`));
-        const row = h('div', 'deal-row');
-        row.append(pips);
-        const cost = g.dealCost(d.id);
-        if (cost != null) {
-          const nb = this.btn('btn small', `Négocier +40 % · ${moneyInt(cost)}`, () => {
-            const r = g.negotiate(d.id);
-            if (!r.ok) return this.toast(r.reason!, 'bad');
-            this.toast('Commandes plus grosses', 'good');
-            this.refreshComputer();
-          });
-          nb.dataset.cost = String(cost);
-          nb.disabled = g.money < cost;
-          row.append(nb);
-        }
-        el.append(row);
-      } else if (unlocked) {
-        const b = this.btn('btn primary', `Signer le contrat · ${moneyInt(d.fee)}`, () => {
-          const r = g.sign(d.id);
+  /** Le grossiste : il reprend le surplus de bouteilles à tout moment, à petit prix. */
+  private wholesaleTab(g: Game, card: HTMLElement): void {
+    const auto = h('label', 'toggle');
+    const box = h('input');
+    box.type = 'checkbox';
+    box.checked = g.autoWholesale;
+    box.onchange = () => (g.autoWholesale = box.checked);
+    auto.append(box, h('span', '', 'Vendre le surplus automatiquement'));
+    card.append(auto, h('p', 'hint', 'Au-delà de la moitié du stockage, à petit prix. Le reste attend les commandes.'));
+    const beers = g.beers.filter((b) => b.stock > 0 && b.tasting.quality >= DRINKABLE_MIN);
+    if (!beers.length) card.append(h('p', 'hint', 'Rien en stock.'));
+    for (const b of beers) {
+      const el = h('div', 'stock-line');
+      const thumb = h('canvas', 'label-thumb');
+      drawLabel(thumb, b.label, b.name);
+      const unit = wholesalePrice(b.tasting);
+      el.append(thumb, h('span', 'stock-name', `${b.name} · ${b.stock}`));
+      const sell = (n: number, label: string) =>
+        this.btn('btn small', label, () => {
+          const r = g.sellWholesale(b.id, n);
           if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`Contrat signé avec ${d.name} : première commande bientôt !`, 'good');
+          this.toast(`+${moneyInt(r.amount!)}`, 'good');
           this.refreshComputer();
         });
-        b.dataset.cost = String(d.fee);
-        b.disabled = g.money < d.fee;
-        el.append(b);
-      } else {
-        const lvOk = g.breweryLevel >= d.level;
-        el.append(h('div', lvOk ? 'note' : 'note bad', `${lvOk ? '✓' : '✗'} Brasserie ★${d.level} ${BREWERY_NAMES[d.level - 1]}`));
-        const soldOk = g.totalSold >= d.unlockSold;
-        const bar = h('div', 'progress');
-        const fill = h('div', 'progress-fill');
-        fill.style.width = `${Math.min(100, (g.totalSold / d.unlockSold) * 100)}%`;
-        bar.append(fill);
-        el.append(h('div', soldOk ? 'note' : 'hint', `${soldOk ? '✓' : '✗'} ${d.unlockSold.toLocaleString('fr-FR')} vendues`), bar);
-      }
+      if (b.stock > CRATE) el.append(sell(CRATE, '1 caisse'));
+      el.append(sell(b.stock, `Tout · ${moneyInt(b.stock * unit)}`));
       card.append(el);
     }
   }
@@ -1277,8 +1228,8 @@ export class App {
     const lv = g.breweryLevel;
     const card = this.modalCard(levelUp ? 'Ta brasserie grandit !' : 'Ta brasserie');
     card.append(h('div', 'verdict big v-top', `★ ${lv} · ${g.breweryName}`));
-    const opened = CLIENTS.filter((d) => d.level === lv && d.level > 1);
-    if (levelUp && opened.length) card.append(h('p', 'note', `Nouveaux clients : ${opened.map((d) => d.name).join(', ')}`));
+    const opened = CLIENT_TYPES.filter((d) => d.level === lv && d.level > 1);
+    if (levelUp && opened.length) card.append(h('p', 'note', `Nouveaux clients : ${opened.map((d) => d.label).join(', ')}`));
     if (lv < MAX_LEVEL) {
       card.append(h('div', 'section-title', `Prochain : ★${lv + 1} ${BREWERY_NAMES[lv]}`));
       const list = h('div', 'brewery-list');
@@ -1293,9 +1244,9 @@ export class App {
         };
         list.append(row);
       }
-      const next = CLIENTS.filter((d) => d.level === lv + 1);
+      const next = CLIENT_TYPES.filter((d) => d.level === lv + 1);
       card.append(list);
-      if (next.length) card.append(h('p', 'hint', `Débloque : ${next.map((d) => d.name).join(', ')}`));
+      if (next.length) card.append(h('p', 'hint', `Débloque : ${next.map((d) => d.label).join(', ')}`));
     } else card.append(h('p', 'note', 'Niveau maximal'));
     card.append(this.btn('btn primary', 'Fermer', () => this.closeModal()));
   }
@@ -1358,7 +1309,7 @@ export class App {
       1: { text: 'Touche une machine pour la régler.' },
       2: { text: 'Appuie sur « Brasser » pour lancer ton premier brassin.' },
       3: { text: 'Je t\'aide pour celui-ci : ça ira vite. On goûte à la première bouteille !' },
-      4: { text: 'Tes bouteilles vont au stockage : remplis-y les commandes de l\'ordinateur. Pour le bar, brasse en fûts et branche-les dans sa cave. Glisse l\'écran pour visiter tes pièces !', action: 'Compris' },
+      4: { text: 'Glisse l\'écran : au stockage, l\'ordinateur reçoit les commandes ; au bar, branche des fûts. Bonne brasse !', action: 'Compris' },
     };
     const tip = this.modalOpen || this.openSheet?.kind === 'brew' ? undefined : tips[g.tips];
     this.mentor.classList.toggle('hidden', !tip);

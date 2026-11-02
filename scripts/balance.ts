@@ -8,7 +8,8 @@
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
 import { DEFAULT_LABEL } from '../src/core/label';
 import { Game, simulateOffline } from '../src/core/game';
-import { BAR, CLIENTS } from '../src/core/market';
+import { BAR } from '../src/core/market';
+import { COMPUTERS } from '../src/core/orders';
 import { MAX_LEVEL, STATION_ORDER, upgradeCost } from '../src/core/stations';
 import { STORAGE } from '../src/core/warehouse';
 import { BOT_RECIPES } from './recipes';
@@ -27,11 +28,22 @@ const buy = (what: string, cost: number) => log.push({ t: clock, what, cost });
 /** Remplit toutes les commandes possibles avec les bières qui conviennent (les plus en stock d'abord). */
 function deliver() {
   for (const o of [...g.orders]) {
-    const ids = g.suitable(o).sort((a, b) => b.stock - a.stock).map((b) => b.id);
-    const r = g.fulfill(o.id, ids);
+    const r = g.fulfill(o.id, g.autoPick(o));
     if (r.ok) delivered += r.amount!;
   }
 }
+
+/** Grossiste : on vend ce qui dépasse la moitié du stockage (on garde de quoi honorer les commandes). */
+function wholesale() {
+  const keep = g.storageCap * 0.5;
+  for (const b of [...g.beers].sort((a, c) => c.stock - a.stock)) {
+    const over = g.stored - keep;
+    if (over <= 0) break;
+    const r = g.sellWholesale(b.id, Math.min(b.stock, over));
+    if (r.ok) wholesaled += r.amount!;
+  }
+}
+let wholesaled = 0;
 let delivered = 0;
 
 /** Le bar : change les fûts vides (la bière la plus populaire d'abord) et programme des brassins en fûts. */
@@ -78,19 +90,13 @@ function newBeer(): boolean {
 function shop() {
   for (let k = 0; k < 200; k++) {
     const options: { cost: number; label: string; act: () => boolean }[] = [];
-    for (const d of CLIENTS) {
-      if (g.signed.includes(d.id) || !g.clientOpen(d.id)) continue;
-      options.push({ cost: d.fee, label: `Contrat ${d.name}`, act: () => g.sign(d.id).ok });
-    }
     for (const id of STATION_ORDER) {
       const lv = g.level(id);
       if (lv >= MAX_LEVEL) continue;
       options.push({ cost: upgradeCost(id, lv + 1), label: `${id} → ${lv + 1}`, act: () => g.upgrade(id).ok });
     }
-    for (const id of g.signed) {
-      const c = g.dealCost(id);
-      if (c != null) options.push({ cost: c, label: `Négo ${id} ${(g.deals[id] ?? 0) + 1}`, act: () => g.negotiate(id).ok });
-    }
+    const pc = COMPUTERS[g.computerLevel];
+    if (pc) options.push({ cost: pc.cost, label: `Ordinateur → ${g.computerLevel + 1}`, act: () => g.upgradeComputer().ok });
     const bar = BAR[g.barLevel];
     if (bar) options.push({ cost: bar.cost, label: `Bar → ${g.barLevel + 1}`, act: () => g.upgradeBar().ok });
     const next = STORAGE[g.storageLevel];
@@ -108,6 +114,7 @@ function shop() {
 function session(minutes: number) {
   if (g.offline) g.collectOffline();
   deliver();
+  wholesale();
   tendBar();
   shop();
   while (g.beers.length < g.rangeSlots && newBeer()) buy(`Nouvelle bière (${g.beers.length})`, 0);
@@ -121,10 +128,11 @@ function session(minutes: number) {
     if (clock % 60 < DT) shop();
   });
   deliver();
+  wholesale();
   shop();
 }
 
-const done = () => STATION_ORDER.every((id) => g.level(id) >= MAX_LEVEL) && g.storageLevel >= STORAGE.length && g.nextSlotCost == null && g.barLevel >= BAR.length && g.signed.length === CLIENTS.length && g.signed.every((id) => g.dealCost(id) == null);
+const done = () => STATION_ORDER.every((id) => g.level(id) >= MAX_LEVEL) && g.storageLevel >= STORAGE.length && g.nextSlotCost == null && g.barLevel >= BAR.length && g.computerLevel >= COMPUTERS.length;
 
 // Première session : le tutoriel, un peu plus long (20 min).
 session(20);
@@ -174,12 +182,8 @@ console.log('\n=== Résumé');
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
 console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.round(b * 100)}`).join(' · '));
-console.log('Bar :', Math.round(g.barRevenue), '€ ·', g.barSold, 'btl · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€');
-console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots, '· contrats', g.signed.length);
-for (const d of CLIENTS) {
-  const e = log.find((x) => x.what === `Contrat ${d.name}`);
-  console.log(`  ${d.name.padEnd(16)} ${e ? fmt(e.t) : '—'}`);
-}
+console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', g.wholesaleSold, 'btl');
+console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots);
 if (process.env.DEBUG) {
   console.log('autoBrew', g.autoBrew, 'queued', g.queued, 'room', g.roomForBatch, 'stored', g.stored, '/', g.storageCap, 'liters', g.batchLiters);
   console.log('batches', g.batches.map((b) => `${b.stage}:${b.beerId}:${b.waiting}:${b.bottles}:${b.delivered}`));

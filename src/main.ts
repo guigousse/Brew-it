@@ -1,7 +1,7 @@
 import './ui/style.css';
 import { FixedStepLoop, Game, simulateOffline } from './core/game';
 import { SaveManager } from './core/save';
-import { CLIENTS } from './core/market';
+import { clientTypeById } from './core/orders';
 import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { createStorage } from './platform/storage';
@@ -39,20 +39,18 @@ async function boot() {
     unsubscribe = game.events.on((e) => {
       if (muted) return; // rattrapage hors-ligne : pas de rafale de notifications
       if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
-      if (e.type === 'batchDone' && e.beerId != null) app.toast(e.kegs ? `+${e.kegs} fût${e.kegs > 1 ? 's' : ''} au stockage` : `+${e.bottles} bouteilles en stock`, 'good');
-      if (e.type === 'trend') app.toast(`Nouvelle tendance : ${TRENDS.find((t) => t.id === e.id)?.text}`, 'info');
-      if (e.type === 'batchRuined') app.toast(`Lot de « ${game.beers.find((b) => b.id === e.beerId)?.name} » raté, jeté`, 'bad');
+      if (e.type === 'trend') app.toast(`Tendance : ${TRENDS.find((t) => t.id === e.id)?.short}`, 'info');
+      if (e.type === 'batchRuined') app.toast(`Lot de « ${game.beers.find((b) => b.id === e.beerId)?.name} » raté`, 'bad');
       if (e.type === 'breweryLevel') {
         app.scene.flash();
         app.openBrewery(true);
         tapFeedback(true);
       }
-      if (e.type === 'clientAvailable') app.toast(`Nouveau client possible : ${CLIENTS.find((d) => d.id === e.id)?.name} (ordinateur du stockage)`, 'good');
+      if (e.type === 'clientAvailable') app.toast(`Nouveaux clients : ${clientTypeById(e.id)?.label}`, 'good');
       if (e.type === 'order') {
-        app.toast(`📨 Commande de ${CLIENTS.find((d) => d.id === e.client)?.name}`, 'good');
+        app.toast(`📨 ${e.client}`, 'good');
         tapFeedback(false);
       }
-      if (e.type === 'orderExpired') app.toast(`Commande de ${CLIENTS.find((d) => d.id === e.client)?.name} expirée`, 'bad');
     });
     app.update();
     if (game.offline) app.openOffline();

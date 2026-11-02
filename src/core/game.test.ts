@@ -1,7 +1,9 @@
 import { GASTON_RECIPE } from './brewing/model';
 import { Game, simulateOffline } from './game';
 import { DEFAULT_LABEL } from './label';
-import { BAR, CLIENTS, kegSpace, MAX_PENDING, ORDER_LIFE_S } from './market';
+import { BAR, kegSpace } from './market';
+import { COMPUTERS, drawOrder, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, type Order } from './orders';
+import { Rng } from './rng';
 import { popTarget, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
 import { STATION_ORDER } from './stations';
@@ -24,10 +26,10 @@ const withBeer = (money = 250) => {
 };
 
 describe('jeu', () => {
-  it('démarre avec la recette de Gaston, 250 €, le bar du coin et de la verrerie (lots de 5 L)', () => {
+  it('démarre avec la recette de Gaston, 250 €, un petit bar et de la verrerie (lots de 5 L)', () => {
     const g = new Game();
     expect(g.recipe).toEqual(GASTON_RECIPE);
-    expect(g.signed).toEqual([]);
+    expect(g.orders).toEqual([]);
     expect(g.barLevel).toBe(1);
     expect(g.batchLiters).toBe(5);
     expect(g.rangeSlots).toBe(1);
@@ -92,6 +94,12 @@ describe('jeu', () => {
     expect(g.plan).toEqual([]);
     expect(g.batchAt('mill')!.format).toBe('keg');
     runUntil(g, () => g.batches.length === 0);
+    // la verrerie du niveau 1 est imprécise : un lot peut être raté, on recommence
+    for (let k = 0; k < 5 && !beer.kegs.length; k++) {
+      g.planBrew(beer.id, 'keg');
+      g.step();
+      runUntil(g, () => g.batches.length === 0);
+    }
     expect(beer.kegs).toEqual([20]); // lot de 5 L = 1 fût de 20 verres
     expect(beer.stock).toBe(stock);
     expect(g.stored).toBe(stock + kegSpace(20)); // environ une caisse
@@ -168,66 +176,95 @@ describe('jeu', () => {
     expect(g.taps.length).toBe(BAR[1]!.taps);
   });
 
-  it('un client sous contrat envoie des commandes ; remplies, elles sont payées aussitôt', () => {
+  it('une commande arrive au tableau ; remplie, elle est payée le montant annoncé', () => {
     const g = withBeer(1e4);
-    g.totalSold = 100;
-    expect(g.sign('epicerie').ok).toBe(true);
-    run(g, 30);
+    run(g, FIRST_ORDER_S + 1);
     expect(g.orders.length).toBe(1);
     const o = g.orders[0]!;
-    expect(o.qty).toBe(g.orderSize('epicerie'));
+    // première commande : quelques bouteilles ou un fût, jamais une palette
+    expect(o.kind === 'keg' ? o.qty : o.qty / 24).toBeLessThanOrEqual(2);
+    const order: Order = { ...o, kind: 'classic', qty: 12, want: undefined, mix: undefined, minQuality: 0.3, reward: 50 };
+    g.orders = [order];
     const beer = g.beers[0]!;
-    beer.stock = o.qty - 1;
-    expect(g.fulfill(o.id, [beer.id]).ok).toBe(false); // il manque une bouteille
-    beer.stock = o.qty + 10;
-    const q = g.quote(o, [beer.id]);
-    expect(q.filled).toBe(o.qty);
+    beer.stock = 11;
+    expect(g.fulfill(order.id, [beer.id]).ok).toBe(false); // il manque une bouteille
+    beer.stock = 20;
     const money = g.money;
-    const r = g.fulfill(o.id, [beer.id]);
-    expect(r.ok).toBe(true);
-    expect(g.money).toBeCloseTo(money + q.amount);
-    expect(beer.stock).toBe(10);
+    expect(g.fulfill(order.id, g.autoPick(order)).ok).toBe(true);
+    expect(g.money).toBe(money + 50);
+    expect(beer.stock).toBe(8);
     expect(g.orders.length).toBe(0);
   });
 
-  it('les commandes s\'accumulent (3 par client au plus) puis expirent', () => {
+  it('peu de commandes : une toutes les 30 à 60 min, tant que le tableau a de la place ; elles expirent', () => {
     const g = withBeer(1e4);
-    g.totalSold = 100;
-    g.sign('epicerie');
-    simulateOffline(g, 3 * 3600);
-    expect(g.orders.length).toBe(MAX_PENDING);
+    run(g, 3600);
+    expect(g.orders.length).toBeLessThanOrEqual(2);
+    simulateOffline(g, 4 * 3600);
+    expect(g.orders.length).toBe(COMPUTERS[0]!.slots); // le tableau est plein : plus rien n'arrive
     const first = g.orders[0]!;
-    simulateOffline(g, ORDER_LIFE_S);
+    simulateOffline(g, ORDER_LIFE_MAX_S);
     expect(g.orders.some((o) => o.id === first.id)).toBe(false);
-    expect(g.orders.length).toBeGreaterThan(0);
   });
 
-  it('une commande exigeant un style refuse les bières qui ne le respectent pas', () => {
-    const g = withBeer(1e9);
-    g.totalSold = 1e7;
-    for (let i = 0; i < 4; i++) for (const id of STATION_ORDER) g.upgrade(id);
-    g.sign('caviste');
+  it('style recherché, assortiment, fûts : chaque commande a ses exigences', () => {
+    const g = withBeer(1e4);
     const beer = g.beers[0]!;
-    beer.stock = 1000;
-    beer.tasting = { ...beer.tasting, quality: 0.9, aroma: 0.1 };
-    g.orders = [{ id: 1, client: 'caviste', qty: 12, like: true, received: 0, expires: 1e9 }];
-    expect(g.suitable(g.orders[0]!)).toEqual([]);
-    beer.tasting = { ...beer.tasting, aroma: 0.8 };
+    beer.stock = 100;
+    beer.tasting = { ...beer.tasting, quality: 0.9, abv: 4.5 };
+    const base = { id: 1, type: 'bistrot', client: 'Le Zinc', minQuality: 0.3, reward: 100, received: 0, expires: 1e9 };
+    g.orders = [{ ...base, kind: 'style', qty: 12, want: 'strong' }];
+    expect(g.suitable(g.orders[0]!)).toEqual([]); // 4,5 % : pas une bière forte
+    g.orders = [{ ...base, kind: 'style', qty: 12, want: 'light' }];
     expect(g.fulfill(1, [beer.id]).ok).toBe(true);
+    g.orders = [{ ...base, kind: 'mix', qty: 24, mix: 2 }];
+    expect(g.fulfill(1, [beer.id]).ok).toBe(false); // une seule bière
+    g.buySlot();
+    g.beers.push({ ...beer, id: 999, name: 'Deux', stock: 30 });
+    expect(g.fulfill(1, [beer.id, 999]).ok).toBe(true);
+    expect(g.beers[1]!.stock).toBe(18);
+    g.orders = [{ ...base, kind: 'keg', qty: 2 }];
+    beer.kegs = [20];
+    expect(g.fulfill(1, [beer.id]).ok).toBe(false);
+    beer.kegs = [20, 20, 20];
+    expect(g.fulfill(1, [beer.id]).ok).toBe(true);
+    expect(beer.kegs).toEqual([20]);
   });
 
-  it('la négociation agrandit les commandes', () => {
+  it('de nouveaux clients avec le niveau de la brasserie et la popularité ; des commandes à la mesure de la brasserie', () => {
+    expect(openTypes(1, 0).map((c) => c.id)).toEqual(['particulier', 'bistrot']);
+    expect(openTypes(5, 1).length).toBeGreaterThan(8);
+    const rng = new Rng(7);
+    for (let i = 0; i < 200; i++) {
+      const o1 = drawOrder(i, { rng, time: 0, breweryLevel: 1, brand: 0.3, beers: 2, storageCap: 120, kegLiters: 5, trends: [] });
+      if (o1.kind !== 'keg') expect(o1.qty).toBeLessThanOrEqual(30);
+      const o5 = drawOrder(i, { rng, time: 0, breweryLevel: 5, brand: 1, beers: 8, storageCap: 4000 * 12, kegLiters: 50, trends: [] });
+      if (o5.kind !== 'keg') expect(o5.qty).toBeLessThanOrEqual(4000 * 12 * 0.75);
+      expect(o5.reward).toBeGreaterThan(0);
+    }
+  });
+
+  it('le grossiste reprend les bouteilles à tout moment, à petit prix ; il écoule seul le surplus', () => {
+    const g = withBeer(0);
+    g.autoWholesale = false;
+    const beer = g.beers[0]!;
+    beer.stock = 50;
+    const r = g.sellWholesale(beer.id, 30);
+    expect(r.ok).toBe(true);
+    expect(beer.stock).toBe(20);
+    expect(r.amount! / 30).toBeLessThan(3.2); // une commande paie environ le double
+    expect(g.money).toBeCloseTo(r.amount!);
+    g.autoWholesale = true;
+    beer.stock = 100; // plus de la moitié du stockage (120)
+    g.step(1);
+    expect(beer.stock).toBe(60);
+  });
+
+  it('améliorer l\'ordinateur ajoute une place au tableau des commandes', () => {
     const g = withBeer(1e6);
-    g.totalSold = 100;
-    g.sign('epicerie');
-    g.storageLevel = 5; // les commandes ne dépassent jamais les 3/4 du stockage
-    const one = g.orderSize('epicerie');
-    const c1 = g.dealCost('epicerie')!;
-    expect(g.negotiate('epicerie').ok).toBe(true);
-    expect(g.dealCost('epicerie')!).toBeGreaterThan(c1);
-    expect(g.orderSize('epicerie')).toBeGreaterThan(one * 1.2); // +40 %, arrondi à la demi-caisse
-    for (let i = 0; i < 4; i++) g.negotiate('epicerie');
-    expect(g.dealCost('epicerie')).toBeNull();
+    expect(g.boardSlots).toBe(2);
+    expect(g.upgradeComputer().ok).toBe(true);
+    expect(g.boardSlots).toBe(3);
   });
 
   it('la gamme s\'agrandit en achetant des places, de plus en plus chères', () => {
@@ -252,6 +289,7 @@ describe('jeu', () => {
 
   it('le stockage se remplit ; plein, il bloque l\'embouteillage jusqu\'à l\'agrandissement', () => {
     const g = withBeer(1e4);
+    g.autoWholesale = false; // personne n'achète
     g.beers[0]!.stock = 110;
     expect(g.storageCap).toBe(120);
     g.loadBeer(g.beers[0]!.id);
@@ -330,26 +368,22 @@ describe('jeu', () => {
   it('les anciennes sauvegardes (3 niveaux) passent aux niveaux 2 à 4', () => {
     const g = new Game();
     const old = { ...g.toJSON(), version: 3, stations: { ...g.stations, mill: { level: 3 } } };
-    delete (old as { deals?: unknown }).deals;
     const loaded = Game.fromJSON(JSON.parse(JSON.stringify(old)));
     expect(loaded.level('mill')).toBe(4);
     expect(loaded.level('mash')).toBe(2);
-    expect(loaded.deals).toEqual({});
   });
 
-  it('sauvegardes v4 : le bar du coin devient la pièce Bar, les autres contrats restent', () => {
+  it('sauvegardes v4 : le bar du coin devient la pièce Bar ; les contrats laissent place au tableau de commandes', () => {
     const g = withBeer();
     const old = { ...g.toJSON(), version: 4, signed: ['bar', 'epicerie'], deals: { bar: 2 }, demand: { bar: 0.5 } } as Record<string, unknown>;
-    for (const k of ['barLevel', 'taps', 'orders', 'orderTimers', 'trends', 'plan']) delete old[k];
+    for (const k of ['barLevel', 'taps', 'orders', 'orderTimer', 'trends', 'plan']) delete old[k];
     old.beers = (old.beers as Record<string, unknown>[]).map(({ kegs: _k, pop: _p, ...b }) => b);
     const loaded = Game.fromJSON(JSON.parse(JSON.stringify(old)));
-    expect(loaded.signed).toEqual(['epicerie']);
-    expect(loaded.deals).toEqual({});
     expect(loaded.taps).toEqual([{ beerId: null, glasses: 0, capacity: 0 }]);
     expect(loaded.beers[0]!.kegs).toEqual([]);
     expect(loaded.beers[0]!.pop).toBeGreaterThan(0);
     expect(loaded.orders).toEqual([]);
-    run(loaded, 30);
+    run(loaded, FIRST_ORDER_S + 1);
     expect(loaded.orders.length).toBe(1);
   });
 
@@ -360,22 +394,13 @@ describe('jeu', () => {
     const levels: number[] = [];
     g.events.on((e) => e.type === 'breweryLevel' && levels.push(e.level));
     expect(g.breweryLevel).toBe(1);
-    expect(g.sign('caviste').ok).toBe(false); // il faut le niveau 2
+    expect(openTypes(g.breweryLevel, 1).some((c) => c.id === 'caviste')).toBe(false); // il faut le niveau 2
     for (const id of STATION_ORDER.slice(0, 6)) g.upgrade(id);
     expect(g.breweryLevel).toBe(1); // l'embouteillage est encore au niveau 1
     g.upgrade('bottling');
     expect(g.breweryLevel).toBe(2);
     expect(g.breweryName).toBe('Garage');
     expect(levels).toEqual([2]);
-    expect(g.sign('caviste').ok).toBe(true);
-    expect(g.clientOpen('restaurant')).toBe(false);
-  });
-
-  it('chaque commande, même négociée au maximum, tient dans le stockage maximal', () => {
-    const g = new Game();
-    for (const c of CLIENTS) {
-      g.deals[c.id] = 5;
-      expect(g.orderSize(c.id)).toBeLessThanOrEqual(STORAGE[STORAGE.length - 1]!.crates * 12);
-    }
+    expect(openTypes(g.breweryLevel, 1).some((c) => c.id === 'caviste')).toBe(true);
   });
 });

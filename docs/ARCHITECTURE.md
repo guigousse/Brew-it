@@ -8,7 +8,8 @@ src/
 │   ├── brewing/model.ts  modèle de brassage réaliste (recette + niveaux + températures réelles → dégustation)
 │   ├── brewing/strains.ts levures
 │   ├── stations.ts       les 7 machines : réglages, niveaux, durées
-│   ├── market.ts         clients et commandes, niveaux du bar, fûts, prix
+│   ├── market.ts         niveaux du bar, fûts, prix
+│   ├── orders.ts         tableau de commandes : profils de clients, types de commandes, grossiste
 │   ├── trends.ts         tendances du moment et popularité (bières, marque)
 │   ├── warehouse.ts      niveaux du stockage, places de la gamme
 │   ├── game.ts           état de la partie : lots dans la chaîne, gamme, bar, commandes, améliorations, hors-ligne

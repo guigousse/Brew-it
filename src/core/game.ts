@@ -1,7 +1,8 @@
 import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Levels, type Recipe, type Tasting } from './brewing/model';
 import { EventBus } from './events';
 import type { Label } from './label';
-import { BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, CLIENTS, glassPrice, kegGlasses, kegLiters, kegSpace, DEAL_BONUS, DEAL_PRICE, dealCost, LIKE_BONUS, LIKE_CHANCE, MAX_PENDING, ORDER_GAP_S, ORDER_LIFE_S, ORDER_MINUTES, ORDER_PREMIUM, qualityFactor, suits, variety, type Client } from './market';
+import { BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, glassPrice, kegGlasses, kegLiters, kegSpace, variety } from './market';
+import { CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, WHOLESALE_KEEP, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
@@ -78,26 +79,15 @@ export interface Batch {
   delivered?: number;
 }
 
-/** Commande d'un client, reçue sur l'ordinateur du stockage : une mission à remplir avant son expiration. */
-export interface Order {
-  id: number;
-  client: string;
-  /** Bouteilles demandées. */
-  qty: number;
-  /** La commande exige le style préféré du client (et paie mieux). */
-  like: boolean;
-  /** Instant de réception (s de jeu). */
-  received: number;
-  /** Instant d'expiration (s de jeu). */
-  expires: number;
-}
+export type { Order } from './orders';
 
-/** Ce que rapporterait une commande remplie avec ces bières (prises dans l'ordre donné). */
+/** Une commande remplie avec les bières choisies (sans rien prélever). */
 export interface OrderQuote {
-  /** Bouteilles prises à chaque bière. */
+  /** Bouteilles (ou fûts) prises à chaque bière. */
   take: { beer: Beer; n: number }[];
   filled: number;
-  amount: number;
+  /** La commande est complète. */
+  ok: boolean;
 }
 
 export interface CommandResult {
@@ -140,10 +130,6 @@ export class Game {
   /** Essai embouteillé qui attend d'être goûté, mis de côté pour ne pas bloquer la ligne. */
   trial: Batch | null = null;
   beers: Beer[] = [];
-  /** Clients sous contrat : ils envoient des commandes sur l'ordinateur du stockage. */
-  signed: string[] = [];
-  /** Niveau de négociation de chaque contrat (0 à MAX_DEAL). */
-  deals: Record<string, number> = {};
   /** Places achetées sur l'étagère de la gamme. */
   rangeSlots = 1;
   /** Niveau du stockage (1 à STORAGE.length). */
@@ -160,9 +146,16 @@ export class Game {
   barRevenue = 0;
   /** Commandes en attente sur l'ordinateur. */
   orders: Order[] = [];
-  /** Compte à rebours (s) avant la prochaine commande de chaque client. */
-  orderTimers: Record<string, number> = {};
+  /** Compte à rebours (s) avant la prochaine commande. */
+  orderTimer = FIRST_ORDER_S;
   ordersDone = 0;
+  /** Niveau de l'ordinateur des commandes (1 à COMPUTERS.length). */
+  computerLevel = 1;
+  /** Bouteilles reprises par le grossiste. */
+  wholesaleSold = 0;
+  /** Le grossiste reprend automatiquement le surplus (au-delà de la moitié du stockage). */
+  autoWholesale = true;
+  private wholesaleClock = 0;
   totalSold = 0;
   totalRevenue = 0;
   batchesDone = 0;
@@ -190,12 +183,6 @@ export class Game {
 
   get breweryName(): string {
     return BREWERY_NAMES[this.breweryLevel - 1]!;
-  }
-
-  /** Un client peut être signé : assez de bouteilles vendues et une brasserie du bon niveau. */
-  clientOpen(id: string): boolean {
-    const c = clientById(id);
-    return !!c && this.totalSold >= c.unlockSold && this.breweryLevel >= c.level;
   }
 
   /** Taille d'un brassin : le plus petit appareil fixe le volume. */
@@ -459,36 +446,6 @@ export class Game {
     if (!this.beers.length) this.autoBrew = false;
   }
 
-  /** Signe un contrat avec un client débloqué : sa première commande arrive vite. */
-  sign(id: string): CommandResult {
-    const c = clientById(id);
-    if (!c || this.signed.includes(id)) return { ok: false, reason: 'Déjà signé' };
-    if (this.breweryLevel < c.level) return { ok: false, reason: `Ta brasserie doit d'abord passer au niveau ${c.level} (${BREWERY_NAMES[c.level - 1]})` };
-    if (this.totalSold < c.unlockSold) return { ok: false, reason: `Vends d'abord ${c.unlockSold} bouteilles` };
-    if (this.money < c.fee) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= c.fee;
-    this.signed.push(id);
-    this.orderTimers[id] = FIRST_ORDER_S;
-    return { ok: true };
-  }
-
-  /** Prix de la prochaine négociation avec un client (null : impossible ou au maximum). */
-  dealCost(id: string): number | null {
-    const c = clientById(id);
-    if (!c || !this.signed.includes(id)) return null;
-    return dealCost(c, this.deals[id] ?? 0);
-  }
-
-  /** Négocie de plus grosses commandes avec un client sous contrat. */
-  negotiate(id: string): CommandResult {
-    const cost = this.dealCost(id);
-    if (cost == null) return { ok: false, reason: 'Contrat déjà au maximum' };
-    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= cost;
-    this.deals[id] = (this.deals[id] ?? 0) + 1;
-    return { ok: true };
-  }
-
   /** Cadence maximale de la ligne (bouteilles/min) : un brassin par passage dans l'appareil le plus lent. */
   productionRate(r: Recipe = this.nextAutoBeer()?.recipe ?? this.recipe): number {
     const liters = this.batchLiters;
@@ -570,70 +527,95 @@ export class Game {
 
   // ------------------------------------------------------------------ commandes
 
-  /** Taille des commandes d'un client (bouteilles, par demi-caisses), selon la négociation. */
-  orderSize(id: string): number {
-    const c = clientById(id);
-    if (!c) return 0;
-    // la popularité de la marque grossit les commandes
-    const n = c.rate * ORDER_MINUTES * (1 + DEAL_BONUS * (this.deals[id] ?? 0)) * (0.6 + 0.8 * this.brand);
-    // jamais plus que ce que le stockage peut contenir (les trois quarts)
-    return Math.max(6, Math.round(Math.min(n, this.storageCap * 0.75) / 6) * 6);
+  /** Places au tableau des commandes. */
+  get boardSlots(): number {
+    return COMPUTERS[this.computerLevel - 1]!.slots;
   }
 
-  /** Bières de la gamme qui conviennent à une commande. */
+  /** Améliore l'ordinateur : une place de plus au tableau des commandes. */
+  upgradeComputer(): CommandResult {
+    const next = COMPUTERS[this.computerLevel];
+    if (!next) return { ok: false, reason: 'Niveau maximal' };
+    if (this.money < next.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= next.cost;
+    this.computerLevel++;
+    return { ok: true };
+  }
+
+  /** Bières de la gamme qui conviennent à une commande (qualité, style). */
   suitable(o: Order): Beer[] {
-    const c = clientById(o.client);
-    return c ? this.beers.filter((b) => suits(c, b.tasting, o.like)) : [];
+    return this.beers.filter((b) => fits(o, b.tasting));
   }
 
-  /** Remplit la commande avec les bières choisies, dans l'ordre (sans rien prélever) : bouteilles et montant. */
+  /** Ce que donneraient les bières choisies pour cette commande (bouteilles, ou fûts pour une commande de fûts). */
   quote(o: Order, beerIds: number[]): OrderQuote {
-    const c = clientById(o.client);
+    const ok = this.suitable(o);
+    const chosen = beerIds.map((id) => ok.find((b) => b.id === id)).filter((b): b is Beer => !!b);
+    const avail = (b: Beer) => (o.kind === 'keg' ? b.kegs.length : b.stock);
     const take: OrderQuote['take'] = [];
     let filled = 0;
-    let amount = 0;
-    if (!c) return { take, filled, amount };
-    const ok = this.suitable(o);
-    for (const id of beerIds) {
-      const beer = ok.find((b) => b.id === id);
-      if (!beer || filled >= o.qty) continue;
-      const n = Math.min(beer.stock, o.qty - filled);
-      if (n <= 0) continue;
-      take.push({ beer, n });
-      filled += n;
-      amount += n * orderPrice(c, beer.tasting, o.like, this.deals[c.id] ?? 0);
+    if (o.mix) {
+      // assortiment : une part égale de plusieurs bières différentes
+      const per = Math.ceil(o.qty / o.mix);
+      for (const b of chosen) {
+        if (take.length >= o.mix || avail(b) < per) continue;
+        take.push({ beer: b, n: per });
+        filled += per;
+      }
+      return { take, filled: Math.min(filled, o.qty), ok: take.length >= o.mix };
     }
-    return { take, filled, amount };
+    for (const b of chosen) {
+      if (filled >= o.qty) break;
+      const n = Math.min(avail(b), o.qty - filled);
+      if (n <= 0) continue;
+      take.push({ beer: b, n });
+      filled += n;
+    }
+    return { take, filled, ok: filled >= o.qty };
   }
 
-  /** Montant maximal d'une commande (remplie avec des bières excellentes) : affiché sur l'ordinateur. */
-  orderValue(o: Order): number {
-    const c = clientById(o.client);
-    return c ? o.qty * orderPrice(c, { quality: 1 }, o.like, this.deals[c.id] ?? 0) : 0;
+  /** Les bières à proposer d'emblée pour une commande : celles qui ont le plus de stock. */
+  autoPick(o: Order): number[] {
+    const avail = (b: Beer) => (o.kind === 'keg' ? b.kegs.length : b.stock);
+    const sorted = this.suitable(o).filter((b) => avail(b) > 0).sort((a, b) => avail(b) - avail(a));
+    if (o.mix) return sorted.slice(0, o.mix).map((b) => b.id);
+    const out: number[] = [];
+    let n = 0;
+    for (const b of sorted) {
+      if (n >= o.qty) break;
+      out.push(b.id);
+      n += avail(b);
+    }
+    return out;
   }
 
-  /** Envoie une commande remplie avec les bières choisies : on est payé tout de suite. */
+  /** Envoie une commande remplie avec les bières choisies : elle est payée tout de suite. */
   fulfill(orderId: number, beerIds: number[]): CommandResult & { amount?: number } {
     const o = this.orders.find((x) => x.id === orderId);
     if (!o) return { ok: false, reason: 'Commande introuvable' };
     const q = this.quote(o, beerIds);
-    if (q.filled < o.qty) return { ok: false, reason: `Il manque ${o.qty - q.filled} bouteilles` };
+    if (!q.ok) return { ok: false, reason: o.mix ? `Il faut ${o.mix} bières différentes` : `Il manque ${o.qty - q.filled} ${o.kind === 'keg' ? 'fûts' : 'bouteilles'}` };
+    const units = q.take.reduce((s, t) => s + t.n, 0);
     for (const { beer, n } of q.take) {
-      beer.stock -= n;
+      if (o.kind === 'keg') {
+        beer.kegs.sort((a, b) => a - b);
+        beer.kegs.splice(0, n);
+      } else beer.stock -= n;
       beer.sold += n;
-      beer.revenue += (n / q.filled) * q.amount;
-      beer.pop = gainPop(beer.pop, popTarget(beer.tasting, this.trends), n, POP_PER_BOTTLE);
+      beer.revenue += (n / units) * o.reward;
+      // une commande fait connaître la bière (une commande de prestige, beaucoup)
+      beer.pop = gainPop(beer.pop, popTarget(beer.tasting, this.trends), o.kind === 'prestige' ? 60 : o.kind === 'keg' ? n * 40 : n, POP_PER_BOTTLE);
     }
-    this.totalSold += q.filled;
-    this.totalRevenue += q.amount;
-    this.money += q.amount;
+    this.totalSold += units;
+    this.totalRevenue += o.reward;
+    this.money += o.reward;
     this.ordersDone++;
     this.orders = this.orders.filter((x) => x !== o);
-    this.events.emit({ type: 'sale', amount: q.amount });
-    return { ok: true, amount: q.amount };
+    this.events.emit({ type: 'sale', amount: o.reward });
+    return { ok: true, amount: o.reward };
   }
 
-  /** Refuser une commande : le client en enverra une autre plus tard. */
+  /** Refuser une commande : sa place se libère pour une autre. */
   declineOrder(orderId: number): CommandResult {
     const before = this.orders.length;
     this.orders = this.orders.filter((x) => x.id !== orderId);
@@ -642,7 +624,26 @@ export class Game {
 
   /** Commandes qu'on peut remplir tout de suite avec le stock. */
   get readyOrders(): Order[] {
-    return this.orders.filter((o) => this.suitable(o).reduce((s, b) => s + b.stock, 0) >= o.qty);
+    return this.orders.filter((o) => this.quote(o, this.autoPick(o)).ok);
+  }
+
+  /** Le grossiste reprend des bouteilles à tout moment, à petit prix. */
+  sellWholesale(beerId: number, n: number): CommandResult & { amount?: number } {
+    const beer = this.beer(beerId);
+    if (!beer) return { ok: false, reason: 'Bière introuvable' };
+    n = Math.min(Math.floor(n), beer.stock);
+    if (n <= 0) return { ok: false, reason: 'Rien à vendre' };
+    if (beer.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable' };
+    const amount = n * wholesalePrice(beer.tasting);
+    beer.stock -= n;
+    beer.sold += n;
+    beer.revenue += amount;
+    this.totalSold += n;
+    this.totalRevenue += amount;
+    this.wholesaleSold += n;
+    this.money += amount;
+    this.events.emit({ type: 'sale', amount });
+    return { ok: true, amount };
   }
 
   collectOffline(): number {
@@ -678,6 +679,10 @@ export class Game {
     }
     this.sellBar(dt);
     this.tickOrders(dt);
+    if (this.autoWholesale && (this.wholesaleClock += dt) >= 1) {
+      this.wholesaleClock = 0;
+      this.sellSurplus();
+    }
     this.tickTrends();
     // sans ventes, la popularité s'érode doucement
     const keep = Math.exp(-POP_DECAY * dt);
@@ -823,31 +828,46 @@ export class Game {
     }
   }
 
-  /** Les clients sous contrat envoient ponctuellement des commandes ; elles expirent si on ne les remplit pas. */
+  /** Vente automatique : le grossiste reprend ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. */
+  private sellSurplus(): void {
+    let over = this.stored - this.storageCap * WHOLESALE_KEEP;
+    while (over >= 1) {
+      let best: Beer | undefined;
+      for (const b of this.beers) if (b.stock > 0 && b.tasting.quality >= DRINKABLE_MIN && (!best || b.stock > best.stock)) best = b;
+      if (!best) return;
+      const n = Math.min(best.stock, Math.ceil(over));
+      this.sellWholesale(best.id, n);
+      over -= n;
+    }
+  }
+
+  /**
+   * Une nouvelle commande arrive toutes les 30 à 60 minutes, tant que le tableau a de la place
+   * (un peu plus souvent pour une marque connue). Elles expirent si on ne les remplit pas.
+   */
   private tickOrders(dt: number): void {
     if (this.orders.some((o) => o.expires <= this.time)) {
       for (const o of this.orders) if (o.expires <= this.time) this.events.emit({ type: 'orderExpired', client: o.client });
       this.orders = this.orders.filter((o) => o.expires > this.time);
     }
-    for (const id of this.signed) {
-      const c = clientById(id);
-      if (!c || this.orders.filter((o) => o.client === id).length >= MAX_PENDING) continue;
-      const left = (this.orderTimers[id] ?? FIRST_ORDER_S) - dt;
-      this.orderTimers[id] = left;
-      if (left > 0) continue;
-      // une marque populaire reçoit des commandes plus souvent
-      this.orderTimers[id] = (ORDER_GAP_S * (0.7 + 0.6 * this.rng.next())) / (0.6 + 0.8 * this.brand);
-      const like = !!c.likes && this.rng.next() < LIKE_CHANCE;
-      this.orders.push({ id: this.nextId++, client: id, qty: this.orderSize(id), like, received: this.time, expires: this.time + ORDER_LIFE_S });
-      this.events.emit({ type: 'order', client: id });
-    }
+    if (this.orders.length >= this.boardSlots) return;
+    this.orderTimer -= dt;
+    if (this.orderTimer > 0) return;
+    this.orderTimer = (ORDER_GAP_MIN_S + (ORDER_GAP_MAX_S - ORDER_GAP_MIN_S) * this.rng.next()) / (0.8 + 0.4 * this.brand);
+    const o = drawOrder(this.nextId++, {
+      rng: this.rng, time: this.time, breweryLevel: this.breweryLevel, brand: this.brand, beers: this.beers.length,
+      storageCap: this.storageCap, kegLiters: kegLiters(this.batchLiters), trends: this.trends,
+    });
+    this.orders.push(o);
+    this.events.emit({ type: 'order', client: o.client });
   }
 
+  /** Annonce les nouveaux profils de clients (la brasserie grandit, la marque se fait connaître). */
   private announce(): void {
-    for (const c of CLIENTS) {
-      if (this.signed.includes(c.id) || this.announced.has(c.id) || !this.clientOpen(c.id)) continue;
+    for (const c of openTypes(this.breweryLevel, this.brand)) {
+      if (this.announced.has(c.id)) continue;
       this.announced.add(c.id);
-      this.events.emit({ type: 'clientAvailable', id: c.id });
+      if (c.level > 1 || c.pop > 0) this.events.emit({ type: 'clientAvailable', id: c.id });
     }
   }
 
@@ -855,19 +875,19 @@ export class Game {
 
   toJSON() {
     return {
-      version: 6, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
+      version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, trial: this.trial, beers: this.beers,
-      queued: this.queued, signed: this.signed, deals: this.deals, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimers: this.orderTimers, ordersDone: this.ordersDone, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
+      queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
 
   static fromJSON(raw: unknown): Game {
     const s = raw as Omit<ReturnType<Game['toJSON']>, 'version'> & { version: number };
-    if (!s || s.version < 2 || s.version > 6) throw new Error('Sauvegarde incompatible');
+    if (!s || s.version < 2 || s.version > 7) throw new Error('Sauvegarde incompatible');
     const g = new Game();
-    const { demand: _demand, ...rest } = s as typeof s & { demand?: unknown };
+    const { demand: _d, signed: _s, deals: _dl, orderTimers: _t, ...rest } = s as typeof s & { demand?: unknown; signed?: unknown; deals?: unknown; orderTimers?: unknown };
     Object.assign(g, { ...rest, rng: new Rng(s.rng), announced: new Set(s.announced) });
     // Sauvegardes v2 : places de gamme liées aux distributeurs, pas encore de stockage.
     if (s.version === 2) {
@@ -877,11 +897,12 @@ export class Game {
     // Avant la v4, il n'y avait que 3 niveaux d'appareils : ils deviennent les niveaux 2 à 4.
     if (s.version < 4) for (const id of STATION_ORDER) g.stations[id] = { level: Math.min(MAX_LEVEL, (g.stations[id]?.level ?? 1) + 1) };
     // Avant la v5, le « Bar du coin » était un distributeur : il devient la pièce Bar, et les ventes passent par des commandes.
-    if (s.version < 5) {
-      g.signed = g.signed.filter((id) => CLIENTS.some((c) => c.id === id));
-      for (const id of g.signed) g.orderTimers[id] = FIRST_ORDER_S;
-      delete g.deals.bar;
-      g.barLevel = 1;
+    if (s.version < 5) g.barLevel = 1;
+    // Avant la v7, les commandes venaient de clients sous contrat : place au tableau de commandes variées.
+    if (s.version < 7) {
+      g.orders = [];
+      g.orderTimer = FIRST_ORDER_S;
+      g.announced = new Set(CLIENT_TYPES.filter((c) => c.level <= g.breweryLevel && c.pop <= g.brand).map((c) => c.id));
     }
     // Avant la v6, le bar servait des bouteilles : il tire maintenant des fûts, et les bières ont une popularité.
     if (s.version < 6) {
@@ -899,25 +920,18 @@ export class Game {
     g.plan ??= [];
     g.format ??= 'bottle';
     g.orders ??= [];
-    g.orderTimers ??= {};
+    g.orderTimer ??= FIRST_ORDER_S;
+    g.wholesaleSold ??= 0;
+    g.autoWholesale ??= true;
+    g.computerLevel ??= 1;
     g.queued ??= false;
-    g.deals ??= {};
     g.trial ??= null;
     return g;
   }
 }
 
-/** Première commande d'un client tout juste signé (s de jeu). */
-export const FIRST_ORDER_S = 20;
 /** Brassins programmés au plus. */
 export const MAX_PLAN = 6;
-
-export const clientById = (id: string): Client | undefined => CLIENTS.find((c) => c.id === id);
-
-/** Prix d'une bouteille livrée pour une commande. */
-export function orderPrice(c: Client, t: Pick<Tasting, 'quality'>, like: boolean, deal = 0): number {
-  return c.price * qualityFactor(t) * ORDER_PREMIUM * (like ? LIKE_BONUS : 1) * (1 + DEAL_PRICE * deal);
-}
 
 export const sameRecipe = (a: Recipe, b: Recipe) => (Object.keys(a) as (keyof Recipe)[]).every((k) => a[k] === b[k]);
 
