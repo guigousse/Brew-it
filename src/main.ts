@@ -1,7 +1,7 @@
 import './ui/style.css';
 import { FixedStepLoop, Game, simulateOffline } from './core/game';
 import { SaveManager } from './core/save';
-import { DISTRIBUTORS } from './core/market';
+import { CLIENTS } from './core/market';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { createStorage } from './platform/storage';
 import { App } from './ui/app';
@@ -28,12 +28,15 @@ async function boot() {
   });
 
   app.onTasteReady = () => tapFeedback(true);
+  app.onSent = () => tapFeedback(true);
   let unsubscribe = () => {};
+  let muted = false;
   function start(g: Game) {
     unsubscribe();
     game = g;
     loop = new FixedStepLoop(() => game);
     unsubscribe = game.events.on((e) => {
+      if (muted) return; // rattrapage hors-ligne : pas de rafale de notifications
       if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
       if (e.type === 'batchDone' && e.beerId != null) app.toast(`+${e.bottles} bouteilles en stock`, 'good');
       if (e.type === 'batchRuined') app.toast(`Lot de « ${game.beers.find((b) => b.id === e.beerId)?.name} » raté, jeté`, 'bad');
@@ -42,7 +45,12 @@ async function boot() {
         app.openBrewery(true);
         tapFeedback(true);
       }
-      if (e.type === 'distributorAvailable') app.toast(`Nouveau client : ${DISTRIBUTORS.find((d) => d.id === e.id)?.name}`, 'good');
+      if (e.type === 'clientAvailable') app.toast(`Nouveau client possible : ${CLIENTS.find((d) => d.id === e.id)?.name} (ordinateur du stockage)`, 'good');
+      if (e.type === 'order') {
+        app.toast(`📨 Commande de ${CLIENTS.find((d) => d.id === e.client)?.name}`, 'good');
+        tapFeedback(false);
+      }
+      if (e.type === 'orderExpired') app.toast(`Commande de ${CLIENTS.find((d) => d.id === e.client)?.name} expirée`, 'bad');
     });
     app.update();
     if (game.offline) app.openOffline();
@@ -79,7 +87,11 @@ async function boot() {
     () => {
       if (!pausedAt) return;
       app.scene.invalidate();
+      app.storageRoom.invalidate();
+      app.barRoom.invalidate();
+      muted = true;
       simulateOffline(game, (Date.now() - pausedAt) / 1000);
+      muted = false;
       last = performance.now();
       if (game.offline) app.openOffline();
     },

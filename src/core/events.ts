@@ -3,7 +3,9 @@ export type GameEvent =
   | { type: 'batchDone'; beerId: number | null; bottles: number }
   | { type: 'stage'; batchId: number; stage: number }
   | { type: 'sale'; amount: number }
-  | { type: 'distributorAvailable'; id: string }
+  | { type: 'clientAvailable'; id: string }
+  | { type: 'order'; client: string }
+  | { type: 'orderExpired'; client: string }
   | { type: 'upgraded'; station: string; level: number }
   | { type: 'breweryLevel'; level: number }
   | { type: 'batchRuined'; beerId: number };

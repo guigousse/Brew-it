@@ -1,12 +1,13 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { type Beer, type Game } from '../core/game';
-import { DISTRIBUTORS, MAX_DEAL } from '../core/market';
+import { clientById, type Beer, type Game, type Order } from '../core/game';
+import { BAR, barPrice, BAR_MIN_QUALITY, CLIENTS, MAX_DEAL } from '../core/market';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
-import { BOTTLE_SCALE, drawShelfBottle, drawStorage, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
+import { BOTTLE_SCALE, drawShelfBottle, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
+import { BarRoom, StorageRoom } from '../render/rooms';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
@@ -33,6 +34,21 @@ function img(canvas: HTMLCanvasElement, cls = 'pix'): HTMLImageElement {
   return i;
 }
 
+/** Les trois pièces, dans l'ordre du trajet de la bière : on glisse de l'une à l'autre. */
+export type RoomId = 'workshop' | 'storage' | 'bar';
+const ROOMS: readonly { id: RoomId; name: string }[] = [
+  { id: 'workshop', name: 'Atelier' },
+  { id: 'storage', name: 'Stockage' },
+  { id: 'bar', name: 'Bar' },
+];
+
+type SheetState = { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'storage' | 'bar' | 'barUp' };
+
+const duration = (s: number) => {
+  const m = Math.max(0, Math.floor(s / 60));
+  return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`;
+};
+
 export interface AppCallbacks {
   getSpeed(): number;
   setSpeed(s: number): void;
@@ -54,20 +70,45 @@ export class App {
   private bottom = h('nav', 'bottombar');
   private brewBtn = h('button', 'brew-btn');
   private rangeBtn = h('button', 'side-btn');
-  private salesBtn = h('button', 'side-btn');
-  private storageBtn = h('button', 'side-btn');
+  private stockBtn = h('button', 'side-btn');
+  private ordersBtn = h('button', 'brew-btn');
+  private menuBtn = h('button', 'brew-btn');
+  private barUpBtn = h('button', 'side-btn');
+  // --- les pièces
+  readonly storageRoom = new StorageRoom();
+  readonly barRoom = new BarRoom();
+  private room: RoomId = 'workshop';
+  private nav = h('div', 'rooms-nav');
+  private navTabs = new Map<RoomId, { btn: HTMLButtonElement; badge: HTMLElement }>();
+  private track = h('div', 'rooms-track');
+  private wraps: HTMLElement[] = [];
+  private storageWrap = h('div', 'scene-wrap');
+  private barWrap = h('div', 'scene-wrap');
+  private roomHits: { el: HTMLButtonElement; rect: { x: number; y: number; w: number; h: number } }[] = [];
+  private storagePlaque = h('button', 'map-btn plaque');
+  private barPlaque = h('button', 'map-btn plaque');
+  private ordersBadge = h('div', 'orders-badge hidden');
+  /** Glissement en cours : départ du doigt, décalage, et s'il faut avaler le « clic » qui suit. */
+  private swipe: { id: number; x: number; y: number; dx: number; on: boolean; t: number } | null = null;
+  private swallowClick = false;
+  private roomsDrawUntil = 0;
+  /** Fenêtre de l'ordinateur ouverte, onglet affiché, bières choisies pour chaque commande. */
+  private computer: { tab: 'orders' | 'clients'; key: string } | null = null;
+  private picks = new Map<number, number[]>();
   /** Bière choisie sur l'étagère (fiche affichée sous l'étagère). */
   private shelfSel: number | null = null;
   private sheet = h('section', 'sheet hidden');
   private modal = h('div', 'modal hidden');
   private mentor = h('div', 'mentor hidden');
   private toasts = h('div', 'toasts');
-  private openSheet: { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'sales' | 'storage' } | null = null;
+  private openSheet: SheetState | null = null;
   private sheetKey = '';
   private mentorKey = '';
   private scale = 2;
   /** Appelé quand une première bouteille d'essai est prête (haptique). */
   onTasteReady?: () => void;
+  /** Appelé quand une commande part (haptique). */
+  onSent?: () => void;
 
   constructor(private root: HTMLElement, private game: () => Game, private cb: AppCallbacks) {
     // header
@@ -78,7 +119,15 @@ export class App {
     const opts = h('button', 'icon-btn', '⚙');
     opts.setAttribute('aria-label', 'Options');
     opts.onclick = () => this.openOptions();
-    this.header.append(logo, pill, opts);
+    this.header.append(logo, pill, opts, this.nav);
+    for (const r of ROOMS) {
+      const btn = h('button', 'room-tab');
+      const badge = h('span', 'room-badge hidden');
+      btn.append(h('span', '', r.name), badge);
+      btn.onclick = () => this.goRoom(r.id);
+      this.nav.append(btn);
+      this.navTabs.set(r.id, { btn, badge });
+    }
 
     // scène + étiquettes cliquables
     this.sceneWrap.append(this.scene.canvas);
@@ -97,14 +146,46 @@ export class App {
     this.tasteBtn.onclick = () => this.openTasting();
     this.plaque.onclick = () => this.openBrewery();
     this.sceneWrap.append(this.plaque, this.tasteBtn);
-    this.stage.append(this.sceneWrap);
 
-    // barre du bas
+    // stockage : rayonnages et ordinateur
+    this.storageWrap.append(this.storageRoom.canvas);
+    for (const hit of this.storageRoom.hits()) {
+      const el = h('button', 'station-hit');
+      el.setAttribute('aria-label', hit.id === 'computer' ? 'Ordinateur des commandes' : 'Rayonnages');
+      el.onclick = () => (hit.id === 'computer' ? this.openComputer() : this.open({ kind: 'storage' }));
+      this.storageWrap.append(el);
+      this.roomHits.push({ el, rect: hit.rect });
+    }
+    this.storagePlaque.onclick = () => this.open({ kind: 'storage' });
+    this.storageWrap.append(this.storagePlaque, this.ordersBadge);
+    // bar : le comptoir
+    this.barWrap.append(this.barRoom.canvas);
+    for (const hit of this.barRoom.hits()) {
+      const el = h('button', 'station-hit');
+      el.setAttribute('aria-label', 'Comptoir');
+      el.onclick = () => this.open({ kind: 'bar' });
+      this.barWrap.append(el);
+      this.roomHits.push({ el, rect: hit.rect });
+    }
+    this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
+    this.barWrap.append(this.barPlaque);
+    for (const w of [this.sceneWrap, this.storageWrap, this.barWrap]) {
+      const pane = h('div', 'room');
+      pane.append(w);
+      this.track.append(pane);
+      this.wraps.push(w);
+    }
+    this.stage.append(this.track);
+    this.bindSwipe();
+
+    // barre du bas : ses boutons changent selon la pièce
     this.rangeBtn.onclick = () => this.open({ kind: 'range' });
-    this.salesBtn.onclick = () => this.open({ kind: 'sales' });
-    this.storageBtn.onclick = () => this.open({ kind: 'storage' });
     this.brewBtn.onclick = () => this.open({ kind: 'brew' });
-    this.bottom.append(this.rangeBtn, this.storageBtn, this.brewBtn, this.salesBtn);
+    this.stockBtn.onclick = () => this.open({ kind: 'storage' });
+    this.ordersBtn.onclick = () => this.openComputer();
+    this.menuBtn.onclick = () => this.open({ kind: 'bar' });
+    this.barUpBtn.onclick = () => this.open({ kind: 'barUp' });
+    this.setBottom();
 
     // Gaston
     const av = h('canvas', 'mentor-avatar');
@@ -127,8 +208,13 @@ export class App {
     this.scale = Math.min(availW / SCENE_W, availH / SCENE_H);
     const w = Math.floor(SCENE_W * this.scale);
     const hh = Math.floor(SCENE_H * this.scale);
-    Object.assign(this.sceneWrap.style, { width: `${w}px`, height: `${hh}px` });
-    Object.assign(this.scene.canvas.style, { width: `${w}px`, height: `${hh}px` });
+    for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px` });
+    for (const c of [this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas]) Object.assign(c.style, { width: `${w}px`, height: `${hh}px` });
+    const s = this.scale;
+    for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
+    const bp = this.storageRoom.badgePoint;
+    Object.assign(this.ordersBadge.style, { left: `${bp.x * s}px`, top: `${bp.y * s}px` });
+    this.placeTrack();
     this.stage.style.top = `${top}px`;
     this.stage.style.bottom = `${window.innerHeight - bottom}px`;
     this.root.style.setProperty('--bottom-h', `${window.innerHeight - bottom}px`);
@@ -141,6 +227,11 @@ export class App {
 
   frame(t: number): void {
     const g = this.game();
+    // On ne dessine que la pièce affichée (et ses voisines pendant un glissement).
+    const all = !!this.swipe?.on || performance.now() < this.roomsDrawUntil;
+    if (all || this.room === 'storage') this.storageRoom.draw(g, t);
+    if (all || this.room === 'bar') this.barRoom.draw(g, t);
+    if (!all && this.room !== 'workshop') return;
     this.scene.draw(g, t);
     // étiquettes des appareils
     for (const id of STATION_ORDER) {
@@ -181,8 +272,37 @@ export class App {
     const trial = g.tastable;
     this.rangeBtn.replaceChildren(h('span', 'side-title', 'Gamme'), h('span', 'side-sub', `${g.beers.length}/${g.rangeSlots} bières`));
     const capCrates = STORAGE[g.storageLevel - 1]!.crates;
-    this.storageBtn.replaceChildren(h('span', 'side-title', 'Stockage'), h('span', 'side-sub', g.storageFull ? 'Plein !' : `${Math.ceil(g.stored / CRATE)}/${capCrates} caisses`));
-    this.storageBtn.classList.toggle('alert', g.bottlingBlocked);
+    this.stockBtn.replaceChildren(h('span', 'side-title', 'Stock'), h('span', 'side-sub', g.storageFull ? 'Plein !' : `${Math.ceil(g.stored / CRATE)}/${capCrates} caisses`));
+    this.stockBtn.classList.toggle('alert', g.bottlingBlocked);
+    const ready = g.readyOrders.length;
+    const availableClient = CLIENTS.some((c) => !g.signed.includes(c.id) && g.clientOpen(c.id));
+    this.ordersBtn.replaceChildren(
+      h('span', 'brew-title', 'Commandes'),
+      h('span', 'brew-sub', g.orders.length ? `${g.orders.length} en attente${ready ? ` · ${ready} prête${ready > 1 ? 's' : ''}` : ''}` : availableClient ? '✍ Nouveau client' : g.signed.length ? 'Aucune pour l\'instant' : 'Signe un client'),
+    );
+    this.ordersBtn.classList.toggle('ready', ready > 0 || availableClient);
+    this.menuBtn.replaceChildren(h('span', 'brew-title', 'La carte'), h('span', 'brew-sub', g.barServing ? `${fmtRate(g.barRate)} btl/min` : g.beers.length ? 'À sec !' : 'Rien à servir'));
+    this.menuBtn.classList.toggle('ready', g.barServing);
+    const nextBar = BAR[g.barLevel];
+    this.barUpBtn.replaceChildren(h('span', 'side-title', 'Agrandir'), h('span', 'side-sub', nextBar ? moneyShort(nextBar.cost) : 'Au max'));
+    this.barUpBtn.classList.toggle('alert', !!nextBar && g.money >= nextBar.cost);
+    this.storagePlaque.textContent = `▣ ${STORAGE[g.storageLevel - 1]!.name}`;
+    this.barPlaque.textContent = `★ ${g.barLevel} · ${g.bar.name}`;
+    this.ordersBadge.classList.toggle('hidden', !g.orders.length);
+    this.ordersBadge.classList.toggle('ready', ready > 0);
+    this.ordersBadge.textContent = String(g.orders.length);
+    // pastilles des onglets de pièces
+    const badges: Record<RoomId, string> = {
+      workshop: trial ? '🍺' : '',
+      storage: g.orders.length ? String(g.orders.length) : g.storageFull ? '!' : availableClient ? '✍' : '',
+      bar: g.beers.length && !g.barServing && !g.onTap.some((b) => g.pendingBottles(b.id) > 0) ? '!' : '', // à sec, et rien n'arrive
+    };
+    for (const [id, tab] of this.navTabs) {
+      tab.btn.classList.toggle('active', id === this.room);
+      tab.badge.textContent = badges[id];
+      tab.badge.classList.toggle('hidden', !badges[id]);
+      tab.badge.classList.toggle('hot', id === 'storage' ? ready > 0 || g.storageFull : !!badges[id]);
+    }
     this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen);
     this.placeTaste();
     if (trial && trial.id !== this.announcedTaste) {
@@ -190,9 +310,7 @@ export class App {
       this.toast('Première bouteille : goûte-la !', 'good');
       this.onTasteReady?.();
     }
-    const available = DISTRIBUTORS.some((d) => !g.signed.includes(d.id) && g.distributorOpen(d.id));
-    this.salesBtn.replaceChildren(h('span', 'side-title', 'Ventes'), h('span', 'side-sub', available ? '✍ Nouveau contrat' : `${g.totalSold} vendues`));
-    this.salesBtn.classList.toggle('alert', available);
+    this.refreshComputer();
     this.renderSheet();
     this.renderMentor();
     // La barre du bas change de hauteur une fois remplie / les polices chargées : on recadre.
@@ -224,8 +342,9 @@ export class App {
     this.sheet.classList.toggle('hidden', !s);
     if (!s) return;
     const key = JSON.stringify([
-      s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.signed, g.selectedBeer, g.autoBrew,
-      Math.floor(g.totalSold / 10), g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'sales' ? [g.deals, Math.round(g.demandRate), Math.round(g.productionRate())] : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
+      s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer, g.autoBrew,
+      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.barMenu, Math.floor(g.barSold / 10), g.barLevel] : 0,
+      s.kind === 'storage' ? Math.round(g.productionRate()) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
     ]);
     if (key === this.sheetKey) return this.refreshLive();
     this.sheetKey = key;
@@ -237,7 +356,8 @@ export class App {
     if (s.kind === 'brew') this.brewSheet(g);
     if (s.kind === 'range') this.rangeSheet(g);
     if (s.kind === 'storage') this.storageSheet(g);
-    if (s.kind === 'sales') this.salesSheet(g);
+    if (s.kind === 'bar') this.barSheet(g);
+    if (s.kind === 'barUp') this.barUpSheet(g);
     const body = this.sheet.querySelector('.sheet-body');
     if (body) body.scrollTop = scroll;
     const shelf = this.sheet.querySelector('.shelf');
@@ -444,9 +564,6 @@ export class App {
     const body = this.frameSheet(`Stockage · ${lvl.name}`);
     const capCrates = lvl.crates;
     const crates = Math.ceil(g.stored / CRATE);
-    const pic = h('canvas', 'storage-pic');
-    drawStorage(pic, g.beers, capCrates, g.storageLevel);
-    body.append(pic);
     body.append(h('div', 'stats-line strong', `${g.stored} / ${g.storageCap} bouteilles · ${crates} / ${capCrates} caisses de ${CRATE}`));
     const bar = h('div', 'progress');
     const fill = h('div', `progress-fill${g.storageFull ? ' full' : ''}`);
@@ -519,28 +636,213 @@ export class App {
     return card;
   }
 
-  // --- Ventes
-  private salesSheet(g: Game): void {
-    const body = this.frameSheet('Ventes');
-    const demand = g.demandRate;
-    const prod = g.productionRate();
-    const short = demand > prod * 1.05;
-    body.append(
-      h('div', 'stats-line strong', `${g.totalSold.toLocaleString('fr-FR')} vendues · ${moneyInt(g.totalRevenue)}`),
-      h('div', short ? 'note bad' : 'stats-line', `Commandes ${fmtRate(demand)}/min · production ${fmtRate(prod)}/min${short ? ' ⚠' : ''}`),
-    );
-    for (const d of DISTRIBUTORS) {
+  // --- Bar : la carte (bières servies, une par tireuse)
+  private barSheet(g: Game): void {
+    const body = this.frameSheet(`La carte · ${g.barMenu.length}/${g.barTaps} tireuses`);
+    body.append(h('div', 'stats-line strong', `${fmtRate(g.barRate)} btl/min · ${g.barSold.toLocaleString('fr-FR')} servies · ${moneyInt(g.barRevenue)}`));
+    if (!g.beers.length) body.append(h('p', 'hint', 'Garde une bière à l\'atelier pour la servir ici.'));
+    else if (!g.barServing) body.append(h('p', 'note bad', g.onTap.length ? 'À sec : plus rien en stock à servir' : 'Mets une bière à la carte'));
+    const list = h('div', 'stock-list');
+    for (const b of g.beers) {
+      const on = g.barMenu.includes(b.id);
+      const line = h('button', `stock-line tap-line${on ? ' on' : ''}`);
+      const thumb = h('canvas', 'label-thumb');
+      drawLabel(thumb, b.label, b.name);
+      const ok = b.tasting.quality >= BAR_MIN_QUALITY;
+      line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.stock} btl · ${money(barPrice(g.barLevel, b.tasting))}`), h('span', 'tap-state', on ? '✓' : '+'));
+      line.disabled = !ok || (!on && g.barMenu.length >= g.barTaps);
+      line.onclick = () => {
+        const r = g.toggleTap(b.id);
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.sheetKey = '';
+      };
+      list.append(line);
+    }
+    body.append(list);
+    if (g.beers.length > g.barTaps) body.append(h('p', 'hint', 'Plus de tireuses : agrandis le bar.'));
+  }
+
+  // --- Bar : l'agrandir (plus de places, de tireuses, une meilleure ambiance)
+  private barUpSheet(g: Game): void {
+    const lvl = g.bar;
+    const body = this.frameSheet(`Bar · ${lvl.name}`);
+    const next = BAR[g.barLevel];
+    const levels = h('div', 'storage-levels');
+    for (const [l, tag, cls] of [[lvl, 'Actuel', 'done'], [next, 'Suivant', 'current']] as const) {
+      if (!l) continue;
+      const cell = h('div', `storage-level ${cls}`);
+      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.seats} places · ${l.taps} tireuse${l.taps > 1 ? 's' : ''} · ${l.rate} btl/min · prix ×${l.priceMult.toLocaleString('fr-FR')}`));
+      levels.append(cell);
+    }
+    body.append(levels);
+    if (next) {
+      const b = this.btn('btn primary', `Agrandir · ${moneyInt(next.cost)}`, () => {
+        const r = g.upgradeBar();
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.toast(`${next.name} !`, 'good');
+        this.barRoom.invalidate();
+        this.sheetKey = '';
+      });
+      b.dataset.cost = String(next.cost);
+      b.disabled = g.money < next.cost;
+      body.append(b);
+    } else body.append(h('p', 'note', 'Niveau maximal'));
+  }
+
+  // ------------------------------------------------------------------ ordinateur des commandes
+
+  /** L'ordinateur du stockage : les commandes des clients (des missions) et les contrats. */
+  openComputer(tab?: 'orders' | 'clients'): void {
+    const g = this.game();
+    if (this.room !== 'storage') this.goRoom('storage');
+    this.close();
+    const card = this.modalCard('');
+    card.classList.add('computer');
+    const t = tab ?? (g.signed.length ? 'orders' : 'clients');
+    this.computer = { tab: t, key: '' };
+    this.renderComputer(card);
+  }
+
+  private computerKey(g: Game): string {
+    return JSON.stringify([this.computer?.tab, g.orders.map((o) => o.id), g.beers.map((b) => [b.id, b.stock]), g.signed, g.deals, Math.floor(g.totalSold / 50), g.breweryLevel, [...this.picks]]);
+  }
+
+  /** Reconstruit la fenêtre quand une commande arrive, expire, ou que le stock change. */
+  private refreshComputer(): void {
+    if (!this.computer || !this.modalOpen) return;
+    const card = this.modal.querySelector<HTMLElement>('.modal-card.computer');
+    if (!card) return;
+    if (this.computerKey(this.game()) !== this.computer.key) this.renderComputer(card);
+    else {
+      card.querySelectorAll<HTMLButtonElement>('[data-cost]').forEach((b) => (b.disabled = this.game().money < Number(b.dataset.cost)));
+      card.querySelectorAll<HTMLElement>('[data-expires]').forEach((el) => (el.textContent = `⏳ ${duration(Number(el.dataset.expires) - this.game().time)}`));
+    }
+  }
+
+  private renderComputer(card: HTMLElement): void {
+    const g = this.game();
+    const st = this.computer!;
+    st.key = this.computerKey(g);
+    const scroll = card.scrollTop;
+    card.replaceChildren();
+    const head = h('div', 'sheet-head');
+    const tabs = h('div', 'pc-tabs');
+    for (const [id, name] of [['orders', `Commandes${g.orders.length ? ` (${g.orders.length})` : ''}`], ['clients', 'Clients']] as const) {
+      tabs.append(this.btn(`pc-tab${st.tab === id ? ' active' : ''}`, name, () => {
+        st.tab = id;
+        this.renderComputer(card);
+      }));
+    }
+    head.append(tabs, this.btn('icon-btn small', '✕', () => this.closeModal()));
+    card.append(head);
+    if (st.tab === 'orders') this.ordersTab(g, card);
+    else this.clientsTab(g, card);
+    card.scrollTop = scroll;
+  }
+
+  private ordersTab(g: Game, card: HTMLElement): void {
+    if (!g.signed.length) {
+      card.append(h('p', 'hint', 'Aucun client pour l\'instant. Signe un contrat : ses commandes arriveront ici.'));
+      card.append(this.btn('btn primary', 'Voir les clients', () => {
+        this.computer!.tab = 'clients';
+        this.renderComputer(card);
+      }));
+      return;
+    }
+    if (!g.orders.length) {
+      card.append(h('p', 'hint', 'Pas de commande en attente. Tes clients en envoient régulièrement, même quand tu n\'es pas là.'));
+      return;
+    }
+    // les plus urgentes d'abord
+    for (const o of [...g.orders].sort((a, b) => a.expires - b.expires)) card.append(this.orderCard(g, o));
+    // ménage des sélections de commandes disparues
+    for (const id of this.picks.keys()) if (!g.orders.some((o) => o.id === id)) this.picks.delete(id);
+  }
+
+  /** Une commande : ce qu'elle demande, les bières qui conviennent (à cocher), et l'envoi. */
+  private orderCard(g: Game, o: Order): HTMLElement {
+    const c = clientById(o.client)!;
+    const ok = g.suitable(o);
+    // première ouverture : on présélectionne les bières les plus en stock jusqu'à remplir la commande
+    if (!this.picks.has(o.id)) {
+      const sorted = [...ok].sort((a, b) => b.stock - a.stock);
+      const pick: number[] = [];
+      let n = 0;
+      for (const b of sorted) {
+        if (n >= o.qty || b.stock <= 0) break;
+        pick.push(b.id);
+        n += b.stock;
+      }
+      this.picks.set(o.id, pick);
+    }
+    const pick = this.picks.get(o.id)!;
+    const q = g.quote(o, pick);
+    const card = h('div', `card order${q.filled >= o.qty ? ' banner' : ''}`);
+    const head = h('div', 'beer-head');
+    const left = h('span', 'order-time');
+    left.dataset.expires = String(o.expires);
+    left.textContent = `⏳ ${duration(o.expires - g.time)}`;
+    head.append(h('span', 'beer-name', c.name), left);
+    card.append(head);
+    card.append(h('div', 'stats-line strong', `${o.qty} bouteilles · min. ${verdictOf(c.minQuality)}${o.like ? ` · ♥ ${c.likes!.label}` : ''}`));
+    card.append(h('div', 'stats-line', `Jusqu'à ${moneyInt(g.orderValue(o))} selon la qualité`));
+    if (!ok.length) card.append(h('p', 'note bad', o.like ? 'Aucune bière de ta gamme n\'a ce style' : 'Aucune bière de ta gamme n\'est assez bonne'));
+    else {
+      const chips = h('div', 'chips');
+      for (const b of ok) {
+        const on = pick.includes(b.id);
+        const chip = h('button', `chip beer-chip${on ? ' active' : ''}`);
+        const thumb = h('canvas', 'label-thumb');
+        drawLabel(thumb, b.label, b.name);
+        chip.append(thumb, h('span', '', `${b.name} · ${b.stock}`));
+        chip.disabled = !on && b.stock <= 0;
+        chip.onclick = () => {
+          this.picks.set(o.id, on ? pick.filter((x) => x !== b.id) : [...pick, b.id]);
+          this.refreshComputer();
+        };
+        chips.append(chip);
+      }
+      card.append(chips);
+      const bar = h('div', 'progress');
+      const fill = h('div', 'progress-fill');
+      fill.style.width = `${Math.min(100, (q.filled / o.qty) * 100)}%`;
+      bar.append(fill);
+      card.append(bar);
+    }
+    const row = h('div', 'row');
+    const send = this.btn('btn primary', q.filled >= o.qty ? `Envoyer · ${moneyInt(q.amount)}` : `${q.filled}/${o.qty} bouteilles`, () => {
+      const r = g.fulfill(o.id, pick);
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      this.picks.delete(o.id);
+      this.toast(`Commande envoyée : +${moneyInt(r.amount!)}`, 'good');
+      this.onSent?.();
+      this.sheetKey = '';
+      this.refreshComputer();
+    });
+    send.disabled = q.filled < o.qty;
+    const decline = this.btn('btn small bad', 'Refuser', () => {
+      g.declineOrder(o.id);
+      this.picks.delete(o.id);
+      this.refreshComputer();
+    });
+    row.append(send, decline);
+    card.append(row);
+    return card;
+  }
+
+  /** Les clients : contrats à signer, négociations (commandes plus grosses). */
+  private clientsTab(g: Game, card: HTMLElement): void {
+    card.append(h('div', 'stats-line', `${g.totalSold.toLocaleString('fr-FR')} vendues · ${g.ordersDone} commandes livrées · production ${fmtRate(g.productionRate())} btl/min`));
+    for (const d of CLIENTS) {
       const signed = g.signed.includes(d.id);
-      const unlocked = g.distributorOpen(d.id);
-      const card = h('div', `card distributor${signed ? ' signed' : unlocked ? ' available' : ' locked'}`);
+      const unlocked = g.clientOpen(d.id);
+      const el = h('div', `card client${signed ? ' signed' : unlocked ? ' available' : ' locked'}`);
       const head = h('div', 'beer-head');
       head.append(h('span', 'beer-name', d.name), h('span', `verdict ${signed ? 'v-good' : unlocked ? 'v-top' : 'v-meh'}`, signed ? '✓' : unlocked ? 'Disponible' : '🔒'));
-      card.append(head);
-      card.append(h('div', 'stats-line', `${signed ? fmtRate(g.orderRate(d.id)) : d.rate}/min · lots de ${d.order} · ${money(d.price * 0.6)}–${money(d.price * 1.4)} · min. ${verdictOf(d.minQuality)}${d.likes ? ` · ♥ ${d.likes.label}` : ''}`));
-      if (d.order > g.storageCap) card.append(h('p', 'note bad', `Stockage trop petit (lots de ${d.order})`));
+      el.append(head, h('div', 'hint', d.description));
+      el.append(h('div', 'stats-line', `Commandes de ${g.orderSize(d.id)} btl · min. ${verdictOf(d.minQuality)}${d.likes ? ` · ♥ ${d.likes.label}` : ''}`));
+      if (g.orderSize(d.id) > g.storageCap) el.append(h('p', 'note bad', 'Stockage trop petit pour ses commandes'));
       if (signed) {
-        const best = g.beers.filter((b) => b.tasting.quality >= d.minQuality);
-        if (!best.length) card.append(h('p', 'note bad', 'Aucune bière ne lui convient'));
         const lvl = g.deals[d.id] ?? 0;
         const pips = h('div', 'deal-pips');
         for (let i = 0; i < MAX_DEAL; i++) pips.append(h('span', `pip${i < lvl ? ' on' : ''}`));
@@ -551,38 +853,115 @@ export class App {
           const nb = this.btn('btn small', `Négocier +40 % · ${moneyInt(cost)}`, () => {
             const r = g.negotiate(d.id);
             if (!r.ok) return this.toast(r.reason!, 'bad');
-            this.toast('+40 % de commandes', 'good');
-            this.sheetKey = '';
+            this.toast('Commandes plus grosses', 'good');
+            this.refreshComputer();
           });
           nb.dataset.cost = String(cost);
           nb.disabled = g.money < cost;
           row.append(nb);
         }
-        card.append(row);
+        el.append(row);
       } else if (unlocked) {
         const b = this.btn('btn primary', `Signer le contrat · ${moneyInt(d.fee)}`, () => {
           const r = g.sign(d.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`Contrat signé avec ${d.name} !`, 'good');
-          this.sheetKey = '';
+          this.toast(`Contrat signé avec ${d.name} : première commande bientôt !`, 'good');
+          this.refreshComputer();
         });
         b.dataset.cost = String(d.fee);
         b.disabled = g.money < d.fee;
-        card.append(b);
+        el.append(b);
       } else {
         const lvOk = g.breweryLevel >= d.level;
-        card.append(h('div', lvOk ? 'note' : 'note bad', `${lvOk ? '✓' : '✗'} Brasserie ★${d.level} ${BREWERY_NAMES[d.level - 1]}`));
+        el.append(h('div', lvOk ? 'note' : 'note bad', `${lvOk ? '✓' : '✗'} Brasserie ★${d.level} ${BREWERY_NAMES[d.level - 1]}`));
         const soldOk = g.totalSold >= d.unlockSold;
-        if (d.unlockSold > 0) {
-          const bar = h('div', 'progress');
-          const fill = h('div', 'progress-fill');
-          fill.style.width = `${Math.min(100, (g.totalSold / d.unlockSold) * 100)}%`;
-          bar.append(fill);
-          card.append(h('div', soldOk ? 'note' : 'hint', `${soldOk ? '✓' : '✗'} ${d.unlockSold.toLocaleString('fr-FR')} vendues`), bar);
-        }
+        const bar = h('div', 'progress');
+        const fill = h('div', 'progress-fill');
+        fill.style.width = `${Math.min(100, (g.totalSold / d.unlockSold) * 100)}%`;
+        bar.append(fill);
+        el.append(h('div', soldOk ? 'note' : 'hint', `${soldOk ? '✓' : '✗'} ${d.unlockSold.toLocaleString('fr-FR')} vendues`), bar);
       }
-      body.append(card);
+      card.append(el);
     }
+  }
+
+  // ------------------------------------------------------------------ pièces
+
+  /** Va dans une pièce (onglet ou glissement). */
+  goRoom(id: RoomId): void {
+    if (id === this.room) return;
+    this.room = id;
+    this.close();
+    this.storageRoom.selected = null;
+    this.barRoom.selected = null;
+    this.roomsDrawUntil = performance.now() + 400;
+    this.stage.classList.remove('dragging');
+    this.placeTrack();
+    this.setBottom();
+    this.update();
+  }
+
+  private get roomIndex(): number {
+    return ROOMS.findIndex((r) => r.id === this.room);
+  }
+
+  private placeTrack(dx = 0): void {
+    this.track.style.transform = `translateX(calc(${-this.roomIndex * 100}vw + ${dx}px))`;
+  }
+
+  /** La barre du bas propose les actions de la pièce affichée. */
+  private setBottom(): void {
+    const btns = this.room === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.room === 'storage' ? [this.stockBtn, this.ordersBtn] : [this.barUpBtn, this.menuBtn];
+    this.bottom.replaceChildren(...btns);
+  }
+
+  /** Glisser horizontalement passe d'une pièce à l'autre ; un glissement n'ouvre pas ce qu'il y a sous le doigt. */
+  private bindSwipe(): void {
+    const st = this.stage;
+    st.addEventListener('pointerdown', (e) => {
+      if (this.swipe) return;
+      this.swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false, t: performance.now() };
+    });
+    st.addEventListener('pointermove', (e) => {
+      const sw = this.swipe;
+      if (!sw || sw.id !== e.pointerId) return;
+      const dx = e.clientX - sw.x;
+      const dy = e.clientY - sw.y;
+      if (!sw.on) {
+        if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+        sw.on = true;
+        st.classList.add('dragging');
+        try { st.setPointerCapture(e.pointerId); } catch { /* le doigt est déjà parti */ }
+      }
+      // résistance aux bords (pas de pièce avant l'atelier ni après le bar)
+      const i = this.roomIndex;
+      sw.dx = (i === 0 && dx > 0) || (i === ROOMS.length - 1 && dx < 0) ? dx / 3 : dx;
+      this.placeTrack(sw.dx);
+    });
+    const end = (e: PointerEvent) => {
+      const sw = this.swipe;
+      if (!sw || sw.id !== e.pointerId) return;
+      this.swipe = null;
+      if (!sw.on) return;
+      this.swallowClick = true;
+      setTimeout(() => (this.swallowClick = false), 50);
+      st.classList.remove('dragging');
+      const fast = Math.abs(sw.dx) / Math.max(1, performance.now() - sw.t) > 0.5;
+      const far = Math.abs(sw.dx) > window.innerWidth * 0.22;
+      const i = this.roomIndex + (fast || far ? (sw.dx < 0 ? 1 : -1) : 0);
+      const target = ROOMS[Math.max(0, Math.min(ROOMS.length - 1, i))]!.id;
+      this.roomsDrawUntil = performance.now() + 400;
+      if (target !== this.room) this.goRoom(target);
+      else this.placeTrack();
+    };
+    st.addEventListener('pointerup', end);
+    st.addEventListener('pointercancel', end);
+    // le relâchement d'un glissement ne doit pas toucher une machine
+    st.addEventListener('click', (e) => {
+      if (!this.swallowClick) return;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
   }
 
   // ------------------------------------------------------------------ fenêtres
@@ -742,7 +1121,7 @@ export class App {
     const lv = g.breweryLevel;
     const card = this.modalCard(levelUp ? 'Ta brasserie grandit !' : 'Ta brasserie');
     card.append(h('div', 'verdict big v-top', `★ ${lv} · ${g.breweryName}`));
-    const opened = DISTRIBUTORS.filter((d) => d.level === lv && d.level > 1);
+    const opened = CLIENTS.filter((d) => d.level === lv && d.level > 1);
     if (levelUp && opened.length) card.append(h('p', 'note', `Nouveaux clients : ${opened.map((d) => d.name).join(', ')}`));
     if (lv < MAX_LEVEL) {
       card.append(h('div', 'section-title', `Prochain : ★${lv + 1} ${BREWERY_NAMES[lv]}`));
@@ -753,11 +1132,12 @@ export class App {
         row.append(img(stationCanvas(id, g.level(id)), 'pix brewery-pic'), h('span', '', STATIONS[id].step), h('span', 'brewery-state', ok ? '✓' : `niv. ${g.level(id)}`));
         row.onclick = () => {
           this.closeModal();
+          this.goRoom('workshop');
           this.open({ kind: 'station', id });
         };
         list.append(row);
       }
-      const next = DISTRIBUTORS.filter((d) => d.level === lv + 1);
+      const next = CLIENTS.filter((d) => d.level === lv + 1);
       card.append(list);
       if (next.length) card.append(h('p', 'hint', `Débloque : ${next.map((d) => d.name).join(', ')}`));
     } else card.append(h('p', 'note', 'Niveau maximal'));
@@ -792,6 +1172,7 @@ export class App {
   }
 
   private modalCard(title: string): HTMLElement {
+    this.computer = null;
     this.modal.replaceChildren();
     this.modal.classList.remove('hidden');
     const card = h('div', 'modal-card');
@@ -803,6 +1184,7 @@ export class App {
   }
 
   private closeModal(): void {
+    this.computer = null;
     this.modal.classList.add('hidden');
     this.modal.replaceChildren();
   }
@@ -820,7 +1202,7 @@ export class App {
       1: { text: 'Touche une machine pour la régler.' },
       2: { text: 'Appuie sur « Brasser » pour lancer ton premier brassin.' },
       3: { text: 'Je t\'aide pour celui-ci : ça ira vite. On goûte à la première bouteille !' },
-      4: { text: 'Le bar l\'achète ! Active le brassage continu : la brasserie tourne même appli fermée.', action: 'Compris' },
+      4: { text: 'Tes bouteilles vont au stockage, et le bar les vend. Glisse l\'écran pour visiter tes pièces ! Active aussi le brassage continu.', action: 'Compris' },
     };
     const tip = this.modalOpen || this.openSheet?.kind === 'brew' ? undefined : tips[g.tips];
     this.mentor.classList.toggle('hidden', !tip);

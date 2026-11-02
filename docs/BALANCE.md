@@ -90,12 +90,21 @@ Avant les corrections, avec 5 niveaux mais l'ancienne économie, le joueur simul
 ## Résultat (4 visites par jour)
 
 ```
-Contrats : Épicerie J1 · Caviste J4 · Restaurant J6 · Festival J12 · Supermarché J17 · Export J24
-Machines : niveau 2 le J1 · niveau 3 du J2 au J4 · niveau 4 du J6 au J10 · niveau 5 du J13 au J19
+Contrats : Épicerie J1 · Caviste J4 · Restaurant J6 · Festival J13 · Supermarché J21 · Export J29
 Chiffre d'affaires par jour :
-  J1 25k · J3 80k · J5 266k · J7 472k · J10 554k · J12 1,3M · J15 1,6M · J20 2,8M · J24 6,8M · J27 9,4M
-Fin : J28 · 107 visites · 48 % sans achat · pire série sans achat : 4 visites
+  J2 68k · J5 197k · J8 317k · J13 924k · J16 868k · J26 2,6M · J30 4,0M · J34 4,4M
+Fin : J36 · 120 visites · 48 % sans achat · pire série sans achat : 7 visites
+2 visites par jour : fin J48 · 42 % sans achat · pire série : 6
 ```
+
+## Refonte des ventes : bar et commandes
+
+Le « Bar du coin » est devenu une pièce, et les distributeurs sont devenus des clients qui envoient des commandes à remplir à la main. Les ventes ont changé de nature :
+- **Le bar** vend en continu, y compris hors ligne : c'est le revenu passif. Ses niveaux 4 et 5 sont forts (90 puis 450 btl/min × variété), pour écouler la production pendant l'absence.
+- **Les commandes** sont le revenu actif : elles paient 40 % de plus, mais n'avancent que quand le joueur les envoie. Elles s'accumulent hors ligne (3 par client au plus). Le stock disponible les limite, d'où un **stockage bien plus grand** (jusqu'à 4 000 caisses).
+- **La négociation** agrandit les commandes (+40 %) et améliore leur prix (+10 %). Sans ce bonus de prix, les négociations de fin de partie ne rapportaient plus rien : une fois le stock épuisé, une commande plus grosse ne fait pas vendre plus.
+
+Par rapport à l'ancienne économie (fin au J33, J42 à 2 visites par jour), la partie est 10 à 15 % plus longue. Elle récompense un peu plus le jeu actif, sans l'imposer : en fin de partie, le bar fait environ 60 % du chiffre d'affaires.
 
 ## Où régler quoi
 
@@ -105,8 +114,10 @@ Fin : J28 · 107 visites · 48 % sans achat · pire série sans achat : 4 visite
 | Changer le prix des machines | `TIER_COST` et `baseCost` (`src/core/stations.ts`) |
 | Changer le rythme du brassage | `DAY_S`, `SPEED`, `BOTTLE_S` (`src/core/stations.ts`) |
 | Changer la place des bières dans la gamme | `VARIETY` (`market.ts`) et `SLOT_COSTS` (`src/core/warehouse.ts`) |
-| Changer les négociations | `DEAL_BONUS`, `DEAL_COST`, `MAX_DEAL` (`market.ts`) |
-| Changer le stockage | `STORAGE` (`warehouse.ts`) et la taille des commandes `order` (`market.ts`) |
+| Changer les négociations | `DEAL_BONUS`, `DEAL_PRICE`, `DEAL_COST`, `MAX_DEAL` (`market.ts`) |
+| Changer le stockage | `STORAGE` (`warehouse.ts`) |
+| Changer le bar | `BAR`, `BAR_PRICE` (`market.ts`) |
+| Changer les commandes | `ORDER_MINUTES`, `ORDER_GAP_S`, `MAX_PENDING`, `ORDER_LIFE_S`, `ORDER_PREMIUM`, `LIKE_BONUS` (`market.ts`) |
 
 Après chaque réglage, relancer `npm run balance` et vérifier :
 - la durée totale ;
@@ -115,7 +126,7 @@ Après chaque réglage, relancer `npm run balance` et vérifier :
 
 ## Pistes pour la suite (pas encore faites)
 
-1. **Des commandes spéciales**, par exemple « le caviste veut une IPA Bonne avant ce soir, prime 2 000 € ». Ce serait une raison de revenir qui passe par la recette, pas seulement par l'argent. C'est le meilleur levier pour remplir la moitié des visites sans achat.
+1. ~~Des commandes spéciales~~ : c'est fait en partie. Les clients envoient des commandes à remplir, parfois avec un style exigé. On pourrait ajouter des commandes rares, avec une prime, qui demandent une recette précise.
 2. **Des notifications locales** : essai prêt à goûter, stockage plein, plafond des 8 h atteint. Elles ramènent le joueur au bon moment.
 3. ~~Faire peser davantage la qualité~~ : c'est fait. La précision du matériel fait varier la qualité de 0,58 en moyenne au niveau 1 à 1,00 au niveau 5 (voir GAME_DESIGN.md et `npm run quality`). Le rythme reste de 28 jours.
 4. **Le palier du niveau 5.** Le volume de 600 L n'arrive qu'avec les 7 machines au niveau 5. C'est le passage le plus lent (J13 à J19). On pourrait donner à chaque machine de niveau 5 un bonus immédiat (vitesse, qualité).

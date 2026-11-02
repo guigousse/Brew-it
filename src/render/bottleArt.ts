@@ -185,7 +185,7 @@ export function drawStorage(canvas: HTMLCanvasElement, beers: Beer[], capacity: 
   }
 }
 
-function drawCrate(g: CanvasRenderingContext2D, x: number, y: number, s: number, crate: CrateSpec): void {
+export function drawCrate(g: CanvasRenderingContext2D, x: number, y: number, s: number, crate: CrateSpec): void {
   const full = crate.count >= CRATE;
   const lid = Math.max(1, Math.round(s / 5));
   g.fillStyle = '#3a2410';

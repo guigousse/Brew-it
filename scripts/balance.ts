@@ -8,7 +8,7 @@
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
 import { DEFAULT_LABEL } from '../src/core/label';
 import { Game, simulateOffline } from '../src/core/game';
-import { DISTRIBUTORS } from '../src/core/market';
+import { BAR, CLIENTS } from '../src/core/market';
 import { MAX_LEVEL, STATION_ORDER, upgradeCost } from '../src/core/stations';
 import { STORAGE } from '../src/core/warehouse';
 import { BOT_RECIPES } from './recipes';
@@ -23,6 +23,16 @@ let clock = SESSIONS[0]! * 3600; // secondes depuis le jour 1 à minuit
 const log: { t: number; what: string; cost: number }[] = [];
 const fmt = (t: number) => `J${Math.floor(t / 86400) + 1} ${String(Math.floor((t % 86400) / 3600)).padStart(2, '0')}h${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}`;
 const buy = (what: string, cost: number) => log.push({ t: clock, what, cost });
+
+/** Remplit toutes les commandes possibles avec les bières qui conviennent (les plus en stock d'abord). */
+function deliver() {
+  for (const o of [...g.orders]) {
+    const ids = g.suitable(o).sort((a, b) => b.stock - a.stock).map((b) => b.id);
+    const r = g.fulfill(o.id, ids);
+    if (r.ok) delivered += r.amount!;
+  }
+}
+let delivered = 0;
 
 function play(seconds: number, during?: () => void) {
   for (let s = 0; s < seconds; s += DT) {
@@ -55,8 +65,8 @@ function newBeer(): boolean {
 function shop() {
   for (let k = 0; k < 200; k++) {
     const options: { cost: number; label: string; act: () => boolean }[] = [];
-    for (const d of DISTRIBUTORS) {
-      if (g.signed.includes(d.id) || !g.distributorOpen(d.id)) continue;
+    for (const d of CLIENTS) {
+      if (g.signed.includes(d.id) || !g.clientOpen(d.id)) continue;
       options.push({ cost: d.fee, label: `Contrat ${d.name}`, act: () => g.sign(d.id).ok });
     }
     for (const id of STATION_ORDER) {
@@ -68,6 +78,8 @@ function shop() {
       const c = g.dealCost(id);
       if (c != null) options.push({ cost: c, label: `Négo ${id} ${(g.deals[id] ?? 0) + 1}`, act: () => g.negotiate(id).ok });
     }
+    const bar = BAR[g.barLevel];
+    if (bar) options.push({ cost: bar.cost, label: `Bar → ${g.barLevel + 1}`, act: () => g.upgradeBar().ok });
     const next = STORAGE[g.storageLevel];
     if (next) options.push({ cost: next.cost, label: `Stockage → ${g.storageLevel + 1}`, act: () => g.upgradeStorage().ok });
     const slot = g.nextSlotCost;
@@ -82,6 +94,7 @@ function shop() {
 
 function session(minutes: number) {
   if (g.offline) g.collectOffline();
+  deliver();
   shop();
   while (g.beers.length < g.rangeSlots && newBeer()) buy(`Nouvelle bière (${g.beers.length})`, 0);
   if (g.beers.length) {
@@ -89,12 +102,14 @@ function session(minutes: number) {
     g.autoBrew = true;
   }
   play(minutes * 60, () => {
-    if (Math.floor(clock) % 60 === 0) shop();
+    if (clock % 10 < DT) deliver();
+    if (clock % 60 < DT) shop();
   });
+  deliver();
   shop();
 }
 
-const done = () => STATION_ORDER.every((id) => g.level(id) >= MAX_LEVEL) && g.storageLevel >= STORAGE.length && g.nextSlotCost == null && g.signed.length === DISTRIBUTORS.length && g.signed.every((id) => g.dealCost(id) == null);
+const done = () => STATION_ORDER.every((id) => g.level(id) >= MAX_LEVEL) && g.storageLevel >= STORAGE.length && g.nextSlotCost == null && g.barLevel >= BAR.length && g.signed.length === CLIENTS.length && g.signed.every((id) => g.dealCost(id) == null);
 
 // Première session : le tutoriel, un peu plus long (20 min).
 session(20);
@@ -142,8 +157,9 @@ console.log(revenueByDay.map((r, i) => `J${i + 1} ${Math.round(((revenueByDay[i 
 console.log('\n=== Résumé');
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
+console.log('Bar :', Math.round(g.barRevenue), '€ ·', g.barSold, 'btl · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€');
 console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots, '· contrats', g.signed.length);
-for (const d of DISTRIBUTORS) {
+for (const d of CLIENTS) {
   const e = log.find((x) => x.what === `Contrat ${d.name}`);
   console.log(`  ${d.name.padEnd(16)} ${e ? fmt(e.t) : '—'}`);
 }
@@ -151,5 +167,5 @@ if (process.env.DEBUG) {
   console.log('autoBrew', g.autoBrew, 'queued', g.queued, 'room', g.roomForBatch, 'stored', g.stored, '/', g.storageCap, 'liters', g.batchLiters);
   console.log('batches', g.batches.map((b) => `${b.stage}:${b.beerId}:${b.waiting}:${b.bottles}:${b.delivered}`));
   console.log('beers', g.beers.map((b) => `${b.name} q${b.tasting.quality.toFixed(2)} stock ${b.stock}`));
-  console.log('demand', g.demand);
+  console.log('orders', g.orders.map((o) => `${o.client}:${o.qty}`));
 }

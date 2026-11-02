@@ -1,7 +1,7 @@
 import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Levels, type Recipe, type Tasting } from './brewing/model';
 import { EventBus } from './events';
 import type { Label } from './label';
-import { bottlePrice, DEAL_BONUS, dealCost, DISTRIBUTORS, variety } from './market';
+import { BAR, BAR_MIN_QUALITY, barPrice, CLIENTS, DEAL_BONUS, DEAL_PRICE, dealCost, LIKE_BONUS, LIKE_CHANCE, MAX_PENDING, ORDER_GAP_S, ORDER_LIFE_S, ORDER_MINUTES, ORDER_PREMIUM, qualityFactor, suits, variety, type Client } from './market';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
@@ -48,6 +48,28 @@ export interface Batch {
   delivered?: number;
 }
 
+/** Commande d'un client, reçue sur l'ordinateur du stockage : une mission à remplir avant son expiration. */
+export interface Order {
+  id: number;
+  client: string;
+  /** Bouteilles demandées. */
+  qty: number;
+  /** La commande exige le style préféré du client (et paie mieux). */
+  like: boolean;
+  /** Instant de réception (s de jeu). */
+  received: number;
+  /** Instant d'expiration (s de jeu). */
+  expires: number;
+}
+
+/** Ce que rapporterait une commande remplie avec ces bières (prises dans l'ordre donné). */
+export interface OrderQuote {
+  /** Bouteilles prises à chaque bière. */
+  take: { beer: Beer; n: number }[];
+  filled: number;
+  amount: number;
+}
+
 export interface CommandResult {
   ok: boolean;
   reason?: string;
@@ -64,7 +86,7 @@ type StationState = { level: number };
 
 /**
  * État complet d'une partie : une brasserie verticale de 7 appareils, des lots qui la traversent,
- * une gamme de bières et des distributeurs qui les achètent.
+ * une gamme de bières, un bar qui les sert et des clients qui les commandent.
  */
 export class Game {
   time = 0;
@@ -84,19 +106,31 @@ export class Game {
   /** Essai embouteillé qui attend d'être goûté, mis de côté pour ne pas bloquer la ligne. */
   trial: Batch | null = null;
   beers: Beer[] = [];
-  signed: string[] = ['bar'];
+  /** Clients sous contrat : ils envoient des commandes sur l'ordinateur du stockage. */
+  signed: string[] = [];
   /** Niveau de négociation de chaque contrat (0 à MAX_DEAL). */
   deals: Record<string, number> = {};
   /** Places achetées sur l'étagère de la gamme. */
   rangeSlots = 1;
   /** Niveau du stockage (1 à STORAGE.length). */
   storageLevel = 1;
+  /** Niveau du bar (1 à BAR.length). */
+  barLevel = 1;
+  /** Bières à la carte du bar (une par tireuse). */
+  barMenu: number[] = [];
+  /** Clientèle accumulée du bar (bouteilles). */
+  barDemand = 0;
+  barSold = 0;
+  barRevenue = 0;
+  /** Commandes en attente sur l'ordinateur. */
+  orders: Order[] = [];
+  /** Compte à rebours (s) avant la prochaine commande de chaque client. */
+  orderTimers: Record<string, number> = {};
+  ordersDone = 0;
   totalSold = 0;
   totalRevenue = 0;
   batchesDone = 0;
   nextId = 1;
-  /** Demande accumulée de chaque distributeur (bouteilles). */
-  demand: Record<string, number> = {};
   /** Avancement de l'accompagnement de Gaston. */
   tips = 0;
   /** Gains de la dernière absence, en attente de récolte. */
@@ -122,10 +156,10 @@ export class Game {
     return BREWERY_NAMES[this.breweryLevel - 1]!;
   }
 
-  /** Un distributeur peut être signé : assez de bouteilles vendues et une brasserie du bon niveau. */
-  distributorOpen(id: string): boolean {
-    const d = DISTRIBUTORS.find((x) => x.id === id);
-    return !!d && this.totalSold >= d.unlockSold && this.breweryLevel >= d.level;
+  /** Un client peut être signé : assez de bouteilles vendues et une brasserie du bon niveau. */
+  clientOpen(id: string): boolean {
+    const c = clientById(id);
+    return !!c && this.totalSold >= c.unlockSold && this.breweryLevel >= c.level;
   }
 
   /** Taille d'un brassin : le plus petit appareil fixe le volume. */
@@ -311,6 +345,8 @@ export class Game {
     };
     this.beers.push(beer);
     b.beerId = beer.id;
+    // Une tireuse libre au bar : la nouvelle bière passe à la carte.
+    if (this.barMenu.length < this.barTaps) this.barMenu.push(beer.id);
     if (sameRecipe(this.recipe, beer.recipe)) this.selectedBeer = beer.id;
     if (b === this.trial) {
       // L'essai était déjà sorti de la ligne : ses bouteilles vont directement au stockage.
@@ -338,30 +374,32 @@ export class Game {
 
   removeBeer(id: number): void {
     this.beers = this.beers.filter((b) => b.id !== id);
+    this.barMenu = this.barMenu.filter((x) => x !== id);
     if (this.selectedBeer === id) this.selectedBeer = null;
     if (!this.beers.length) this.autoBrew = false;
   }
 
-  /** Signe un contrat avec un distributeur débloqué. */
+  /** Signe un contrat avec un client débloqué : sa première commande arrive vite. */
   sign(id: string): CommandResult {
-    const d = DISTRIBUTORS.find((x) => x.id === id);
-    if (!d || this.signed.includes(id)) return { ok: false, reason: 'Déjà signé' };
-    if (this.breweryLevel < d.level) return { ok: false, reason: `Ta brasserie doit d'abord passer au niveau ${d.level} (${BREWERY_NAMES[d.level - 1]})` };
-    if (this.totalSold < d.unlockSold) return { ok: false, reason: `Vends d'abord ${d.unlockSold} bouteilles` };
-    if (this.money < d.fee) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= d.fee;
+    const c = clientById(id);
+    if (!c || this.signed.includes(id)) return { ok: false, reason: 'Déjà signé' };
+    if (this.breweryLevel < c.level) return { ok: false, reason: `Ta brasserie doit d'abord passer au niveau ${c.level} (${BREWERY_NAMES[c.level - 1]})` };
+    if (this.totalSold < c.unlockSold) return { ok: false, reason: `Vends d'abord ${c.unlockSold} bouteilles` };
+    if (this.money < c.fee) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= c.fee;
     this.signed.push(id);
+    this.orderTimers[id] = FIRST_ORDER_S;
     return { ok: true };
   }
 
-  /** Prix de la prochaine négociation avec un distributeur (null : impossible ou au maximum). */
+  /** Prix de la prochaine négociation avec un client (null : impossible ou au maximum). */
   dealCost(id: string): number | null {
-    const d = DISTRIBUTORS.find((x) => x.id === id);
-    if (!d || !this.signed.includes(id)) return null;
-    return dealCost(d, this.deals[id] ?? 0);
+    const c = clientById(id);
+    if (!c || !this.signed.includes(id)) return null;
+    return dealCost(c, this.deals[id] ?? 0);
   }
 
-  /** Négocie un plus gros volume avec un distributeur sous contrat. */
+  /** Négocie de plus grosses commandes avec un client sous contrat. */
   negotiate(id: string): CommandResult {
     const cost = this.dealCost(id);
     if (cost == null) return { ok: false, reason: 'Contrat déjà au maximum' };
@@ -378,17 +416,128 @@ export class Game {
     return (Math.floor(liters / BOTTLE_L) / slowest) * 60;
   }
 
-  /** Commandes totales de tous les distributeurs sous contrat (bouteilles/min). */
-  get demandRate(): number {
-    return this.signed.reduce((s, id) => s + this.orderRate(id), 0);
+  // ------------------------------------------------------------------ bar
+
+  get bar() {
+    return BAR[this.barLevel - 1]!;
   }
 
-  /** Bouteilles par minute que commande un distributeur, avec la gamme actuelle. */
-  orderRate(id: string): number {
-    const d = DISTRIBUTORS.find((x) => x.id === id);
-    if (!d) return 0;
-    const accepted = this.beers.filter((b) => b.tasting.quality >= d.minQuality).length;
-    return d.rate * variety(accepted) * (1 + DEAL_BONUS * (this.deals[id] ?? 0));
+  /** Tireuses du bar : nombre de bières à la carte au plus. */
+  get barTaps(): number {
+    return this.bar.taps;
+  }
+
+  /** Bières à la carte, dans l'ordre des tireuses. */
+  get onTap(): Beer[] {
+    return this.barMenu.map((id) => this.beers.find((b) => b.id === id)).filter((b): b is Beer => !!b);
+  }
+
+  /** Met une bière à la carte ou l'en retire. */
+  toggleTap(beerId: number): CommandResult {
+    if (this.barMenu.includes(beerId)) {
+      this.barMenu = this.barMenu.filter((x) => x !== beerId);
+      return { ok: true };
+    }
+    if (!this.beers.some((b) => b.id === beerId)) return { ok: false, reason: 'Bière introuvable' };
+    if (this.barMenu.length >= this.barTaps) return { ok: false, reason: 'Toutes les tireuses sont prises : agrandis le bar' };
+    this.barMenu.push(beerId);
+    return { ok: true };
+  }
+
+  /** Clientèle du bar (bouteilles/min) : plus il y a de bières à la carte, plus il y a de monde. */
+  get barRate(): number {
+    const served = this.onTap.filter((b) => b.tasting.quality >= BAR_MIN_QUALITY).length;
+    return this.bar.rate * variety(served);
+  }
+
+  /** Le bar a quelque chose à servir. */
+  get barServing(): boolean {
+    return this.onTap.some((b) => b.stock > 0 && b.tasting.quality >= BAR_MIN_QUALITY);
+  }
+
+  upgradeBar(): CommandResult {
+    const next = BAR[this.barLevel];
+    if (!next) return { ok: false, reason: 'Niveau maximal' };
+    if (this.money < next.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= next.cost;
+    this.barLevel++;
+    // Les nouvelles tireuses servent les bières de la gamme qui n'étaient pas encore à la carte.
+    for (const b of this.beers) if (this.barMenu.length < this.barTaps && !this.barMenu.includes(b.id)) this.barMenu.push(b.id);
+    return { ok: true };
+  }
+
+  // ------------------------------------------------------------------ commandes
+
+  /** Taille des commandes d'un client (bouteilles, par demi-caisses), selon la négociation. */
+  orderSize(id: string): number {
+    const c = clientById(id);
+    if (!c) return 0;
+    const n = c.rate * ORDER_MINUTES * (1 + DEAL_BONUS * (this.deals[id] ?? 0));
+    return Math.max(6, Math.round(n / 6) * 6);
+  }
+
+  /** Bières de la gamme qui conviennent à une commande. */
+  suitable(o: Order): Beer[] {
+    const c = clientById(o.client);
+    return c ? this.beers.filter((b) => suits(c, b.tasting, o.like)) : [];
+  }
+
+  /** Remplit la commande avec les bières choisies, dans l'ordre (sans rien prélever) : bouteilles et montant. */
+  quote(o: Order, beerIds: number[]): OrderQuote {
+    const c = clientById(o.client);
+    const take: OrderQuote['take'] = [];
+    let filled = 0;
+    let amount = 0;
+    if (!c) return { take, filled, amount };
+    const ok = this.suitable(o);
+    for (const id of beerIds) {
+      const beer = ok.find((b) => b.id === id);
+      if (!beer || filled >= o.qty) continue;
+      const n = Math.min(beer.stock, o.qty - filled);
+      if (n <= 0) continue;
+      take.push({ beer, n });
+      filled += n;
+      amount += n * orderPrice(c, beer.tasting, o.like, this.deals[c.id] ?? 0);
+    }
+    return { take, filled, amount };
+  }
+
+  /** Montant maximal d'une commande (remplie avec des bières excellentes) : affiché sur l'ordinateur. */
+  orderValue(o: Order): number {
+    const c = clientById(o.client);
+    return c ? o.qty * orderPrice(c, { quality: 1 }, o.like, this.deals[c.id] ?? 0) : 0;
+  }
+
+  /** Envoie une commande remplie avec les bières choisies : on est payé tout de suite. */
+  fulfill(orderId: number, beerIds: number[]): CommandResult & { amount?: number } {
+    const o = this.orders.find((x) => x.id === orderId);
+    if (!o) return { ok: false, reason: 'Commande introuvable' };
+    const q = this.quote(o, beerIds);
+    if (q.filled < o.qty) return { ok: false, reason: `Il manque ${o.qty - q.filled} bouteilles` };
+    for (const { beer, n } of q.take) {
+      beer.stock -= n;
+      beer.sold += n;
+      beer.revenue += (n / q.filled) * q.amount;
+    }
+    this.totalSold += q.filled;
+    this.totalRevenue += q.amount;
+    this.money += q.amount;
+    this.ordersDone++;
+    this.orders = this.orders.filter((x) => x !== o);
+    this.events.emit({ type: 'sale', amount: q.amount });
+    return { ok: true, amount: q.amount };
+  }
+
+  /** Refuser une commande : le client en enverra une autre plus tard. */
+  declineOrder(orderId: number): CommandResult {
+    const before = this.orders.length;
+    this.orders = this.orders.filter((x) => x.id !== orderId);
+    return before === this.orders.length ? { ok: false, reason: 'Commande introuvable' } : { ok: true };
+  }
+
+  /** Commandes qu'on peut remplir tout de suite avec le stock. */
+  get readyOrders(): Order[] {
+    return this.orders.filter((o) => this.suitable(o).reduce((s, b) => s + b.stock, 0) >= o.qty);
   }
 
   collectOffline(): number {
@@ -414,7 +563,8 @@ export class Game {
         if (beer && this.money >= this.brewCost(beer.recipe)) this.launch(beer.recipe, beer.id);
       }
     }
-    this.sell(dt);
+    this.sellBar(dt);
+    this.tickOrders(dt);
     this.announce();
   }
 
@@ -494,42 +644,57 @@ export class Game {
   }
 
   /**
-   * Les distributeurs passent commande en continu, par lots (1 bouteille pour le bar, des palettes pour le supermarché).
-   * Une commande part dès qu'une bière qui leur convient en a assez en stock : celle dont on a le plus.
-   * Plus la gamme compte de bières qui leur plaisent, plus ils commandent (variété).
+   * Le bar sert ses clients en continu, une bouteille à la fois, parmi les bières à la carte :
+   * celle dont il reste le plus en stock. Plus la carte est variée, plus il y a de monde.
    */
-  private sell(dt: number): void {
+  private sellBar(dt: number): void {
+    const served = this.onTap.filter((b) => b.tasting.quality >= BAR_MIN_QUALITY);
+    if (!served.length) return;
+    this.barDemand = Math.min(2, this.barDemand + (this.barRate / 60) * dt);
     let earned = 0;
-    for (const id of this.signed) {
-      const d = DISTRIBUTORS.find((x) => x.id === id);
-      if (!d) continue;
-      const accepted = this.beers.filter((b) => b.tasting.quality >= d.minQuality);
-      if (!accepted.length) continue;
-      const rate = this.orderRate(id);
-      this.demand[id] = Math.min(d.order * 2, (this.demand[id] ?? 0) + (rate / 60) * dt);
-      while ((this.demand[id] ?? 0) >= d.order) {
-        let best: Beer | undefined;
-        for (const beer of accepted) if (beer.stock >= d.order && (!best || beer.stock > best.stock)) best = beer;
-        if (!best) break;
-        const price = bottlePrice(d, best.tasting) * d.order;
-        best.stock -= d.order;
-        best.sold += d.order;
-        best.revenue += price;
-        this.totalSold += d.order;
-        this.totalRevenue += price;
-        this.money += price;
-        earned += price;
-        this.demand[id]! -= d.order;
-      }
+    while (this.barDemand >= 1) {
+      let best: Beer | undefined;
+      for (const b of served) if (b.stock > 0 && (!best || b.stock > best.stock)) best = b;
+      if (!best) break;
+      const price = barPrice(this.barLevel, best.tasting);
+      best.stock--;
+      best.sold++;
+      best.revenue += price;
+      this.totalSold++;
+      this.totalRevenue += price;
+      this.barSold++;
+      this.barRevenue += price;
+      this.money += price;
+      earned += price;
+      this.barDemand--;
     }
     if (earned > 0) this.events.emit({ type: 'sale', amount: earned });
   }
 
+  /** Les clients sous contrat envoient ponctuellement des commandes ; elles expirent si on ne les remplit pas. */
+  private tickOrders(dt: number): void {
+    if (this.orders.some((o) => o.expires <= this.time)) {
+      for (const o of this.orders) if (o.expires <= this.time) this.events.emit({ type: 'orderExpired', client: o.client });
+      this.orders = this.orders.filter((o) => o.expires > this.time);
+    }
+    for (const id of this.signed) {
+      const c = clientById(id);
+      if (!c || this.orders.filter((o) => o.client === id).length >= MAX_PENDING) continue;
+      const left = (this.orderTimers[id] ?? FIRST_ORDER_S) - dt;
+      this.orderTimers[id] = left;
+      if (left > 0) continue;
+      this.orderTimers[id] = ORDER_GAP_S * (0.7 + 0.6 * this.rng.next());
+      const like = !!c.likes && this.rng.next() < LIKE_CHANCE;
+      this.orders.push({ id: this.nextId++, client: id, qty: this.orderSize(id), like, received: this.time, expires: this.time + ORDER_LIFE_S });
+      this.events.emit({ type: 'order', client: id });
+    }
+  }
+
   private announce(): void {
-    for (const d of DISTRIBUTORS) {
-      if (this.signed.includes(d.id) || this.announced.has(d.id) || !this.distributorOpen(d.id)) continue;
-      this.announced.add(d.id);
-      this.events.emit({ type: 'distributorAvailable', id: d.id });
+    for (const c of CLIENTS) {
+      if (this.signed.includes(c.id) || this.announced.has(c.id) || !this.clientOpen(c.id)) continue;
+      this.announced.add(c.id);
+      this.events.emit({ type: 'clientAvailable', id: c.id });
     }
   }
 
@@ -537,18 +702,20 @@ export class Game {
 
   toJSON() {
     return {
-      version: 4, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
+      version: 5, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, trial: this.trial, beers: this.beers,
-      queued: this.queued, signed: this.signed, deals: this.deals, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
-      nextId: this.nextId, demand: this.demand, tips: this.tips, offline: this.offline, announced: [...this.announced],
+      queued: this.queued, signed: this.signed, deals: this.deals, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, barMenu: this.barMenu, barDemand: this.barDemand,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimers: this.orderTimers, ordersDone: this.ordersDone, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
+      nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
 
   static fromJSON(raw: unknown): Game {
     const s = raw as Omit<ReturnType<Game['toJSON']>, 'version'> & { version: number };
-    if (!s || s.version < 2 || s.version > 4) throw new Error('Sauvegarde incompatible');
+    if (!s || s.version < 2 || s.version > 5) throw new Error('Sauvegarde incompatible');
     const g = new Game();
-    Object.assign(g, { ...s, rng: new Rng(s.rng), announced: new Set(s.announced) });
+    const { demand: _demand, ...rest } = s as typeof s & { demand?: unknown };
+    Object.assign(g, { ...rest, rng: new Rng(s.rng), announced: new Set(s.announced) });
     // Sauvegardes v2 : places de gamme liées aux distributeurs, pas encore de stockage.
     if (s.version === 2) {
       g.rangeSlots = Math.max(1, g.beers.length);
@@ -556,11 +723,32 @@ export class Game {
     }
     // Avant la v4, il n'y avait que 3 niveaux d'appareils : ils deviennent les niveaux 2 à 4.
     if (s.version < 4) for (const id of STATION_ORDER) g.stations[id] = { level: Math.min(MAX_LEVEL, (g.stations[id]?.level ?? 1) + 1) };
+    // Avant la v5, le « Bar du coin » était un distributeur : il devient la pièce Bar, et les ventes passent par des commandes.
+    if (s.version < 5) {
+      g.signed = g.signed.filter((id) => CLIENTS.some((c) => c.id === id));
+      for (const id of g.signed) g.orderTimers[id] = FIRST_ORDER_S;
+      delete g.deals.bar;
+      g.barLevel = 1;
+      g.barMenu = g.beers.slice(0, BAR[0]!.taps).map((b) => b.id);
+    }
+    g.barMenu ??= [];
+    g.orders ??= [];
+    g.orderTimers ??= {};
     g.queued ??= false;
     g.deals ??= {};
     g.trial ??= null;
     return g;
   }
+}
+
+/** Première commande d'un client tout juste signé (s de jeu). */
+export const FIRST_ORDER_S = 20;
+
+export const clientById = (id: string): Client | undefined => CLIENTS.find((c) => c.id === id);
+
+/** Prix d'une bouteille livrée pour une commande. */
+export function orderPrice(c: Client, t: Pick<Tasting, 'quality'>, like: boolean, deal = 0): number {
+  return c.price * qualityFactor(t) * ORDER_PREMIUM * (like ? LIKE_BONUS : 1) * (1 + DEAL_PRICE * deal);
 }
 
 export const sameRecipe = (a: Recipe, b: Recipe) => (Object.keys(a) as (keyof Recipe)[]).every((k) => a[k] === b[k]);

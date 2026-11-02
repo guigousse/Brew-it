@@ -12,10 +12,10 @@ export interface StorageLevel {
 /** Niveaux du stockage : les caisses s'y empilent jusqu'à ce qu'il soit plein. */
 export const STORAGE: readonly StorageLevel[] = [
   { name: 'Coin du garage', crates: 10, cost: 0 },
-  { name: 'Cave voûtée', crates: 30, cost: 500 },
-  { name: 'Chambre froide', crates: 80, cost: 30000 },
-  { name: 'Entrepôt', crates: 200, cost: 200000 },
-  { name: 'Plateforme logistique', crates: 600, cost: 1200000 },
+  { name: 'Cave voûtée', crates: 40, cost: 500 },
+  { name: 'Chambre froide', crates: 150, cost: 8000 },
+  { name: 'Entrepôt', crates: 600, cost: 120000 },
+  { name: 'Plateforme logistique', crates: 4000, cost: 1000000 },
 ];
 
 /**
