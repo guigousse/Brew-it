@@ -1,8 +1,8 @@
 import type { FluidId } from './fluids';
 import type { ItemId } from './items';
 
-export type MachineKind = 'water_tap' | 'supplier' | 'mill' | 'mash_tun' | 'kettle' | 'fermenter' | 'bottler' | 'stand' | 'crate';
-export type Category = 'transport' | 'supply' | 'brewing' | 'sales';
+export type MachineKind = 'water_tap' | 'supplier' | 'mill' | 'mash_tun' | 'kettle' | 'fermenter' | 'bottler' | 'stand' | 'crate' | 'storage';
+export type Category = 'transport' | 'supply' | 'brewing' | 'storage' | 'sales';
 export type ParamValue = number | string;
 
 export interface FluidTankDef {
@@ -90,7 +90,7 @@ export const BUILDINGS = {
   // --- Eau et réserves -----------------------------------------------------------------------
   water_tap: {
     name: 'Robinet d\'eau', description: 'L\'eau du réseau, à 12 °C. Branche un tuyau dessus.',
-    size: 1, cost: 50, category: 'supply', color: 0x2d6cb5, maxHealth: MACHINE_HP, rotatable: false,
+    size: 1, cost: 50, category: 'transport', color: 0x2d6cb5, maxHealth: MACHINE_HP, rotatable: false,
     fluid: { capacity: 20, maxFlow: 10, accepts: [] },
     machine: 'water_tap',
     defaultParams: { rate: 4, temp: 12 },
@@ -101,6 +101,29 @@ export const BUILDINGS = {
     itemsOut: { capacity: 10 },
     machine: 'supplier',
     defaultParams: { item: 'malt', interval: 1 },
+  },
+
+  // --- Stockage d'ingrédients (3 niveaux) : alimente automatiquement les appareils voisins ---------
+  storage_1: {
+    name: 'Bac de stockage', description: 'Garde un ingrédient au choix et le donne tout seul aux appareils collés à lui.',
+    size: 1, cost: 60, category: 'storage', color: 0xa8743c, maxHealth: MACHINE_HP, rotatable: false, family: 'storage', tier: 1,
+    itemsOut: { capacity: 30 },
+    machine: 'storage',
+    defaultParams: { item: 'malt' },
+  },
+  storage_2: {
+    name: 'Silo 150', description: 'Silo inox : cinq fois plus de réserve.',
+    size: 2, cost: 500, category: 'storage', color: 0xb3bfcc, maxHealth: MACHINE_HP, rotatable: false, family: 'storage', tier: 2, unlock: PRO,
+    itemsOut: { capacity: 150 },
+    machine: 'storage',
+    defaultParams: { item: 'malt' },
+  },
+  storage_3: {
+    name: 'Silo industriel', description: 'Grand silo : de quoi tenir des dizaines de brassins.',
+    size: 2, cost: 2500, category: 'storage', color: 0x8d98a6, maxHealth: MACHINE_HP * 2, rotatable: false, family: 'storage', tier: 3, unlock: INDUSTRIAL,
+    itemsOut: { capacity: 600 },
+    machine: 'storage',
+    defaultParams: { item: 'malt' },
   },
 
   // --- Brassage : versions miniatures (départ) ----------------------------------------------

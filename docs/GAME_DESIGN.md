@@ -3,25 +3,33 @@
 ## Fantasme
 « Je suis parti d'un garage avec une marmite. Aujourd'hui, mon usine tourne toute seule et ma triple fruitée vient de gagner une médaille. »
 
-## Principe d'accessibilité
-Pas de curseurs ni de mode expert. Le joueur réalise **chaque étape réelle du brassage** et prend à chacune **une décision de brasseur simple**, 2 ou 3 options expliquées. Il doit sentir qu'il *sait* brasser, sans jamais affronter un tableau de réglages.
+## Brassage : apprendre, puis expérimenter
+- **Tutoriel :** le joueur brasse la **recette de Gaston**, une blonde réussie. Chaque réglage est expliqué sur une fiche en lecture seule.
+- **Ensuite :** il invente ses recettes avec une **molette par réglage**. Aucune prévision n'est affichée : c'est la **fournée d'essai** qui révèle le résultat.
 
-| Étape | Machine | Choix du joueur |
+| Étape | Molettes | Plage |
 |---|---|---|
-| Malt | Livraison | — |
-| Concassage | Concasseur | — |
-| Empâtage | Cuve d'empâtage | Malt : 4 / 5 / 6 kg (légère, normale, forte) · Température : 63 / 66 / 69 °C (sèche, équilibrée, ronde) |
-| Ébullition et houblonnage | Cuve d'ébullition | Houblon : 50 / 100 / 200 g (douce, équilibrée, très amère) |
-| Refroidissement | Refroidisseur | — (comprendre le danger des 35 °C) |
-| Fermentation | Fermenteur | Levure : américaine (nette), anglaise (fruitée), saison (épicée) |
-| Garde | Fermenteur | 1 / 3 / 7 jours (rapide, bonne, excellente) |
-| Embouteillage | Embouteilleuse | — |
-| Livraison | Caisse (12 bouteilles) | — |
+| Empâtage | Malt (par lot de 25 L) · Température · Durée | 1–10 kg · 45–85 °C · 10–120 min |
+| Ébullition | Houblon · Durée | 0–300 g · 5–120 min |
+| Fermentation | Levure (ale américaine, ale anglaise, saison, lager) · Température · Garde | 4–36 °C · 0–30 j |
 
-Les volumes s'adaptent tout seuls : chaque machine traite le lot entier qui arrive de l'étape précédente. L'eau d'empâtage est fixe (24 L), si bien que la quantité de malt règle directement la force de la bière (≈ 4 %, 5 % ou 6,5 %).
+### Fournée d'essai et dégustation
+Un nouveau brassin ne lance **qu'un seul lot**. À la fin de la fermentation, la production se met en pause et la **dégustation** s'affiche : verdict (Imbuvable, Médiocre, Correcte, Bonne, Excellente), note sur 20, alcool, amertume, couleur, fruité, et la **liste des défauts expliqués**. Le joueur valide et lance la production, jette la fournée, ou corrige sa recette. **Une bière imbuvable ne peut pas être produite**, et le bar refuse les caisses imbuvables.
+
+### Modèle réaliste (src/core/brewing/profile.ts)
+| Cause | Effet |
+|---|---|
+| Empâtage < 60 °C ou > 72 °C, ou trop court | Enzymes lentes ou détruites (> 78 °C) : peu de sucre, bière trouble au goût de farine, aqueuse |
+| Température d'empâtage | 62 °C donne un moût très fermentescible (bière sèche) ; 72 °C laisse des dextrines (bière ronde) |
+| Houblon (formule de Tinseth, alpha 6 %) | Amertume en IBU ; rapport BU:GU > 1,6 → amertume agressive ; < 0,12 → bière écœurante |
+| Ébullition < 30 min | Goût de maïs cuit (DMS) |
+| Fermentation trop chaude | Fruité excessif, puis alcools de fusel (goût de solvant) |
+| Fermentation trop froide | Fermentation incomplète, puis bloquée : bière sucrée et plate |
+| Trop de sucre pour la levure | Elle abandonne au-delà de sa tolérance : bière sirupeuse |
+| Garde trop courte | Pomme verte et beurre ; une lager demande 14 jours |
+| Moût à plus de 35 °C au moment d'ajouter la levure | La levure meurt : lot perdu |
 
 ## Le brassin (recette)
-- Le joueur compose son brassin **une seule fois** dans un assistant : un choix par écran, avec Gaston qui explique son effet. Il voit une **prévision** (alcool, amertume, nombre de bouteilles), puis il **nomme sa bière**.
 - Le brassin est **sauvegardé** et s'applique à toute la ligne. Pour changer de bière, on met la **production en pause** (les lots en cours se terminent), puis on reprend un ancien brassin ou on en compose un nouveau.
 - Le nom suit chaque lot jusqu'aux bouteilles et aux caisses. 🔜 Une étiquette personnalisée sera apposée sur les bouteilles.
 
@@ -34,6 +42,9 @@ Les volumes s'adaptent tout seuls : chaque machine traite le lot entier qui arri
 ## Interface
 - **Header :** nom de l'appli, argent, options.
 - **Onglets du bas :** **Magasin** (appareils, agrandissement, suppression), **Fournisseur** (malt, houblon, levure, bouteilles mis en stock) et **Brassins** (production, recettes).
+
+## Stockage (3 niveaux)
+Bac de stockage (mini, 30 unités) → Silo 150 (pro) → Silo industriel (600). Chaque réserve se **règle sur un ingrédient** (malt, houblon, levure, bouteilles). Elle **alimente toute seule les appareils collés à elle**, qui n'affichent alors plus d'icône « + ». Elle se remplit avec son propre « + », depuis le stock ou en complétant par un achat. Changer d'ingrédient rend son contenu au stock.
 
 ## Ingrédients
 - On achète les ingrédients au **Fournisseur** : ils vont dans le **stock**. Quand une machine en manque pour le prochain lot, une **icône « + » pulse** au-dessus d'elle (malt pour le concasseur, houblon pour la marmite d'ébullition, levure pour le fermenteur, bouteilles pour l'embouteilleuse). Un toucher la charge depuis le stock. S'il n'y en a pas assez, le complément est acheté au prix du fournisseur.

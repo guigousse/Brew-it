@@ -7,7 +7,7 @@ import type { Rng } from '../rng';
 export const ITEM_PRICES: Partial<Record<ItemId, number>> = {
   malt: 1.2,
   crushed_malt: 1.5,
-  hops: 2,
+  hops: 0.4, // 10 g
   yeast: 4,
   bottle: 0.3,
 };

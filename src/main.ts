@@ -3,6 +3,7 @@ import { SaveManager } from './core/save/storage';
 import { FixedStepLoop, simulateOffline } from './core/sim/loop';
 import { buildReferenceBrewery } from './core/testing/scenarios';
 import { World } from './core/world';
+import { ingredientNeeds } from './core/ingredients';
 import { createStorage } from './platform/storage';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { GameRenderer, WALL_TILES } from './render/renderer';
@@ -77,6 +78,7 @@ async function boot() {
       if (e.type === 'crateDelivered' || e.type === 'tutorialDone') tapFeedback(true);
     });
     hud.update();
+    if (world.tasting) hud.openTasting(world.tasting.recipeId);
     requestAnimationFrame(fitView);
     if (!demo) void saves.save(world);
   }
@@ -120,7 +122,11 @@ async function boot() {
   );
 
   // Accès console pour le debug
-  (window as unknown as { brewit: unknown }).brewit = { get world() { return world; }, saves, renderer, hud };
+  (window as unknown as { brewit: unknown }).brewit = {
+    get world() { return world; }, saves, renderer, hud,
+    /** Debug : charge tous les ingrédients manquants. */
+    loadAll: () => ingredientNeeds(world).forEach((n) => world.loadMissing(n.buildingId)),
+  };
 }
 
 void boot();

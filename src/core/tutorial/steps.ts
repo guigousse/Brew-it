@@ -112,7 +112,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   },
   {
     id: 'recipe', chapter: 'Ton brassin', signal: 'recipe:created', action: 'recipe',
-    text: 'Ta brasserie est prête ! Maintenant, compose ta recette : c\'est ton brassin. Je t\'explique chaque choix, et tu lui donneras un nom.',
+    text: 'Ta brasserie est prête ! Pour ta première bière, je te prête ma recette, une blonde qui ne rate jamais. Regarde bien chaque réglage : plus tard, tu inventeras les tiens.',
   },
   {
     id: 'stock_malt', chapter: 'Le fournisseur', signal: 'stock:malt', tab: 'supplier',
@@ -169,7 +169,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
       const b = w.firstBeer;
       const name = b?.name ? `« ${b.name} »` : 'Ta bière';
       const profile = b ? ` ${name} fait ${b.abv.toFixed(1)} % d'alcool, ${Math.round(b.ibu)} d'amertume (IBU), avec une qualité de ${Math.round(b.quality * 100)} %.` : '';
-      return `Ta première caisse est livrée !${profile} Je t'offre ${TUTORIAL_REWARD} € pour lancer ta brasserie. Livre des caisses pour débloquer du matériel pro au Magasin !`;
+      return `Ta première caisse est livrée !${profile} Je t'offre ${TUTORIAL_REWARD} € pour lancer ta brasserie. À toi d'inventer tes recettes dans l'onglet Brassins : chaque nouvelle recette passe par une fournée d'essai.`;
     },
     onComplete: (w) => {
       w.money += TUTORIAL_REWARD;

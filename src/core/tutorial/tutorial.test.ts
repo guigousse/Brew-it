@@ -10,7 +10,7 @@ import { currentStep, skipTutorial, stepText, tutorialPalette } from './tutorial
 function act(w: World, choices: RecipeChoices = DEFAULT_CHOICES): boolean {
   const step = currentStep(w)!;
   for (const t of step.places ?? []) w.place(t.type, t.x, t.y, 0);
-  if (step.signal === 'recipe:created') w.createRecipe('Blonde de Gaston', choices);
+  if (step.signal === 'recipe:created') w.createRecipe('Blonde de Gaston', choices, { validated: true });
   else if (step.signal === 'stock:malt') w.buyPack('malt5');
   else if (step.signal?.startsWith('load:') || step.id === 'load_rest') {
     for (const n of ingredientNeeds(w)) w.loadMissing(n.buildingId);
@@ -116,8 +116,8 @@ describe('tutoriel', () => {
       playTutorial(w, choices);
       return w.firstBeer!;
     };
-    const light = brew({ ...DEFAULT_CHOICES, grainKg: 4, hopsItems: 1 });
-    const strong = brew({ ...DEFAULT_CHOICES, grainKg: 6, hopsItems: 4 });
+    const light = brew({ ...DEFAULT_CHOICES, grainKg: 4, hopsGrams: 20 });
+    const strong = brew({ ...DEFAULT_CHOICES, grainKg: 6, hopsGrams: 80 });
     expect(light.abv).toBeGreaterThan(3);
     expect(light.abv).toBeLessThan(4.8);
     expect(strong.abv).toBeGreaterThan(light.abv + 1.5);
@@ -173,7 +173,7 @@ describe('matériel et paliers', () => {
       w.place('mill', 0, 0);
       const m = w.place(mash, 1, 0);
       w.place('water_tap', 1, { mash_tun_mini: 1, mash_tun: 2, mash_tun_3: 3 }[mash]);
-      w.createRecipe('Test', DEFAULT_CHOICES);
+      w.createRecipe('Test', DEFAULT_CHOICES, { validated: true });
       for (const n of ingredientNeeds(w)) w.loadMissing(n.buildingId);
       for (let i = 0; i < 20 * 120; i++) w.step();
       return w.buildings.get(m.id!)!.fluid!.amount;
@@ -190,10 +190,10 @@ describe('matériel et paliers', () => {
 describe('brassins et production', () => {
   it('pause, changement de brassin, reprise', () => {
     const w = new World({ tutorial: false });
-    const a = w.createRecipe('Blonde', DEFAULT_CHOICES);
-    expect(w.createRecipe('IPA', { ...DEFAULT_CHOICES, hopsItems: 4 }).ok).toBe(false); // production en marche
+    const a = w.createRecipe('Blonde', DEFAULT_CHOICES, { validated: true });
+    expect(w.createRecipe('IPA', { ...DEFAULT_CHOICES, hopsGrams: 120 }).ok).toBe(false); // production en marche
     w.setProduction(false);
-    const b = w.createRecipe('IPA', { ...DEFAULT_CHOICES, hopsItems: 4 });
+    const b = w.createRecipe('IPA', { ...DEFAULT_CHOICES, hopsGrams: 120 });
     expect(w.activeRecipe!.name).toBe('IPA');
     w.setProduction(false);
     expect(w.selectRecipe(a.id!).ok).toBe(true);
@@ -201,6 +201,16 @@ describe('brassins et production', () => {
     expect(w.recipes.map((r) => r.id)).toEqual([a.id, b.id]);
     expect(w.setProduction(true).ok).toBe(true);
     expect(w.selectRecipe(b.id!).ok).toBe(false);
+  });
+
+  it('un brassin créé à partir d\'un autre garde son propre id et son nom', () => {
+    const w = new World({ tutorial: false });
+    w.createRecipe('Blonde', DEFAULT_CHOICES, { validated: true });
+    w.setProduction(false);
+    w.createRecipe('Essai', { ...w.recipes[0]!, mashTemp: 70 });
+    expect(w.recipes.map((r) => [r.id, r.name])).toEqual([[1, 'Blonde'], [2, 'Essai']]);
+    expect(w.activeRecipe!.name).toBe('Essai');
+    expect((w.activeRecipe as unknown as Record<string, unknown>).tasting).toBeUndefined();
   });
 
   it('déplace un bâtiment avec son contenu', () => {
@@ -215,5 +225,79 @@ describe('brassins et production', () => {
     w.place('mill', 5, 5);
     expect(w.move(r.id!, 4, 4).ok).toBe(false);
     expect(w.at(1, 0)!.id).toBe(r.id);
+  });
+});
+
+describe('fournée d\'essai et dégustation', () => {
+  const line = (choices: RecipeChoices) => {
+    const w = new World({ tutorial: false, money: 1e5 });
+    // ligne miniature raccordée comme dans le tutoriel
+    const put = (t: Parameters<World['place']>[0], x: number, y: number, rot: 0 | 1 | 2 | 3 = 0) => w.place(t, x, y, rot);
+    put('mill', 1, 2); put('mash_tun_mini', 2, 2); put('water_tap', 2, 0); put('conduit', 2, 1, 1);
+    put('conduit', 3, 2); put('conduit', 4, 2); put('kettle_mini', 5, 2); put('cooler', 6, 2); put('conduit', 7, 2);
+    put('fermenter_mini', 8, 2); put('conduit', 8, 3, 1); put('bottler_mini', 8, 4);
+    put('conveyor', 7, 4, 2); put('conveyor', 6, 4, 1); put('crate', 6, 5);
+    w.createRecipe('Essai', choices);
+    return w;
+  };
+  const runUntil = (w: World, cond: () => boolean, max = 900) => {
+    for (let i = 0; i < max * 20 && !cond(); i++) {
+      w.step();
+      for (const n of ingredientNeeds(w)) w.loadMissing(n.buildingId);
+    }
+  };
+
+  it('un nouveau brassin brasse un seul lot, puis présente la dégustation et met en pause', () => {
+    const w = line(DEFAULT_CHOICES);
+    expect(w.activeRecipe!.status).toBe('test');
+    let tastings = 0;
+    w.events.on((e) => e.type === 'tasting' && tastings++);
+    runUntil(w, () => !!w.tasting);
+    expect(tastings).toBe(1);
+    expect(w.production.running).toBe(false);
+    expect(w.activeRecipe!.tasting!.quality).toBeGreaterThan(0.85);
+    expect(w.stats.brews).toBe(1); // un seul lot d'essai
+    expect(w.stats.bottles).toBe(0); // la bière attend la décision
+    expect(w.validateRecipe().ok).toBe(true);
+    expect(w.activeRecipe!.status).toBe('validated');
+    runUntil(w, () => w.stats.crates >= 1, 300);
+    expect(w.stats.crates).toBeGreaterThanOrEqual(1);
+  });
+
+  it('une recette ratée est imbuvable : impossible de la produire, on peut la jeter', () => {
+    const w = line({ ...DEFAULT_CHOICES, mashTemp: 82 });
+    runUntil(w, () => !!w.tasting);
+    expect(w.activeRecipe!.tasting!.quality).toBeLessThan(0.3);
+    expect(w.validateRecipe().ok).toBe(false);
+    expect(w.discardTest().ok).toBe(true);
+    expect(w.tasting).toBeNull();
+    expect(w.list.find((b) => b.type === 'fermenter_mini')!.machine!.phase).toBe('filling');
+    expect(w.recipes[0]!.tasting).toBeDefined(); // le résultat reste consultable
+  });
+});
+
+describe('réserves', () => {
+  it('une réserve de malt alimente le concasseur voisin, sans icône « + » sur la machine', () => {
+    const w = new World({ tutorial: false, money: 1e4 });
+    w.place('mill', 1, 1);
+    w.place('mash_tun_mini', 2, 1);
+    const s = w.place('storage_1', 0, 1);
+    w.createRecipe('Test', DEFAULT_CHOICES, { validated: true });
+    expect(ingredientNeeds(w).map((n) => n.buildingId)).toContain(s.id);
+    w.buyPack('malt25');
+    w.loadMissing(s.id!);
+    expect(w.buildings.get(s.id!)!.itemsOut!.length).toBe(25 + 5 * 0 + 5); // 25 du stock + 5 achetés pour remplir 30
+    expect(ingredientNeeds(w).some((n) => n.item === 'malt')).toBe(false);
+    for (let i = 0; i < 20 * 10; i++) w.step();
+    expect(w.list.find((b) => b.type === 'mash_tun_mini')!.itemsIn!.length).toBeGreaterThan(0);
+  });
+
+  it('changer l\'ingrédient d\'une réserve rend son contenu au stock', () => {
+    const w = new World({ tutorial: false, money: 1e4 });
+    const s = w.place('storage_1', 0, 0);
+    w.loadMissing(s.id!);
+    expect(w.setStorageItem(s.id!, 'yeast').ok).toBe(true);
+    expect(w.stock.malt).toBe(30);
+    expect(w.buildings.get(s.id!)!.params.item).toBe('yeast');
   });
 });

@@ -289,6 +289,39 @@ const SPRITES: Partial<Record<BuildingType, SpriteDef>> = {
     p.outline();
   } },
 
+  // --- Réserves d'ingrédients
+  storage_1: { w: 16, h: 18, draw: (p) => {
+    p.rect(1, 4, 14, 13, PAL.wd[1]!); p.hl(1, 4, 14, PAL.wd[0]!);
+    for (const y of [8, 12]) p.hl(1, y, 14, PAL.wd[2]!);
+    p.vl(1, 4, 13, PAL.wd[2]!); p.vl(14, 4, 13, PAL.wd[3]!);
+    p.rect(2, 2, 12, 2, PAL.wd[3]!); // bord du bac
+    p.rect(5, 9, 6, 5, PAL.pl[0]!); // étiquette
+    p.outline();
+  } },
+  storage_2: { w: 32, h: 50, draw: (p) => {
+    legs(p, 5, 25, 40, 9, PAL.st);
+    for (let i = 0; i < 9; i++) p.band(4 + i * 1.5, 32 + i, 24 - i * 3, PAL.st); // trémie
+    p.cylinder(4, 8, 24, 24, PAL.st);
+    for (let i = 0; i < 5; i++) p.band(4 + i * 2, 7 - i, 24 - i * 4, PAL.st);
+    p.rect(19, 12, 4, 16, PAL.ir[2]!); // jauge (remplie par-dessus)
+    p.rect(10, 16, 8, 8, PAL.pl[0]!); // étiquette
+    p.rect(14, 46, 4, 3, PAL.st[3]!);
+    p.outline();
+  } },
+  storage_3: { w: 32, h: 62, draw: (p) => {
+    legs(p, 4, 26, 52, 9, PAL.ir);
+    for (let i = 0; i < 9; i++) p.band(3 + i * 1.5, 44 + i, 26 - i * 3, PAL.st);
+    p.cylinder(3, 8, 26, 36, PAL.st);
+    for (const y of [16, 26, 36]) p.band(3, y, 26, PAL.st);
+    for (let i = 0; i < 5; i++) p.band(3 + i * 2, 7 - i, 26 - i * 4, [PAL.rd[0]!, PAL.rd[1]!, PAL.rd[1]!, PAL.rd[2]!]);
+    for (let y = 8; y < 52; y += 4) p.hl(29, y, 3, PAL.ir[0]!); // échelle
+    p.vl(29, 8, 44, PAL.ir[1]!); p.vl(31, 8, 44, PAL.ir[1]!);
+    p.rect(20, 12, 4, 26, PAL.ir[2]!);
+    p.rect(9, 20, 8, 8, PAL.pl[0]!);
+    p.rect(14, 58, 4, 3, PAL.st[3]!);
+    p.outline();
+  } },
+
   crate: { w: 16, h: 14, draw: (p) => {
     p.rect(1, 3, 14, 10, PAL.wd[1]!);
     p.hl(1, 3, 14, PAL.wd[0]!); p.hl(1, 7, 14, PAL.wd[2]!); p.hl(1, 12, 14, PAL.wd[3]!);

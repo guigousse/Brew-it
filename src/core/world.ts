@@ -1,6 +1,6 @@
 import { BatchRegistry, type BatchId, type BatchProfile } from './brewing/batches';
 import { createBuilding, type Building } from './building';
-import { BUILDINGS, type BuildingType, type ParamValue } from './content/buildings';
+import { BUILDINGS, kindOf, type BuildingType, type ParamValue } from './content/buildings';
 import { EXPANSIONS, MAX_MAP_HEIGHT, MAX_MAP_WIDTH } from './content/expansions';
 import { STARTER_BUILDINGS, unlockMet } from './content/progression';
 import { findPack } from './content/supplies';
@@ -8,6 +8,7 @@ import type { ItemId } from './content/items';
 import { ITEM_PRICES } from './economy/market';
 import { tutorialPlacement, tutorialUpdate, type TutorialState } from './tutorial/tutorial';
 import type { Recipe, RecipeChoices } from './brewing/recipe';
+import { DRINKABLE_MIN } from './brewing/profile';
 import { needOf } from './ingredients';
 import type { MachineKind } from './content/buildings';
 import { DX, DY, type Dir } from './dir';
@@ -77,6 +78,8 @@ export class World {
   stock: Partial<Record<ItemId, number>> = {};
   /** Brassins sauvegardés par le joueur (on peut toujours revenir à un ancien). */
   recipes: Recipe[] = [];
+  /** Dégustation en attente de décision (fin d'une fournée d'essai). */
+  tasting: { recipeId: number; buildingId: number } | null = null;
   /** Brassin appliqué par la ligne, et production en marche ou en pause. */
   production: { recipeId: number | null; running: boolean } = { recipeId: null, running: false };
   /** Profil de la toute première bière livrée (affiché à la fin du tutoriel). */
@@ -189,23 +192,71 @@ export class World {
     return this.recipes.find((r) => r.id === this.production.recipeId);
   }
 
-  /** Une machine ne lance un nouveau lot que si un brassin est actif et la production en marche. */
-  canStart(_kind: MachineKind): boolean {
-    return this.production.running && !!this.activeRecipe;
+  /**
+   * Seul l'empâtage lance de nouveaux lots : il faut un brassin actif et la production en marche.
+   * Les étapes suivantes terminent toujours ce qui est déjà brassé (la pause laisse finir les lots en cours).
+   */
+  canStart(kind: MachineKind): boolean {
+    const r = this.activeRecipe;
+    if (kind !== 'mash_tun') return !!r || this.recipes.length > 0;
+    if (!this.production.running || !r) return false;
+    // Fournée d'essai : un seul lot démarre à l'empâtage.
+    if (r.status === 'test' && r.testStarted) return false;
+    return true;
   }
 
-  /** Crée et sauvegarde un brassin, l'active et lance la production. */
-  createRecipe(name: string, choices: RecipeChoices): CommandResult {
+  /**
+   * Crée et sauvegarde un brassin, l'active et lance la production.
+   * Un nouveau brassin commence par une fournée d'essai (sauf la recette de Gaston, déjà éprouvée).
+   */
+  createRecipe(name: string, choices: RecipeChoices, opts: { validated?: boolean } = {}): CommandResult {
+    if (this.tasting) return { ok: false, reason: 'Termine d\'abord la dégustation en cours' };
     if (this.production.running && this.activeRecipe) return { ok: false, reason: 'Mets d\'abord la production en pause' };
     const id = this.recipes.reduce((m, r) => Math.max(m, r.id), 0) + 1;
-    this.recipes.push({ id, name: name.trim() || `Brassin n°${id}`, ...choices });
+    // On ne garde que les réglages (l'éditeur peut partir d'un brassin existant, avec son id et son nom).
+    const { grainKg, mashTemp, mashTime, hopsGrams, boilTime, strain, fermentTemp, gardeDays } = choices;
+    this.recipes.push({
+      id, name: name.trim() || `Brassin n°${id}`, grainKg, mashTemp, mashTime, hopsGrams, boilTime, strain, fermentTemp, gardeDays,
+      status: opts.validated ? 'validated' : 'test',
+    });
     this.production = { recipeId: id, running: true };
     this.signal('recipe:created');
     return { ok: true, id };
   }
 
+  /** Après dégustation : on garde la recette et on lance la production (impossible si imbuvable). */
+  validateRecipe(): CommandResult {
+    const t = this.tasting;
+    const r = t && this.recipes.find((x) => x.id === t.recipeId);
+    if (!t || !r) return { ok: false, reason: 'Aucune dégustation en cours' };
+    if ((r.tasting?.quality ?? 0) < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable : personne ne l\'achètera' };
+    r.status = 'validated';
+    this.tasting = null;
+    this.production = { recipeId: r.id, running: true };
+    return { ok: true };
+  }
+
+  /** Après dégustation : on jette la fournée d'essai ; la recette reste dans la liste avec son résultat. */
+  discardTest(): CommandResult {
+    const t = this.tasting;
+    if (!t) return { ok: false, reason: 'Aucune dégustation en cours' };
+    const b = this.buildings.get(t.buildingId);
+    if (b?.machine) {
+      b.machine.batch = null;
+      b.machine.phase = 'filling';
+      b.machine.timer = 0;
+      b.machine.duration = 0;
+    }
+    const r = this.recipes.find((x) => x.id === t.recipeId);
+    if (r) r.testStarted = false;
+    this.tasting = null;
+    this.production.running = false;
+    return { ok: true };
+  }
+
   /** Reprend un brassin sauvegardé (production en pause uniquement). */
   selectRecipe(id: number): CommandResult {
+    if (this.tasting) return { ok: false, reason: 'Termine d\'abord la dégustation en cours' };
     if (this.production.running) return { ok: false, reason: 'Mets d\'abord la production en pause' };
     if (!this.recipes.some((r) => r.id === id)) return { ok: false, reason: 'Brassin introuvable' };
     this.production.recipeId = id;
@@ -215,6 +266,7 @@ export class World {
   /** Pause : les lots en cours se terminent, aucun nouveau ne démarre. */
   setProduction(running: boolean): CommandResult {
     if (running && !this.activeRecipe) return { ok: false, reason: 'Crée d\'abord un brassin' };
+    if (running && this.tasting) return { ok: false, reason: 'Termine d\'abord la dégustation' };
     this.production.running = running;
     return { ok: true };
   }
@@ -248,9 +300,20 @@ export class World {
     this.stock[need.item] = (this.stock[need.item] ?? 0) - fromStock;
     const cost = bought * unit;
     this.money -= cost;
-    for (let i = 0; i < qty; i++) b.itemsIn!.push({ item: need.item, batch: null });
+    const target = kindOf(b.type) === 'storage' ? b.itemsOut! : b.itemsIn!;
+    for (let i = 0; i < qty; i++) target.push({ item: need.item, batch: null });
     this.signal(`load:${need.item}`);
     return { ok: true, item: need.item, qty, fromStock, cost };
+  }
+
+  /** Change l'ingrédient d'une réserve ; son contenu actuel retourne dans le stock. */
+  setStorageItem(id: number, item: ItemId): CommandResult {
+    const b = this.buildings.get(id);
+    if (!b || kindOf(b.type) !== 'storage') return { ok: false, reason: 'Ce n\'est pas une réserve' };
+    for (const u of b.itemsOut ?? []) this.stock[u.item] = (this.stock[u.item] ?? 0) + 1;
+    b.itemsOut = [];
+    b.params.item = item;
+    return { ok: true };
   }
 
   /** Débloque les appareils dont la condition est remplie (caisses livrées, agrandissements). */

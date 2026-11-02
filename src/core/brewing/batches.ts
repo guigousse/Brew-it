@@ -1,4 +1,5 @@
 import type { StrainId } from '../content/strains';
+import type { Defect } from './profile';
 
 export type BatchId = number;
 
@@ -23,6 +24,8 @@ export interface BatchProfile {
   name?: string;
   /** Brassin d'origine : les machines suivantes appliquent ses réglages. */
   recipeId?: number;
+  /** Défauts accumulés au fil des étapes (la qualité en découle). */
+  defects?: Defect[];
 }
 
 export const NUMERIC_KEYS = ['og', 'fermentability', 'ibu', 'abv', 'fruity', 'quality', 'gardeDays'] as const;
@@ -67,7 +70,7 @@ export class BatchRegistry {
     // Traces négligeables : on garde le lot dominant (évite de créer un lot à chaque tick dans un tuyau).
     if (vb / total < BLEND_EPSILON) return a;
     if (va / total < BLEND_EPSILON) return b;
-    const mixed: BatchProfile = { ...pa, strain: va >= vb ? pa.strain : pb.strain };
+    const mixed: BatchProfile = { ...pa, strain: va >= vb ? pa.strain : pb.strain, defects: [...(pa.defects ?? []), ...(pb.defects ?? [])].filter((d, i, a) => a.findIndex((x) => x.id === d.id) === i) };
     for (const k of NUMERIC_KEYS) mixed[k] = (pa[k] * va + pb[k] * vb) / total;
     // Un assemblage non maîtrisé dégrade légèrement la qualité.
     mixed.quality *= 0.95;

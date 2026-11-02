@@ -1,6 +1,7 @@
 import { countItems, type Building } from './building';
 import { BUILDINGS, kindOf, type BuildingDef } from './content/buildings';
 import { hopsFor, yeastFor } from './systems/machines';
+import { expectedWort } from './ingredients';
 import { ITEMS, type ItemId } from './content/items';
 import { STRAINS, type StrainId } from './content/strains';
 import { CRATE_SIZE, waterFor } from './systems/machines';
@@ -55,7 +56,7 @@ export function describe(world: World, b: Building): MachineInfo {
       return { status: idleReason(world) ?? 'En attente des ingrédients', needs };
     }
     case 'kettle': {
-      needs.push({ label: 'Houblon', have: countItems(b.itemsIn!, 'hops'), want: hopsFor(world.activeRecipe?.hopsItems ?? 1, b.fluidIn!.amount || 19 * scale), unit: '× 50 g' });
+      needs.push({ label: 'Houblon', have: countItems(b.itemsIn!, 'hops'), want: hopsFor(world.activeRecipe?.hopsGrams ?? 30, b.fluidIn!.amount || expectedWort(world.activeRecipe?.grainKg ?? 5) * scale), unit: '× 10 g' });
       if (m?.phase === 'heating') return { status: `Montée à ébullition : ${t(m.temp)}`, needs };
       if (m?.phase === 'processing') return { status: `Ébullition avec ${Math.round(Number(m.data?.hopsGrams ?? 0))} g de houblon`, progress: pct(b), needs };
       if (m?.phase === 'blocked') return { status: 'Moût houblonné prêt : la sortie est bloquée', needs };
@@ -90,6 +91,11 @@ export function describe(world: World, b: Building): MachineInfo {
         progress: m?.phase === 'processing' ? pct(b) : b.itemsIn!.length / CRATE_SIZE,
         needs,
       };
+    case 'storage': {
+      const item = String(b.params.item) as ItemId;
+      const cap = (BUILDINGS[b.type] as BuildingDef).itemsOut!.capacity;
+      return { status: `${ITEMS[item]?.name ?? item} : ${b.itemsOut!.length} / ${cap}`, progress: b.itemsOut!.length / cap, needs };
+    }
     case 'stand':
       return { status: b.itemsIn!.length ? `Vend aux passants (${b.itemsIn!.length} en stock)` : 'Plus rien à vendre', needs };
     default:

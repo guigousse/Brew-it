@@ -8,7 +8,7 @@ import type { MarketState } from '../economy/market';
 import { World } from '../world';
 import { migrate } from './migrations';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /** Format de sauvegarde : JSON pur, versionné. Toute évolution du format = une migration dans migrations.ts. */
 export interface SaveFile {
@@ -32,6 +32,7 @@ export interface SaveFile {
     recipes: Recipe[];
     production: World['production'];
     stock: World['stock'];
+    tasting: World['tasting'];
   };
 }
 
@@ -57,6 +58,7 @@ export function serialize(world: World, now = Date.now()): SaveFile {
       recipes: world.recipes,
       production: world.production,
       stock: world.stock,
+      tasting: world.tasting,
     },
   });
 }
@@ -76,6 +78,7 @@ export function deserialize(raw: unknown): World {
   world.recipes = s.recipes;
   world.production = s.production;
   world.stock = s.stock;
+  world.tasting = s.tasting;
   const reg = new BatchRegistry(s.batches.next, s.batches.batches);
   Object.assign(world.batches, reg);
   for (let i = 1; i <= s.expansion; i++) {

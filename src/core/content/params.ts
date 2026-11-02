@@ -1,70 +1,34 @@
 import type { RecipeChoices } from '../brewing/recipe';
 
 /**
- * Les choix du brassin : 2 ou 3 options simples et expliquées par étape du brassage.
- * Pas de curseurs : le joueur comprend l'effet de chaque décision de brasseur.
+ * Organisation des molettes du brassin, par étape du brassage, avec l'explication de chaque réglage.
+ * Le jeu ne donne aucune prévision : c'est la fournée d'essai qui révèle le résultat.
  */
-export interface ChoiceOption {
-  value: number | string;
-  label: string;
-  /** L'effet sur la bière, en quelques mots. */
-  hint: string;
-}
+export type KnobKey = Exclude<keyof RecipeChoices, 'strain'>;
 
-export interface ChoiceMeta {
-  key: keyof RecipeChoices;
-  /** Étape du brassage concernée. */
+export interface KnobGroup {
   step: string;
-  label: string;
-  /** Pourquoi ce choix compte, en une ou deux phrases. */
-  why: string;
-  options: readonly ChoiceOption[];
+  /** Ce qui se passe à cette étape. */
+  hint: string;
+  knobs: readonly KnobKey[];
+  /** L'étape comporte le choix de la levure. */
+  strain?: boolean;
 }
 
-export const RECIPE_CHOICES: readonly ChoiceMeta[] = [
-  {
-    key: 'grainKg', step: 'Empâtage', label: 'Quantité de malt',
-    why: 'Plus de malt, c\'est plus de sucre dans le moût… donc plus d\'alcool à la fin.',
-    options: [
-      { value: 4, label: '4 kg', hint: 'Légère' },
-      { value: 5, label: '5 kg', hint: 'Normale' },
-      { value: 6, label: '6 kg', hint: 'Forte' },
-    ],
-  },
-  {
-    key: 'mashTemp', step: 'Empâtage', label: 'Température d\'empâtage',
-    why: 'Les enzymes du malt coupent l\'amidon en sucres. À 63 °C la levure les mangera presque tous (bière sèche) ; à 69 °C il en restera (bière ronde et douce).',
-    options: [
-      { value: 63, label: '63 °C', hint: 'Sèche' },
-      { value: 66, label: '66 °C', hint: 'Équilibrée' },
-      { value: 69, label: '69 °C', hint: 'Ronde, sucrée' },
-    ],
-  },
-  {
-    key: 'hopsItems', step: 'Ébullition', label: 'Dose de houblon',
-    why: 'Le houblon, ajouté pendant l\'ébullition, apporte l\'amertume et les arômes. Beaucoup de houblon, c\'est le style IPA.',
-    options: [
-      { value: 1, label: '50 g', hint: 'Douce' },
-      { value: 2, label: '100 g', hint: 'Équilibrée' },
-      { value: 4, label: '200 g', hint: 'Très amère' },
-    ],
-  },
-  {
-    key: 'strain', step: 'Fermentation', label: 'Levure',
-    why: 'La levure mange le sucre et fabrique l\'alcool et les bulles. Chaque souche donne son caractère.',
-    options: [
-      { value: 'ale_us', label: 'Ale américaine', hint: 'Nette' },
-      { value: 'ale_uk', label: 'Ale anglaise', hint: 'Fruitée, ronde' },
-      { value: 'saison', label: 'Saison', hint: 'Épicée, sèche' },
-    ],
-  },
-  {
-    key: 'gardeDays', step: 'Garde', label: 'Temps de garde',
-    why: 'Après la fermentation, la bière se repose au calme et s\'affine. Plus c\'est long, meilleur c\'est… mais plus il faut attendre.',
-    options: [
-      { value: 1, label: '1 jour', hint: 'Rapide' },
-      { value: 3, label: '3 jours', hint: 'Bonne' },
-      { value: 7, label: '7 jours', hint: 'Excellente' },
-    ],
-  },
+export const RECIPE_GROUPS: readonly KnobGroup[] = [
+  { step: 'Empâtage', hint: 'Le malt infuse dans 24 L d\'eau chaude : ses enzymes changent l\'amidon en sucre.', knobs: ['grainKg', 'mashTemp', 'mashTime'] },
+  { step: 'Ébullition', hint: 'Le moût bout avec le houblon, qui apporte amertume et arômes.', knobs: ['hopsGrams', 'boilTime'] },
+  { step: 'Fermentation et garde', hint: 'La levure transforme le sucre en alcool et en bulles, puis la bière mûrit.', knobs: ['fermentTemp', 'gardeDays'], strain: true },
 ];
+
+/** Les explications de Gaston sur sa recette (tutoriel). */
+export const GASTON_NOTES: Record<keyof RecipeChoices, string> = {
+  grainKg: '5 kg de malt pour 25 L : assez de sucre pour une bière autour de 5 %.',
+  mashTemp: '66 °C : le juste milieu entre une bière sèche et une bière ronde.',
+  mashTime: '60 minutes : le temps qu\'il faut aux enzymes pour tout convertir.',
+  hopsGrams: '30 g : une amertume douce, qui équilibre le sucre sans agresser.',
+  boilTime: '60 minutes de grosse ébullition : on stérilise et on chasse les mauvais arômes.',
+  strain: 'Levure ale américaine : nette, elle laisse parler le malt et le houblon.',
+  fermentTemp: '19 °C : bien dans sa zone de confort, pas de goût de solvant.',
+  gardeDays: '3 jours de garde : les arômes de jeunesse disparaissent.',
+};

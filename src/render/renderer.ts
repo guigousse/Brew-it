@@ -417,6 +417,24 @@ export class GameRenderer {
     if (kind === 'water_tap' && (b.fluid?.amount ?? 0) < 19.5 && Math.floor(t * 4) % 2 === 0) {
       g.rect(box.x + 7, box.y + box.h - 2, 2, 2).fill(0xa8dcff);
     }
+    if (kind === 'storage') {
+      // ingrédient affiché sur l'étiquette + jauge de niveau
+      const cap = (BUILDINGS[b.type] as BuildingDef).itemsOut!.capacity;
+      const level = Math.min(1, (b.itemsOut?.length ?? 0) / cap);
+      const item = String(b.params.item) as ItemId;
+      const tier = (BUILDINGS[b.type] as BuildingDef).tier ?? 1;
+      const lab = tier === 1 ? { x: 8, y: 11 } : tier === 2 ? { x: 14, y: 20 } : { x: 13, y: 24 };
+      drawItem(g, item, box.x + lab.x, box.y + lab.y);
+      if (tier === 1) {
+        if (level > 0) g.rect(box.x + 2, box.y + 2, 12, 2).fill(item === 'malt' ? 0xe8cf95 : item === 'hops' ? 0x6cc04a : item === 'yeast' ? 0xfffcf0 : 0x7a3e12);
+      } else {
+        const gx = box.x + (tier === 2 ? 19 : 20);
+        const gy = box.y + 12;
+        const gh = tier === 2 ? 16 : 26;
+        const h = Math.round(gh * level);
+        g.rect(gx + 1, gy + gh - h, 2, h).fill(0x7ee081);
+      }
+    }
     if (kind === 'stand') {
       for (let i = 0; i < Math.min(8, b.itemsIn?.length ?? 0); i++) {
         g.rect(box.x + 4 + i * 3, box.y + 18, 2, 4).fill(0x6b3a12);

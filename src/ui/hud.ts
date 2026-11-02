@@ -1,9 +1,10 @@
 import { Alert, type Building } from '../core/building';
-import { predict, styleLabel, DEFAULT_CHOICES, type Recipe, type RecipeChoices } from '../core/brewing/recipe';
+import { GASTON_RECIPE, RANGES, type Recipe, type RecipeChoices, type Tasting } from '../core/brewing/recipe';
+import { colorLabel, DRINKABLE_MIN, verdictOf } from '../core/brewing/profile';
 import { BUILDINGS, kindOf, type BuildingDef, type BuildingType, type Category } from '../core/content/buildings';
 import { EXPANSIONS } from '../core/content/expansions';
 import { ITEMS, type ItemId } from '../core/content/items';
-import { RECIPE_CHOICES } from '../core/content/params';
+import { GASTON_NOTES, RECIPE_GROUPS } from '../core/content/params';
 import { unlockText } from '../core/content/progression';
 import { STRAINS } from '../core/content/strains';
 import { SUPPLIES } from '../core/content/supplies';
@@ -15,17 +16,19 @@ import { TUTORIAL_STEPS } from '../core/tutorial/steps';
 import { currentStep, skipTutorial, stepText, tutorialPalette } from '../core/tutorial/tutorial';
 import { itemCanvas, spriteCanvas } from '../render/sprites';
 import { drawGaston } from './gaston';
+import { createKnob } from './knob';
 import type { InputController, Tool } from './input';
 
 type Tab = 'shop' | 'supplier' | 'brews';
 
-const SHOP_CATEGORIES: { id: Category | 'local'; label: string }[] = [
-  { id: 'brewing', label: 'Brassage' },
-  { id: 'transport', label: 'Liaisons' },
-  { id: 'supply', label: 'Eau' },
-  { id: 'sales', label: 'Vente' },
-  { id: 'local', label: 'Local' },
+const SHOP_SECTIONS: { id: Category | 'local'; label: string; title: string }[] = [
+  { id: 'brewing', label: 'Brassage', title: 'Appareils de brassage' },
+  { id: 'transport', label: 'Connecteurs', title: 'Connecteurs : tuyaux, tapis, eau' },
+  { id: 'storage', label: 'Stockage', title: 'Stockage des ingrédients' },
+  { id: 'sales', label: 'Vente', title: 'Vente et livraison' },
+  { id: 'local', label: 'Local', title: 'Le local' },
 ];
+const FAMILY_ORDER = ['mill', 'mash_tun', 'kettle', 'cooler', 'fermenter', 'bottler', 'storage'];
 
 const ALERT_LABELS: [number, string][] = [
   [Alert.Broken, 'En panne : touche « Réparer »'],
@@ -60,17 +63,13 @@ function pixelImg(canvas: HTMLCanvasElement | null, cls = 'pix'): HTMLElement {
   return img;
 }
 
-const optionLabel = (key: keyof RecipeChoices, value: unknown) => RECIPE_CHOICES.find((c) => c.key === key)?.options.find((o) => o.value === value);
+const fmt = (n: number, d = 0) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 export function recipeSummary(r: RecipeChoices): string {
-  return [
-    optionLabel('grainKg', r.grainKg)?.label,
-    optionLabel('mashTemp', r.mashTemp)?.label,
-    `${optionLabel('hopsItems', r.hopsItems)?.label} de houblon`,
-    STRAINS[r.strain].name,
-    `garde ${optionLabel('gardeDays', r.gardeDays)?.label}`,
-  ].join(' · ');
+  return `${fmt(r.grainKg, r.grainKg % 1 ? 1 : 0)} kg · ${r.mashTemp} °C ${r.mashTime} min · ${r.hopsGrams} g houblon ${r.boilTime} min · ${STRAINS[r.strain].name} ${r.fermentTemp} °C · garde ${r.gardeDays} j`;
 }
+
+const VERDICT_CLASS: Record<string, string> = { Imbuvable: 'v-bad', Médiocre: 'v-meh', Correcte: 'v-ok', Bonne: 'v-good', Excellente: 'v-top' };
 
 /** Caractéristiques d'un appareil pour le magasin. */
 function specText(def: BuildingDef): string {
@@ -115,7 +114,6 @@ export class Hud {
   private modal = h('div', 'modal hidden');
   private toasts = h('div', 'toasts');
   private openTab: Tab | null = null;
-  private shopCategory: Category | 'local' = 'brewing';
   selectedId: number | null = null;
   private inspectorKey = '';
   private mentorKey = '';
@@ -194,8 +192,8 @@ export class Hud {
     }
     this.sheet.classList.toggle('hidden', !tab);
     if (!tab) return;
-    const key = `${tab}|${this.shopCategory}|${Math.floor(w.money)}|${JSON.stringify(w.stock)}|${w.tutorial.step}|${w.unlocked.length}|${w.production.recipeId}|${w.production.running}|${w.recipes.length}|${w.expansion}`;
-    if (key === this.sheetKey) return;
+    const key = `${tab}|${JSON.stringify(w.stock)}|${w.tutorial.step}|${w.unlocked.length}|${w.production.recipeId}|${w.production.running}|${w.recipes.length}|${w.expansion}|${w.tasting?.recipeId ?? ''}|${w.recipes.map((r) => r.status + (r.tasting ? 't' : '')).join()}`;
+    if (key === this.sheetKey) return this.refreshAffordability(w);
     this.sheetKey = key;
     const scroll = this.sheet.querySelector('.sheet-body')?.scrollTop ?? 0;
     this.sheet.replaceChildren();
@@ -206,6 +204,15 @@ export class Hud {
     if (bodyEl) bodyEl.scrollTop = scroll;
   }
 
+  /** Met à jour sur place ce qui dépend de l'argent (sans reconstruire le panneau). */
+  private refreshAffordability(w: World): void {
+    this.sheet.querySelectorAll<HTMLElement>('[data-cost]').forEach((el) => {
+      const short = w.money < Number(el.dataset.cost);
+      if (el instanceof HTMLButtonElement && el.classList.contains('pack')) el.disabled = short;
+      else el.classList.toggle('short', short);
+    });
+  }
+
   private sheetFrame(title: string): HTMLElement {
     const head = h('div', 'sheet-head');
     head.append(h('strong', '', title), this.button('icon-btn small', '✕', () => this.toggleTab(this.openTab!)));
@@ -214,66 +221,73 @@ export class Hud {
     return body;
   }
 
-  // --- Magasin
+  // --- Magasin : une liste unique découpée en sections, avec des raccourcis en haut
   private renderShop(w: World): void {
     const body = this.sheetFrame('Magasin');
     const inTutorial = !w.tutorial.done;
     const tutorialTypes = tutorialPalette(w);
-    if (!inTutorial) {
-      const chips = h('div', 'chips');
-      for (const c of SHOP_CATEGORIES) {
-        chips.append(this.button(`chip${c.id === this.shopCategory ? ' active' : ''}`, c.label, () => {
-          this.shopCategory = c.id;
-          this.sheetKey = '';
-          this.renderSheet();
-        }));
-      }
-      body.append(chips);
-    }
-    const grid = h('div', 'shop-grid');
-    if (!inTutorial && this.shopCategory === 'local') {
-      const next = EXPANSIONS[w.expansion + 1];
-      const card = h('div', 'card');
-      card.append(h('div', 'card-title', next ? `Agrandir : ${next.name}` : 'Local au maximum'), h('div', 'card-spec', next ? `${next.width} × ${next.height} cases` : ''));
-      if (next) {
-        const buy = this.button('btn primary', moneyInt(next.cost), () => {
-          const r = w.expand();
-          if (!r.ok) this.toast(r.reason!, 'bad');
-        });
-        buy.disabled = w.money < next.cost;
-        card.append(buy);
-      }
-      const del = h('div', 'card');
-      del.append(h('div', 'card-title', 'Supprimer des éléments'), h('div', 'card-spec', `Remboursés à ${Math.round(REFUND_RATIO * 100)} %`), this.button('btn bad', 'Choisir', () => {
-        this.openTab = null;
-        this.setTool({ kind: 'delete' });
-      }));
-      grid.append(card, del);
-      body.append(grid, h('p', 'hint', 'Pour déplacer un appareil, touche-le sur la carte puis « Déplacer ».'));
-      return;
-    }
-    const types = (Object.keys(BUILDINGS) as BuildingType[]).filter((t) => {
-      const d = BUILDINGS[t] as BuildingDef;
-      if (d.hidden) return false;
-      return inTutorial ? tutorialTypes.includes(t) : d.category === this.shopCategory;
-    });
-    if (inTutorial && !types.length) body.append(h('p', 'hint', 'Écoute Gaston : rien à acheter pour l\'instant.'));
-    for (const t of types) {
+    const shopCard = (t: BuildingType) => {
       const d = BUILDINGS[t] as BuildingDef;
       const locked = !inTutorial && !!d.unlock && !w.unlocked.includes(t);
       const card = h('button', `card shop-item${locked ? ' locked' : ''}${inTutorial ? ' pulse' : ''}`);
       const pic = h('div', 'card-pic');
       pic.append(pixelImg(spriteCanvas(t, true)));
       card.append(pic, h('div', 'card-title', d.name), h('div', 'card-spec', locked ? unlockText(d.unlock!) : specText(d) || d.description));
-      card.append(h('div', `price${!locked && !inTutorial && w.money < d.cost ? ' short' : ''}`, locked ? '🔒' : inTutorial ? 'Offert' : moneyInt(d.cost)));
+      const price = h('div', `price${!locked && !inTutorial && w.money < d.cost ? ' short' : ''}`, locked ? '🔒' : inTutorial ? 'Offert' : moneyInt(d.cost));
+      if (!locked && !inTutorial) price.dataset.cost = String(d.cost);
+      card.append(price);
       card.disabled = locked;
       card.onclick = () => {
         this.openTab = null;
         this.setTool({ kind: 'build', type: t });
       };
-      grid.append(card);
+      return card;
+    };
+    if (inTutorial) {
+      const grid = h('div', 'shop-grid');
+      for (const t of tutorialTypes) grid.append(shopCard(t));
+      if (!tutorialTypes.length) body.append(h('p', 'hint', 'Écoute Gaston : rien à acheter pour l\'instant.'));
+      body.append(grid);
+      return;
     }
-    body.append(grid);
+    const chips = h('div', 'chips');
+    body.append(chips);
+    for (const sec of SHOP_SECTIONS) {
+      const header = h('div', 'shop-section', sec.title);
+      chips.append(this.button('chip', sec.label, () => header.scrollIntoView({ block: 'start', behavior: 'smooth' })));
+      body.append(header);
+      const grid = h('div', 'shop-grid');
+      if (sec.id === 'local') {
+        const next = EXPANSIONS[w.expansion + 1];
+        const card = h('div', 'card');
+        card.append(h('div', 'card-title', next ? `Agrandir : ${next.name}` : 'Local au maximum'), h('div', 'card-spec', next ? `${next.width} × ${next.height} cases` : ''));
+        if (next) {
+          const buy = this.button('btn primary', moneyInt(next.cost), () => {
+            const r = w.expand();
+            if (!r.ok) this.toast(r.reason!, 'bad');
+          });
+          buy.disabled = w.money < next.cost;
+          card.append(buy);
+        }
+        const del = h('div', 'card');
+        del.append(h('div', 'card-title', 'Supprimer des éléments'), h('div', 'card-spec', `Remboursés à ${Math.round(REFUND_RATIO * 100)} %`), this.button('btn bad', 'Choisir', () => {
+          this.openTab = null;
+          this.setTool({ kind: 'delete' });
+        }));
+        grid.append(card, del);
+        body.append(grid, h('p', 'hint', 'Pour déplacer un appareil, touche-le sur la carte puis « Déplacer ».'));
+        continue;
+      }
+      const types = (Object.keys(BUILDINGS) as BuildingType[])
+        .filter((t) => !(BUILDINGS[t] as BuildingDef).hidden && BUILDINGS[t].category === sec.id)
+        .sort((a, b) => {
+          const da = BUILDINGS[a] as BuildingDef;
+          const db = BUILDINGS[b] as BuildingDef;
+          return (FAMILY_ORDER.indexOf(da.family ?? '') - FAMILY_ORDER.indexOf(db.family ?? '')) || (da.tier ?? 0) - (db.tier ?? 0);
+        });
+      for (const t of types) grid.append(shopCard(t));
+      body.append(grid);
+    }
   }
 
   // --- Fournisseur
@@ -299,6 +313,7 @@ export class Hud {
         });
         b.append(h('span', 'pack-label', p.label), h('span', 'pack-price', money(p.price)));
         b.disabled = w.money < p.price;
+        b.dataset.cost = String(p.price);
         packs.append(b);
       }
       row.append(info, packs);
@@ -310,52 +325,70 @@ export class Hud {
   private renderBrews(w: World): void {
     const body = this.sheetFrame('Brassins');
     const active = w.activeRecipe;
+    if (w.tasting) {
+      const banner = h('div', 'beer-sheet pulse');
+      banner.append(h('div', 'beer-style', 'Fournée d\'essai prête !'), this.button('btn primary', 'Goûter la bière', () => w.tasting && this.openTasting(w.tasting.recipeId)));
+      body.append(banner);
+    }
     const status = h('div', 'beer-sheet');
     if (active) {
-      const p = predict(active);
-      status.append(
-        h('div', 'beer-style', `${w.production.running ? '▶ En production' : '⏸ En pause'} : ${active.name}`),
-        h('div', 'beer-stats', `≈ ${p.abv.toFixed(1)} % · ${Math.round(p.ibu)} IBU · ${styleLabel(p)}`),
-        h('div', 'card-spec', recipeSummary(active)),
-      );
+      const state = active.status === 'test'
+        ? (w.tasting ? '🍺 Dégustation en attente' : '🧪 Fournée d\'essai en cours')
+        : w.production.running ? '▶ En production' : '⏸ En pause';
+      status.append(h('div', 'beer-style', `${state} : ${active.name}`), h('div', 'card-spec', recipeSummary(active)));
     } else status.append(h('div', 'beer-style', 'Aucun brassin pour l\'instant'));
     body.append(status);
     if (!active && !w.tutorial.done) {
-      body.append(h('p', 'hint', 'Gaston te dira quand composer ton premier brassin.'));
+      body.append(h('p', 'hint', 'Gaston te dira quand lancer ton premier brassin.'));
       return;
     }
-    if (active) {
+    if (active && active.status === 'validated' && !w.tasting) {
       body.append(this.button(`btn ${w.production.running ? '' : 'primary'}`, w.production.running ? '⏸ Mettre la production en pause' : '▶ Reprendre la production', () => {
         w.setProduction(!w.production.running);
         this.sheetKey = '';
         this.renderSheet();
       }));
-      if (w.production.running) body.append(h('p', 'hint', 'Pour changer de bière, mets la production en pause : les lots en cours se terminent.'));
     }
-    const paused = !w.production.running || !active;
+    const busy = !!w.tasting || (w.production.running && !!active);
+    if (w.tutorial.done) {
+      const create = this.button('btn primary', '＋ Nouveau brassin', () => this.openEditor(active ?? GASTON_RECIPE));
+      create.disabled = busy;
+      body.append(create);
+      if (busy) body.append(h('p', 'hint', w.tasting ? 'Goûte d\'abord la fournée d\'essai.' : 'Pour créer ou changer de brassin, mets la production en pause : les lots en cours se terminent.'));
+    }
     if (w.recipes.length) {
       body.append(h('div', 'section-title', 'Mes brassins'));
       const list = h('div', 'recipe-list');
-      for (const r of [...w.recipes].reverse()) list.append(this.recipeRow(w, r, paused));
+      for (const r of [...w.recipes].reverse()) list.append(this.recipeRow(w, r, !busy));
       body.append(list);
     }
-    if (paused && w.tutorial.done) body.append(this.button('btn primary', '＋ Nouveau brassin', () => this.openWizard(active ?? DEFAULT_CHOICES)));
   }
 
   private recipeRow(w: World, r: Recipe, selectable: boolean): HTMLElement {
     const isActive = w.production.recipeId === r.id;
-    const row = h('button', `recipe-row${isActive ? ' active' : ''}`);
-    row.disabled = !selectable && !isActive;
-    row.append(h('span', 'option-label', `${r.name}${isActive ? ' (actif)' : ''}`), h('span', 'card-spec', recipeSummary(r)));
-    row.onclick = () => {
-      if (isActive || !selectable) return;
-      const res = w.selectRecipe(r.id);
-      if (!res.ok) return this.toast(res.reason!, 'bad');
-      w.setProduction(true);
-      this.toast(`Production relancée : « ${r.name} »`, 'good');
-      this.sheetKey = '';
-      this.renderSheet();
-    };
+    const row = h('div', `recipe-row${isActive ? ' active' : ''}`);
+    const head = h('div', 'recipe-head');
+    head.append(h('span', 'option-label', `${r.name}${isActive ? ' (actif)' : ''}`));
+    if (r.tasting) {
+      const v = verdictOf(r.tasting.quality);
+      head.append(h('span', `verdict ${VERDICT_CLASS[v]}`, v));
+    } else if (r.status === 'test') head.append(h('span', 'verdict v-meh', 'À goûter'));
+    row.append(head, h('span', 'card-spec', recipeSummary(r)));
+    const actions = h('div', 'insp-actions');
+    if (r.tasting) actions.append(this.button('btn small', 'Dégustation', () => this.openTasting(r.id, true)));
+    if (w.tutorial.done) actions.append(this.button('btn small', 'Modifier', () => this.openEditor(r, `${r.name} v2`)));
+    const drinkable = r.status === 'validated' && (r.tasting?.quality ?? 1) >= DRINKABLE_MIN;
+    if (!isActive && selectable && drinkable) {
+      actions.append(this.button('btn small primary', 'Produire', () => {
+        const res = w.selectRecipe(r.id);
+        if (!res.ok) return this.toast(res.reason!, 'bad');
+        w.setProduction(true);
+        this.toast(`Production relancée : « ${r.name} »`, 'good');
+        this.sheetKey = '';
+        this.renderSheet();
+      }));
+    }
+    row.append(actions);
     return row;
   }
 
@@ -447,7 +480,7 @@ export class Hud {
     this.inspector.classList.toggle('hidden', !b);
     if (!b) return;
     const def = BUILDINGS[b.type] as BuildingDef;
-    const key = `${b.id}|${w.tutorial.done}|${w.production.recipeId}`;
+    const key = `${b.id}|${w.tutorial.done}|${w.production.recipeId}|${b.params.item ?? ''}`;
     if (this.inspectorKey !== key) {
       this.inspectorKey = key;
       this.inspector.replaceChildren();
@@ -461,6 +494,24 @@ export class Hud {
       if (['mill', 'mash_tun', 'kettle', 'fermenter'].includes(kindOf(b.type) ?? '')) {
         const box = h('div', 'insp-recipe');
         box.append(h('div', 'section-title', recipe ? `Brassin : ${recipe.name}` : 'Aucun brassin'), h('div', 'card-spec', recipe ? recipeSummary(recipe) : 'Compose ton brassin dans l\'onglet Brassins.'));
+        this.inspector.append(box);
+      }
+      if (kindOf(b.type) === 'storage') {
+        const box = h('div', 'insp-recipe');
+        box.append(h('div', 'section-title', 'Ingrédient stocké'));
+        const row = h('div', 'strain-row');
+        for (const it of ['malt', 'hops', 'yeast', 'bottle'] as ItemId[]) {
+          const btn = h('button', `chip${b.params.item === it ? ' active' : ''}`);
+          btn.append(pixelImg(itemCanvas(it), 'pix item-icon'), document.createTextNode(` ${ITEMS[it].name}`));
+          btn.onclick = () => {
+            if (b.params.item === it) return;
+            w.setStorageItem(b.id, it);
+            this.inspectorKey = '';
+            this.toast(`Réserve réglée sur : ${ITEMS[it].name.toLowerCase()}`, 'info');
+          };
+          row.append(btn);
+        }
+        box.append(row, h('p', 'hint', 'Elle alimente tout seul les appareils collés à elle. Changer d\'ingrédient rend le contenu au stock.'));
         this.inspector.append(box);
       }
       const actions = h('div', 'insp-actions');
@@ -535,71 +586,166 @@ export class Hud {
     this.mentorChapter.textContent = `${step.chapter} · ${w.tutorial.step + 1}/${TUTORIAL_STEPS.length}`;
     this.mentorActions.replaceChildren();
     if (step.ack) this.mentorActions.append(this.button('btn primary', step.id === 'finale' ? 'Lancer ma brasserie !' : 'Continuer', () => w.signal(`ack:${step.id}`)));
-    if (step.action === 'recipe') this.mentorActions.append(this.button('btn primary pulse', 'Composer mon brassin', () => this.openWizard()));
+    if (step.action === 'recipe') this.mentorActions.append(this.button('btn primary pulse', 'Voir la recette de Gaston', () => this.openGastonRecipe()));
     if (step.fastForward) {
       const fast = this.cb.getSpeed() > 1;
       this.mentorActions.append(this.button(`btn${fast ? ' active' : ''}`, fast ? `⏩ Vitesse ×${this.cb.getSpeed()}` : '⏩ Accélérer le temps', () => this.cb.setSpeed(fast ? 1 : 4)));
     }
   }
 
-  // ------------------------------------------------------------------ assistant de brassin
+  // ------------------------------------------------------------------ éditeur de brassin (molettes)
 
-  openWizard(base: RecipeChoices = DEFAULT_CHOICES): void {
+  /** Nouveau brassin : une molette par réglage, aucune prévision. Le résultat se découvre à la fournée d'essai. */
+  openEditor(base: RecipeChoices = GASTON_RECIPE, name = ''): void {
     const choices: RecipeChoices = { ...base };
-    let index = 0;
-    const total = RECIPE_CHOICES.length + 1;
-    const render = () => {
-      this.modal.replaceChildren();
-      this.modal.classList.remove('hidden');
-      const card = h('div', 'modal-card wizard');
-      const head = h('div', 'sheet-head');
-      head.append(h('strong', '', 'Nouveau brassin'), h('span', 'mentor-chapter', `${Math.min(index + 1, total)}/${total}`), this.button('icon-btn small', '✕', () => this.closeModal()));
-      const dots = h('div', 'dots');
-      for (let i = 0; i < total; i++) dots.append(h('span', `dot${i <= index ? ' on' : ''}`));
-      card.append(head, dots);
-      if (index < RECIPE_CHOICES.length) {
-        const meta = RECIPE_CHOICES[index]!;
-        card.append(h('div', 'wizard-step', meta.step), h('div', 'wizard-title', meta.label), h('p', 'wizard-why', meta.why));
-        const row = h('div', 'choice-options');
-        for (const o of meta.options) {
-          const btn = h('button', `option${choices[meta.key] === o.value ? ' active' : ''}`);
-          btn.append(h('span', 'option-label', o.label), h('span', 'option-hint', o.hint));
-          btn.onclick = () => {
-            (choices as Record<string, unknown>)[meta.key] = o.value;
-            index++;
-            render();
+    this.modal.replaceChildren();
+    this.modal.classList.remove('hidden');
+    const card = h('div', 'modal-card editor');
+    const head = h('div', 'sheet-head');
+    head.append(h('strong', '', 'Nouveau brassin'), this.button('icon-btn small', '✕', () => this.closeModal()));
+    card.append(head, h('p', 'hint', 'Règle chaque étape, puis lance une fournée d\'essai : tu goûteras le résultat avant de produire.'));
+    card.append(this.recipeGroups(choices, false));
+    const input = h('input', 'name-input');
+    input.maxLength = 32;
+    input.placeholder = 'Nom de ta bière';
+    input.value = name;
+    const launch = this.button('btn primary big', '🧪 Lancer la fournée d\'essai', () => {
+      const w = this.world();
+      const r = w.createRecipe(input.value, choices);
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      this.closeModal();
+      this.toast(`Fournée d'essai de « ${w.activeRecipe!.name} » lancée`, 'good');
+      this.inspectorKey = '';
+      this.sheetKey = '';
+    });
+    card.append(h('div', 'section-title', 'Nom de la bière'), input, launch);
+    this.modal.append(card);
+  }
+
+  /** Les molettes, groupées par étape. `readonly` pour la fiche de la recette de Gaston. */
+  private recipeGroups(choices: RecipeChoices, readonly: boolean, notes?: Record<string, string>): HTMLElement {
+    const wrap = h('div', 'recipe-groups');
+    for (const g of RECIPE_GROUPS) {
+      const box = h('section', 'recipe-group');
+      box.append(h('div', 'wizard-step', g.step), h('p', 'hint', g.hint));
+      if (g.strain) {
+        const strains = h('div', 'strain-row');
+        const desc = h('div', 'card-spec strain-desc', STRAINS[choices.strain].description);
+        for (const [id, st] of Object.entries(STRAINS)) {
+          const b = h('button', `chip${choices.strain === id ? ' active' : ''}`, st.name);
+          b.disabled = readonly && choices.strain !== id;
+          b.onclick = () => {
+            if (readonly) return;
+            choices.strain = id as RecipeChoices['strain'];
+            strains.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === b));
+            desc.textContent = st.description;
           };
-          row.append(btn);
+          strains.append(b);
         }
-        card.append(row);
-      } else {
-        const p = predict(choices);
-        card.append(h('div', 'wizard-step', 'Dernière étape'), h('div', 'wizard-title', 'Donne un nom à ta bière'));
-        const input = h('input', 'name-input');
-        input.maxLength = 32;
-        input.placeholder = 'Ex. : Blonde du garage';
-        input.value = this.world().recipes.length ? '' : 'Blonde du garage';
-        const sheet = h('div', 'beer-sheet');
-        sheet.append(
-          h('div', 'beer-style', styleLabel(p)),
-          h('div', 'beer-stats', `≈ ${p.abv.toFixed(1)} % alcool · ${Math.round(p.ibu)} IBU · ${Math.round(p.liters / 0.33)} bouteilles par brassin`),
-          h('div', 'card-spec', recipeSummary(choices)),
-        );
-        const launch = this.button('btn primary big', 'Sauvegarder et lancer la production', () => {
-          const w = this.world();
-          const r = w.createRecipe(input.value, choices);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.closeModal();
-          this.toast(`Brassin « ${w.activeRecipe!.name} » lancé !`, 'good');
-          this.inspectorKey = '';
-          this.sheetKey = '';
-        });
-        card.append(input, sheet, launch);
+        box.append(h('div', 'section-title', 'Levure'), strains, desc);
+        if (notes?.strain) box.append(h('p', 'note', notes.strain));
       }
-      if (index > 0) card.append(this.button('btn small back', '← Retour', () => { index--; render(); }));
-      this.modal.append(card);
-    };
-    render();
+      const knobs = h('div', 'knob-row');
+      for (const k of g.knobs) {
+        const range = RANGES[k];
+        const cell = h('div', 'knob-cell');
+        cell.append(createKnob({
+          label: range.label, min: range.min, max: range.max, step: range.step, unit: range.unit, value: choices[k], disabled: readonly,
+          onChange: (v) => (choices[k] = v),
+        }));
+        knobs.append(cell);
+      }
+      box.append(knobs);
+      // Explications de Gaston sous la rangée de molettes.
+      const lines = g.knobs.filter((k) => notes?.[k]).map((k) => h('li', 'note', notes![k]!));
+      if (lines.length) {
+        const ul = h('ul', 'notes');
+        ul.append(...lines);
+        box.append(ul);
+      }
+      wrap.append(box);
+    }
+    return wrap;
+  }
+
+  /** Tutoriel : Gaston présente sa recette, réglage par réglage ; le joueur la nomme et lance la production. */
+  openGastonRecipe(): void {
+    this.modal.replaceChildren();
+    this.modal.classList.remove('hidden');
+    const card = h('div', 'modal-card editor');
+    const head = h('div', 'sheet-head');
+    head.append(h('strong', '', 'La recette de Gaston'), this.button('icon-btn small', '✕', () => this.closeModal()));
+    card.append(head, h('p', 'hint', 'Voici chaque réglage et pourquoi. Plus tard, tu tourneras toi-même les molettes.'));
+    card.append(this.recipeGroups({ ...GASTON_RECIPE }, true, GASTON_NOTES));
+    const input = h('input', 'name-input');
+    input.maxLength = 32;
+    input.value = 'Blonde de Gaston';
+    const launch = this.button('btn primary big', 'Lancer la production', () => {
+      const w = this.world();
+      const r = w.createRecipe(input.value, GASTON_RECIPE, { validated: true });
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      this.closeModal();
+      this.toast(`Brassin « ${w.activeRecipe!.name} » lancé !`, 'good');
+      this.sheetKey = '';
+    });
+    card.append(h('div', 'section-title', 'Nom de ta première bière'), input, launch);
+    this.modal.append(card);
+  }
+
+  /** Dégustation de la fournée d'essai : verdict, mesures, défauts expliqués, décision. */
+  openTasting(recipeId: number, readOnly = false): void {
+    const w = this.world();
+    const r = w.recipes.find((x) => x.id === recipeId);
+    const t: Tasting | undefined = r?.tasting;
+    if (!r || !t) return;
+    const pending = !readOnly && w.tasting?.recipeId === r.id;
+    const v = verdictOf(t.quality);
+    this.modal.replaceChildren();
+    this.modal.classList.remove('hidden');
+    const card = h('div', 'modal-card tasting');
+    const head = h('div', 'sheet-head');
+    head.append(h('strong', '', `Dégustation : ${r.name}`), this.button('icon-btn small', '✕', () => this.closeModal()));
+    const verdict = h('div', `verdict big ${VERDICT_CLASS[v]}`, v);
+    const score = h('div', 'score');
+    score.append(h('span', '', `Note ${Math.round(t.quality * 20)}/20`));
+    const stats = h('div', 'tasting-stats');
+    for (const [k, val] of [['Alcool', `${t.abv.toFixed(1)} %`], ['Amertume', `${Math.round(t.ibu)} IBU`], ['Couleur', colorLabel(t.og)], ['Fruité', t.fruity > 0.5 ? 'Marqué' : t.fruity > 0.25 ? 'Léger' : 'Discret']] as const) {
+      const cell = h('div', 'stat');
+      cell.append(h('div', 'section-title', k), h('div', 'stat-value', val));
+      stats.append(cell);
+    }
+    card.append(head, verdict, score, stats);
+    if (t.defects.length) {
+      card.append(h('div', 'section-title', 'Ce qui ne va pas'));
+      const list = h('ul', 'defects');
+      for (const d of t.defects) list.append(h('li', '', d.label));
+      card.append(list);
+    } else card.append(h('p', 'note', 'Aucun défaut : propre, équilibrée, réussie. Bravo !'));
+    card.append(h('div', 'card-spec', recipeSummary(r)));
+    if (pending) {
+      const ok = t.quality >= DRINKABLE_MIN;
+      const go = this.button('btn primary big', ok ? '▶ Valider et lancer la production' : 'Imbuvable : impossible à vendre', () => {
+        const res = w.validateRecipe();
+        if (!res.ok) return this.toast(res.reason!, 'bad');
+        this.closeModal();
+        this.toast(`« ${r.name} » part en production`, 'good');
+        this.sheetKey = '';
+      });
+      go.disabled = !ok;
+      const redo = this.button('btn', 'Jeter et modifier la recette', () => {
+        w.discardTest();
+        this.closeModal();
+        this.openEditor(r, `${r.name} v2`);
+      });
+      const toss = this.button('btn bad', 'Jeter la fournée', () => {
+        w.discardTest();
+        this.closeModal();
+        this.toast('Fournée jetée', 'info');
+        this.sheetKey = '';
+      });
+      card.append(go, redo, toss);
+    } else card.append(this.button('btn', 'Fermer', () => this.closeModal()));
+    this.modal.append(card);
   }
 
   private closeModal(): void {
@@ -645,7 +791,7 @@ export class Hud {
     this.speedBtn.textContent = `⏩ ×${this.cb.getSpeed()}`;
     const r = w.activeRecipe;
     this.prodChip.hidden = !r;
-    this.prodChip.textContent = r ? `${w.production.running ? '▶' : '⏸'} ${r.name}` : '';
+    this.prodChip.textContent = r ? `${w.tasting ? '🍺' : r.status === 'test' ? '🧪' : w.production.running ? '▶' : '⏸'} ${r.name}` : '';
     const tool = this.input.tool;
     if (tool.kind === 'build' && !w.tutorial.done && !tutorialPalette(w).includes(tool.type)) this.setTool({ kind: 'none' });
     this.renderSheet();
@@ -665,7 +811,11 @@ export class Hud {
     if (e.type === 'batchLost') this.toast(`Lot perdu : ${e.reason}`, 'bad');
     if (e.type === 'broken') this.toast('Un tuyau a cédé sous la pression !', 'bad');
     if (e.type === 'expanded') this.toast(`Nouvel espace : ${EXPANSIONS[e.level]!.name}`, 'good');
-    if (e.type === 'crateDelivered') this.toast(`Caisse livrée au bar : +${money(e.price)}`, 'good');
+    if (e.type === 'crateDelivered') this.toast(e.price > 0 ? `Caisse livrée au bar : +${money(e.price)}` : 'Le bar refuse ta caisse : bière imbuvable !', e.price > 0 ? 'good' : 'bad');
+    if (e.type === 'tasting') {
+      this.sheetKey = '';
+      this.openTasting(e.recipeId);
+    }
     if (e.type === 'unlocked' && w.tutorial.done && w.stats.crates > 0 && e.buildings.length < 8) {
       this.toast(`Nouveau au Magasin : ${e.buildings.map((t) => BUILDINGS[t as BuildingType].name).join(', ')}`, 'good');
     }

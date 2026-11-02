@@ -39,6 +39,27 @@ const MIGRATIONS: Record<number, (save: any) => any> = {
     version: 4,
     world: { ...s.world, stock: {}, unlocked: [...new Set([...s.world.unlocked, ...STARTER_BUILDINGS])] },
   }),
+  // v4 → v5 : brassins réglés aux molettes, houblon compté par 10 g, dégustation.
+  4: (s) => {
+    const strainTemp: Record<string, number> = { ale_us: 19, ale_uk: 19.5, saison: 26, lager: 11.5 };
+    const hopsX5 = (list: { item: string }[] | undefined) =>
+      list?.flatMap((u) => (u.item === 'hops' ? [u, u, u, u, u].map((x) => ({ ...x })) : [u]));
+    return {
+      ...s,
+      version: 5,
+      world: {
+        ...s.world,
+        tasting: null,
+        stock: { ...s.world.stock, hops: (s.world.stock?.hops ?? 0) * 5 },
+        recipes: s.world.recipes.map((r: any) => ({
+          id: r.id, name: r.name, grainKg: r.grainKg, mashTemp: r.mashTemp, mashTime: 60,
+          hopsGrams: (r.hopsItems ?? 1) * 50, boilTime: 60, strain: r.strain, fermentTemp: strainTemp[r.strain] ?? 19,
+          gardeDays: r.gardeDays, status: 'validated',
+        })),
+        buildings: s.world.buildings.map((b: any) => ({ ...b, itemsIn: hopsX5(b.itemsIn), itemsOut: hopsX5(b.itemsOut), belt: b.belt })),
+      },
+    };
+  },
 };
 
 export function migrate(raw: unknown): SaveFile {

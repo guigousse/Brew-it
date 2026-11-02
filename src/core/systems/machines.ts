@@ -1,11 +1,10 @@
 import type { BatchProfile } from '../brewing/batches';
-import { boil, ferment, mash, TIME_SCALE } from '../brewing/profile';
+import { boil, DRINKABLE_MIN, ferment, mash, qualityFrom, TIME_SCALE } from '../brewing/profile';
 import { Alert, countItems, num, takeItems, type Building, type FluidTank, type MachineState } from '../building';
 import { BUILDINGS, type BuildingDef, type MachineKind } from '../content/buildings';
 import type { FluidId } from '../content/fluids';
 import { BOTTLE_LITERS, HOPS_GRAMS_PER_ITEM, type ItemId } from '../content/items';
 import { YEAST_DEATH_TEMP, type StrainId } from '../content/strains';
-import { fermentTempFor } from '../brewing/recipe';
 import { appeal, ITEM_PRICES, salePrice } from '../economy/market';
 import { approach } from '../math';
 import type { World } from '../world';
@@ -17,8 +16,6 @@ const BOIL_TEMP = 100;
 /** Réglages fixes (le joueur ne choisit que l'essentiel). */
 export const FIXED = {
   waterL: 24, // eau d'empâtage fixe : la quantité de malt règle donc la force de la bière
-  mashTimeMin: 60,
-  boilTimeMin: 60,
   mashHeatRate: 1.5, // °C/s
   boilHeatRate: 2,
   /** Un lot démarre quand le liquide d'entrée n'a plus bougé pendant ce délai (s)… */
@@ -44,8 +41,8 @@ const scaleOf = (b: Building) => defOf(b).batchScale ?? 1;
 const speedOf = (b: Building) => defOf(b).speed ?? 1;
 /** Volume de moût de référence d'un lot ×1 (24 L d'eau − absorption du grain). */
 const REF_BATCH_L = 19;
-/** Houblon nécessaire pour un volume de moût donné (la dose de la recette vaut pour 19 L). */
-export const hopsFor = (hopsItems: number, liters: number) => Math.max(hopsItems, Math.round((hopsItems * liters) / REF_BATCH_L));
+/** Sachets de 10 g de houblon pour un volume de moût donné (la dose de la recette vaut pour un lot de 25 L ≈ 19 L de moût). */
+export const hopsFor = (hopsGrams: number, liters: number) => Math.ceil((hopsGrams / HOPS_GRAMS_PER_ITEM) * (liters / REF_BATCH_L) - 1e-6);
 /** Un sachet de levure pour 25 L. */
 export const yeastFor = (liters: number) => Math.max(1, Math.ceil(liters / 25 - 1e-9));
 
@@ -82,6 +79,17 @@ function fail(world: World, b: Building, m: MachineState, reason: string) {
 function heatTo(m: MachineState, target: number, rate: number, dt: number): boolean {
   m.temp = approach(m.temp ?? target, target, rate * dt);
   return Math.abs(m.temp - target) < 0.5;
+}
+
+/** Fin de fermentation : pour une fournée d'essai, on présente la dégustation et on met la production en pause. */
+function onFermentDone(world: World, b: Building, m: MachineState) {
+  const p = world.batches.get(m.batch);
+  const r = world.recipes.find((x) => x.id === p?.recipeId);
+  if (!p || !r || r.status !== 'test') return;
+  r.tasting = { abv: p.abv, ibu: p.ibu, og: p.og, fruity: p.fruity, quality: p.quality, defects: p.defects ?? [] };
+  world.tasting = { recipeId: r.id, buildingId: b.id };
+  world.production.running = false;
+  world.events.emit({ type: 'tasting', recipeId: r.id });
 }
 
 function tickFailed(m: MachineState, dt: number) {
@@ -159,7 +167,8 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
         const water = waterFor(recipe.grainKg) * scaleOf(b);
         const ready = countItems(b.itemsIn!, 'crushed_malt') >= grain && b.fluidIn!.amount >= water;
         if (!ready) return;
-        m.data = { grainKg: grain, waterL: water, mashTemp: recipe.mashTemp, recipeId: recipe.id, name: recipe.name };
+        m.data = { grainKg: grain, waterL: water, mashTemp: recipe.mashTemp, mashTime: recipe.mashTime, recipeId: recipe.id, name: recipe.name };
+        if (recipe.status === 'test') recipe.testStarted = true; // une seule fournée d'essai
         m.temp = b.fluidIn!.temp;
         takeItems(b.itemsIn!, 'crushed_malt', grain);
         drain(b.fluidIn!, water);
@@ -168,7 +177,7 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
       }
       case 'heating':
         if (heatTo(m, Number(m.data!.mashTemp), FIXED.mashHeatRate * speedOf(b), dt)) {
-          setPhase(m, 'processing', (FIXED.mashTimeMin * TIME_SCALE.brewMinute) / speedOf(b));
+          setPhase(m, 'processing', (Number(m.data!.mashTime) * TIME_SCALE.brewMinute) / speedOf(b));
         }
         return;
       case 'processing':
@@ -176,15 +185,15 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
         return;
       case 'blocked': {
         const d = m.data!;
-        const r = mash({ grainKg: +d.grainKg!, waterL: +d.waterL!, mashTemp: +d.mashTemp!, mashTimeMin: FIXED.mashTimeMin });
+        const r = mash({ grainKg: +d.grainKg!, waterL: +d.waterL!, mashTemp: +d.mashTemp!, mashTimeMin: +d.mashTime! });
         if (!outputFits(b, 'wort', r.volume)) {
           b.alerts |= Alert.OutputBlocked;
           return;
         }
         b.alerts &= ~Alert.OutputBlocked;
         const batch = world.batches.create({
-          ...emptyProfile(), og: r.og, fermentability: r.fermentability, quality: r.quality,
-          name: String(d.name), recipeId: Number(d.recipeId),
+          ...emptyProfile(), og: r.og, fermentability: r.fermentability, quality: qualityFrom(r.defects),
+          name: String(d.name), recipeId: Number(d.recipeId), defects: r.defects,
         });
         mixInto(world, b.fluid!, 'wort', r.volume, m.temp ?? +d.mashTemp!, batch);
         world.events.emit({ type: 'batchReady', buildingId: b.id, batchId: batch });
@@ -206,9 +215,10 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
         const src = world.batches.get(b.fluidIn!.batch);
         const recipe = recipeOf(world, src);
         const volume = b.fluidIn!.amount;
-        const hops = hopsFor(recipe?.hopsItems ?? 1, volume);
+        const hops = hopsFor(recipe?.hopsGrams ?? 30, volume);
         if (countItems(b.itemsIn!, 'hops') < hops) return;
-        m.data = { volume, hopsGrams: hops * HOPS_GRAMS_PER_ITEM, og: src?.og ?? 0 };
+        // Dose réelle de la recette, rapportée au volume (les sachets de 10 g sont arrondis au-dessus).
+        m.data = { volume, hopsGrams: (recipe?.hopsGrams ?? 30) * (volume / REF_BATCH_L), og: src?.og ?? 0, boilTime: recipe?.boilTime ?? 60 };
         m.batch = world.batches.create(src ?? emptyProfile()); // copie : le lot d'origine reste intact
         m.temp = b.fluidIn!.temp;
         takeItems(b.itemsIn!, 'hops', hops);
@@ -218,14 +228,14 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
         return;
       }
       case 'heating':
-        if (heatTo(m, BOIL_TEMP, FIXED.boilHeatRate * speedOf(b), dt)) setPhase(m, 'processing', (FIXED.boilTimeMin * TIME_SCALE.brewMinute) / speedOf(b));
+        if (heatTo(m, BOIL_TEMP, FIXED.boilHeatRate * speedOf(b), dt)) setPhase(m, 'processing', (Number(m.data!.boilTime) * TIME_SCALE.brewMinute) / speedOf(b));
         return;
       case 'processing':
         advanceProcessing(m, dt);
         return;
       case 'blocked': {
         const d = m.data!;
-        const r = boil({ og: +d.og!, volume: +d.volume!, hopsGrams: +d.hopsGrams!, boilMin: FIXED.boilTimeMin });
+        const r = boil({ og: +d.og!, volume: +d.volume!, hopsGrams: +d.hopsGrams!, boilMin: +d.boilTime! });
         if (!outputFits(b, 'hopped_wort', r.volume)) {
           b.alerts |= Alert.OutputBlocked;
           return;
@@ -234,7 +244,8 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
         const p = world.batches.get(m.batch)!;
         p.og = r.og;
         p.ibu = r.ibu;
-        p.quality *= r.quality;
+        p.defects = [...(p.defects ?? []), ...r.defects];
+        p.quality = qualityFrom(p.defects);
         mixInto(world, b.fluid!, 'hopped_wort', r.volume, BOIL_TEMP, m.batch);
         world.stats.brews++;
         m.batch = null;
@@ -266,12 +277,13 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
           fail(world, b, m, `Levure tuée : le moût était à ${pitchTemp.toFixed(0)} °C`);
           return;
         }
-        const temp = fermentTempFor(strain);
+        const temp = recipe?.fermentTemp ?? 19;
         const garde = recipe?.gardeDays ?? 3;
-        const r = ferment({ og: src?.og ?? 0, fermentability: src?.fermentability ?? 0.75, strain, temp, gardeDays: garde });
+        const r = ferment({ og: src?.og ?? 0, fermentability: src?.fermentability ?? 0.75, ibu: src?.ibu ?? 0, strain, temp, gardeDays: garde });
+        const defects = [...(src?.defects ?? []), ...r.defects];
         m.batch = world.batches.create({
           ...(src ?? emptyProfile()),
-          abv: r.abv, fruity: r.fruity, quality: (src?.quality ?? 1) * r.quality, strain, gardeDays: garde,
+          abv: r.abv, fruity: r.fruity, quality: qualityFrom(defects), defects, strain, gardeDays: garde,
         });
         // ~5 % de pertes (lie). fermentDuration sert à l'affichage « fermentation » puis « garde ».
         m.data = { volume: volume * 0.95, temp, fermentDuration: r.days * TIME_SCALE.brewDay };
@@ -282,8 +294,13 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
       }
       case 'processing':
         advanceProcessing(m, dt);
+        if ((m.phase as string) === 'blocked') onFermentDone(world, b, m);
         return;
       case 'blocked': {
+        // Fournée d'essai : la bière attend la décision du joueur après dégustation.
+        const p = world.batches.get(m.batch);
+        const r = world.recipes.find((x) => x.id === p?.recipeId);
+        if (r?.status === 'test') return;
         const volume = Number(m.data!.volume);
         if (!outputFits(b, 'beer', volume)) {
           b.alerts |= Alert.OutputBlocked;
@@ -321,6 +338,9 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
     }
   },
 
+  /** Réserve : rien à faire, elle déverse son contenu dans les appareils voisins (dumpItems). */
+  storage() {},
+
   /** Caisse de livraison : dès 12 bouteilles, elle part chez le bar et rapporte le prix des bouteilles. */
   crate(world, b, m, dt) {
     if (m.phase === 'processing') {
@@ -337,7 +357,10 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
       if (p) world.firstBeer = { ...p };
     }
     let price = 0;
-    for (const u of units) price += salePrice(world.batches.get(u.batch) ?? emptyProfile(), world.market, num(b, 'basePrice'));
+    for (const u of units) {
+      const p = world.batches.get(u.batch) ?? emptyProfile();
+      if (p.quality >= DRINKABLE_MIN) price += salePrice(p, world.market, num(b, 'basePrice'));
+    }
     world.earn(price);
     world.stats.crates++;
     world.checkUnlocks();
@@ -361,7 +384,7 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
     if (m.timer >= 1) {
       m.timer -= 1;
       const sold = stock.shift()!;
-      const price = salePrice(profile, world.market, num(b, 'basePrice'));
+      const price = profile.quality >= DRINKABLE_MIN ? salePrice(profile, world.market, num(b, 'basePrice')) : 0;
       world.earn(price);
       world.events.emit({ type: 'sale', buildingId: b.id, batchId: sold.batch ?? 0, price });
     }

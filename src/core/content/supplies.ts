@@ -27,11 +27,11 @@ export const SUPPLIES: readonly Supply[] = [
     ],
   },
   {
-    item: 'hops', name: 'Houblon', unit: '× 50 g',
+    item: 'hops', name: 'Houblon', unit: '× 10 g',
     description: 'La fleur qui donne l\'amertume et les arômes.',
     packs: [
-      { id: 'hops1', label: 'Sachet de 50 g', qty: 1, price: 2 },
-      { id: 'hops5', label: 'Sac de 250 g', qty: 5, price: 9 },
+      { id: 'hops1', label: 'Sachet de 50 g', qty: 5, price: 2 },
+      { id: 'hops5', label: 'Sac de 250 g', qty: 25, price: 9 },
     ],
   },
   {

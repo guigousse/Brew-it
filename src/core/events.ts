@@ -10,7 +10,8 @@ export type GameEvent =
   | { type: 'crateDelivered'; buildingId: number; price: number }
   | { type: 'tutorialStep'; index: number }
   | { type: 'tutorialDone' }
-  | { type: 'unlocked'; buildings: string[] };
+  | { type: 'unlocked'; buildings: string[] }
+  | { type: 'tasting'; recipeId: number };
 
 type Listener = (e: GameEvent) => void;
 

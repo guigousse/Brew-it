@@ -15,9 +15,21 @@ export interface IngredientNeed {
 }
 
 const MIN_BOTTLES = 12; // une caisse
+/** Moût obtenu par lot de 25 L : 24 L d'eau moins 1 L absorbé par kg de grain. */
+export const expectedWort = (grainKg: number) => Math.max(1, 24 - grainKg);
 const scale = (b: Building) => (BUILDINGS[b.type] as BuildingDef).batchScale ?? 1;
 
+/** Une réserve voisine contient-elle encore cet ingrédient ? Elle alimente alors la machine toute seule. */
+const fedByStorage = (world: World, b: Building, item: ItemId) =>
+  world.neighbors(b).some((n) => kindOf(n.b.type) === 'storage' && n.b.params.item === item && (n.b.itemsOut?.length ?? 0) > 0);
+
 function missingFor(world: World, b: Building): { item: ItemId; missing: number } | null {
+  if (kindOf(b.type) === 'storage') {
+    // Réserve : on propose de la remplir quand elle descend sous le quart.
+    const cap = (BUILDINGS[b.type] as BuildingDef).itemsOut!.capacity;
+    const have = b.itemsOut?.length ?? 0;
+    return have < cap * 0.25 ? { item: String(b.params.item) as ItemId, missing: cap - have } : null;
+  }
   const r = world.activeRecipe;
   if (!r || !b.machine) return null;
   const items = b.itemsIn ?? [];
@@ -39,12 +51,12 @@ function missingFor(world: World, b: Building): { item: ItemId; missing: number 
       return { item: 'crushed_malt', missing: Math.max(0, r.grainKg * scale(b) - countItems(items, 'crushed_malt')) };
     }
     case 'kettle': {
-      // Volume attendu : le moût présent, sinon un lot de la taille de la cuve.
-      const liters = b.fluidIn?.amount || 19 * scale(b);
-      return { item: 'hops', missing: Math.max(0, hopsFor(r.hopsItems, liters) - countItems(items, 'hops')) };
+      // Volume attendu : le moût présent, sinon celui que donnera l'empâtage (24 L d'eau − absorption du grain).
+      const liters = b.fluidIn?.amount || expectedWort(r.grainKg) * scale(b);
+      return { item: 'hops', missing: Math.max(0, hopsFor(r.hopsGrams, liters) - countItems(items, 'hops')) };
     }
     case 'fermenter': {
-      const liters = b.fluidIn?.amount || 19 * scale(b);
+      const liters = b.fluidIn?.amount || expectedWort(r.grainKg) * scale(b);
       return { item: 'yeast', missing: Math.max(0, yeastFor(liters) - countItems(items, 'yeast')) };
     }
     case 'bottler': {
@@ -60,6 +72,7 @@ function missingFor(world: World, b: Building): { item: ItemId; missing: number 
 export function needOf(world: World, b: Building): IngredientNeed | null {
   const m = missingFor(world, b);
   if (!m || m.missing <= 0) return null;
+  if (kindOf(b.type) !== 'storage' && fedByStorage(world, b, m.item)) return null;
   const unitPrice = ITEM_PRICES[m.item] ?? 1;
   return { buildingId: b.id, item: m.item, missing: m.missing, unitPrice, total: unitPrice * m.missing };
 }
