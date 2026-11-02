@@ -36,7 +36,7 @@ github.com/guigousse/brew-it → Settings → Secrets and variables → **Action
 | `IOS_BUNDLE_ID` | facultatif : `com.guigousse.brewit` est déjà la valeur par défaut |
 
 ## 5. Lancer le build
-github.com/guigousse/brew-it → **Actions** → TestFlight → Run workflow. L'envoi n'est jamais automatique : un push ne déclenche rien, on lance le workflow quand un lot de modifications est prêt.
+Chaque push sur `main` ou `claude/project-foundation` envoie un build sur TestFlight (sauf s'il ne touche que la documentation). On peut aussi le lancer à la main : github.com/guigousse/brew-it → **Actions** → TestFlight → Run workflow.
 Le build prend environ 10 min, puis Apple le traite pendant 5 à 30 min.
 
 ## 6. Installer sur l'iPhone
