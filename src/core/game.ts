@@ -4,12 +4,12 @@ import type { Label } from './label';
 import { bottlePrice, DISTRIBUTORS } from './market';
 import { Rng } from './rng';
 import { CAPACITY, PRECISION, STATION_ORDER, STATIONS, stationDuration, type StationId } from './stations';
+import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 
 export const TICK_RATE = 20;
 export const TICK_DT = 1 / TICK_RATE;
 export const BOTTLE_L = 0.33;
 export const STARTING_MONEY = 250;
-const MAX_RANGE = 6;
 
 /** Prix des ingrédients (achetés automatiquement au lancement d'un brassin). */
 export const PRICES = { maltKg: 1.5, hopsG: 0.05, yeastPer20L: 4, bottle: 0.25 };
@@ -43,6 +43,8 @@ export interface Batch {
   tasting?: Tasting;
   /** Bouteilles produites par ce lot (après pertes éventuelles). */
   bottles?: number;
+  /** Bouteilles déjà rangées dans le stockage (le lot attend tant que le stockage est plein). */
+  delivered?: number;
 }
 
 export interface CommandResult {
@@ -78,6 +80,10 @@ export class Game {
   batches: Batch[] = [];
   beers: Beer[] = [];
   signed: string[] = ['bar'];
+  /** Places achetées sur l'étagère de la gamme. */
+  rangeSlots = 1;
+  /** Niveau du stockage (1 à STORAGE.length). */
+  storageLevel = 1;
   totalSold = 0;
   totalRevenue = 0;
   batchesDone = 0;
@@ -105,8 +111,32 @@ export class Game {
     return Math.min(...STATION_ORDER.map((id) => CAPACITY[this.level(id)] ?? 20));
   }
 
-  get rangeSlots(): number {
-    return Math.min(MAX_RANGE, this.signed.length);
+  /** Prix de la prochaine place dans la gamme (null : étagère complète). */
+  get nextSlotCost(): number | null {
+    return this.rangeSlots >= MAX_RANGE ? null : slotCost(this.rangeSlots);
+  }
+
+  /** Capacité du stockage, en bouteilles. */
+  get storageCap(): number {
+    return STORAGE[this.storageLevel - 1]!.crates * CRATE;
+  }
+
+  /** Bouteilles en stock, toutes bières confondues. */
+  get stored(): number {
+    return this.beers.reduce((s, b) => s + b.stock, 0);
+  }
+
+  /**
+   * Le stockage pourra accueillir un brassin de plus, en comptant ceux déjà sur la ligne
+   * (le brassage continu attend sinon, pour ne pas acheter d'ingrédients pour rien).
+   */
+  get roomForBatch(): boolean {
+    const pending = this.batches.reduce((s, b) => s + (b.beerId != null ? Math.floor(b.liters / BOTTLE_L) - (b.delivered ?? 0) : 0), 0);
+    return this.stored + pending + Math.floor(this.batchLiters / BOTTLE_L) <= this.storageCap;
+  }
+
+  get storageFull(): boolean {
+    return this.stored >= this.storageCap;
   }
 
   /** Coût des ingrédients d'un brassin. */
@@ -175,6 +205,25 @@ export class Game {
     return { ok: true };
   }
 
+  /** Achète une nouvelle place sur l'étagère de la gamme. */
+  buySlot(): CommandResult {
+    const cost = this.nextSlotCost;
+    if (cost == null) return { ok: false, reason: 'Ton étagère est complète' };
+    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= cost;
+    this.rangeSlots++;
+    return { ok: true };
+  }
+
+  upgradeStorage(): CommandResult {
+    const next = STORAGE[this.storageLevel];
+    if (!next) return { ok: false, reason: 'Niveau maximal' };
+    if (this.money < next.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= next.cost;
+    this.storageLevel++;
+    return { ok: true };
+  }
+
   /** Essai en cours d'embouteillage dont la première bouteille est sortie : on peut le goûter. */
   get tastable(): Batch | undefined {
     const b = this.batchAt('bottling');
@@ -188,7 +237,7 @@ export class Game {
     const b = this.tastable;
     if (!b?.tasting) return { ok: false, reason: 'Aucun essai à garder' };
     if (b.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable : personne ne l\'achètera' };
-    if (this.beers.length >= this.rangeSlots) return { ok: false, reason: 'Ta gamme est pleine : signe un nouveau distributeur ou retire une bière' };
+    if (this.beers.length >= this.rangeSlots) return { ok: false, reason: 'Ta gamme est pleine : achète une nouvelle place ou retire une bière' };
     const beer: Beer = {
       id: this.nextId++, name: name.trim() || `Bière n°${this.beers.length + 1}`, recipe: b.recipe, tasting: b.tasting,
       stock: 0, sold: 0, revenue: 0, label: { ...label },
@@ -245,7 +294,7 @@ export class Game {
     // De l'aval vers l'amont : un appareil se libère avant que le lot précédent n'y entre.
     const sorted = [...this.batches].sort((a, b) => b.stage - a.stage);
     for (const b of sorted) this.advance(b, dt);
-    if (this.autoBrew && this.selectedBeer != null && this.canBrew().ok) this.brew();
+    if (this.autoBrew && this.selectedBeer != null && this.roomForBatch && this.canBrew().ok) this.brew();
     this.sell(dt);
     this.announce();
   }
@@ -260,7 +309,7 @@ export class Game {
     if (next >= STATION_ORDER.length) {
       // Un essai attend la décision du joueur (garder ou recommencer) avant de sortir de la ligne.
       if (b.beerId == null) return;
-      return this.finish(b);
+      return this.store(b);
     }
     if (this.batches.some((o) => o.stage === next)) return; // appareil suivant occupé
     this.enter(b, next);
@@ -290,17 +339,30 @@ export class Game {
     this.events.emit({ type: 'stage', batchId: b.id, stage });
   }
 
-  private finish(b: Batch): void {
-    this.batches = this.batches.filter((x) => x !== b);
+  /**
+   * Fin de l'embouteillage : les caisses rejoignent le stockage. S'il est plein, le lot reste sur la ligne
+   * (l'embouteillage est bloqué) et finit de se ranger dès que des bouteilles sont vendues.
+   */
+  private store(b: Batch): void {
     const tasting = b.tasting ?? brew(b.recipe, this.levels, b.actual as Actual);
-    const bottles = b.bottles ?? Math.floor((b.liters / BOTTLE_L) * (1 - tasting.lost));
-    this.batchesDone++;
+    const bottles = tasting.quality >= DRINKABLE_MIN ? (b.bottles ?? Math.floor((b.liters / BOTTLE_L) * (1 - tasting.lost))) : 0;
     const beer = this.beers.find((x) => x.id === b.beerId);
-    if (beer) {
-      beer.stock += tasting.quality >= DRINKABLE_MIN ? bottles : 0;
-      beer.tasting = tasting;
+    if (beer && (b.delivered ?? 0) < bottles) {
+      const n = Math.min(bottles - (b.delivered ?? 0), Math.max(0, this.storageCap - this.stored));
+      beer.stock += n;
+      b.delivered = (b.delivered ?? 0) + n;
+      if (b.delivered < bottles) return;
     }
+    this.batches = this.batches.filter((x) => x !== b);
+    this.batchesDone++;
+    if (beer) beer.tasting = tasting;
     this.events.emit({ type: 'batchDone', beerId: beer?.id ?? null, bottles });
+  }
+
+  /** Lot bloqué en fin de ligne faute de place dans le stockage. */
+  get bottlingBlocked(): boolean {
+    const b = this.batchAt('bottling');
+    return !!b && b.waiting && b.beerId != null && this.storageFull;
   }
 
   /** Les distributeurs achètent en continu les bières de la gamme qui leur conviennent. */
@@ -347,18 +409,23 @@ export class Game {
 
   toJSON() {
     return {
-      version: 2, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
+      version: 3, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, beers: this.beers,
-      signed: this.signed, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
+      signed: this.signed, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
       nextId: this.nextId, demand: this.demand, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
 
   static fromJSON(raw: unknown): Game {
-    const s = raw as ReturnType<Game['toJSON']>;
-    if (!s || s.version !== 2) throw new Error('Sauvegarde incompatible');
+    const s = raw as Omit<ReturnType<Game['toJSON']>, 'version'> & { version: number };
+    if (!s || (s.version !== 2 && s.version !== 3)) throw new Error('Sauvegarde incompatible');
     const g = new Game();
     Object.assign(g, { ...s, rng: new Rng(s.rng), announced: new Set(s.announced) });
+    // Sauvegardes v2 : places de gamme liées aux distributeurs, pas encore de stockage.
+    if (s.version === 2) {
+      g.rangeSlots = Math.max(1, g.beers.length);
+      g.storageLevel = 1;
+    }
     return g;
   }
 }

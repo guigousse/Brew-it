@@ -62,13 +62,28 @@ Le Bar du coin est sous contrat dès le départ. Les suivants se débloquent sel
 
 | Distributeur | Bouteilles vendues | Particularité |
 |---|---|---|
-| Épicerie fine | 150 | Qualité min. Correcte |
-| Caviste | 500 | Aime les bières aromatiques |
-| Restaurant | 1 500 | Aime les bières limpides et légères |
-| Supermarché | 4 000 | Gros volumes, petits prix |
-| Export | 15 000 | Qualité Excellente ; aime les bières fortes |
+| Bar du coin | 0 | 1 bouteille/min, prend tout ce qui est buvable |
+| Épicerie fine | 60 | 3/min, qualité min. Correcte |
+| Caviste | 250 | 5/min, aime les bières aromatiques |
+| Restaurant | 800 | 8/min, aime les bières limpides et légères |
+| Supermarché | 2 500 | 30/min, gros volumes, petits prix |
+| Export | 8 000 | 60/min, qualité Excellente ; aime les bières fortes |
 
-Chaque distributeur signé ajoute **une place dans la gamme** (6 au maximum).
+## Gamme : l'étagère
+La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 600 €, 2 500 €, 9 000 €, 30 000 €, 100 000 €, 300 000 € — la hausse s'accélère.
+
+## Stockage
+Les bouteilles embouteillées rejoignent le stockage en caisses de 12. Quand il est plein, l'embouteillage s'arrête jusqu'à ce que des ventes libèrent de la place, et le brassage continu attend d'avoir la place pour un brassin de plus.
+
+| Niveau | Capacité | Prix |
+|---|---|---|
+| Coin du garage | 10 caisses (120 btl) | — |
+| Cave voûtée | 25 caisses | 300 € |
+| Chambre froide | 60 caisses | 1 500 € |
+| Entrepôt | 150 caisses | 6 000 € |
+| Plateforme logistique | 400 caisses | 25 000 € |
+
+L'embouteillage prend 0,6 s par bouteille au niveau 1 (×0,75 et ×0,5 aux niveaux suivants).
 
 ## Accompagnement
 Gaston accueille le joueur, l'invite à toucher une machine, à lancer son premier brassin avec sa recette de blonde préréglée, puis à l'ajouter à sa gamme.

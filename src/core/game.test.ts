@@ -63,12 +63,14 @@ describe('jeu', () => {
     expect(g.beers[0]!.label.emblem).toBe('hop');
     runUntil(g, () => g.beers[0]!.stock > 0);
     const money = g.money;
-    run(g, 60);
-    expect(g.beers[0]!.sold).toBeGreaterThan(8);
+    const sold = g.beers[0]!.sold;
+    run(g, 180);
+    expect(g.beers[0]!.sold - sold).toBeGreaterThanOrEqual(3); // le bar achète 1 bouteille par minute
+    expect(g.beers[0]!.sold - sold).toBeLessThanOrEqual(8);
     expect(g.money).toBeGreaterThan(money);
   });
 
-  it('la gamme est limitée par le nombre de distributeurs signés', () => {
+  it('la gamme s\'agrandit en achetant des places, de plus en plus chères', () => {
     const g = new Game();
     g.money = 1e5;
     g.brew();
@@ -80,9 +82,40 @@ describe('jeu', () => {
     g.brew();
     runUntil(g, () => !!g.tastable);
     expect(g.keepTrial('B', DEFAULT_LABEL).ok).toBe(false);
-    g.totalSold = 200;
-    expect(g.sign('epicerie').ok).toBe(true);
+    const c2 = g.nextSlotCost!;
+    const money = g.money;
+    expect(g.buySlot().ok).toBe(true);
+    expect(g.money).toBe(money - c2);
+    expect(g.rangeSlots).toBe(2);
     expect(g.keepTrial('B', DEFAULT_LABEL).ok).toBe(true);
+    const c3 = g.nextSlotCost!;
+    g.buySlot();
+    const c4 = g.nextSlotCost!;
+    expect(c3).toBeGreaterThan(c2);
+    expect(c4 - c3).toBeGreaterThan(c3 - c2); // la hausse s'accélère
+  });
+
+  it('le stockage se remplit de caisses ; plein, il bloque l\'embouteillage', () => {
+    const g = new Game();
+    g.money = 1e4;
+    g.signed = []; // personne n'achète
+    g.brew();
+    runUntil(g, () => !!g.tastable);
+    g.keepTrial('Blonde', DEFAULT_LABEL);
+    expect(g.roomForBatch).toBe(true);
+    g.brew();
+    run(g, 10);
+    expect(g.roomForBatch).toBe(false); // le brassage continu attendrait
+    g.brew(); // à la main, on peut forcer : le 3e lot ne tiendra pas
+    runUntil(g, () => g.bottlingBlocked, 3000);
+    expect(g.stored).toBe(g.storageCap);
+    expect(g.storageCap).toBe(120);
+    const done = g.batchesDone;
+    expect(g.upgradeStorage().ok).toBe(true);
+    expect(g.storageCap).toBeGreaterThan(120);
+    g.step();
+    expect(g.bottlingBlocked).toBe(false);
+    expect(g.batchesDone).toBe(done + 1);
   });
 
   it('une bière imbuvable ne peut pas entrer dans la gamme', () => {
@@ -109,9 +142,9 @@ describe('jeu', () => {
     runUntil(g, () => !!g.tastable);
     g.keepTrial('Blonde', DEFAULT_LABEL);
     g.autoBrew = true;
-    run(g, 400);
-    expect(g.batchesDone).toBeGreaterThan(2);
-    expect(g.beers[0]!.stock + g.beers[0]!.sold).toBeGreaterThan(120);
+    run(g, 600);
+    expect(g.batchesDone).toBeGreaterThanOrEqual(2);
+    expect(g.beers[0]!.stock).toBeLessThanOrEqual(g.storageCap);
   });
 
   it('production hors-ligne : les gains attendent la récolte, la sauvegarde les garde', async () => {
@@ -123,7 +156,7 @@ describe('jeu', () => {
     g.autoBrew = true;
     const money = g.money;
     const report = simulateOffline(g, 3600)!;
-    expect(report.sold).toBeGreaterThan(100);
+    expect(report.sold).toBeGreaterThan(50);
     expect(report.earned).toBeGreaterThan(0);
     expect(g.money).toBeLessThanOrEqual(money);
     const store = new SaveManager(new MemoryStorage());

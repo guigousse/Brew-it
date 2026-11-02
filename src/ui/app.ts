@@ -6,6 +6,8 @@ import { CAPACITY, PRECISION, STATION_ORDER, STATIONS, type StationId } from '..
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
+import { BOTTLE_SCALE, drawShelfBottle, drawStorage, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
+import { CRATE, STORAGE } from '../core/warehouse';
 import { DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
@@ -50,11 +52,14 @@ export class App {
   private brewBtn = h('button', 'brew-btn');
   private rangeBtn = h('button', 'side-btn');
   private salesBtn = h('button', 'side-btn');
+  private storageBtn = h('button', 'side-btn');
+  /** Bière choisie sur l'étagère (fiche affichée sous l'étagère). */
+  private shelfSel: number | null = null;
   private sheet = h('section', 'sheet hidden');
   private modal = h('div', 'modal hidden');
   private mentor = h('div', 'mentor hidden');
   private toasts = h('div', 'toasts');
-  private openSheet: { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'sales' } | null = null;
+  private openSheet: { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'sales' | 'storage' } | null = null;
   private sheetKey = '';
   private mentorKey = '';
   private scale = 2;
@@ -94,8 +99,9 @@ export class App {
     // barre du bas
     this.rangeBtn.onclick = () => this.open({ kind: 'range' });
     this.salesBtn.onclick = () => this.open({ kind: 'sales' });
+    this.storageBtn.onclick = () => this.open({ kind: 'storage' });
     this.brewBtn.onclick = () => this.open({ kind: 'brew' });
-    this.bottom.append(this.rangeBtn, this.brewBtn, this.salesBtn);
+    this.bottom.append(this.rangeBtn, this.storageBtn, this.brewBtn, this.salesBtn);
 
     // Gaston
     const av = h('canvas', 'mentor-avatar');
@@ -144,7 +150,11 @@ export class App {
       o.label.style.left = `${(r.x + r.w / 2) * s}px`;
       o.label.style.top = `${Math.max(0, r.y * s - 18)}px`;
       const pct = batch ? Math.min(1, batch.elapsed / Math.max(0.01, batch.duration)) : 0;
-      o.text.textContent = batch ? (batch.waiting ? `${STATIONS[id].step} ⏸` : `${STATIONS[id].step} · ${Math.round(pct * 100)} %`) : STATIONS[id].step;
+      o.text.textContent = batch
+        ? id === 'bottling' && g.bottlingBlocked ? 'Stockage plein ⏸'
+        : batch.waiting ? `${STATIONS[id].step} ⏸` : `${STATIONS[id].step} · ${Math.round(pct * 100)} %`
+        : STATIONS[id].step;
+      o.label.classList.toggle('blocked', id === 'bottling' && g.bottlingBlocked);
       (o.bar.firstElementChild as HTMLElement).style.width = `${pct * 100}%`;
     }
   }
@@ -163,9 +173,11 @@ export class App {
     const can = g.canBrew();
     this.brewBtn.replaceChildren(h('span', 'brew-title', 'Brasser'), h('span', 'brew-sub', can.ok ? `${g.batchLiters} L · ${moneyInt(g.brewCost())}` : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants'));
     this.brewBtn.classList.toggle('ready', can.ok);
-    const stock = g.beers.reduce((s, b) => s + b.stock, 0);
     const trial = g.tastable;
-    this.rangeBtn.replaceChildren(h('span', 'side-title', 'Ma gamme'), h('span', 'side-sub', `${g.beers.length}/${g.rangeSlots} · ${stock} btl`));
+    this.rangeBtn.replaceChildren(h('span', 'side-title', 'Gamme'), h('span', 'side-sub', `${g.beers.length}/${g.rangeSlots} bières`));
+    const capCrates = STORAGE[g.storageLevel - 1]!.crates;
+    this.storageBtn.replaceChildren(h('span', 'side-title', 'Stockage'), h('span', 'side-sub', g.storageFull ? 'Plein !' : `${Math.ceil(g.stored / CRATE)}/${capCrates} caisses`));
+    this.storageBtn.classList.toggle('alert', g.bottlingBlocked);
     this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen);
     this.placeTaste();
     if (trial && trial.id !== this.announcedTaste) {
@@ -206,17 +218,24 @@ export class App {
     const s = this.openSheet;
     this.sheet.classList.toggle('hidden', !s);
     if (!s) return;
-    const key = JSON.stringify([s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.signed, g.selectedBeer, g.autoBrew, Math.floor(g.totalSold / 10), g.batchLiters, s.kind === 'brew' ? g.canBrew().ok : 0]);
+    const key = JSON.stringify([
+      s, g.level(s.kind === 'station' ? s.id : 'mill'), g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.signed, g.selectedBeer, g.autoBrew,
+      Math.floor(g.totalSold / 10), g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch] : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
+    ]);
     if (key === this.sheetKey) return this.refreshLive();
     this.sheetKey = key;
     const scroll = this.sheet.querySelector('.sheet-body')?.scrollTop ?? 0;
+    const shelfScroll = this.sheet.querySelector('.shelf')?.scrollLeft ?? 0;
     this.sheet.replaceChildren();
     if (s.kind === 'station') this.stationSheet(g, s.id);
     if (s.kind === 'brew') this.brewSheet(g);
     if (s.kind === 'range') this.rangeSheet(g);
+    if (s.kind === 'storage') this.storageSheet(g);
     if (s.kind === 'sales') this.salesSheet(g);
     const body = this.sheet.querySelector('.sheet-body');
     if (body) body.scrollTop = scroll;
+    const shelf = this.sheet.querySelector('.shelf');
+    if (shelf) shelf.scrollLeft = shelfScroll;
   }
 
   /** Met à jour sans reconstruire ce qui dépend de l'argent. */
@@ -332,7 +351,8 @@ export class App {
         this.toast(box.checked ? 'Brassage automatique activé' : 'Brassage automatique arrêté', 'info');
       };
       auto.append(box, h('span', '', `Brasser « ${beer.name} » en continu`));
-      body.append(auto, h('p', 'hint', 'Un nouveau brassin démarre dès que le moulin est libre, tant que tu as de quoi payer les ingrédients. Ça continue même quand l\'appli est fermée.'));
+      body.append(auto, h('p', 'hint', 'Un nouveau brassin démarre dès que le moulin est libre, tant que tu as de quoi payer les ingrédients et de la place dans le stockage. Ça continue même quand l\'appli est fermée.'));
+      if (g.autoBrew && !g.roomForBatch) body.append(h('p', 'note bad', 'En pause : le stockage sera plein avec les brassins déjà en route. Vends ou agrandis ton stockage.'));
     }
     if (g.beers.length) {
       body.append(h('div', 'section-title', 'Charger une bière de ma gamme'));
@@ -346,7 +366,7 @@ export class App {
     }
   }
 
-  // --- Ma gamme
+  // --- Ma gamme : une étagère de grandes bouteilles, et une silhouette « + » pour en créer une nouvelle
   private rangeSheet(g: Game): void {
     const body = this.frameSheet(`Ma gamme · ${g.beers.length}/${g.rangeSlots}`);
     if (g.tastable) {
@@ -354,9 +374,125 @@ export class App {
       banner.append(h('div', 'beer-name', 'Un essai sort de la ligne'), this.btn('btn primary', 'Goûter', () => this.openTasting()));
       body.append(banner);
     }
-    if (!g.beers.length) body.append(h('p', 'hint', 'Ta gamme est vide. Brasse un essai réussi pour y ajouter ta première bière.'));
-    for (const b of g.beers) body.append(this.beerCard(g, b));
-    if (g.beers.length >= g.rangeSlots) body.append(h('p', 'hint', 'Signe de nouveaux distributeurs (onglet Ventes) pour agrandir ta gamme.'));
+    if (this.shelfSel == null || !g.beers.some((b) => b.id === this.shelfSel)) this.shelfSel = g.selectedBeer ?? g.beers[0]?.id ?? null;
+    const shelf = h('div', 'shelf');
+    const row = h('div', 'shelf-row');
+    const slot = (kind: ShelfBottleKind, tag: string, onclick: () => void, beer?: Beer) => {
+      const item = h('button', `shelf-item ${kind}${beer && beer.id === this.shelfSel ? ' selected' : ''}`);
+      const bottle = h('div', 'shelf-bottle');
+      const c = h('canvas', 'shelf-glass');
+      drawShelfBottle(c, kind);
+      bottle.append(c);
+      if (beer) {
+        const lab = h('canvas', 'shelf-label');
+        drawLabel(lab, beer.label, beer.name);
+        Object.assign(lab.style, { left: `${LABEL_SPOT.x * BOTTLE_SCALE}px`, top: `${LABEL_SPOT.y * BOTTLE_SCALE}px` });
+        bottle.append(lab);
+      }
+      item.append(bottle, h('span', 'shelf-tag', tag));
+      item.onclick = onclick;
+      row.append(item);
+      return item;
+    };
+    for (const b of g.beers) {
+      slot('beer', `${b.stock} btl`, () => {
+        this.shelfSel = b.id;
+        this.sheetKey = '';
+      }, b);
+    }
+    for (let i = g.beers.length; i < g.rangeSlots; i++) {
+      slot('empty', 'Place libre', () => this.toast('Brasse un essai, goûte-le et garde-le : il prendra cette place.', 'info'));
+    }
+    const cost = g.nextSlotCost;
+    if (cost != null) {
+      const add = slot('add', moneyInt(cost), () => this.openNewRange());
+      add.setAttribute('aria-label', `Nouvelle gamme pour ${moneyInt(cost)}`);
+      add.classList.toggle('afford', g.money >= cost);
+    }
+    shelf.append(row);
+    body.append(shelf);
+    const sel = g.beers.find((b) => b.id === this.shelfSel);
+    if (sel) body.append(this.beerCard(g, sel));
+    else body.append(h('p', 'hint', g.rangeSlots > g.beers.length
+      ? 'Ton étagère attend sa première bière : brasse un essai réussi, goûte-le et garde-le.'
+      : 'Touche la silhouette « + » pour ouvrir une nouvelle gamme.'));
+  }
+
+  /** Confirmation d'achat d'une nouvelle place sur l'étagère. */
+  private openNewRange(): void {
+    const g = this.game();
+    const cost = g.nextSlotCost;
+    if (cost == null) return;
+    const card = this.modalCard('Nouvelle gamme');
+    card.append(
+      h('p', 'hint', 'Ajoute une place sur ton étagère pour une nouvelle bière.'),
+      h('p', 'hint', 'Ensuite, règle tes machines pour une autre recette, brasse un essai, goûte-le et garde-le : il prendra cette place, avec son nom et son étiquette.'),
+    );
+    const buy = this.btn('btn primary big', `Créer une gamme · ${moneyInt(cost)}`, () => {
+      const r = g.buySlot();
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      this.closeModal();
+      this.sheetKey = '';
+      this.toast('Nouvelle place sur ton étagère !', 'good');
+    });
+    buy.disabled = g.money < cost;
+    card.append(buy);
+    if (g.money < cost) card.append(h('p', 'note bad', `Il te manque ${moneyInt(cost - g.money)}.`));
+    card.append(h('p', 'hint', 'Chaque nouvelle gamme coûte plus cher que la précédente.'));
+    card.append(this.btn('btn', 'Annuler', () => this.closeModal()));
+  }
+
+  // --- Stockage : les caisses s'empilent jusqu'à ce que la réserve soit pleine
+  private storageSheet(g: Game): void {
+    const lvl = STORAGE[g.storageLevel - 1]!;
+    const body = this.frameSheet(`Stockage · ${lvl.name}`);
+    const capCrates = lvl.crates;
+    const crates = Math.ceil(g.stored / CRATE);
+    const pic = h('canvas', 'storage-pic');
+    drawStorage(pic, g.beers, capCrates, g.storageLevel);
+    body.append(pic);
+    body.append(h('div', 'stats-line strong', `${g.stored} / ${g.storageCap} bouteilles · ${crates} / ${capCrates} caisses de ${CRATE}`));
+    const bar = h('div', 'progress');
+    const fill = h('div', `progress-fill${g.storageFull ? ' full' : ''}`);
+    fill.style.width = `${Math.min(100, (g.stored / g.storageCap) * 100)}%`;
+    bar.append(fill);
+    body.append(bar);
+    if (g.bottlingBlocked) body.append(h('p', 'note bad', 'Stockage plein : l\'embouteillage est à l\'arrêt. Attends les ventes ou agrandis ta réserve.'));
+    else body.append(h('p', 'hint', 'Les bouteilles embouteillées arrivent ici en caisses ; les distributeurs y viennent les chercher.'));
+    if (g.beers.length) {
+      const list = h('div', 'stock-list');
+      for (const b of g.beers) {
+        const line = h('div', 'stock-line');
+        const thumb = h('canvas', 'label-thumb');
+        drawLabel(thumb, b.label, b.name);
+        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.stock} btl · ${Math.ceil(b.stock / CRATE)} caisses`));
+        list.append(line);
+      }
+      body.append(list);
+    }
+    // agrandissement
+    const up = h('div', 'card upgrade');
+    up.append(h('div', 'section-title', 'Agrandir'));
+    const levels = h('div', 'storage-levels');
+    STORAGE.forEach((l, i) => {
+      const cell = h('div', `storage-level${i + 1 === g.storageLevel ? ' current' : i + 1 < g.storageLevel ? ' done' : ''}`);
+      cell.append(h('span', 'level-name', l.name), h('span', 'level-perk', `${l.crates} caisses · ${l.crates * CRATE} btl`));
+      levels.append(cell);
+    });
+    up.append(levels);
+    const next = STORAGE[g.storageLevel];
+    if (next) {
+      const b = this.btn('btn primary', `Passer à : ${next.name} (${next.crates} caisses) · ${moneyInt(next.cost)}`, () => {
+        const r = g.upgradeStorage();
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.toast(`${next.name} : ${next.crates} caisses de place !`, 'good');
+        this.sheetKey = '';
+      });
+      b.dataset.cost = String(next.cost);
+      b.disabled = g.money < next.cost;
+      up.append(b);
+    } else up.append(h('p', 'note', 'Niveau maximal atteint.'));
+    body.append(up);
   }
 
   private beerCard(g: Game, b: Beer): HTMLElement {
@@ -410,7 +546,7 @@ export class App {
         const b = this.btn('btn primary', `Signer le contrat · ${moneyInt(d.fee)}`, () => {
           const r = g.sign(d.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`Contrat signé avec ${d.name} ! Une place de plus dans ta gamme.`, 'good');
+          this.toast(`Contrat signé avec ${d.name} !`, 'good');
           this.sheetKey = '';
         });
         b.dataset.cost = String(d.fee);
@@ -440,6 +576,7 @@ export class App {
     card.append(h('div', 'stats-line', `${b.bottles} bouteilles dans ce brassin`));
     const ok = t.quality >= DRINKABLE_MIN;
     const full = g.beers.length >= g.rangeSlots;
+    const slotCost = g.nextSlotCost;
     const keep = this.btn('btn primary big', ok ? (full ? 'Gamme pleine' : 'Garder cette bière') : 'Imbuvable', () => {
       this.openLabelEditor(g.beers.length ? '' : 'Blonde de Gaston', { ...DEFAULT_LABEL }, (name, label) => {
         const r = g.keepTrial(name, label);
@@ -451,7 +588,19 @@ export class App {
       });
     });
     keep.disabled = !ok || full;
-    if (full && ok) card.append(h('p', 'note bad', 'Ta gamme est pleine : retire une bière ou signe un distributeur.'));
+    if (full && ok) {
+      card.append(h('p', 'note bad', 'Ta gamme est pleine : crée une nouvelle gamme ou retire une bière.'));
+      if (slotCost != null) {
+        const buy = this.btn('btn', `Créer une gamme · ${moneyInt(slotCost)}`, () => {
+          const r = g.buySlot();
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          this.sheetKey = '';
+          this.openTasting();
+        });
+        buy.disabled = g.money < slotCost;
+        card.append(buy);
+      }
+    }
     card.append(keep, this.btn('btn bad', 'Recommencer (jeter ce brassin)', () => {
       g.discardTrial();
       this.closeModal();

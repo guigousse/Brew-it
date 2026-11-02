@@ -116,7 +116,7 @@ export function stationDuration(id: StationId, r: Recipe, level: number, liters:
     cooler: 12,
     fermenter: r.fermentDays * 12,
     conditioning: Math.max(4, r.gardeDays * 10),
-    bottling: (liters / 0.33) * 0.25,
+    bottling: (liters / 0.33) * 0.6,
   };
   return base[id] * (SPEED[level] ?? 1);
 }
