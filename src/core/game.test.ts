@@ -46,24 +46,25 @@ describe('jeu', () => {
     expect(b.tasting!.quality).toBeGreaterThan(0.85);
   });
 
-  it('un essai non goûté est mis de côté et ne bloque pas la ligne ; recommencer le jette', () => {
+  it('un essai ne remplit qu\'une bouteille puis attend la dégustation ; recommencer le jette', () => {
     const g = new Game();
     g.brew();
     run(g, 600);
-    expect(g.batchAt('bottling')).toBeUndefined();
-    expect(g.trial).not.toBeNull();
-    expect(g.tastable).toBe(g.trial);
+    const b = g.batchAt('bottling')!;
+    expect(g.tastable).toBe(b);
+    expect(b.elapsed).toBeCloseTo(b.duration / b.bottles!); // une seule bouteille remplie
     expect(g.discardTrial().ok).toBe(true);
-    expect(g.trial).toBeNull();
+    expect(g.batchAt('bottling')).toBeUndefined();
   });
 
-  it('garder un essai mis de côté range ses bouteilles', () => {
+  it('garder l\'essai relance l\'embouteillage : toutes ses bouteilles vont au stock', () => {
     const g = new Game();
     g.brew();
     run(g, 600);
     expect(g.keepTrial('Blonde', DEFAULT_LABEL).ok).toBe(true);
+    run(g, 60);
     expect(g.beers[0]!.stock + g.beers[0]!.sold).toBe(15);
-    expect(g.trial).toBeNull();
+    expect(g.batchAt('bottling')).toBeUndefined();
   });
 
   it('moulin occupé : le brassin attend son tour, avant le brassage continu', () => {

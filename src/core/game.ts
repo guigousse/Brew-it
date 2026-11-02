@@ -285,6 +285,11 @@ export class Game {
     return { ok: true };
   }
 
+  /** Essai à l'embouteillage, pas encore validé : il ne remplit qu'une bouteille. */
+  private awaitingTaste(b: Batch): boolean {
+    return b.beerId == null && b.stage === STATION_ORDER.length - 1 && !!b.tasting && (b.bottles ?? 0) > 1;
+  }
+
   /** Essai en cours d'embouteillage dont la première bouteille est sortie : on peut le goûter. */
   get tastable(): Batch | undefined {
     if (this.trial) return this.trial;
@@ -415,6 +420,11 @@ export class Game {
 
   private advance(b: Batch, dt: number): void {
     if (!b.waiting) {
+      // Essai : la ligne remplit une seule bouteille, puis attend que le joueur la goûte et décide.
+      if (this.awaitingTaste(b)) {
+        b.elapsed = Math.min(b.elapsed + dt, b.duration / Math.max(1, b.bottles ?? 1));
+        return;
+      }
       b.elapsed += dt;
       if (b.elapsed < b.duration) return;
       b.waiting = true;

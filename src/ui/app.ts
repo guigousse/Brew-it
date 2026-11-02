@@ -7,7 +7,7 @@ import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
 import { BOTTLE_SCALE, drawShelfBottle, drawStorage, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
-import { CRATE, STORAGE } from '../core/warehouse';
+import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
@@ -20,6 +20,7 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 };
 const money = (v: number) => `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: v % 1 ? 2 : 0 })} €`;
 const moneyInt = (v: number) => `${Math.floor(v).toLocaleString('fr-FR')} €`;
+const moneyShort = (v: number) => (v >= 1e6 ? `${(v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} M€` : v >= 1e4 ? `${Math.round(v / 1000)} k€` : moneyInt(v));
 const fmtRate = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: v < 10 ? 1 : 0 });
 const VERDICT_CLASS: Record<string, string> = { Imbuvable: 'v-bad', Médiocre: 'v-meh', Correcte: 'v-ok', Bonne: 'v-good', Excellente: 'v-top' };
 
@@ -154,6 +155,7 @@ export class App {
       const pct = batch ? Math.min(1, batch.elapsed / Math.max(0.01, batch.duration)) : 0;
       o.text.textContent = batch
         ? id === 'bottling' && g.bottlingBlocked ? 'Stockage plein ⏸'
+        : id === 'bottling' && g.tastable === batch ? 'À goûter ⏸'
         : batch.waiting ? `${STATIONS[id].step} ⏸` : `${STATIONS[id].step} · ${Math.round(pct * 100)} %`
         : STATIONS[id].step;
       o.label.classList.toggle('blocked', id === 'bottling' && g.bottlingBlocked);
@@ -230,6 +232,7 @@ export class App {
     const scroll = this.sheet.querySelector('.sheet-body')?.scrollTop ?? 0;
     const shelfScroll = this.sheet.querySelector('.shelf')?.scrollLeft ?? 0;
     this.sheet.replaceChildren();
+    this.sheet.classList.remove('fit');
     if (s.kind === 'station') this.stationSheet(g, s.id);
     if (s.kind === 'brew') this.brewSheet(g);
     if (s.kind === 'range') this.rangeSheet(g);
@@ -368,19 +371,17 @@ export class App {
   // --- Ma gamme : une étagère de grandes bouteilles, et une silhouette « + » pour en créer une nouvelle
   private rangeSheet(g: Game): void {
     const body = this.frameSheet(`Ma gamme · ${g.beers.length}/${g.rangeSlots}`);
-    if (g.tastable) {
-      const banner = h('div', 'card banner');
-      banner.append(h('div', 'beer-name', 'Un essai sort de la ligne'), this.btn('btn primary', 'Goûter', () => this.openTasting()));
-      body.append(banner);
-    }
+    this.sheet.classList.add('fit');
+    if (g.tastable) body.append(this.btn('btn primary', '🍺 Un essai attend : goûter', () => this.openTasting()));
     if (this.shelfSel == null || !g.beers.some((b) => b.id === this.shelfSel)) this.shelfSel = g.selectedBeer ?? g.beers[0]?.id ?? null;
+    // L'étagère entière, 2 rangées de 4 : bières, places libres, la place à acheter (+), puis les futures places.
     const shelf = h('div', 'shelf');
-    const row = h('div', 'shelf-row');
-    const slot = (kind: ShelfBottleKind, tag: string, onclick: () => void, beer?: Beer) => {
+    const items: HTMLElement[] = [];
+    const slot = (kind: ShelfBottleKind, tag: string, onclick?: () => void, beer?: Beer) => {
       const item = h('button', `shelf-item ${kind}${beer && beer.id === this.shelfSel ? ' selected' : ''}`);
       const bottle = h('div', 'shelf-bottle');
       const c = h('canvas', 'shelf-glass');
-      drawShelfBottle(c, kind);
+      drawShelfBottle(c, kind === 'locked' ? 'empty' : kind);
       bottle.append(c);
       if (beer) {
         const lab = h('canvas', 'shelf-label');
@@ -389,30 +390,30 @@ export class App {
         bottle.append(lab);
       }
       item.append(bottle, h('span', 'shelf-tag', tag));
-      item.onclick = onclick;
-      row.append(item);
+      if (onclick) item.onclick = onclick;
+      else item.disabled = true;
+      items.push(item);
       return item;
     };
-    for (const b of g.beers) {
-      slot('beer', `${b.stock} btl`, () => {
-        this.shelfSel = b.id;
-        this.sheetKey = '';
-      }, b);
-    }
-    for (let i = g.beers.length; i < g.rangeSlots; i++) {
-      slot('empty', 'Place libre', () => this.toast('Garde un essai pour la remplir', 'info'));
-    }
+    for (const b of g.beers) slot('beer', `${b.stock} btl`, () => {
+      this.shelfSel = b.id;
+      this.sheetKey = '';
+    }, b);
+    for (let i = g.beers.length; i < g.rangeSlots; i++) slot('empty', 'Libre', () => this.toast('Garde un essai pour la remplir', 'info'));
     const cost = g.nextSlotCost;
     if (cost != null) {
-      const add = slot('add', moneyInt(cost), () => this.openNewRange());
-      add.setAttribute('aria-label', `Nouvelle gamme pour ${moneyInt(cost)}`);
+      const add = slot('add', moneyShort(cost), () => this.openNewRange());
       add.classList.toggle('afford', g.money >= cost);
     }
-    shelf.append(row);
+    while (items.length < MAX_RANGE) slot('locked', '🔒');
+    for (let r = 0; r < items.length; r += 4) {
+      const row = h('div', 'shelf-row');
+      row.append(...items.slice(r, r + 4));
+      shelf.append(row);
+    }
     body.append(shelf);
     const sel = g.beers.find((b) => b.id === this.shelfSel);
     if (sel) body.append(this.beerCard(g, sel));
-    else if (!g.beers.length) body.append(h('p', 'hint', 'Garde un essai réussi pour remplir l\'étagère.'));
   }
 
   /** Confirmation d'achat d'une nouvelle place sur l'étagère. */
@@ -494,16 +495,12 @@ export class App {
   private beerCard(g: Game, b: Beer): HTMLElement {
     const t = b.tasting;
     const v = verdictOf(t.quality);
-    const card = h('div', `card beer${b.id === g.selectedBeer ? ' selected' : ''}`);
+    const card = h('div', 'card beer');
     const head = h('div', 'beer-head');
-    const thumb = h('canvas', 'label-thumb');
-    drawLabel(thumb, b.label, b.name);
-    const title = h('div', 'beer-title');
-    title.append(thumb, h('span', 'beer-name', b.name));
-    head.append(title, h('span', `verdict ${VERDICT_CLASS[v]}`, v));
-    card.append(head, h('div', 'stats-line', `${t.style} · ${t.abv.toFixed(1)} % · ${Math.round(t.ibu)} IBU · ${t.color}`), h('div', 'stats-line strong', `Stock : ${b.stock} bouteilles · vendues : ${b.sold} · ${moneyInt(b.revenue)}`));
+    head.append(h('span', 'beer-name', b.name), h('span', `verdict ${VERDICT_CLASS[v]}`, v));
+    card.append(head, h('div', 'stats-line', `${t.style} · ${t.abv.toFixed(1)} % · ${Math.round(t.ibu)} IBU · ${b.stock} btl · ${b.sold} vendues`));
     const actions = h('div', 'row');
-    actions.append(this.btn('btn small', b.id === g.selectedBeer ? 'Réglages chargés' : 'Charger ses réglages', () => {
+    actions.append(this.btn('btn small', b.id === g.selectedBeer ? '✓ Chargée' : 'Charger', () => {
       g.loadBeer(b.id);
       this.sheetKey = '';
     }));

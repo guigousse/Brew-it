@@ -214,30 +214,29 @@ button:disabled { cursor: default; opacity: .5; }
 .beer-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 /* --- Étagère de la gamme ------------------------------------------------------------ */
-.shelf {
-  overflow-x: auto; overscroll-behavior-x: contain; margin: 0 -12px; padding: 10px 12px 0;
-  background: linear-gradient(#3a2418, #2a1a12); border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink);
-}
+.shelf { margin: 0 -12px; padding: 6px 8px 0; background: linear-gradient(#3a2418, #2a1a12); border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
 .shelf-row {
-  display: flex; align-items: flex-end; width: max-content; min-width: 100%; padding: 0 6px;
+  display: grid; grid-template-columns: repeat(4, 1fr); justify-items: center; align-items: end; margin-bottom: 6px;
   /* planche : chant clair, face, ombre */
-  background: linear-gradient(to top, #2a1608 0 4px, #8a5a2c 4px 20px, #c88a4a 20px 23px, transparent 23px);
+  background: linear-gradient(to top, #2a1608 0 3px, #8a5a2c 3px 16px, #c88a4a 16px 18px, transparent 18px);
 }
-.shelf-item {
-  display: grid; justify-items: center; gap: 0; padding: 0 8px; background: none; border: none; color: inherit;
-}
-.shelf-bottle { position: relative; width: 136px; height: 288px; }
-.shelf-glass { width: 136px; height: 288px; image-rendering: pixelated; display: block; }
-.shelf-label { position: absolute; width: 120px; height: 76px; image-rendering: pixelated; filter: drop-shadow(0 1px 0 #0006); }
+.shelf-item { display: grid; justify-items: center; padding: 0; background: none; border: none; color: inherit; }
+.shelf-item:disabled { opacity: .3; cursor: default; }
+.shelf-bottle { position: relative; width: 68px; height: 144px; }
+.shelf-glass { width: 68px; height: 144px; image-rendering: pixelated; display: block; }
+.shelf-label { position: absolute; width: 60px; height: 38px; filter: drop-shadow(0 1px 0 #0006); }
 .shelf-item.selected .shelf-glass { filter: drop-shadow(0 0 0 var(--accent)) drop-shadow(0 0 4px #f2c14eb0); }
-.shelf-item:active .shelf-bottle { transform: translateY(-2px); }
+.shelf-item:active:not(:disabled) .shelf-bottle { transform: translateY(-2px); }
 .shelf-tag {
-  margin: 1px 0 3px; padding: 0 6px; height: 18px; line-height: 16px; font-size: 15px; color: var(--ink); white-space: nowrap;
+  margin: 0 0 1px; padding: 0 4px; height: 15px; line-height: 13px; font-size: 14px; color: var(--ink); white-space: nowrap;
   background: #e8c070; border: 1px solid #5a3a18; box-shadow: inset 1px 1px 0 #fff2c0;
 }
-.shelf-item.empty .shelf-tag { background: #6e5a3a; color: var(--dim); }
+.shelf-item.empty .shelf-tag, .shelf-item.locked .shelf-tag { background: #6e5a3a; color: var(--dim); }
 .shelf-item.add .shelf-tag { background: #4a3a24; color: var(--accent); }
 .shelf-item.add.afford .shelf-glass { animation: pulse 1.2s steps(4) infinite; }
+/* Gamme : tout tient d'un bloc, sans défilement */
+.sheet.fit { max-height: none; }
+.sheet.fit .sheet-body { overflow: hidden; gap: 8px; }
 
 /* --- Stockage ------------------------------------------------------------------------ */
 .storage-pic { width: 100%; max-width: 480px; height: auto; align-self: center; image-rendering: pixelated; border: 2px solid var(--ink); }

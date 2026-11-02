@@ -9,7 +9,7 @@ import { drawMiniLabel } from './labelArt';
 
 export const BOTTLE_W = 34;
 export const BOTTLE_H = 72;
-export const BOTTLE_SCALE = 4;
+export const BOTTLE_SCALE = 2;
 /** Zone de l'étiquette sur le corps de la bouteille (px natifs). */
 export const LABEL_SPOT = { x: 2, y: 36, w: 30, h: 19 };
 
@@ -25,7 +25,7 @@ function halfWidth(y: number): number {
   return 17;
 }
 
-export type ShelfBottleKind = 'beer' | 'empty' | 'add';
+export type ShelfBottleKind = 'beer' | 'empty' | 'add' | 'locked';
 
 export function drawShelfBottle(canvas: HTMLCanvasElement, kind: ShelfBottleKind): void {
   canvas.width = BOTTLE_W;
