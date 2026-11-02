@@ -82,6 +82,8 @@ jobs:
           sed -i '' "s/__TEAM_ID__/$APPLE_TEAM_ID/" ios/ci/ExportOptions.plist
           grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CURRENT_PROJECT_VERSION|MARKETING_VERSION" "$PBX" | sort -u
 
+      # Archive sans signature : signer ici créait un certificat de développement à chaque build (Mac neuf),
+      # jusqu'au plafond du compte Apple. La signature se fait à l'export, par la signature cloud de distribution.
       - name: Archive
         if: steps.cfg.outputs.ready == 'true'
         run: |
@@ -89,10 +91,7 @@ jobs:
             -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*sign|ARCHIVE" || true
           test -d "$RUNNER_TEMP/App.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
 
