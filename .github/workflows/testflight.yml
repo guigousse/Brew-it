@@ -10,11 +10,10 @@
 #   IOS_BUNDLE_ID      (facultatif) remplace le Bundle ID par défaut com.guigousse.brewit
 name: TestFlight
 
+# Envoi uniquement à la demande (Actions → TestFlight → Run workflow) : les modifications sont groupées
+# et envoyées sur TestFlight quand on donne le feu vert, pas à chaque push.
 on:
   workflow_dispatch:
-  push:
-    branches: [main, claude/project-foundation]
-    paths-ignore: ['docs/**', '**/*.md']
 
 concurrency:
   group: testflight
