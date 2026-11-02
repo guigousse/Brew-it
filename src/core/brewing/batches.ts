@@ -19,6 +19,10 @@ export interface BatchProfile {
   quality: number;
   strain: StrainId | null;
   gardeDays: number;
+  /** Nom du brassin (porté jusqu'aux bouteilles, puis sur l'étiquette). */
+  name?: string;
+  /** Brassin d'origine : les machines suivantes appliquent ses réglages. */
+  recipeId?: number;
 }
 
 export const NUMERIC_KEYS = ['og', 'fermentability', 'ibu', 'abv', 'fruity', 'quality', 'gardeDays'] as const;
@@ -29,7 +33,7 @@ const TOLERANCE: Record<(typeof NUMERIC_KEYS)[number], number> = {
 };
 
 export function profilesClose(a: BatchProfile, b: BatchProfile): boolean {
-  if (a.strain !== b.strain) return false;
+  if (a.strain !== b.strain || a.recipeId !== b.recipeId) return false;
   return NUMERIC_KEYS.every((k) => Math.abs(a[k] - b[k]) <= TOLERANCE[k]);
 }
 

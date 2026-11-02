@@ -1,3 +1,4 @@
+import { DEFAULT_CHOICES } from '../brewing/recipe';
 import { World } from '../world';
 
 /**
@@ -39,6 +40,7 @@ export function buildReferenceBrewery(opts: { coolers?: boolean; money?: number 
   const bottles = place('supplier', 14, 2);
   w.setParam(bottles, 'item', 'bottle');
   place('stand', 16, 0);
+  w.createRecipe('Blonde de référence', DEFAULT_CHOICES);
   w.money = opts.money ?? 1e6;
   return w;
 }

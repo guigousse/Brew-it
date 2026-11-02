@@ -1,4 +1,4 @@
-import type { BuildingType, MachineKind } from '../content/buildings';
+import type { BuildingType } from '../content/buildings';
 import { STARTER_BUILDINGS } from '../content/progression';
 import type { World } from '../world';
 import { TUTORIAL_STEPS, type PlaceTarget, type TutorialStep } from './steps';
@@ -30,10 +30,6 @@ export function tutorialPlacement(w: World, type: BuildingType, x: number, y: nu
 
 /** Bâtiments proposés dans la palette pendant l'étape en cours. */
 export const tutorialPalette = (w: World): BuildingType[] => [...new Set(pendingPlacements(w).map((t) => t.type))];
-
-export function tutorialAllowsStart(w: World, kind: MachineKind): boolean {
-  return TUTORIAL_STEPS.slice(0, w.tutorial.step).some((s) => s.allowStart?.includes(kind));
-}
 
 function isComplete(w: World, step: TutorialStep): boolean {
   if (step.places && !step.places.every((t) => placed(w, t))) return false;

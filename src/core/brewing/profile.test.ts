@@ -16,8 +16,8 @@ describe('formules de brassage', () => {
 
   it('ébullition : amertume Tinseth réaliste et concentration par évaporation', () => {
     const r = boil({ og: 50, volume: 20, hopsGrams: 50, boilMin: 60 });
-    expect(r.ibu).toBeGreaterThan(50);
-    expect(r.ibu).toBeLessThan(65);
+    expect(r.ibu).toBeGreaterThan(18);
+    expect(r.ibu).toBeLessThan(28);
     expect(r.volume).toBeCloseTo(18);
     expect(r.og).toBeGreaterThan(50);
   });

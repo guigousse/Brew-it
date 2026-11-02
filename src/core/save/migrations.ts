@@ -1,4 +1,5 @@
 import { EXPANSION_UNLOCKS, STARTER_BUILDINGS } from '../content/progression';
+import { DEFAULT_CHOICES } from '../brewing/recipe';
 import { SAVE_VERSION, type SaveFile } from './serialize';
 
 /**
@@ -17,6 +18,19 @@ const MIGRATIONS: Record<number, (save: any) => any> = {
       tutorial: { step: 0, done: true, signals: [] },
       unlocked: [...STARTER_BUILDINGS, ...EXPANSION_UNLOCKS.slice(0, s.world.expansion + 1).flat()],
       firstBeer: null,
+    },
+  }),
+  // v2 → v3 : les choix passent des machines au brassin. Un tutoriel en cours (ancien plan du garage)
+  // est considéré comme terminé ; la ligne existante reçoit un brassin par défaut et redémarre.
+  2: (s) => ({
+    ...s,
+    version: 3,
+    world: {
+      ...s.world,
+      tutorial: s.world.tutorial.done ? s.world.tutorial : { ...s.world.tutorial, done: true },
+      unlocked: [...new Set([...s.world.unlocked, ...STARTER_BUILDINGS])],
+      recipes: [{ id: 1, name: 'Ma première bière', ...DEFAULT_CHOICES }],
+      production: { recipeId: 1, running: true },
     },
   }),
 };

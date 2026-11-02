@@ -15,7 +15,7 @@ export const TIME_SCALE = {
 
 const POINTS_PER_KG_PER_L = 230; // 5 kg de malt dans 24 L ≈ 1.045 avant ébullition, ≈ 5 % d'alcool à la fin
 const GRAIN_ABSORPTION_L_PER_KG = 1;
-const HOPS_ALPHA = 0.1;
+const HOPS_ALPHA = 0.04; // calibré pour 50 / 100 / 200 g ≈ 22 / 44 / 88 IBU sur un brassin de 19 L
 const EVAPORATION_PER_HOUR = 0.1;
 
 export interface MashInput {

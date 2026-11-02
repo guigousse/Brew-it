@@ -2,12 +2,13 @@ import { BatchRegistry, type BatchProfile } from '../brewing/batches';
 import type { Building } from '../building';
 import type { BuildingType } from '../content/buildings';
 import type { TutorialState } from '../tutorial/tutorial';
+import type { Recipe } from '../brewing/recipe';
 import { EXPANSIONS } from '../content/expansions';
 import type { MarketState } from '../economy/market';
 import { World } from '../world';
 import { migrate } from './migrations';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** Format de sauvegarde : JSON pur, versionné. Toute évolution du format = une migration dans migrations.ts. */
 export interface SaveFile {
@@ -28,6 +29,8 @@ export interface SaveFile {
     tutorial: TutorialState;
     unlocked: BuildingType[];
     firstBeer: BatchProfile | null;
+    recipes: Recipe[];
+    production: World['production'];
   };
 }
 
@@ -50,6 +53,8 @@ export function serialize(world: World, now = Date.now()): SaveFile {
       tutorial: world.tutorial,
       unlocked: world.unlocked,
       firstBeer: world.firstBeer,
+      recipes: world.recipes,
+      production: world.production,
     },
   });
 }
@@ -66,6 +71,8 @@ export function deserialize(raw: unknown): World {
   world.tutorial = s.tutorial;
   world.unlocked = s.unlocked;
   world.firstBeer = s.firstBeer;
+  world.recipes = s.recipes;
+  world.production = s.production;
   const reg = new BatchRegistry(s.batches.next, s.batches.batches);
   Object.assign(world.batches, reg);
   for (let i = 1; i <= s.expansion; i++) {

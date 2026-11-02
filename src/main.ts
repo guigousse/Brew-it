@@ -38,6 +38,17 @@ async function boot() {
       if (count > 0) tapFeedback();
       else if (reason) hud.toast(world.tutorial.done ? reason : 'Touche la case qui clignote', 'bad');
     },
+    onBuy: (id) => {
+      hud.buy(id);
+      tapFeedback();
+    },
+    onDeleteSelectionChanged: () => hud.deleteSelectionChanged(),
+    onMoved: (ok, reason) => {
+      if (ok) {
+        tapFeedback();
+        hud.setTool({ kind: 'none' });
+      } else if (reason) hud.toast(reason, 'bad');
+    },
   });
 
   // Cadre la zone constructible entre la barre du haut et Gaston / la barre d'outils.
@@ -46,7 +57,7 @@ async function boot() {
       x: 0, y: hud.topInset, w: renderer.app.screen.width, h: hud.bottomInset - hud.topInset,
     });
 
-  const hud = new Hud(document.getElementById('hud')!, () => world, input, {
+  const hud = new Hud(document.getElementById('hud')!, () => world, input, renderer.deleteSet, {
     setSpeed: (s) => (loop.speed = s),
     getSpeed: () => loop.speed,
     newGame: () => startWorld(new World()),

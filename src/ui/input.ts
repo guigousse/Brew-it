@@ -1,22 +1,34 @@
 import { BUILDINGS, type BuildingType } from '../core/content/buildings';
 import type { Dir } from '../core/dir';
 import type { World } from '../core/world';
-import type { GameRenderer } from '../render/renderer';
+import { TILE } from '../render/camera';
+import { ICON_RADIUS, iconAnchor, type GameRenderer } from '../render/renderer';
 
-export type Tool = { kind: 'none' } | { kind: 'build'; type: BuildingType } | { kind: 'delete' };
+export type Tool =
+  | { kind: 'none' }
+  | { kind: 'build'; type: BuildingType }
+  | { kind: 'delete' }
+  | { kind: 'move'; id: number };
 
 interface Callbacks {
   onSelect(id: number | null): void;
   onBuilt(count: number, failedReason?: string): void;
+  onBuy(buildingId: number): void;
+  onDeleteSelectionChanged(): void;
+  onMoved(ok: boolean, reason?: string): void;
 }
 
 const TAP_SLOP = 8; // px avant de considérer qu'un doigt glisse
+type Tile = { x: number; y: number };
+
+const dirBetween = (a: Tile, b: Tile): Dir => (b.x > a.x ? 0 : b.x < a.x ? 2 : b.y > a.y ? 1 : 3);
 
 /**
  * Gestes tactiles :
- * - 1 doigt, sans outil : glisser = déplacer la caméra, toucher = sélectionner un bâtiment.
- * - 1 doigt, outil construction : glisser = tracer une ligne (convoyeurs/tuyaux orientés dans le sens du geste).
- * - 1 doigt, outil démolition : toucher / glisser = démolir.
+ * - 1 doigt, sans outil : glisser = déplacer la caméra ; toucher = icône « + » ou sélection d'un bâtiment.
+ * - Construction : tapis et tuyaux suivent le doigt case par case (virages compris) ; les machines suivent le doigt.
+ * - Suppression : toucher / glisser marque les bâtiments en rouge (confirmation dans la barre d'outils).
+ * - Déplacement : le bâtiment suit le doigt, on le pose en relâchant.
  * - 2 doigts : pincer = zoomer, glisser = déplacer (dans tous les modes).
  */
 export class InputController {
@@ -26,6 +38,9 @@ export class InputController {
   private start: { sx: number; sy: number; tx: number; ty: number } | null = null;
   private moved = false;
   private pinch: { dist: number; mx: number; my: number } | null = null;
+  /** Chemin tracé au doigt (tapis / tuyaux). */
+  private path: Tile[] = [];
+  private lastMark = '';
 
   constructor(
     private el: HTMLElement,
@@ -46,11 +61,19 @@ export class InputController {
   setTool(tool: Tool): void {
     this.tool = tool;
     this.renderer.ghost = null;
+    this.renderer.moveGhost = null;
+    if (tool.kind !== 'delete') this.renderer.deleteSet.clear();
   }
 
   private local(e: PointerEvent) {
     const r = this.el.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  private isPathTool(): boolean {
+    if (this.tool.kind !== 'build') return false;
+    const def = BUILDINGS[this.tool.type];
+    return def.rotatable && def.size === 1;
   }
 
   private down = (e: PointerEvent) => {
@@ -61,8 +84,9 @@ export class InputController {
       const t = this.renderer.camera.screenToTile(p.x, p.y);
       this.start = { sx: p.x, sy: p.y, tx: t.x, ty: t.y };
       this.moved = false;
-      if (this.tool.kind === 'build') this.updateGhost(t.x, t.y);
-      if (this.tool.kind === 'delete') this.demolish(t.x, t.y);
+      this.path = [t];
+      this.refreshGhost(t);
+      if (this.tool.kind === 'delete') this.mark(t, true);
     } else if (this.pointers.size === 2) {
       this.start = null; // un 2e doigt annule le geste en cours
       this.renderer.ghost = null;
@@ -91,10 +115,14 @@ export class InputController {
         if (this.moved) this.renderer.camera.pan(p.x - prev.x, p.y - prev.y);
         break;
       case 'build':
-        this.updateGhost(t.x, t.y);
+        if (this.isPathTool()) this.extendPath(t);
+        this.refreshGhost(t);
+        break;
+      case 'move':
+        this.refreshGhost(t);
         break;
       case 'delete':
-        this.demolish(t.x, t.y);
+        this.mark(t, false);
         break;
     }
   };
@@ -106,10 +134,14 @@ export class InputController {
       this.renderer.camera.snapZoom();
     }
     if (!this.start || this.pointers.size > 0) return;
-    if (this.tool.kind === 'none' && !this.moved) {
-      this.cb.onSelect(this.world().at(this.start.tx, this.start.ty)?.id ?? null);
-    } else if (this.tool.kind === 'build' && this.renderer.ghost) {
-      this.commitGhost();
+    const p = this.local(e);
+    if (this.tool.kind === 'none' && !this.moved) this.tap(p);
+    else if (this.tool.kind === 'build' && this.renderer.ghost) this.commitGhost();
+    else if (this.tool.kind === 'move' && this.renderer.moveGhost) {
+      const g = this.renderer.moveGhost;
+      const r = this.world().move(g.id, g.x, g.y);
+      this.renderer.moveGhost = null;
+      this.cb.onMoved(r.ok, r.reason);
     }
     this.start = null;
   };
@@ -119,34 +151,83 @@ export class InputController {
     this.start = null;
     this.pinch = null;
     this.renderer.ghost = null;
+    this.renderer.moveGhost = null;
   };
+
+  /** Toucher simple : une icône « + » en priorité, sinon la sélection d'un bâtiment. */
+  private tap(p: { x: number; y: number }): void {
+    const cam = this.renderer.camera;
+    const wx = (p.x - cam.x) / cam.zoom;
+    const wy = (p.y - cam.y) / cam.zoom;
+    const w = this.world();
+    // Tolérance au doigt : au moins ~22 px écran autour de l'icône.
+    const radius = Math.max(ICON_RADIUS + 2, 22 / cam.zoom);
+    for (const n of this.renderer.needs) {
+      const b = w.buildings.get(n.buildingId);
+      if (!b) continue;
+      const a = iconAnchor(b);
+      if (Math.hypot(wx - a.x, wy - a.y) <= radius) {
+        this.cb.onBuy(b.id);
+        return;
+      }
+    }
+    this.cb.onSelect(w.at(Math.floor(wx / TILE), Math.floor(wy / TILE))?.id ?? null);
+  }
 
   private pinchState() {
     const [a, b] = [...this.pointers.values()] as [{ x: number; y: number }, { x: number; y: number }];
     return { dist: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
   }
 
-  /** Ligne droite (axe dominant) entre le point de départ et le doigt, orientée dans le sens du tracé. */
-  private updateGhost(tx: number, ty: number): void {
-    if (this.tool.kind !== 'build' || !this.start) return;
-    const type = this.tool.type;
-    const def = BUILDINGS[type];
-    const dx = tx - this.start.tx;
-    const dy = ty - this.start.ty;
-    const horizontal = Math.abs(dx) >= Math.abs(dy);
-    const len = horizontal ? Math.abs(dx) : Math.abs(dy);
-    const step = def.size;
-    let rot = this.rot;
-    if (def.rotatable && len > 0) rot = (horizontal ? (dx > 0 ? 0 : 2) : dy > 0 ? 1 : 3) as Dir;
-    const sx = Math.sign(horizontal ? dx : 0);
-    const sy = Math.sign(horizontal ? 0 : dy);
-    const tiles = [];
-    for (let i = 0; i <= len; i += step) tiles.push({ x: this.start.tx + sx * i, y: this.start.ty + sy * i, rot });
+  /** Le chemin suit le doigt case par case ; revenir en arrière efface la dernière case. */
+  private extendPath(t: Tile): void {
+    const last = this.path[this.path.length - 1]!;
+    if (last.x === t.x && last.y === t.y) return;
+    const prev = this.path[this.path.length - 2];
+    if (prev && prev.x === t.x && prev.y === t.y) {
+      this.path.pop();
+      return;
+    }
+    // Doigt rapide : on comble l'écart en L (horizontal puis vertical).
+    let cur = { ...last };
+    while (cur.x !== t.x || cur.y !== t.y) {
+      if (cur.x !== t.x) cur = { x: cur.x + Math.sign(t.x - cur.x), y: cur.y };
+      else cur = { x: cur.x, y: cur.y + Math.sign(t.y - cur.y) };
+      if (this.path.some((q) => q.x === cur.x && q.y === cur.y)) continue; // pas de boucle
+      this.path.push(cur);
+    }
+  }
+
+  private refreshGhost(t: Tile): void {
     const w = this.world();
-    const checks = tiles.map((t) => w.checkPlace(type, t.x, t.y));
+    if (this.tool.kind === 'move') {
+      const b = w.buildings.get(this.tool.id);
+      if (!b) return;
+      const size = BUILDINGS[b.type].size;
+      const x = t.x - Math.floor((size - 1) / 2);
+      const y = t.y - Math.floor((size - 1) / 2);
+      const valid = canMoveTo(w, b.id, x, y, size);
+      this.renderer.moveGhost = { id: b.id, x, y, valid };
+      return;
+    }
+    if (this.tool.kind !== 'build') return;
+    const type = this.tool.type;
+    let tiles: { x: number; y: number; rot: Dir }[];
+    if (this.isPathTool()) {
+      // Chaque case pointe vers la suivante ; la dernière garde la direction du dernier segment.
+      tiles = this.path.map((q, i) => {
+        const next = this.path[i + 1];
+        const before = this.path[i - 1];
+        const rot = next ? dirBetween(q, next) : before ? dirBetween(before, q) : this.rot;
+        return { ...q, rot };
+      });
+    } else {
+      const size = BUILDINGS[type].size;
+      tiles = [{ x: t.x - Math.floor((size - 1) / 2), y: t.y - Math.floor((size - 1) / 2), rot: this.rot }];
+    }
+    const checks = tiles.map((q) => (w.at(q.x, q.y) ? { ok: true, cost: 0 } : w.checkPlace(type, q.x, q.y)));
     const cost = checks.reduce((sum, c) => sum + c.cost, 0);
-    const valid = checks.every((c) => c.ok) && w.money >= cost;
-    this.renderer.ghost = { type, tiles, valid };
+    this.renderer.ghost = { type, tiles, valid: checks.every((c) => c.ok) && w.money >= cost };
   }
 
   private commitGhost(): void {
@@ -165,8 +246,27 @@ export class InputController {
     this.cb.onBuilt(count, reason);
   }
 
-  private demolish(tx: number, ty: number): void {
-    const b = this.world().at(tx, ty);
-    if (b) this.world().remove(b.id);
+  /** Mode suppression : toucher bascule la marque rouge ; glisser ajoute des bâtiments. */
+  private mark(t: Tile, toggle: boolean): void {
+    const key = `${t.x},${t.y}`;
+    if (!toggle && key === this.lastMark) return;
+    this.lastMark = key;
+    const b = this.world().at(t.x, t.y);
+    if (!b) return;
+    if (!toggle && this.renderer.deleteSet.has(b.id)) return;
+    const set = this.renderer.deleteSet;
+    if (toggle && set.has(b.id)) set.delete(b.id);
+    else set.add(b.id);
+    this.cb.onDeleteSelectionChanged();
   }
+}
+
+function canMoveTo(w: World, id: number, x: number, y: number, size: number): boolean {
+  for (let j = 0; j < size; j++)
+    for (let i = 0; i < size; i++) {
+      if (!w.grid.isUnlocked(x + i, y + j)) return false;
+      const occ = w.grid.get(x + i, y + j);
+      if (occ !== 0 && occ !== id) return false;
+    }
+  return true;
 }

@@ -84,7 +84,7 @@ export const BUILDINGS = {
     defaultParams: { rate: 4, temp: 12 },
   },
   supplier: {
-    name: 'Livraison', description: 'Achète et livre un ingrédient automatiquement.', size: 1, cost: 100, category: 'supply', color: 0x9b6b3d, maxHealth: MACHINE_HP, rotatable: false,
+    name: 'Réserve automatique', description: 'Achète et livre un ingrédient automatiquement.', size: 1, cost: 100, category: 'supply', color: 0x9b6b3d, maxHealth: MACHINE_HP, rotatable: false,
     itemsOut: { capacity: 10 },
     machine: 'supplier',
     defaultParams: { item: 'malt', interval: 1 },
@@ -104,7 +104,6 @@ export const BUILDINGS = {
     fluidIn: { capacity: 60, accepts: ['water'] },
     fluid: { capacity: 60, maxFlow: 10, heatLoss: 0.003, accepts: [] },
     machine: 'mash_tun',
-    defaultParams: { grainKg: 5, mashTemp: 66 },
   },
   kettle: {
     name: 'Cuve d\'ébullition', description: 'Fait bouillir le moût avec le houblon.', size: 2, cost: 600, category: 'brewing', color: 0xb5482c, maxHealth: MACHINE_HP, rotatable: false,
@@ -112,7 +111,6 @@ export const BUILDINGS = {
     fluidIn: { capacity: 60, accepts: ['wort'] },
     fluid: { capacity: 60, maxFlow: 10, heatLoss: 0.003, accepts: [] },
     machine: 'kettle',
-    defaultParams: { hopsItems: 1 },
   },
   fermenter: {
     name: 'Fermenteur', description: 'La levure y transforme le moût en bière.', size: 2, cost: 800, category: 'brewing', color: 0xd8d0b8, maxHealth: MACHINE_HP, rotatable: false,
@@ -120,11 +118,10 @@ export const BUILDINGS = {
     fluidIn: { capacity: 60, accepts: ['hopped_wort'] },
     fluid: { capacity: 60, maxFlow: 10, heatLoss: 0.002, accepts: [] },
     machine: 'fermenter',
-    defaultParams: { strain: 'ale_us', gardeDays: 3 },
   },
   bottler: {
     name: 'Embouteilleuse', description: 'Remplit des bouteilles avec la bière.', size: 2, cost: 700, category: 'brewing', color: 0x4f9a94, maxHealth: MACHINE_HP, rotatable: false,
-    itemsIn: { capacity: 24, accepts: ['bottle'] },
+    itemsIn: { capacity: 60, accepts: ['bottle'] },
     fluidIn: { capacity: 20, accepts: ['beer'] },
     itemsOut: { capacity: 6 },
     machine: 'bottler',

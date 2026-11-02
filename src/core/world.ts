@@ -3,7 +3,9 @@ import { createBuilding, type Building } from './building';
 import { BUILDINGS, type BuildingType, type ParamValue } from './content/buildings';
 import { EXPANSIONS, MAX_MAP_HEIGHT, MAX_MAP_WIDTH } from './content/expansions';
 import { EXPANSION_UNLOCKS, STARTER_BUILDINGS } from './content/progression';
-import { tutorialAllowsStart, tutorialPlacement, tutorialUpdate, type TutorialState } from './tutorial/tutorial';
+import { tutorialPlacement, tutorialUpdate, type TutorialState } from './tutorial/tutorial';
+import type { Recipe, RecipeChoices } from './brewing/recipe';
+import { needOf } from './ingredients';
 import type { MachineKind } from './content/buildings';
 import { DX, DY, type Dir } from './dir';
 import { initialMarket, updateMarket, type MarketState } from './economy/market';
@@ -68,6 +70,10 @@ export class World {
   tutorial: TutorialState;
   /** Bâtiments proposés dans la palette (le contenu se débloque progressivement). */
   unlocked: BuildingType[];
+  /** Brassins sauvegardés par le joueur (on peut toujours revenir à un ancien). */
+  recipes: Recipe[] = [];
+  /** Brassin appliqué par la ligne, et production en marche ou en pause. */
+  production: { recipeId: number | null; running: boolean } = { recipeId: null, running: false };
   /** Profil de la toute première bière livrée (affiché à la fin du tutoriel). */
   firstBeer: BatchProfile | null = null;
   /** Ordre de mise à jour stable (ordre de création). */
@@ -173,9 +179,70 @@ export class World {
     tutorialUpdate(this);
   }
 
-  /** Pendant le tutoriel, une machine attend que le joueur ait fait ses choix avant de lancer son premier lot. */
-  canStart(kind: MachineKind): boolean {
-    return this.tutorial.done || tutorialAllowsStart(this, kind);
+  get activeRecipe(): Recipe | undefined {
+    return this.recipes.find((r) => r.id === this.production.recipeId);
+  }
+
+  /** Une machine ne lance un nouveau lot que si un brassin est actif et la production en marche. */
+  canStart(_kind: MachineKind): boolean {
+    return this.production.running && !!this.activeRecipe;
+  }
+
+  /** Crée et sauvegarde un brassin, l'active et lance la production. */
+  createRecipe(name: string, choices: RecipeChoices): CommandResult {
+    if (this.production.running && this.activeRecipe) return { ok: false, reason: 'Mets d\'abord la production en pause' };
+    const id = this.recipes.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+    this.recipes.push({ id, name: name.trim() || `Brassin n°${id}`, ...choices });
+    this.production = { recipeId: id, running: true };
+    this.signal('recipe:created');
+    return { ok: true, id };
+  }
+
+  /** Reprend un brassin sauvegardé (production en pause uniquement). */
+  selectRecipe(id: number): CommandResult {
+    if (this.production.running) return { ok: false, reason: 'Mets d\'abord la production en pause' };
+    if (!this.recipes.some((r) => r.id === id)) return { ok: false, reason: 'Brassin introuvable' };
+    this.production.recipeId = id;
+    return { ok: true };
+  }
+
+  /** Pause : les lots en cours se terminent, aucun nouveau ne démarre. */
+  setProduction(running: boolean): CommandResult {
+    if (running && !this.activeRecipe) return { ok: false, reason: 'Crée d\'abord un brassin' };
+    this.production.running = running;
+    return { ok: true };
+  }
+
+  /** Achète ce qui manque à une machine (icône « + ») et le dépose directement dedans. */
+  buyMissing(id: number): CommandResult & { item?: string; qty?: number; cost?: number } {
+    const b = this.buildings.get(id);
+    const need = b && needOf(this, b);
+    if (!b || !need) return { ok: false, reason: 'Rien à ajouter' };
+    if (this.money < need.unitPrice) return { ok: false, reason: 'Fonds insuffisants' };
+    const qty = Math.min(need.missing, Math.floor(this.money / need.unitPrice + 1e-9));
+    for (let i = 0; i < qty; i++) b.itemsIn!.push({ item: need.item, batch: null });
+    const cost = qty * need.unitPrice;
+    this.money -= cost;
+    this.signal(`buy:${need.item}`);
+    return { ok: true, item: need.item, qty, cost };
+  }
+
+  /** Déplace un bâtiment avec son contenu (gratuit). */
+  move(id: number, x: number, y: number): CommandResult {
+    if (!this.tutorial.done) return { ok: false, reason: 'Impossible pendant le tutoriel' };
+    const b = this.buildings.get(id);
+    if (!b) return { ok: false, reason: 'Bâtiment introuvable' };
+    const size = BUILDINGS[b.type].size;
+    this.grid.clear(b.x, b.y, size);
+    if (!this.grid.canPlace(x, y, size)) {
+      this.grid.fill(b.id, b.x, b.y, size);
+      return { ok: false, reason: 'Emplacement occupé' };
+    }
+    b.x = x;
+    b.y = y;
+    this.grid.fill(b.id, x, y, size);
+    this.adjCache.clear();
+    return { ok: true };
   }
 
   unlock(types: readonly BuildingType[]): void {

@@ -45,7 +45,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
   padding: calc(var(--safe-top) + 6px) 12px 6px; background: var(--panel); border-bottom: 2px solid var(--border);
 }
-.money { font-family: var(--font-title); color: var(--accent); font-size: 18px; }
+.money { font-family: var(--font-title); color: var(--accent); font-size: 18px; white-space: nowrap; flex-shrink: 0; }
 .stage { color: var(--dim); }
 .trend { color: var(--good); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -112,7 +112,6 @@ input[type=range] { accent-color: var(--accent); height: 28px; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 #f0b03000; } 50% { box-shadow: 0 0 0 3px #f0b030aa; } }
 .pulse { animation: pulse 1s steps(4) infinite; border-color: var(--accent) !important; }
 @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
-.palette-empty { color: var(--dim); align-self: center; padding: 8px 4px; }
 
 /* --- Inspecteur : choix de brasseur ------------------------------------- */
 .insp-desc { margin: 2px 0 6px; color: var(--dim); line-height: 1.15; }
@@ -135,13 +134,6 @@ input[type=range] { accent-color: var(--accent); height: 28px; }
 .option-hint { font-size: 15px; color: var(--dim); line-height: 1; }
 .option.active .option-label { color: var(--accent); }
 
-/* --- Menu ---------------------------------------------------------------- */
-.menu {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(320px, calc(100vw - 32px));
-  background: var(--panel-solid); border: 2px solid var(--border); padding: 12px; display: grid; gap: 10px; box-shadow: 0 6px 0 #0008;
-}
-.menu.hidden { display: none; }
-.menu-list { display: grid; gap: 8px; }
 .speed { min-width: 44px; }
 
 @media (max-width: 520px) {
@@ -149,3 +141,49 @@ input[type=range] { accent-color: var(--accent); height: 28px; }
   .topbar { flex-wrap: nowrap; gap: 8px; }
   .stage { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 }
+
+/* --- Fenêtres : assistant de brassin, production, menu ---------------------- */
+.modal {
+  position: absolute; inset: 0; background: #0d0a12b3; display: grid; place-items: center;
+  padding: calc(var(--safe-top) + 12px) 12px calc(var(--safe-bottom) + 12px); z-index: 20;
+}
+.modal.hidden { display: none; }
+.modal-card {
+  width: min(420px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--panel-solid); border: 2px solid var(--accent); padding: 12px; display: grid; gap: 10px;
+  box-shadow: 0 6px 0 #0008;
+}
+.wizard-head { display: flex; align-items: center; gap: 8px; font-family: var(--font-title); font-size: 14px; }
+.wizard-head strong { flex: 1; }
+.dots { display: flex; gap: 4px; }
+.dot { flex: 1; height: 4px; background: var(--border); }
+.dot.on { background: var(--accent); }
+.wizard-step { color: var(--good); font-family: var(--font-title); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+.wizard-title { font-family: var(--font-title); font-size: 18px; color: var(--accent); }
+.wizard-why { margin: 0; font-size: 19px; line-height: 1.2; }
+.wizard .choice-options { grid-template-columns: 1fr; }
+.wizard .option { grid-template-columns: 1fr auto; text-align: left; align-items: center; min-height: 56px; padding: 10px 12px; }
+.wizard .option-hint { font-size: 17px; }
+.back { justify-self: start; }
+.name-input {
+  font: inherit; font-size: 22px; color: var(--text); background: #1a1423; border: 2px solid var(--border); padding: 10px; width: 100%;
+}
+.name-input:focus { outline: none; border-color: var(--accent); }
+.beer-sheet { border: 2px dashed var(--border); padding: 8px; display: grid; gap: 4px; }
+.beer-style { font-size: 20px; color: var(--accent); }
+.beer-stats { color: var(--good); }
+.btn.big { padding: 12px; font-size: 20px; }
+.recipe-list { display: grid; gap: 6px; }
+.recipe-row {
+  display: grid; gap: 2px; text-align: left; padding: 8px 10px; background: #2b2135; border: 2px solid var(--border);
+}
+.recipe-row.active { border-color: var(--good); }
+.recipe-row:disabled { opacity: .55; }
+.brew-btn { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Inspecteur et barre d'outils ----------------------------------------- */
+.insp-buy:empty { display: none; }
+.insp-buy { margin-bottom: 8px; }
+.btn.buy { width: 100%; animation: pulse 1.2s steps(4) infinite; }
+.insp-recipe { border: 2px solid var(--border); padding: 6px; margin-bottom: 8px; display: grid; gap: 2px; }
+.palette-hint { color: var(--dim); align-self: center; padding: 6px 4px; line-height: 1.15; }

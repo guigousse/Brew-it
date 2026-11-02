@@ -6,6 +6,7 @@ import type { Rng } from '../rng';
 /** Prix d'achat des matières premières (livraisons). */
 export const ITEM_PRICES: Partial<Record<ItemId, number>> = {
   malt: 1.2,
+  crushed_malt: 1.5,
   hops: 2,
   yeast: 4,
   bottle: 0.3,

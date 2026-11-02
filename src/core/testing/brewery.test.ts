@@ -17,7 +17,7 @@ describe('brasserie complète (intégration)', () => {
     expect(sales.length).toBeGreaterThan(10);
     const beer = w.batches.get(sales[0]!.type === 'sale' ? sales[0]!.batchId : null)!;
     expect(beer.abv).toBeGreaterThan(4);
-    expect(beer.ibu).toBeGreaterThan(30);
+    expect(beer.ibu).toBeGreaterThan(15);
     expect(beer.strain).toBe('ale_us');
     // Les ventes finissent par couvrir les achats de matières premières.
     const revenue = sales.reduce((s, e) => s + (e.type === 'sale' ? e.price : 0), 0);

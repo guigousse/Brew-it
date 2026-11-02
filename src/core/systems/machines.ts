@@ -4,7 +4,8 @@ import { Alert, countItems, num, takeItems, type Building, type FluidTank, type 
 import { BUILDINGS, type MachineKind } from '../content/buildings';
 import type { FluidId } from '../content/fluids';
 import { BOTTLE_LITERS, HOPS_GRAMS_PER_ITEM, type ItemId } from '../content/items';
-import { STRAINS, YEAST_DEATH_TEMP, type StrainId } from '../content/strains';
+import { YEAST_DEATH_TEMP, type StrainId } from '../content/strains';
+import { fermentTempFor } from '../brewing/recipe';
 import { appeal, ITEM_PRICES, salePrice } from '../economy/market';
 import { approach } from '../math';
 import type { World } from '../world';
@@ -37,8 +38,6 @@ const setPhase = (m: MachineState, phase: MachineState['phase'], duration = 0) =
 };
 
 export const waterFor = (_grainKg: number) => FIXED.waterL;
-/** Température de fermentation : le milieu de la plage idéale de la levure. */
-export const fermentTempFor = (strain: StrainId) => (STRAINS[strain].tempMin + STRAINS[strain].tempMax) / 2;
 
 const outputFits = (b: Building, fluid: FluidId, amount: number): boolean => {
   const tank = b.fluid!;
@@ -86,6 +85,11 @@ function tickFailed(m: MachineState, dt: number) {
 function advanceProcessing(m: MachineState, dt: number) {
   m.timer += dt;
   if (m.timer >= m.duration) m.phase = 'blocked';
+}
+
+/** Le brassin d'un lot (celui qui l'a lancé), à défaut le brassin actif. */
+function recipeOf(world: World, p: BatchProfile | undefined) {
+  return world.recipes.find((r) => r.id === p?.recipeId) ?? world.activeRecipe;
 }
 
 export function emptyProfile(): BatchProfile {
@@ -140,11 +144,13 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
       case 'idle':
       case 'filling': {
         m.phase = 'filling';
-        const grain = num(b, 'grainKg');
+        const recipe = world.activeRecipe;
+        if (!recipe || !world.canStart('mash_tun')) return;
+        const grain = recipe.grainKg;
         const water = waterFor(grain);
         const ready = countItems(b.itemsIn!, 'crushed_malt') >= grain && b.fluidIn!.amount >= water;
-        if (!ready || !world.canStart('mash_tun')) return;
-        m.data = { grainKg: grain, waterL: water, mashTemp: num(b, 'mashTemp') };
+        if (!ready) return;
+        m.data = { grainKg: grain, waterL: water, mashTemp: recipe.mashTemp, recipeId: recipe.id, name: recipe.name };
         m.temp = b.fluidIn!.temp;
         takeItems(b.itemsIn!, 'crushed_malt', grain);
         drain(b.fluidIn!, water);
@@ -167,7 +173,10 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
           return;
         }
         b.alerts &= ~Alert.OutputBlocked;
-        const batch = world.batches.create({ ...emptyProfile(), og: r.og, fermentability: r.fermentability, quality: r.quality });
+        const batch = world.batches.create({
+          ...emptyProfile(), og: r.og, fermentability: r.fermentability, quality: r.quality,
+          name: String(d.name), recipeId: Number(d.recipeId),
+        });
         mixInto(world, b.fluid!, 'wort', r.volume, m.temp ?? +d.mashTemp!, batch);
         world.events.emit({ type: 'batchReady', buildingId: b.id, batchId: batch });
         setPhase(m, 'filling');
@@ -183,11 +192,13 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
       case 'idle':
       case 'filling': {
         m.phase = 'filling';
-        const hops = num(b, 'hopsItems');
         const cap = BUILDINGS.kettle.fluidIn.capacity;
-        if (!inputSettled(m, b.fluidIn!, cap, dt) || countItems(b.itemsIn!, 'hops') < hops || !world.canStart('kettle')) return;
-        const volume = b.fluidIn!.amount;
+        if (!inputSettled(m, b.fluidIn!, cap, dt) || !world.canStart('kettle')) return;
         const src = world.batches.get(b.fluidIn!.batch);
+        const recipe = recipeOf(world, src);
+        const hops = recipe?.hopsItems ?? 1;
+        if (countItems(b.itemsIn!, 'hops') < hops) return;
+        const volume = b.fluidIn!.amount;
         m.data = { volume, hopsGrams: hops * HOPS_GRAMS_PER_ITEM, og: src?.og ?? 0 };
         m.batch = world.batches.create(src ?? emptyProfile()); // copie : le lot d'origine reste intact
         m.temp = b.fluidIn!.temp;
@@ -233,10 +244,11 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
         m.phase = 'filling';
         const cap = BUILDINGS.fermenter.fluidIn.capacity;
         if (!inputSettled(m, b.fluidIn!, cap, dt) || countItems(b.itemsIn!, 'yeast') < 1 || !world.canStart('fermenter')) return;
-        const strain = (String(b.params.strain) in STRAINS ? String(b.params.strain) : 'ale_us') as StrainId;
+        const src = world.batches.get(b.fluidIn!.batch);
+        const recipe = recipeOf(world, src);
+        const strain: StrainId = recipe?.strain ?? 'ale_us';
         const volume = b.fluidIn!.amount;
         const pitchTemp = b.fluidIn!.temp;
-        const src = world.batches.get(b.fluidIn!.batch);
         drain(b.fluidIn!, volume);
         takeItems(b.itemsIn!, 'yeast', 1);
         m.settle = undefined;
@@ -246,7 +258,7 @@ const MACHINES: Record<MachineKind, MachineUpdate> = {
           return;
         }
         const temp = fermentTempFor(strain);
-        const garde = num(b, 'gardeDays');
+        const garde = recipe?.gardeDays ?? 3;
         const r = ferment({ og: src?.og ?? 0, fermentability: src?.fermentability ?? 0.75, strain, temp, gardeDays: garde });
         m.batch = world.batches.create({
           ...(src ?? emptyProfile()),

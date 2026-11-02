@@ -20,9 +20,23 @@ Pas de curseurs ni de mode expert. Le joueur réalise **chaque étape réelle du
 
 Les volumes s'adaptent tout seuls : chaque machine traite le lot entier qui arrive de l'étape précédente. L'eau d'empâtage est fixe (24 L), si bien que la quantité de malt règle directement la force de la bière (≈ 4 %, 5 % ou 6,5 %).
 
-## Tutoriel : « Ta première bière » (24 étapes, environ 5 min, 2 min en accéléré)
-Il est guidé par **Gaston**, un brasseur retraité. Le joueur construit lui-même toute la ligne dans le garage : chaque bâtiment est offert, et sa case clignote. Gaston explique le rôle de chaque étape, puis le joueur fait ses choix dans l'inspecteur.
-- Une machine ne lance son premier lot qu'**après** les choix du joueur : la première bière est bien *la sienne*.
+## Le brassin (recette)
+- Le joueur compose son brassin **une seule fois** dans un assistant : un choix par écran, avec Gaston qui explique son effet. Il voit une **prévision** (alcool, amertume, nombre de bouteilles), puis il **nomme sa bière**.
+- Le brassin est **sauvegardé** et s'applique à toute la ligne. Pour changer de bière, on met la **production en pause** (les lots en cours se terminent), puis on reprend un ancien brassin ou on en compose un nouveau.
+- Le nom suit chaque lot jusqu'aux bouteilles et aux caisses. 🔜 Une étiquette personnalisée sera apposée sur les bouteilles.
+
+## Ingrédients
+- Quand une machine manque d'un ingrédient pour le prochain lot, une **icône « + » pulse** au-dessus d'elle : malt pour le concasseur, houblon pour la cuve d'ébullition, levure pour le fermenteur, bouteilles pour l'embouteilleuse. Un toucher achète **exactement ce qui manque** et débite le prix.
+- 🔜 Des **réserves** (silo à malt, chambre froide à houblon…) rempliront automatiquement les machines voisines. Il faudra quand même les réapprovisionner.
+
+## Construction
+- Les tapis et tuyaux **suivent le doigt**, virages compris, et se raccordent visiblement aux machines.
+- **Déplacer** un élément le repose ailleurs avec son contenu, gratuitement.
+- **Supprimer** : les éléments touchés passent en rouge, puis un bouton **Confirmer** les supprime (75 % remboursés).
+
+## Tutoriel : « Ta première bière » (19 étapes, environ 5 min, 2 min en accéléré)
+Il est guidé par **Gaston**, un brasseur retraité. Le joueur construit lui-même toute la ligne dans le garage : chaque bâtiment est offert, et sa case clignote. Gaston explique le rôle de chaque étape. Le joueur compose ensuite son premier brassin, puis ajoute les ingrédients avec les icônes « + ».
+- Rien ne démarre avant que le brassin soit composé : la première bière est bien *la sienne*.
 - Pendant les attentes (empâtage, ébullition, fermentation), Gaston commente ce qui se passe et propose d'accélérer le temps.
 - La fin arrive avec la livraison de la **première caisse de 12 bouteilles** au bar du coin. Le profil de la bière s'affiche (alcool, amertume, qualité), et Gaston offre 1 200 €.
 - Il est possible de passer le tutoriel depuis le menu.

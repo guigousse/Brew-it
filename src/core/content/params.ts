@@ -1,7 +1,8 @@
+import type { RecipeChoices } from '../brewing/recipe';
+
 /**
- * Choix proposés au joueur sur chaque machine : 2 ou 3 options simples et expliquées.
+ * Les choix du brassin : 2 ou 3 options simples et expliquées par étape du brassage.
  * Pas de curseurs : le joueur comprend l'effet de chaque décision de brasseur.
- * Seuls les paramètres listés ici sont affichés ; les autres sont des réglages internes.
  */
 export interface ChoiceOption {
   value: number | string;
@@ -11,66 +12,59 @@ export interface ChoiceOption {
 }
 
 export interface ChoiceMeta {
+  key: keyof RecipeChoices;
+  /** Étape du brassage concernée. */
+  step: string;
   label: string;
-  /** Pourquoi ce choix compte (affiché sous le titre). */
+  /** Pourquoi ce choix compte, en une ou deux phrases. */
   why: string;
   options: readonly ChoiceOption[];
 }
 
-export const CHOICES: Record<string, ChoiceMeta> = {
-  grainKg: {
-    label: 'Quantité de malt',
-    why: 'Plus de malt, c\'est plus de sucre… donc plus d\'alcool.',
+export const RECIPE_CHOICES: readonly ChoiceMeta[] = [
+  {
+    key: 'grainKg', step: 'Empâtage', label: 'Quantité de malt',
+    why: 'Plus de malt, c\'est plus de sucre dans le moût… donc plus d\'alcool à la fin.',
     options: [
       { value: 4, label: '4 kg', hint: 'Légère' },
       { value: 5, label: '5 kg', hint: 'Normale' },
       { value: 6, label: '6 kg', hint: 'Forte' },
     ],
   },
-  mashTemp: {
-    label: 'Température d\'empâtage',
-    why: 'Elle décide du type de sucre : la levure les mange plus ou moins bien.',
+  {
+    key: 'mashTemp', step: 'Empâtage', label: 'Température d\'empâtage',
+    why: 'Les enzymes du malt coupent l\'amidon en sucres. À 63 °C la levure les mangera presque tous (bière sèche) ; à 69 °C il en restera (bière ronde et douce).',
     options: [
       { value: 63, label: '63 °C', hint: 'Sèche' },
       { value: 66, label: '66 °C', hint: 'Équilibrée' },
       { value: 69, label: '69 °C', hint: 'Ronde, sucrée' },
     ],
   },
-  hopsItems: {
-    label: 'Dose de houblon',
-    why: 'Le houblon apporte l\'amertume et les arômes.',
+  {
+    key: 'hopsItems', step: 'Ébullition', label: 'Dose de houblon',
+    why: 'Le houblon, ajouté pendant l\'ébullition, apporte l\'amertume et les arômes. Beaucoup de houblon, c\'est le style IPA.',
     options: [
       { value: 1, label: '50 g', hint: 'Douce' },
       { value: 2, label: '100 g', hint: 'Équilibrée' },
       { value: 4, label: '200 g', hint: 'Très amère' },
     ],
   },
-  strain: {
-    label: 'Levure',
-    why: 'Chaque levure donne son caractère à la bière.',
+  {
+    key: 'strain', step: 'Fermentation', label: 'Levure',
+    why: 'La levure mange le sucre et fabrique l\'alcool et les bulles. Chaque souche donne son caractère.',
     options: [
-      { value: 'ale_us', label: 'Ale américaine', hint: 'Nette, laisse parler le houblon' },
+      { value: 'ale_us', label: 'Ale américaine', hint: 'Nette' },
       { value: 'ale_uk', label: 'Ale anglaise', hint: 'Fruitée, ronde' },
-      { value: 'saison', label: 'Saison', hint: 'Épicée, très sèche' },
+      { value: 'saison', label: 'Saison', hint: 'Épicée, sèche' },
     ],
   },
-  gardeDays: {
-    label: 'Temps de garde',
-    why: 'Après la fermentation, la bière se repose et s\'affine.',
+  {
+    key: 'gardeDays', step: 'Garde', label: 'Temps de garde',
+    why: 'Après la fermentation, la bière se repose au calme et s\'affine. Plus c\'est long, meilleur c\'est… mais plus il faut attendre.',
     options: [
       { value: 1, label: '1 jour', hint: 'Rapide' },
       { value: 3, label: '3 jours', hint: 'Bonne' },
       { value: 7, label: '7 jours', hint: 'Excellente' },
     ],
   },
-  item: {
-    label: 'Ingrédient livré',
-    why: 'Chaque livraison achète automatiquement son ingrédient.',
-    options: [
-      { value: 'malt', label: 'Malt', hint: '1,20 € le kg' },
-      { value: 'hops', label: 'Houblon', hint: '2 € les 50 g' },
-      { value: 'yeast', label: 'Levure', hint: '4 € le sachet' },
-      { value: 'bottle', label: 'Bouteilles', hint: '0,30 € pièce' },
-    ],
-  },
-};
+];

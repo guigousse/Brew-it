@@ -1,5 +1,4 @@
-import { countItems, num, type Building } from './building';
-import { CHOICES } from './content/params';
+import { countItems, type Building } from './building';
 import { ITEMS, type ItemId } from './content/items';
 import { STRAINS, type StrainId } from './content/strains';
 import { CRATE_SIZE, waterFor } from './systems/machines';
@@ -15,7 +14,9 @@ export interface MachineInfo {
 }
 
 const pct = (b: Building) => (b.machine && b.machine.duration > 0 ? Math.min(1, b.machine.timer / b.machine.duration) : undefined);
-const optionHint = (key: string, value: unknown) => CHOICES[key]?.options.find((o) => o.value === value)?.hint ?? '';
+/** Raison pour laquelle une machine de brassage ne démarre pas, si c'est la production. */
+const idleReason = (world: World) =>
+  !world.activeRecipe ? 'Aucun brassin : crée ton premier brassin' : !world.production.running ? 'Production en pause' : null;
 
 /** Description d'une machine pour l'inspecteur et pour Gaston. */
 export function describe(world: World, b: Building): MachineInfo {
@@ -40,26 +41,25 @@ export function describe(world: World, b: Building): MachineInfo {
     case 'mill':
       return { status: m?.phase === 'processing' ? 'Concassage du malt' : 'En attente de malt', progress: pct(b), needs };
     case 'mash_tun': {
-      const grain = num(b, 'grainKg');
+      const grain = world.activeRecipe?.grainKg ?? 5;
       needs.push({ label: 'Malt concassé', have: countItems(b.itemsIn!, 'crushed_malt'), want: grain, unit: 'kg' });
       needs.push({ label: 'Eau', have: Math.floor(b.fluidIn!.amount), want: waterFor(grain), unit: 'L' });
       if (m?.phase === 'heating') return { status: `L'eau chauffe : ${t(m.temp)} → ${t(Number(m.data?.mashTemp))}`, needs };
       if (m?.phase === 'processing') return { status: 'Empâtage : l\'amidon du malt devient du sucre', progress: pct(b), needs };
       if (m?.phase === 'blocked') return { status: 'Moût prêt : la sortie est bloquée', needs };
-      const ready = needs.every((n) => n.have >= n.want);
-      return { status: ready && !world.canStart('mash_tun') ? 'Prête : fais tes choix pour lancer l\'empâtage' : 'En attente des ingrédients', needs };
+      return { status: idleReason(world) ?? 'En attente des ingrédients', needs };
     }
     case 'kettle': {
-      needs.push({ label: 'Houblon', have: countItems(b.itemsIn!, 'hops'), want: num(b, 'hopsItems'), unit: '× 50 g' });
+      needs.push({ label: 'Houblon', have: countItems(b.itemsIn!, 'hops'), want: world.activeRecipe?.hopsItems ?? 1, unit: '× 50 g' });
       if (m?.phase === 'heating') return { status: `Montée à ébullition : ${t(m.temp)}`, needs };
-      if (m?.phase === 'processing') return { status: `Ébullition : le houblon libère son amertume (${optionHint('hopsItems', m.data && Number(m.data.hopsGrams) / 50)})`, progress: pct(b), needs };
+      if (m?.phase === 'processing') return { status: `Ébullition avec ${Math.round(Number(m.data?.hopsGrams ?? 0))} g de houblon`, progress: pct(b), needs };
       if (m?.phase === 'blocked') return { status: 'Moût houblonné prêt : la sortie est bloquée', needs };
       const wort = b.fluidIn!.amount;
-      return { status: wort > 0 ? `Le moût arrive : ${wort.toFixed(0)} L` : 'En attente du moût', needs };
+      return { status: wort > 0 ? `Le moût arrive : ${wort.toFixed(0)} L` : idleReason(world) ?? 'En attente du moût', needs };
     }
     case 'fermenter': {
       needs.push({ label: 'Levure', have: countItems(b.itemsIn!, 'yeast'), want: 1, unit: 'sachet' });
-      const strain = STRAINS[String(b.params.strain) as StrainId]?.name ?? '';
+      const strain = STRAINS[(world.batches.get(m?.batch ?? null)?.strain ?? world.activeRecipe?.strain ?? 'ale_us') as StrainId]?.name ?? '';
       if (m?.phase === 'processing') {
         const fermenting = m.timer < Number(m.data?.fermentDuration ?? 0);
         return {
@@ -71,7 +71,7 @@ export function describe(world: World, b: Building): MachineInfo {
       if (m?.phase === 'blocked') return { status: 'Bière prête : il faut l\'embouteiller', needs };
       if (m?.phase === 'failed') return { status: 'Lot perdu : le moût était trop chaud pour la levure', needs };
       const wort = b.fluidIn!.amount;
-      return { status: wort > 0 ? `Le moût arrive : ${wort.toFixed(0)} L à ${t(b.fluidIn!.temp)}` : 'En attente du moût refroidi', needs };
+      return { status: wort > 0 ? `Le moût arrive : ${wort.toFixed(0)} L à ${t(b.fluidIn!.temp)}` : idleReason(world) ?? 'En attente du moût refroidi', needs };
     }
     case 'bottler':
       needs.push({ label: 'Bouteilles vides', have: countItems(b.itemsIn!, 'bottle'), want: 1, unit: '' });
@@ -81,7 +81,7 @@ export function describe(world: World, b: Building): MachineInfo {
       };
     case 'crate':
       return {
-        status: m?.phase === 'processing' ? 'En route vers le bar du coin…' : `${b.itemsIn!.length} / ${CRATE_SIZE} bouteilles`,
+        status: m?.phase === 'processing' ? 'En route vers le bar du coin…' : `${b.itemsIn!.length} / ${CRATE_SIZE} bouteilles${b.itemsIn![0] ? ` de « ${world.batches.get(b.itemsIn![0].batch)?.name ?? 'bière'} »` : ''}`,
         progress: m?.phase === 'processing' ? pct(b) : b.itemsIn!.length / CRATE_SIZE,
         needs,
       };
