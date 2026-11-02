@@ -291,12 +291,15 @@ export class App {
     // amélioration
     const up = h('div', 'card upgrade');
     up.append(h('div', 'section-title', 'Améliorer'));
+    // On ne dévoile que le palier suivant : la surprise reste entière pour les niveaux d'après.
     const levels = h('div', 'levels');
-    for (let i = 1; i <= MAX_LEVEL; i++) {
-      const cell = h('div', `level${i === lv ? ' current' : i < lv ? ' done' : ''}`);
-      cell.append(img(stationCanvas(id, i), 'pix level-pic'), h('div', 'level-name', def.names[i - 1]!), h('div', 'level-perk', def.perks[i - 1]!));
-      levels.append(cell);
-    }
+    const cell = (i: number, tag: string, cls: string) => {
+      const c = h('div', `level ${cls}`);
+      c.append(h('div', 'section-title', tag), img(stationCanvas(id, i), 'pix level-pic'), h('div', 'level-name', def.names[i - 1]!), h('div', 'level-perk', def.perks[i - 1]!));
+      return c;
+    };
+    levels.append(cell(lv, `Actuel · niv. ${lv}`, 'done'));
+    if (lv < MAX_LEVEL) levels.append(h('div', 'level-arrow', '➜'), cell(lv + 1, `Suivant · niv. ${lv + 1}`, 'current'));
     up.append(levels);
     up.append(h('div', 'hint', `Volume ${CAPACITY[lv]} L · précision ± ${String(PRECISION[lv]).replace('.', ',')} °C`));
     if (lv < MAX_LEVEL) {
@@ -472,14 +475,16 @@ export class App {
     // agrandissement
     const up = h('div', 'card upgrade');
     up.append(h('div', 'section-title', 'Agrandir'));
+    // Seulement le palier actuel et le suivant.
     const levels = h('div', 'storage-levels');
-    STORAGE.forEach((l, i) => {
-      const cell = h('div', `storage-level${i + 1 === g.storageLevel ? ' current' : i + 1 < g.storageLevel ? ' done' : ''}`);
-      cell.append(h('span', 'level-name', l.name), h('span', 'level-perk', `${l.crates} caisses · ${l.crates * CRATE} btl`));
-      levels.append(cell);
-    });
-    up.append(levels);
     const next = STORAGE[g.storageLevel];
+    for (const [l, tag, cls] of [[lvl, 'Actuel', 'done'], [next, 'Suivant', 'current']] as const) {
+      if (!l) continue;
+      const cell = h('div', `storage-level ${cls}`);
+      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.crates} caisses · ${l.crates * CRATE} btl`));
+      levels.append(cell);
+    }
+    up.append(levels);
     if (next) {
       const b = this.btn('btn primary', `Passer à : ${next.name} (${next.crates} caisses) · ${moneyInt(next.cost)}`, () => {
         const r = g.upgradeStorage();
