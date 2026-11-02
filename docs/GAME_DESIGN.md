@@ -1,11 +1,18 @@
 # Brew It : simulation de brassage
 
 ## Concept
-La brasserie compte **trois pièces**, chacune en plein écran et en **portrait**. On passe de l'une à l'autre en **glissant le doigt** ou par les onglets sous le header :
+La brasserie compte **trois pièces**, chacune en plein écran et en **portrait**. On passe de l'une à l'autre en **glissant le doigt** ou par la **barre de navigation en bas de l'écran** :
 
 **Atelier ↔ Stockage ↔ Bar** : le trajet de la bière, de la cuve au verre.
 
-La barre du bas propose les actions de la pièce affichée : Gamme et Brasser à l'atelier, Stock et Commandes au stockage, Agrandir et Les fûts au bar. Chaque pièce évolue sur 5 niveaux, dans le même style pixel art.
+La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Stockage · Bar · Magasin**. Juste au-dessus, un sous-menu propose les actions de la pièce affichée : Gamme et Brasser à l'atelier, Stock et Commandes au stockage, Agrandir, Fête et Les fûts au bar.
+
+- **Tableau de bord** : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
+- **Magasin** : on y achètera plus tard des décorations, du mobilier, des enseignes et d'autres objets. Pour l'instant, les rayons sont annoncés « Bientôt ».
+
+Au-dessus de chaque appareil, l'étape en cours affiche son **temps restant** (m:ss, ou h:mm:ss au-delà d'une heure). Avec plusieurs cuves, c'est celle qui finit la première qui compte.
+
+Chaque pièce évolue sur 5 niveaux, dans le même style pixel art.
 
 ### L'atelier
 L'atelier montre toute la chaîne de brassage. Le procédé descend du haut vers le bas :

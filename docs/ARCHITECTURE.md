@@ -20,7 +20,7 @@ src/
 │   ├── scene.ts          l'atelier : la brasserie verticale (canvas 160 × 300 agrandi au pixel près)
 │   ├── rooms.ts          le stockage et le bar (salle en haut, cave à fûts en bas), 5 décors chacun
 │   └── bottleArt.ts      bouteilles de l'étagère, caisses
-├── ui/                   interface DOM : header et onglets de pièces, glissement, barre du bas par pièce, panneaux,
+├── ui/                   interface DOM : header, barre de navigation en bas (pièces, tableau de bord, magasin), sous-menu par pièce, glissement, panneaux,
 │                         ordinateur des commandes, dégustation, Gaston
 ├── platform/             Capacitor : stockage fichier, cycle de vie, haptique
 └── main.ts               boucle à pas fixe (20 ticks/s), sauvegarde auto, production hors-ligne

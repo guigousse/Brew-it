@@ -1,6 +1,6 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { MAX_PLAN, MAX_TANKS, TANK_STAGES, type Beer, type Game, type Order } from '../core/game';
+import { MAX_PLAN, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Game, type Order, type SaleSource } from '../core/game';
 import { AD, BAR, kegGlasses, kegLiters, PARTY } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
@@ -43,6 +43,25 @@ const ROOMS: readonly { id: RoomId; name: string }[] = [
   { id: 'storage', name: 'Stockage' },
   { id: 'bar', name: 'Bar' },
 ];
+/** Ce que montre l'écran : une des pièces, ou une page (tableau de bord, magasin). */
+export type View = RoomId | 'dashboard' | 'shop';
+type PageId = Exclude<View, RoomId>;
+/** Onglets de la barre de navigation, de gauche à droite. */
+const TABS: readonly { id: View; name: string; icon: string }[] = [
+  { id: 'dashboard', name: 'Tableau de bord', icon: '📊' },
+  { id: 'workshop', name: 'Atelier', icon: '⚗️' },
+  { id: 'storage', name: 'Stockage', icon: '📦' },
+  { id: 'bar', name: 'Bar', icon: '🍺' },
+  { id: 'shop', name: 'Magasin', icon: '🛒' },
+];
+const isRoom = (v: View): v is RoomId => ROOMS.some((r) => r.id === v);
+
+/** Couleur de chaque source de ventes dans le graphique (palette validée sur le fond des panneaux). */
+const SOURCE: Record<SaleSource, { name: string; color: string }> = {
+  bar: { name: 'Bar', color: '#b8862a' },
+  orders: { name: 'Commandes', color: '#3f88d4' },
+  wholesale: { name: 'Grossiste', color: '#d45c8e' },
+};
 
 type PcTab = 'orders' | 'trends' | 'wholesale';
 type SheetState = { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'storage' | 'bar' | 'barUp' };
@@ -50,6 +69,15 @@ type SheetState = { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' 
 const starText = (p: number) => {
   const n = stars(p);
   return '★'.repeat(Math.floor(n)) + (n % 1 ? '½' : '') + '☆'.repeat(5 - Math.ceil(n));
+};
+
+/** Temps restant façon chrono : m:ss, ou h:mm:ss au-delà d'une heure. */
+export const clock = (s: number) => {
+  const t = Math.max(0, Math.ceil(s));
+  const hh = Math.floor(t / 3600);
+  const mm = Math.floor((t % 3600) / 60);
+  const ss = String(t % 60).padStart(2, '0');
+  return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
 };
 
 const duration = (s: number) => {
@@ -75,7 +103,10 @@ export class App {
   /** Plaque du niveau de la brasserie, en haut à gauche de la scène. */
   private plaque = h('button', 'map-btn plaque');
   private announcedTaste = -1;
-  private bottom = h('nav', 'bottombar');
+  /** Bas de l'écran : les actions de la pièce (sous-menu), puis la barre de navigation. */
+  private dock = h('div', 'dock');
+  private bottom = h('div', 'bottombar');
+  private tabbar = h('nav', 'tabbar');
   private brewBtn = h('button', 'brew-btn');
   private rangeBtn = h('button', 'side-btn');
   private stockBtn = h('button', 'side-btn');
@@ -87,8 +118,13 @@ export class App {
   readonly storageRoom = new StorageRoom();
   readonly barRoom = new BarRoom();
   private room: RoomId = 'workshop';
-  private nav = h('div', 'rooms-nav');
-  private navTabs = new Map<RoomId, { btn: HTMLButtonElement; badge: HTMLElement }>();
+  private view: View = 'workshop';
+  private navTabs = new Map<View, { btn: HTMLButtonElement; badge: HTMLElement }>();
+  /** Pages hors des pièces : le tableau de bord et le magasin. */
+  private pages: Record<PageId, HTMLElement> = { dashboard: h('section', 'page hidden'), shop: h('section', 'page hidden') };
+  private dashAt = -1;
+  /** Minute survolée dans le graphique des ventes (index dans les 60 dernières). */
+  private dashPick: number | null = null;
   private track = h('div', 'rooms-track');
   private wraps: HTMLElement[] = [];
   private storageWrap = h('div', 'scene-wrap');
@@ -132,15 +168,17 @@ export class App {
     const opts = h('button', 'icon-btn', '⚙');
     opts.setAttribute('aria-label', 'Options');
     opts.onclick = () => this.openOptions();
-    this.header.append(logo, pill, opts, this.nav);
-    for (const r of ROOMS) {
-      const btn = h('button', 'room-tab');
+    this.header.append(logo, pill, opts);
+    for (const t of TABS) {
+      const btn = h('button', 'nav-tab');
+      btn.setAttribute('aria-label', t.name);
       const badge = h('span', 'room-badge hidden');
-      btn.append(h('span', '', r.name), badge);
-      btn.onclick = () => this.goRoom(r.id);
-      this.nav.append(btn);
-      this.navTabs.set(r.id, { btn, badge });
+      btn.append(h('span', 'nav-icon', t.icon), h('span', 'nav-name', t.name), badge);
+      btn.onclick = () => this.goView(t.id);
+      this.tabbar.append(btn);
+      this.navTabs.set(t.id, { btn, badge });
     }
+    this.dock.append(this.bottom, this.tabbar);
 
     // scène + étiquettes cliquables
     this.sceneWrap.append(this.scene.canvas);
@@ -205,7 +243,7 @@ export class App {
     drawGaston(av);
     this.mentor.append(av, h('div', 'mentor-body'));
 
-    root.append(this.header, this.stage, this.mentor, this.sheet, this.bottom, this.modal, this.toasts);
+    root.append(this.header, this.stage, this.pages.dashboard, this.pages.shop, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }
@@ -215,7 +253,7 @@ export class App {
   /** La brasserie remplit l'espace entre le header et la barre du bas, agrandie au pixel près. */
   layout(): void {
     const top = this.header.getBoundingClientRect().bottom;
-    const bottom = this.bottom.getBoundingClientRect().top;
+    const bottom = this.dock.getBoundingClientRect().top;
     const availW = window.innerWidth - 8;
     const availH = Math.max(100, bottom - top - 8);
     this.scale = Math.min(availW / SCENE_W, availH / SCENE_H);
@@ -229,8 +267,10 @@ export class App {
     const bp = this.storageRoom.badgePoint;
     Object.assign(this.ordersBadge.style, { left: `${bp.x * s}px`, top: `${bp.y * s}px` });
     this.placeTrack();
-    this.stage.style.top = `${top}px`;
-    this.stage.style.bottom = `${window.innerHeight - bottom}px`;
+    for (const el of [this.stage, this.pages.dashboard, this.pages.shop]) {
+      el.style.top = `${top}px`;
+      el.style.bottom = `${window.innerHeight - bottom}px`;
+    }
     this.root.style.setProperty('--bottom-h', `${window.innerHeight - bottom}px`);
     this.root.style.setProperty('--top-h', `${top}px`);
     this.laidOut = `${top}|${bottom}|${window.innerWidth}`;
@@ -241,6 +281,7 @@ export class App {
 
   frame(t: number): void {
     const g = this.game();
+    if (!isRoom(this.view)) return;
     // On ne dessine que la pièce affichée (et ses voisines pendant un glissement).
     const all = !!this.swipe?.on || performance.now() < this.roomsDrawUntil;
     if (all || this.room === 'storage') this.storageRoom.draw(g, t);
@@ -258,12 +299,16 @@ export class App {
       o.label.style.left = `${(r.x + r.w / 2) * s}px`;
       o.label.style.top = `${Math.max(0, r.y * s - 18)}px`;
       const pct = batch ? Math.min(1, batch.elapsed / Math.max(0.01, batch.duration)) : 0;
-      const many = g.tankCount(id) > 1 ? g.batchesAt(id).length : 0;
+      const all = g.batchesAt(id);
+      const many = g.tankCount(id) > 1 ? all.length : 0;
+      // temps restant de l'étape (avec plusieurs cuves : celle qui finit la première)
+      const running = all.filter((b) => !b.waiting);
+      const left = running.length ? Math.min(...running.map((b) => b.duration - b.elapsed)) : 0;
       o.text.textContent = batch
         ? id === 'bottling' && g.bottlingBlocked ? 'Stockage plein ⏸'
         : id === 'bottling' && g.tastable === batch ? 'À goûter ⏸'
-        : many > 1 ? `${STATIONS[id].step} · ${many} cuves`
-        : batch.waiting ? `${STATIONS[id].step} ⏸` : `${STATIONS[id].step} · ${Math.round(pct * 100)} %`
+        : many > 1 ? `${STATIONS[id].step} · ${many} cuves${running.length ? ` · ${clock(left)}` : ''}`
+        : batch.waiting ? `${STATIONS[id].step} ⏸` : `${STATIONS[id].step} · ${clock(left)}`
         : STATIONS[id].step;
       o.label.classList.toggle('blocked', id === 'bottling' && g.bottlingBlocked);
       (o.bar.firstElementChild as HTMLElement).style.width = `${pct * 100}%`;
@@ -315,12 +360,14 @@ export class App {
       bar: g.partying ? '🎉' : emptyTap && kegsReady ? '!' : '', // un fût à changer, et de quoi le remplacer
     };
     for (const [id, tab] of this.navTabs) {
-      tab.btn.classList.toggle('active', id === this.room);
-      tab.badge.textContent = badges[id];
-      tab.badge.classList.toggle('hidden', !badges[id]);
-      tab.badge.classList.toggle('hot', id === 'storage' ? ready > 0 || g.storageFull : !!badges[id]);
+      const badge = isRoom(id) ? badges[id] : '';
+      tab.btn.classList.toggle('active', id === this.view);
+      tab.badge.textContent = badge;
+      tab.badge.classList.toggle('hidden', !badge);
+      tab.badge.classList.toggle('hot', id === 'storage' ? ready > 0 || g.storageFull : !!badge);
     }
-    this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen);
+    this.renderPage();
+    this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen || this.view !== 'workshop');
     this.placeTaste();
     if (trial && trial.id !== this.announcedTaste) {
       this.announcedTaste = trial.id;
@@ -331,7 +378,7 @@ export class App {
     this.renderSheet();
     this.renderMentor();
     // La barre du bas change de hauteur une fois remplie / les polices chargées : on recadre.
-    const key = `${this.header.getBoundingClientRect().bottom}|${this.bottom.getBoundingClientRect().top}|${window.innerWidth}`;
+    const key = `${this.header.getBoundingClientRect().bottom}|${this.dock.getBoundingClientRect().top}|${window.innerWidth}`;
     if (key !== this.laidOut) this.layout();
   }
 
@@ -807,7 +854,7 @@ export class App {
   /** Organiser une fête : 30 min, 50 fois plus de clients ; il faut avoir prévu des fûts. */
   openParty(): void {
     const g = this.game();
-    if (this.room !== 'bar') this.goRoom('bar');
+    if (this.view !== 'bar') this.goRoom('bar');
     const card = this.modalCard('Organiser une fête');
     const kegs = g.beers.reduce((s, b) => s + b.kegs.length, 0);
     card.append(
@@ -830,7 +877,7 @@ export class App {
 
   /** L'ordinateur du stockage : le tableau des commandes, les tendances et le grossiste. */
   openComputer(tab: PcTab = 'orders'): void {
-    if (this.room !== 'storage') this.goRoom('storage');
+    if (this.view !== 'storage') this.goRoom('storage');
     this.close();
     const card = this.modalCard('');
     card.classList.add('computer');
@@ -1030,16 +1077,43 @@ export class App {
 
   /** Va dans une pièce (onglet ou glissement). */
   goRoom(id: RoomId): void {
-    if (id === this.room) return;
+    if (id === this.room && this.view === id) return;
+    const fromPage = !isRoom(this.view);
     this.room = id;
+    this.view = id;
+    this.showView();
+    if (fromPage) this.stage.classList.add('dragging'); // on revient d'une page : pas d'animation de glissement
     this.close();
     this.storageRoom.selected = null;
     this.barRoom.selected = null;
     this.roomsDrawUntil = performance.now() + 400;
-    this.stage.classList.remove('dragging');
     this.placeTrack();
+    if (fromPage) void this.stage.offsetWidth; // applique la position sans transition
+    this.stage.classList.remove('dragging');
     this.setBottom();
     this.update();
+  }
+
+  /** Un onglet de la barre de navigation : une pièce, ou une page. */
+  goView(v: View): void {
+    if (isRoom(v)) return this.goRoom(v);
+    if (v === this.view) return;
+    this.view = v;
+    this.close();
+    this.closeModal();
+    this.dashAt = -1;
+    this.dashPick = null;
+    this.pages[v].scrollTop = 0;
+    this.showView();
+    this.setBottom();
+    this.update();
+  }
+
+  /** Affiche la scène des pièces ou la page choisie. */
+  private showView(): void {
+    const room = isRoom(this.view);
+    this.stage.classList.toggle('hidden', !room);
+    for (const [id, el] of Object.entries(this.pages)) el.classList.toggle('hidden', id !== this.view);
   }
 
   /** Une zone tactile par fût de la cave : toucher un fût permet de le changer. */
@@ -1074,9 +1148,10 @@ export class App {
 
   /** La barre du bas propose les actions de la pièce affichée. */
   private setBottom(): void {
-    const btns = this.room === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.room === 'storage' ? [this.stockBtn, this.ordersBtn] : [this.barUpBtn, this.partyBtn, this.menuBtn];
+    const btns = !isRoom(this.view) ? [] : this.room === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.room === 'storage' ? [this.stockBtn, this.ordersBtn] : [this.barUpBtn, this.partyBtn, this.menuBtn];
     this.bottom.replaceChildren(...btns);
     this.bottom.classList.toggle('three', btns.length === 3);
+    this.bottom.classList.toggle('hidden', !btns.length);
   }
 
   /** Glisser horizontalement passe d'une pièce à l'autre ; un glissement n'ouvre pas ce qu'il y a sous le doigt. */
@@ -1364,6 +1439,215 @@ export class App {
     return !this.modal.classList.contains('hidden');
   }
 
+  // ------------------------------------------------------------------ pages
+
+  private renderPage(): void {
+    if (this.view === 'dashboard') {
+      // en direct, mais une fois par seconde suffit
+      const now = Math.floor(performance.now() / 1000);
+      if (now === this.dashAt) return;
+      this.dashAt = now;
+      this.dashboardPage(this.game());
+    } else if (this.view === 'shop' && !this.pages.shop.childElementCount) this.shopPage();
+  }
+
+  /** Tableau de bord : un aperçu en direct des ventes et de la brasserie. */
+  private dashboardPage(g: Game): void {
+    const page = this.pages.dashboard;
+    const scroll = page.scrollTop;
+    page.replaceChildren();
+    page.append(h('div', 'page-title', 'Tableau de bord'));
+    // chiffres clés
+    const kpis = h('div', 'kpis');
+    const kpi = (label: string, value: string, sub?: string) => {
+      const c = h('div', 'kpi');
+      c.append(h('div', 'section-title', label), h('div', 'kpi-value', value));
+      if (sub) c.append(h('div', 'kpi-sub', sub));
+      kpis.append(c);
+    };
+    const minutes = g.salesMinutes();
+    const hour = g.revenueLastHour;
+    const last5 = minutes.slice(-5).reduce((s, m) => s + m.bar + m.orders + m.wholesale, 0);
+    kpi('Dernière heure', moneyShort(hour), `${moneyInt(last5 / 5)}/min ces 5 min`);
+    kpi('Recettes totales', moneyShort(g.totalRevenue), `${g.totalSold.toLocaleString('fr-FR')} vendues`);
+    kpi('Marque', starText(g.brand), `${fmtRate(g.barRate * 60)} clients/h au bar`);
+    kpi('Brassins', String(g.batchesDone), `${g.batches.length} en cours`);
+    page.append(kpis);
+
+    // ventes minute par minute
+    const chart = h('div', 'card dash-chart');
+    chart.append(h('div', 'section-title', 'Ventes · 60 dernières minutes'));
+    const legend = h('div', 'legend');
+    for (const src of SALE_SOURCES) {
+      const it = h('span', 'legend-item');
+      const sw = h('span', 'legend-swatch');
+      sw.style.background = SOURCE[src].color;
+      it.append(sw, h('span', '', SOURCE[src].name));
+      legend.append(it);
+    }
+    const tip = h('div', 'chart-tip');
+    const canvas = h('canvas', 'sales-canvas');
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', `Ventes de la dernière heure : ${moneyInt(hour)}`);
+    const axis = h('div', 'chart-axis');
+    axis.append(h('span', '', '−60 min'), h('span', '', '−30'), h('span', '', 'maintenant'));
+    chart.append(legend, tip, canvas, axis);
+    page.append(chart);
+    const showTip = () => {
+      const i = this.dashPick;
+      const m = i != null ? minutes[i] : undefined;
+      if (!m) {
+        tip.textContent = hour ? 'Touche une barre pour le détail' : 'Pas encore de vente cette heure-ci';
+        tip.classList.add('dim');
+        return;
+      }
+      tip.classList.remove('dim');
+      const ago = minutes.length - 1 - i!;
+      const parts = SALE_SOURCES.filter((s) => m[s] > 0).map((s) => `${SOURCE[s].name} ${moneyInt(m[s])}`);
+      tip.textContent = `${ago ? `Il y a ${ago} min` : 'Cette minute'} : ${moneyInt(m.bar + m.orders + m.wholesale)}${parts.length ? ` · ${parts.join(' · ')}` : ''}`;
+    };
+    const draw = () => this.drawSales(canvas, minutes);
+    const pick = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      const i = Math.floor(((e.clientX - r.left) / r.width) * minutes.length);
+      this.dashPick = Math.max(0, Math.min(minutes.length - 1, i));
+      showTip();
+      draw();
+    };
+    canvas.addEventListener('pointerdown', pick);
+    canvas.addEventListener('pointermove', (e) => e.pointerType === 'mouse' && pick(e));
+    canvas.addEventListener('pointerleave', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      this.dashPick = null;
+      showTip();
+      draw();
+    });
+    showTip();
+    requestAnimationFrame(draw); // il faut la taille réelle du canevas
+
+    // d'où vient l'argent (depuis le début)
+    const split = h('div', 'card');
+    split.append(h('div', 'section-title', 'Répartition des recettes'));
+    const totals: Record<SaleSource, number> = { bar: g.barRevenue, orders: g.ordersRevenue, wholesale: g.wholesaleRevenue };
+    const sum = Math.max(1e-9, totals.bar + totals.orders + totals.wholesale);
+    for (const src of SALE_SOURCES) {
+      const row = h('div', 'split-row');
+      const bar = h('div', 'split-bar');
+      const fill = h('div', 'split-fill');
+      fill.style.width = `${(totals[src] / sum) * 100}%`;
+      fill.style.background = SOURCE[src].color;
+      bar.append(fill);
+      row.append(h('span', 'split-name', SOURCE[src].name), bar, h('span', 'split-value', moneyShort(totals[src])));
+      split.append(row);
+    }
+    page.append(split);
+
+    // la brasserie en direct
+    const live = h('div', 'card');
+    live.append(h('div', 'section-title', 'En direct'));
+    const line = (k: string, v: string, cls = '') => {
+      const r = h('div', `live-row ${cls}`);
+      r.append(h('span', '', k), h('span', 'live-value', v));
+      live.append(r);
+    };
+    const sorted = [...g.batches].sort((a, b) => b.stage - a.stage);
+    if (!sorted.length) line('Atelier', 'à l\'arrêt', 'dim');
+    for (const b of sorted) {
+      const id = STATION_ORDER[b.stage]!;
+      const name = g.beer(b.beerId)?.name ?? 'Essai';
+      line(`${name} · ${STATIONS[id].step}`, b.waiting ? '⏸' : clock(b.duration - b.elapsed));
+    }
+    if (g.tastable) line('Essai', 'à goûter 🍺');
+    line('Stockage', g.storageFull ? 'plein !' : `${Math.round((g.stored / g.storageCap) * 100)} %`, g.storageFull ? 'bad' : '');
+    const taps = g.taps.filter((t) => t.glasses > 0).length;
+    line('Bar', `${taps}/${g.taps.length} tireuses · ${g.glassesLeft} verres`);
+    if (g.partying) line('Fête', `🎉 ${clock(g.partyUntil - g.time)}`);
+    if (g.advertising) line('Campagne de pub', `📣 ${clock(g.adUntil - g.time)}`);
+    line('Commandes', g.orders.length ? `${g.orders.length} en attente${g.readyOrders.length ? ` · ${g.readyOrders.length} prête${g.readyOrders.length > 1 ? 's' : ''}` : ''}` : 'aucune');
+    page.append(live);
+
+    // les bières qui rapportent le plus
+    if (g.beers.length) {
+      const top = h('div', 'card');
+      top.append(h('div', 'section-title', 'Ma gamme'));
+      const list = h('div', 'stock-list');
+      for (const b of [...g.beers].sort((a, c) => c.revenue - a.revenue)) {
+        const el = h('div', 'stock-line');
+        const thumb = h('canvas', 'label-thumb');
+        drawLabel(thumb, b.label, b.name);
+        el.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.sold} · ${moneyShort(b.revenue)}`), h('span', 'pop-stars', starText(b.pop)));
+        list.append(el);
+      }
+      top.append(list);
+      page.append(top);
+    }
+    page.scrollTop = scroll;
+  }
+
+  /** Barres empilées par source, une par minute ; la minute touchée est mise en avant. */
+  private drawSales(canvas: HTMLCanvasElement, minutes: ReturnType<Game['salesMinutes']>): void {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, canvas.clientWidth);
+    const hh = Math.max(1, canvas.clientHeight);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(hh * dpr);
+    const ctx = canvas.getContext('2d')!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, hh);
+    const max = Math.max(1, ...minutes.map((m) => m.bar + m.orders + m.wholesale));
+    const top = 14;
+    const base = hh - 1;
+    // graduation discrète : le maximum de l'heure
+    ctx.fillStyle = '#5c4a6e';
+    ctx.fillRect(0, top, w, 1);
+    ctx.fillRect(0, base, w, 1);
+    ctx.font = '14px VT323, monospace';
+    ctx.fillStyle = '#bcaecb';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(moneyInt(max), 0, top - 1);
+    const slot = w / minutes.length;
+    const bw = Math.max(1, slot - 1);
+    minutes.forEach((m, i) => {
+      let y = base;
+      const x = i * slot;
+      const dim = this.dashPick != null && this.dashPick !== i;
+      ctx.globalAlpha = dim ? 0.45 : 1;
+      for (const src of SALE_SOURCES) {
+        const v = m[src];
+        if (v <= 0) continue;
+        const bh = Math.max(1, ((base - top) * v) / max);
+        ctx.fillStyle = SOURCE[src].color;
+        ctx.fillRect(x, y - bh, bw, bh - (y < base ? 1 : 0)); // 1 px de fond entre deux segments
+        y -= bh;
+      }
+    });
+    ctx.globalAlpha = 1;
+    if (this.dashPick != null) {
+      ctx.fillStyle = '#f6ecd6';
+      ctx.fillRect(this.dashPick * slot, base - 1, bw, 2);
+    }
+  }
+
+  /** Le magasin : décorations et autres achats, bientôt. */
+  private shopPage(): void {
+    const page = this.pages.shop;
+    page.append(h('div', 'page-title', 'Magasin'), h('p', 'hint', 'Bientôt ici : de quoi décorer ta brasserie et ton bar. Les rayons se remplissent…'));
+    const grid = h('div', 'shop-grid');
+    for (const [icon, name, desc] of [
+      ['🪴', 'Décorations', 'Plantes, cadres, guirlandes pour le bar'],
+      ['🪑', 'Mobilier', 'Tables, tabourets et banquettes'],
+      ['🪧', 'Enseignes', 'Une façade à l\'image de ta marque'],
+      ['💡', 'Ambiance', 'Éclairages et musique'],
+      ['🍻', 'Verrerie', 'Des verres à ton nom'],
+      ['🎨', 'Étiquettes', 'Nouveaux motifs et emblèmes'],
+    ] as const) {
+      const c = h('div', 'card shop-item locked');
+      c.append(h('div', 'shop-icon', icon), h('div', 'beer-name', name), h('div', 'hint', desc), h('span', 'kind-tag', 'Bientôt'));
+      grid.append(c);
+    }
+    page.append(grid);
+  }
+
   // ------------------------------------------------------------------ Gaston
 
   private renderMentor(): void {
@@ -1375,7 +1659,7 @@ export class App {
       3: { text: 'Je t\'aide pour celui-ci : ça ira vite. On goûte à la première bouteille !' },
       4: { text: 'Glisse l\'écran : au stockage, l\'ordinateur reçoit les commandes ; au bar, branche des fûts. Bonne brasse !', action: 'Compris' },
     };
-    const tip = this.modalOpen || this.openSheet?.kind === 'brew' ? undefined : tips[g.tips];
+    const tip = this.modalOpen || this.openSheet?.kind === 'brew' || !isRoom(this.view) ? undefined : tips[g.tips];
     this.mentor.classList.toggle('hidden', !tip);
     if (!tip) return;
     const key = `${g.tips}`;

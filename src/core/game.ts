@@ -104,6 +104,20 @@ export interface OfflineReport {
 
 type StationState = { level: number };
 
+/** D'où vient l'argent : le bar, les commandes ou le grossiste. */
+export type SaleSource = 'bar' | 'orders' | 'wholesale';
+export const SALE_SOURCES: readonly SaleSource[] = ['bar', 'orders', 'wholesale'];
+/** Une minute de jeu de ventes, par source (pour le tableau de bord). */
+export interface SalesMinute {
+  /** Minute de jeu (floor(time / 60)). */
+  m: number;
+  bar: number;
+  orders: number;
+  wholesale: number;
+}
+/** Minutes de ventes gardées en mémoire. */
+export const SALES_HISTORY_MIN = 60;
+
 /**
  * État complet d'une partie : une brasserie verticale de 7 appareils, des lots qui la traversent,
  * une gamme de bières, un bar qui les sert et des clients qui les commandent.
@@ -165,6 +179,11 @@ export class Game {
   private wholesaleClock = 0;
   totalSold = 0;
   totalRevenue = 0;
+  /** Recettes cumulées des commandes et du grossiste (celles du bar : barRevenue). */
+  ordersRevenue = 0;
+  wholesaleRevenue = 0;
+  /** Ventes minute par minute de la dernière heure de jeu. */
+  salesHistory: SalesMinute[] = [];
   batchesDone = 0;
   nextId = 1;
   /** Avancement de l'accompagnement de Gaston. */
@@ -712,6 +731,8 @@ export class Game {
     }
     this.totalSold += units;
     this.totalRevenue += o.reward;
+    this.ordersRevenue += o.reward;
+    this.recordSale('orders', o.reward);
     this.money += o.reward;
     this.ordersDone++;
     this.orders = this.orders.filter((x) => x !== o);
@@ -745,6 +766,8 @@ export class Game {
     this.totalSold += n;
     this.totalRevenue += amount;
     this.wholesaleSold += n;
+    this.wholesaleRevenue += amount;
+    this.recordSale('wholesale', amount);
     this.money += amount;
     this.events.emit({ type: 'sale', amount });
     return { ok: true, amount };
@@ -916,7 +939,37 @@ export class Game {
       earned += price;
       this.barDemand--;
     }
-    if (earned > 0) this.events.emit({ type: 'sale', amount: earned });
+    if (earned > 0) {
+      this.recordSale('bar', earned);
+      this.events.emit({ type: 'sale', amount: earned });
+    }
+  }
+
+  /** Range une vente dans la minute de jeu en cours ; on ne garde que la dernière heure. */
+  private recordSale(source: SaleSource, amount: number): void {
+    const m = Math.floor(this.time / 60);
+    let last = this.salesHistory[this.salesHistory.length - 1];
+    if (!last || last.m !== m) {
+      last = { m, bar: 0, orders: 0, wholesale: 0 };
+      this.salesHistory.push(last);
+      const keep = m - SALES_HISTORY_MIN + 1;
+      while (this.salesHistory.length && this.salesHistory[0]!.m < keep) this.salesHistory.shift();
+    }
+    last[source] += amount;
+  }
+
+  /** Ventes des n dernières minutes de jeu (la minute en cours comprise), une case par minute, les plus anciennes d'abord. */
+  salesMinutes(n = SALES_HISTORY_MIN): SalesMinute[] {
+    const now = Math.floor(this.time / 60);
+    const byMin = new Map(this.salesHistory.map((s) => [s.m, s]));
+    const out: SalesMinute[] = [];
+    for (let m = now - n + 1; m <= now; m++) out.push(byMin.get(m) ?? { m, bar: 0, orders: 0, wholesale: 0 });
+    return out;
+  }
+
+  /** Recettes de la dernière heure de jeu. */
+  get revenueLastHour(): number {
+    return this.salesMinutes().reduce((s, x) => s + x.bar + x.orders + x.wholesale, 0);
   }
 
   /** Les tendances passent ; de nouvelles les remplacent (jamais deux fois la même en même temps). */
@@ -984,7 +1037,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1030,6 +1083,9 @@ export class Game {
     g.wholesaleSold ??= 0;
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
+    g.ordersRevenue ??= 0;
+    g.wholesaleRevenue ??= 0;
+    g.salesHistory ??= [];
     delete (g as unknown as { decor?: unknown }).decor; // la décoration reviendra plus tard
     g.tanks ??= {};
     g.partyUntil ??= 0;

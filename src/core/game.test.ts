@@ -260,6 +260,27 @@ describe('jeu', () => {
     expect(beer.stock).toBe(60);
   });
 
+  it('le tableau de bord garde les ventes minute par minute, par source, sur la dernière heure', () => {
+    const g = withBeer(0);
+    g.autoWholesale = false;
+    const beer = g.beers[0]!;
+    beer.stock = 50;
+    const start = g.wholesaleRevenue;
+    const r = g.sellWholesale(beer.id, 10);
+    expect(g.wholesaleRevenue - start).toBeCloseTo(r.amount!);
+    const now = g.salesMinutes();
+    expect(now).toHaveLength(60);
+    expect(now[59]!.wholesale).toBeCloseTo(r.amount!);
+    // une heure plus tard, la vente est sortie de la fenêtre (mais reste dans les totaux)
+    g.time += 3600;
+    expect(g.revenueLastHour).toBe(0);
+    g.sellWholesale(beer.id, 5);
+    expect(g.salesHistory.every((m) => m.m > Math.floor(g.time / 60) - 60)).toBe(true);
+    const back = Game.fromJSON(JSON.parse(JSON.stringify(g)));
+    expect(back.wholesaleRevenue).toBeCloseTo(g.wholesaleRevenue);
+    expect(back.salesMinutes()[59]!.wholesale).toBeGreaterThan(0);
+  });
+
   it('une fête : 50 fois plus de clients pendant 30 min, les fûts vides sont rebranchés avec ceux du stockage', () => {
     const g = withBeer(1e4);
     const beer = g.beers[0]!;
