@@ -54,8 +54,8 @@ function tendBar() {
     if (b) g.swapKeg(i, b.id);
   });
   if (!g.beers.length) return;
-  const kegs = g.beers.reduce((s, b) => s + b.kegs.length + g.pendingKegs(b.id), 0) + g.plan.filter((p) => p.format === 'keg').length;
-  if (kegs < g.taps.length * 4 && g.plan.length < 2) g.planBrew(g.beers[g.batchesDone % g.beers.length]!.id, 'keg');
+  const kegs = g.beers.reduce((s, b) => s + b.kegs.length + g.pendingKegs(b.id), 0) + g.plan.filter((p) => p.format === 'keg').reduce((n, p) => n + p.count, 0);
+  if (kegs < g.taps.length * 4 && g.planned < 2) g.planBrew(g.beers[g.batchesDone % g.beers.length]!.id, 'keg');
   // une fête quand on a prévu assez de fûts
   const full = g.beers.reduce((s, b) => s + b.kegs.length, 0);
   if (full >= g.taps.length * 3 && g.money >= g.partyCost * 2 && g.startParty().ok) buy('Fête', g.partyCost);

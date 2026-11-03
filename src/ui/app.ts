@@ -1,6 +1,6 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { MAX_PLAN, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Game, type Order, type SaleSource } from '../core/game';
+import { MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD, BAR, kegGlasses, kegLiters, PARTY } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
@@ -8,8 +8,8 @@ import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type St
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
-import { BOTTLE_SCALE, drawShelfBottle, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
-import { BarRoom, StorageRoom } from '../render/rooms';
+import { BOTTLE_SCALE, drawCrate, drawShelfBottle, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
+import { BarRoom, drawKeg, StorageRoom } from '../render/rooms';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
@@ -121,7 +121,7 @@ export class App {
   private view: View = 'workshop';
   private navTabs = new Map<View, { btn: HTMLButtonElement; badge: HTMLElement }>();
   /** Pages hors des pièces : le tableau de bord et le magasin. */
-  private pages: Record<PageId, HTMLElement> = { dashboard: h('section', 'page hidden'), shop: h('section', 'page hidden') };
+  private pages: Record<PageId, HTMLElement> = { dashboard: h('section', 'room page'), shop: h('section', 'room page') };
   private dashAt = -1;
   /** Minute survolée dans le graphique des ventes (index dans les 60 dernières). */
   private dashPick: number | null = null;
@@ -151,6 +151,8 @@ export class App {
   private mentor = h('div', 'mentor hidden');
   private toasts = h('div', 'toasts');
   private openSheet: SheetState | null = null;
+  /** Assistant « Brasser » : étape en cours et choix faits (null : la file des brassins). */
+  private wiz: { step: 'beer' | 'format' | 'count' | 'trial'; beerId: number | null; format: Format; count: number } | null = null;
   private sheetKey = '';
   private mentorKey = '';
   private scale = 2;
@@ -219,12 +221,20 @@ export class App {
     this.roomHits.push({ el: counterEl, rect: counter.rect });
     this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
     this.barWrap.append(this.barPlaque);
-    for (const w of [this.sceneWrap, this.storageWrap, this.barWrap]) {
+    // Le défilé des écrans suit l'ordre des onglets : tableau de bord, les trois pièces, magasin.
+    const wraps: Record<RoomId, HTMLElement> = { workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap };
+    for (const t of TABS) {
+      if (!isRoom(t.id)) {
+        this.track.append(this.pages[t.id]);
+        continue;
+      }
       const pane = h('div', 'room');
-      pane.append(w);
+      pane.append(wraps[t.id]);
       this.track.append(pane);
-      this.wraps.push(w);
+      this.wraps.push(wraps[t.id]);
     }
+    this.track.style.width = `${TABS.length * 100}vw`;
+    this.shopPage();
     this.stage.append(this.track);
     this.bindSwipe();
 
@@ -243,20 +253,23 @@ export class App {
     drawGaston(av);
     this.mentor.append(av, h('div', 'mentor-body'));
 
-    root.append(this.header, this.stage, this.pages.dashboard, this.pages.shop, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
+    root.append(this.header, this.stage, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }
 
   // ------------------------------------------------------------------ mise en page
 
-  /** La brasserie remplit l'espace entre le header et la barre du bas, agrandie au pixel près. */
+  /**
+   * Chaque pièce occupe toute la largeur de l'écran ; si elle est plus haute que la place disponible,
+   * on la fait défiler verticalement. Sur un écran très large (tablette, ordinateur), on limite la hauteur.
+   */
   layout(): void {
     const top = this.header.getBoundingClientRect().bottom;
     const bottom = this.dock.getBoundingClientRect().top;
-    const availW = window.innerWidth - 8;
-    const availH = Math.max(100, bottom - top - 8);
-    this.scale = Math.min(availW / SCENE_W, availH / SCENE_H);
+    const availW = window.innerWidth;
+    const availH = Math.max(100, bottom - top);
+    this.scale = Math.min(availW / SCENE_W, (availH * 1.35) / SCENE_H);
     const w = Math.floor(SCENE_W * this.scale);
     const hh = Math.floor(SCENE_H * this.scale);
     for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px` });
@@ -267,10 +280,8 @@ export class App {
     const bp = this.storageRoom.badgePoint;
     Object.assign(this.ordersBadge.style, { left: `${bp.x * s}px`, top: `${bp.y * s}px` });
     this.placeTrack();
-    for (const el of [this.stage, this.pages.dashboard, this.pages.shop]) {
-      el.style.top = `${top}px`;
-      el.style.bottom = `${window.innerHeight - bottom}px`;
-    }
+    this.stage.style.top = `${top}px`;
+    this.stage.style.bottom = `${window.innerHeight - bottom}px`;
     this.root.style.setProperty('--bottom-h', `${window.innerHeight - bottom}px`);
     this.root.style.setProperty('--top-h', `${top}px`);
     this.laidOut = `${top}|${bottom}|${window.innerWidth}`;
@@ -281,12 +292,11 @@ export class App {
 
   frame(t: number): void {
     const g = this.game();
-    if (!isRoom(this.view)) return;
     // On ne dessine que la pièce affichée (et ses voisines pendant un glissement).
     const all = !!this.swipe?.on || performance.now() < this.roomsDrawUntil;
-    if (all || this.room === 'storage') this.storageRoom.draw(g, t);
-    if (all || this.room === 'bar') this.barRoom.draw(g, t);
-    if (!all && this.room !== 'workshop') return;
+    if (all || this.view === 'storage') this.storageRoom.draw(g, t);
+    if (all || this.view === 'bar') this.barRoom.draw(g, t);
+    if (!all && this.view !== 'workshop') return;
     this.scene.draw(g, t);
     // étiquettes des appareils
     for (const id of STATION_ORDER) {
@@ -327,7 +337,7 @@ export class App {
     this.moneyEl.textContent = moneyInt(g.money);
     this.plaque.textContent = `★ ${g.breweryLevel} · ${g.breweryName}`;
     const can = g.canBrew();
-    const sub = g.plan.length ? `${g.plan.length} programmé${g.plan.length > 1 ? 's' : ''}` : g.autoBrew ? '⟳ En continu' : can.ok ? (g.broke ? 'Offert par Gaston' : moneyInt(g.brewCost())) : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants';
+    const sub = g.planned ? `${g.planned} programmé${g.planned > 1 ? 's' : ''}` : g.autoBrew ? '⟳ En continu' : g.beers.length ? 'Programmer' : can.ok ? (g.broke ? 'Offert par Gaston' : moneyInt(g.brewCost())) : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants';
     this.brewBtn.replaceChildren(h('span', 'brew-title', 'Brasser'), h('span', 'brew-sub', sub));
     this.brewBtn.classList.toggle('ready', can.ok && !g.autoBrew);
     const trial = g.tastable;
@@ -389,6 +399,7 @@ export class App {
     this.openSheet = same ? null : s;
     this.scene.selected = this.openSheet?.kind === 'station' ? this.openSheet.id : null;
     this.sheetKey = '';
+    this.wiz = null;
     if (this.openSheet?.kind === 'station' && this.game().tips === 1) this.game().tips = 2;
     this.renderSheet();
   }
@@ -407,7 +418,7 @@ export class App {
     if (!s) return;
     const key = JSON.stringify([
       s, g.level(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer, g.autoBrew,
-      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.format, g.beers.map((b) => b.kegs.length)] : 0,
+      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.planCap, this.wiz, g.selectedBeer, g.beers.map((b) => b.kegs.length), this.planStatus(g)] : 0,
       s.kind === 'storage' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
     ]);
     if (key === this.sheetKey) return this.refreshLive();
@@ -524,34 +535,220 @@ export class App {
     body.append(up);
   }
 
-  // --- Lancer un brassin
+  // --- Brasser : la file des brassins programmés, et un assistant en 3 étapes pour en ajouter
+
   private brewSheet(g: Game): void {
-    const body = this.frameSheet('Brasser');
-    const beer = g.beers.find((b) => b.id === g.selectedBeer);
-    const card = h('div', 'card');
-    const fmt = g.brewFormat;
-    const kl = kegLiters(g.batchLiters);
-    const nk = Math.floor(g.batchLiters / kl);
-    const units = fmt === 'keg' ? `${nk} fût${nk > 1 ? 's' : ''} de ${kegGlasses(kl)} verres` : `${Math.floor(g.batchLiters / 0.33)} btl`;
-    card.append(
-      h('div', 'beer-name', beer ? beer.name : 'Nouvel essai'),
-      h('div', 'stats-line', `${units} · ${moneyInt(g.brewCost(g.recipe, g.batchLiters, fmt))}`),
-    );
-    if (beer) {
-      // bouteilles pour le stock et les commandes, fûts pour le bar
-      const chips = h('div', 'chips');
-      for (const [f, name] of [['bottle', 'Bouteilles'], ['keg', 'Fûts']] as const) {
-        chips.append(this.btn(`chip${fmt === f ? ' active' : ''}`, name, () => {
-          g.format = f;
-          this.sheetKey = '';
-        }));
-      }
-      card.append(chips);
+    // pas encore de bière dans la gamme : on commence par un essai
+    if (!g.beers.length) this.wiz = { step: 'trial', beerId: null, format: 'bottle', count: 1 };
+    const w = this.wiz;
+    if (!w) return this.queueView(g);
+    const beer = w.beerId != null ? g.beer(w.beerId) : undefined;
+    if (w.step !== 'trial' && w.step !== 'beer' && !beer) {
+      this.wiz = null;
+      return this.queueView(g);
     }
+    const body = this.frameSheet(w.step === 'trial' ? 'Nouvel essai' : 'Programmer des brassins');
+    if (w.step !== 'trial') body.append(this.wizSteps(w.step));
+    else if (g.beers.length) body.append(this.btn('btn small wiz-back', '‹ Retour', () => this.wizGo('beer')));
+    if (w.step === 'trial') this.trialStep(g, body);
+    if (w.step === 'beer') this.beerStep(g, body);
+    if (w.step === 'format' && beer) this.formatStep(g, body, beer);
+    if (w.step === 'count' && beer) this.countStep(g, body, beer, w.format);
+  }
+
+  private refreshSheet(): void {
+    this.sheetKey = '';
+    this.renderSheet();
+  }
+
+  private wizGo(step: NonNullable<App['wiz']>['step'] | null, patch: Partial<NonNullable<App['wiz']>> = {}): void {
+    this.wiz = step == null ? null : { ...(this.wiz ?? { beerId: null, format: 'bottle', count: 1 }), ...patch, step };
+    this.sheetKey = '';
+    this.renderSheet();
+    this.sheet.querySelector('.sheet-body')?.scrollTo(0, 0);
+  }
+
+  /** Fil d'Ariane de l'assistant : 1 Bière › 2 Format › 3 Nombre (on peut revenir en arrière). */
+  private wizSteps(step: 'beer' | 'format' | 'count'): HTMLElement {
+    const row = h('div', 'wiz-steps');
+    const order = ['beer', 'format', 'count'] as const;
+    const at = order.indexOf(step);
+    row.append(this.btn('btn small wiz-back', '‹', () => this.wizGo(at === 0 ? null : order[at - 1]!)));
+    order.forEach((id, i) => {
+      const el = this.btn(`wiz-step${i === at ? ' active' : i < at ? ' done' : ''}`, `${i + 1}. ${['Bière', 'Format', 'Nombre'][i]}`, () => i < at && this.wizGo(id));
+      el.disabled = i > at;
+      row.append(el);
+    });
+    return row;
+  }
+
+  /** Ce qui retient le prochain brassin programmé (rien : il part). */
+  private planStatus(g: Game): string {
+    const head = g.plan[0];
+    const b = head && g.beer(head.beerId);
+    if (!head || !b) return '';
+    const cost = g.brewCost(b.recipe, g.batchLiters, head.format);
+    if (g.batchAt('mill')) return 'Part dès que le moulin se libère';
+    if (g.money < cost && !g.broke) return `⏸ Il manque ${moneyInt(cost - g.money)}`;
+    if (!g.roomFor(head.format)) return '⏸ Stockage plein';
+    return 'Part maintenant';
+  }
+
+  /** La file : les groupes de brassins, dans l'ordre où ils partiront. */
+  private queueView(g: Game): void {
+    const body = this.frameSheet('Brasser');
+    if (g.tastable) body.append(this.btn('btn primary', '🍺 Un essai attend : goûter', () => this.openTasting()));
+    body.append(this.btn('btn primary big', '+ Programmer des brassins', () => this.wizGo('beer', { beerId: null, format: 'bottle', count: 1 })));
+    // la file et sa capacité
+    const head = h('div', 'beer-head');
+    head.append(h('span', 'section-title', 'File des brassins'), h('span', 'stats-line', `${g.planned}/${g.planCap}`));
+    const bar = h('div', 'progress');
+    const fill = h('div', 'progress-fill');
+    fill.style.width = `${Math.min(100, (g.planned / g.planCap) * 100)}%`;
+    bar.append(fill);
+    body.append(head, bar);
+    if (!g.plan.length) body.append(h('p', 'hint', g.autoBrew ? 'File vide : le brassage continu relance la bière la moins en stock.' : 'Aucun brassin programmé.'));
+    const list = h('div', 'plan-list');
+    g.plan.forEach((p, i) => {
+      const b = g.beer(p.beerId);
+      if (!b) return;
+      const card = h('div', `card plan-card${i === 0 ? ' banner' : ''}`);
+      const top = h('div', 'plan-top');
+      const thumb = h('canvas', 'label-thumb');
+      drawLabel(thumb, b.label, b.name);
+      const name = h('div', 'plan-name');
+      name.append(h('span', 'stock-name', b.name), h('span', 'stats-line', `${p.format === 'keg' ? '🛢 Fûts' : '🍾 Bouteilles'} · ${this.batchOutput(g, p.format, p.count)}`));
+      top.append(h('span', 'plan-rank', `${i + 1}.`), thumb, name, this.btn('icon-btn small', '✕', () => {
+        g.unplan(i);
+        this.refreshSheet();
+      }));
+      const ctl = h('div', 'plan-ctl');
+      const up = this.btn('btn small', '▲', () => {
+        g.movePlan(i, -1);
+        this.refreshSheet();
+      });
+      up.disabled = i === 0;
+      up.setAttribute('aria-label', 'Avancer dans la file');
+      const down = this.btn('btn small', '▼', () => {
+        g.movePlan(i, 1);
+        this.refreshSheet();
+      });
+      down.disabled = i === g.plan.length - 1;
+      down.setAttribute('aria-label', 'Reculer dans la file');
+      ctl.append(this.stepper(p.count, 1, p.count + g.planRoom, (n) => {
+        g.setPlanCount(i, n);
+        this.refreshSheet();
+      }), up, down);
+      card.append(top, ctl);
+      if (i === 0) card.append(h('p', this.planStatus(g).startsWith('⏸') ? 'note bad' : 'note', this.planStatus(g)));
+      list.append(card);
+    });
+    body.append(list);
+    const auto = h('label', 'toggle');
+    const box = h('input');
+    box.type = 'checkbox';
+    box.checked = g.autoBrew;
+    box.onchange = () => {
+      g.autoBrew = box.checked;
+      this.refreshSheet();
+    };
+    auto.append(box, h('span', '', 'Brassage continu quand la file est vide'));
+    body.append(auto);
+    if (g.autoBrew && !g.plan.length && !g.roomForBatch) body.append(h('p', 'note bad', '⏸ Stockage plein'));
+  }
+
+  /** Étape 1 : quelle bière ? */
+  private beerStep(g: Game, body: HTMLElement): void {
+    body.append(h('div', 'wiz-q', 'Quelle bière brasser\u00a0?'));
+    const grid = h('div', 'pick-grid');
+    for (const b of g.beers) {
+      const card = h('button', 'card pick-card');
+      const thumb = h('canvas', 'label-thumb pick-label');
+      drawLabel(thumb, b.label, b.name);
+      card.append(thumb, h('span', 'beer-name', b.name), h('span', 'stats-line', `${b.stock} btl · ${b.kegs.length} fût${b.kegs.length > 1 ? 's' : ''}`), h('span', 'pop-stars', starText(b.pop)));
+      card.onclick = () => this.wizGo('format', { beerId: b.id });
+      grid.append(card);
+    }
+    // un essai : les réglages actuels des machines, s'ils ne sont pas ceux d'une bière de la gamme
+    const trial = h('button', 'card pick-card trial');
+    trial.append(h('span', 'pick-icon', '🧪'), h('span', 'beer-name', 'Nouvel essai'), h('span', 'stats-line', g.selectedBeer == null ? 'Réglages actuels des machines' : 'Change un réglage d\'une machine d\'abord'));
+    trial.disabled = g.selectedBeer != null;
+    trial.onclick = () => this.wizGo('trial');
+    grid.append(trial);
+    body.append(grid);
+  }
+
+  /** Étape 2 : bouteilles ou fûts ? */
+  private formatStep(g: Game, body: HTMLElement, beer: Beer): void {
+    body.append(h('div', 'wiz-q', `${beer.name} : en bouteilles ou en fûts\u00a0?`));
+    const grid = h('div', 'pick-grid');
+    for (const [f, name, use] of [['bottle', 'Bouteilles', 'Pour le stock et les commandes'], ['keg', 'Fûts', 'Pour les tireuses du bar']] as const) {
+      const card = h('button', `card pick-card format${this.wiz?.format === f ? ' selected' : ''}`);
+      card.append(this.beerVisual(beer, f), h('span', 'beer-name', name), h('span', 'stats-line strong', this.batchOutput(g, f, 1)), h('span', 'stats-line', use), h('span', 'stats-line', `${moneyInt(g.brewCost(beer.recipe, g.batchLiters, f))} / brassin`));
+      card.onclick = () => this.wizGo('count', { format: f, count: Math.min(this.wiz?.count ?? 1, Math.max(1, g.planRoom)) });
+      grid.append(card);
+    }
+    body.append(grid);
+  }
+
+  /** Étape 3 : combien de brassins ? Le visuel montre chaque brassin (une caisse ou un fût). */
+  private countStep(g: Game, body: HTMLElement, beer: Beer, f: Format): void {
+    const w = this.wiz!;
+    const room = g.planRoom;
+    const n = Math.max(1, Math.min(w.count, room || 1));
+    body.append(h('div', 'wiz-q', 'Combien de brassins\u00a0?'));
+    const visual = h('div', 'batch-visual');
+    const side = h('div', 'batch-side');
+    side.append(this.beerVisual(beer, f), h('span', 'stats-line', `${beer.name}`), h('span', 'stats-line', f === 'keg' ? 'Fûts' : 'Bouteilles'));
+    visual.append(side, this.batchGrid(beer, f, n));
+    body.append(visual);
+    const row = h('div', 'count-row');
+    row.append(this.stepper(n, 1, Math.max(1, room), (v) => this.wizGo('count', { count: v })));
+    const chips = h('div', 'chips');
+    for (const v of [1, 5, 10, 25, 50].filter((x) => x < room)) chips.append(this.btn(`chip${v === n ? ' active' : ''}`, String(v), () => this.wizGo('count', { count: v })));
+    if (room > 1) chips.append(this.btn(`chip${n === room ? ' active' : ''}`, `Max ${room}`, () => this.wizGo('count', { count: room })));
+    row.append(chips);
+    body.append(row);
+    // bilan
+    const unit = g.brewCost(beer.recipe, g.batchLiters, f);
+    const space = g.batchSpace(f);
+    const free = Math.max(0, g.storageCap - g.stored);
+    const fits = space > 0 ? Math.floor(free / space) : n;
+    const sum = h('div', 'card');
+    const line = (k: string, v: string, cls = '') => {
+      const r = h('div', `live-row ${cls}`);
+      r.append(h('span', '', k), h('span', 'live-value', v));
+      sum.append(r);
+    };
+    line('Production', this.batchOutput(g, f, n));
+    line('Ingrédients', `${moneyInt(unit * n)} (${moneyInt(unit)} / brassin)`);
+    line('Place libre au stockage', fits >= n ? `${n} / ${n} brassins` : `${fits} / ${n} brassins`, fits >= n ? '' : 'bad');
+    sum.append(h('p', 'hint', 'Payés au lancement de chaque brassin. Un brassin attend l\'argent et la place dont il a besoin.'));
+    body.append(sum);
+    const go = this.btn('btn primary big', room ? `Programmer ${n} brassin${n > 1 ? 's' : ''}` : 'File pleine', () => {
+      const r = g.planBrew(beer.id, f, n);
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      if (g.tips === 2 || g.tips === 1) g.tips = 3;
+      this.toast(`${n} brassin${n > 1 ? 's' : ''} programmé${n > 1 ? 's' : ''}`, 'good');
+      this.wizGo(null);
+    });
+    go.disabled = !room;
+    body.append(go);
+    if (!room) body.append(h('p', 'note bad', `La file est pleine (${g.planCap} brassins). Elle s'allonge avec le niveau de la brasserie.`));
+  }
+
+  /** Un essai : les réglages actuels des machines ; on goûtera la première bouteille. */
+  private trialStep(g: Game, body: HTMLElement): void {
+    const card = h('div', 'card');
+    const cost = g.brewCost(g.recipe, g.batchLiters, 'bottle');
+    card.append(
+      h('p', 'hint', 'Un brassin avec les réglages actuels des machines. On goûte la première bouteille, puis on décide de la garder dans la gamme.'),
+      h('div', 'stats-line strong', `${this.batchOutput(g, 'bottle', 1)} · ${g.broke ? 'offert par Gaston' : moneyInt(cost)}`),
+    );
     body.append(card);
     const can = g.canBrew();
     const busy = !!g.batchAt('mill');
-    const label = g.queued ? 'En attente du moulin…' : can.ok ? (g.broke ? 'Brasser (offert par Gaston)' : 'Brasser') : busy ? 'Brasser au prochain tour' : can.reason!;
+    const label = g.queued ? 'En attente du moulin…' : can.ok ? (g.broke ? 'Brasser (offert par Gaston)' : 'Brasser l\'essai') : busy ? 'Brasser au prochain tour' : can.reason!;
     const go = this.btn('btn primary big', label, () => {
       const r = busy ? g.queueBrew() : g.brew();
       if (!r.ok) return this.toast(r.reason!, 'bad');
@@ -559,57 +756,77 @@ export class App {
       this.toast(busy ? 'En file d\'attente' : 'Brassin lancé !', 'good');
       this.close();
     });
-    go.disabled = g.queued || (!can.ok && !(busy && g.money >= g.brewCost(g.recipe, g.batchLiters, fmt)));
+    go.disabled = g.queued || (!can.ok && !(busy && g.money >= cost));
     body.append(go);
-    if (beer) {
-      const plan = this.btn('btn', '+ Programmer', () => {
-        const r = g.planBrew(beer.id, fmt);
-        if (!r.ok) return this.toast(r.reason!, 'bad');
-        this.toast('Brassin programmé', 'good');
-        this.sheetKey = '';
-      });
-      plan.disabled = g.plan.length >= MAX_PLAN;
-      body.append(plan);
+  }
+
+  /** Ce que donnent n brassins : bouteilles, ou fûts de x verres. */
+  private batchOutput(g: Game, f: Format, n: number): string {
+    if (f === 'bottle') return `${(Math.floor(g.batchLiters / 0.33) * n).toLocaleString('fr-FR')} btl`;
+    const kl = kegLiters(g.batchLiters);
+    const k = Math.floor(g.batchLiters / kl) * n;
+    return `${k.toLocaleString('fr-FR')} fût${k > 1 ? 's' : ''} de ${kegGlasses(kl)} verres`;
+  }
+
+  /** −  n  + */
+  private stepper(value: number, min: number, max: number, onChange: (v: number) => void): HTMLElement {
+    const el = h('div', 'stepper');
+    const minus = this.btn('knob-btn', '−', () => onChange(Math.max(min, value - 1)));
+    const plus = this.btn('knob-btn', '+', () => onChange(Math.min(max, value + 1)));
+    minus.disabled = value <= min;
+    plus.disabled = value >= max;
+    minus.setAttribute('aria-label', 'Moins');
+    plus.setAttribute('aria-label', 'Plus');
+    el.append(minus, h('span', 'stepper-value', `×${value}`), plus);
+    return el;
+  }
+
+  /** La bière en grand : une bouteille étiquetée, ou un fût cerclé à sa couleur. */
+  private beerVisual(beer: Beer, f: Format): HTMLElement {
+    const box = h('div', 'beer-visual');
+    if (f === 'bottle') {
+      const bottle = h('div', 'shelf-bottle');
+      const c = h('canvas', 'shelf-glass');
+      drawShelfBottle(c, 'beer');
+      const lab = h('canvas', 'shelf-label');
+      drawLabel(lab, beer.label, beer.name);
+      Object.assign(lab.style, { left: `${LABEL_SPOT.x * BOTTLE_SCALE}px`, top: `${LABEL_SPOT.y * BOTTLE_SCALE}px` });
+      bottle.append(c, lab);
+      box.append(bottle);
+    } else {
+      const c = h('canvas', 'keg-big');
+      c.width = 24;
+      c.height = 24;
+      drawKeg(c.getContext('2d')!, 0, 0, 24, beer.label);
+      box.append(c);
     }
-    if (g.plan.length) {
-      body.append(h('div', 'section-title', `Programmés · ${g.plan.length}/${MAX_PLAN}`));
-      const list = h('div', 'stock-list');
-      g.plan.forEach((p, i) => {
-        const b = g.beer(p.beerId);
-        if (!b) return;
-        const line = h('div', 'stock-line');
-        const thumb = h('canvas', 'label-thumb');
-        drawLabel(thumb, b.label, b.name);
-        line.append(h('span', 'plan-rank', `${i + 1}.`), thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', p.format === 'keg' ? 'Fûts' : 'Btl'), this.btn('icon-btn small', '✕', () => {
-          g.unplan(i);
-          this.sheetKey = '';
-        }));
-        list.append(line);
-      });
-      body.append(list);
+    return box;
+  }
+
+  /** Les brassins en petit : une caisse (ou un fût) par brassin. */
+  private batchGrid(beer: Beer, f: Format, n: number): HTMLElement {
+    const box = h('div', 'batch-grid');
+    const shown = Math.min(n, 40);
+    const per = shown <= 16 ? 4 : 8;
+    const cols = Math.min(shown, per);
+    const rows = Math.ceil(shown / per);
+    const S = 14;
+    const zoom = shown <= 16 ? 3 : 2; // peu de brassins : on les montre plus gros
+    const c = h('canvas', 'batch-canvas');
+    c.width = cols * S;
+    c.height = rows * S;
+    c.style.width = `${cols * S * zoom}px`;
+    c.style.height = `${rows * S * zoom}px`;
+    const ctx = c.getContext('2d')!;
+    for (let i = 0; i < shown; i++) {
+      const x = (i % per) * S + 1;
+      const y = Math.floor(i / per) * S + 1;
+      if (f === 'keg') drawKeg(ctx, x, y, S - 2, beer.label);
+      else drawCrate(ctx, x, y, S - 2, { beer, count: 12 });
     }
-    if (g.beers.length) {
-      const auto = h('label', 'toggle');
-      const box = h('input');
-      box.type = 'checkbox';
-      box.checked = g.autoBrew;
-      box.onchange = () => {
-        g.autoBrew = box.checked;
-        this.sheetKey = '';
-      };
-      auto.append(box, h('span', '', 'Brassage continu'));
-      body.append(auto);
-      if (g.autoBrew && !g.roomForBatch) body.append(h('p', 'note bad', '⏸ Stockage plein'));
-    }
-    if (g.beers.length) {
-      body.append(h('div', 'section-title', 'Ma gamme'));
-      const list = h('div', 'chips');
-      for (const b of g.beers) list.append(this.btn(`chip${b.id === g.selectedBeer ? ' active' : ''}`, b.name, () => {
-        g.loadBeer(b.id);
-        this.sheetKey = '';
-      }));
-      body.append(list);
-    }
+    box.append(c);
+    if (n > shown) box.append(h('span', 'stats-line', `+ ${n - shown}`));
+    return box;
   }
 
   // --- Ma gamme : une étagère de grandes bouteilles, et une silhouette « + » pour en créer une nouvelle
@@ -1077,43 +1294,25 @@ export class App {
 
   /** Va dans une pièce (onglet ou glissement). */
   goRoom(id: RoomId): void {
-    if (id === this.room && this.view === id) return;
-    const fromPage = !isRoom(this.view);
-    this.room = id;
-    this.view = id;
-    this.showView();
-    if (fromPage) this.stage.classList.add('dragging'); // on revient d'une page : pas d'animation de glissement
+    this.goView(id);
+  }
+
+  /** Un écran : une pièce ou une page (onglet de la barre de navigation, ou glissement). */
+  goView(v: View): void {
+    if (v === this.view) return;
+    this.view = v;
+    if (isRoom(v)) this.room = v;
     this.close();
     this.storageRoom.selected = null;
     this.barRoom.selected = null;
-    this.roomsDrawUntil = performance.now() + 400;
+    if (v === 'dashboard') {
+      this.dashAt = -1;
+      this.dashPick = null;
+    }
+    this.roomsDrawUntil = performance.now() + 600;
     this.placeTrack();
-    if (fromPage) void this.stage.offsetWidth; // applique la position sans transition
-    this.stage.classList.remove('dragging');
     this.setBottom();
     this.update();
-  }
-
-  /** Un onglet de la barre de navigation : une pièce, ou une page. */
-  goView(v: View): void {
-    if (isRoom(v)) return this.goRoom(v);
-    if (v === this.view) return;
-    this.view = v;
-    this.close();
-    this.closeModal();
-    this.dashAt = -1;
-    this.dashPick = null;
-    this.pages[v].scrollTop = 0;
-    this.showView();
-    this.setBottom();
-    this.update();
-  }
-
-  /** Affiche la scène des pièces ou la page choisie. */
-  private showView(): void {
-    const room = isRoom(this.view);
-    this.stage.classList.toggle('hidden', !room);
-    for (const [id, el] of Object.entries(this.pages)) el.classList.toggle('hidden', id !== this.view);
   }
 
   /** Une zone tactile par fût de la cave : toucher un fût permet de le changer. */
@@ -1138,17 +1337,17 @@ export class App {
     for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
   }
 
-  private get roomIndex(): number {
-    return ROOMS.findIndex((r) => r.id === this.room);
+  private get viewIndex(): number {
+    return TABS.findIndex((t) => t.id === this.view);
   }
 
   private placeTrack(dx = 0): void {
-    this.track.style.transform = `translateX(calc(${-this.roomIndex * 100}vw + ${dx}px))`;
+    this.track.style.transform = `translateX(calc(${-this.viewIndex * 100}vw + ${dx}px))`;
   }
 
   /** La barre du bas propose les actions de la pièce affichée. */
   private setBottom(): void {
-    const btns = !isRoom(this.view) ? [] : this.room === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.room === 'storage' ? [this.stockBtn, this.ordersBtn] : [this.barUpBtn, this.partyBtn, this.menuBtn];
+    const btns = !isRoom(this.view) ? [] : this.view === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.room === 'storage' ? [this.stockBtn, this.ordersBtn] : [this.barUpBtn, this.partyBtn, this.menuBtn];
     this.bottom.replaceChildren(...btns);
     this.bottom.classList.toggle('three', btns.length === 3);
     this.bottom.classList.toggle('hidden', !btns.length);
@@ -1159,6 +1358,7 @@ export class App {
     const st = this.stage;
     st.addEventListener('pointerdown', (e) => {
       if (this.swipe) return;
+      if ((e.target as HTMLElement).closest('.sales-canvas')) return; // le graphique se parcourt au doigt
       this.swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false, t: performance.now() };
     });
     st.addEventListener('pointermove', (e) => {
@@ -1172,9 +1372,9 @@ export class App {
         st.classList.add('dragging');
         try { st.setPointerCapture(e.pointerId); } catch { /* le doigt est déjà parti */ }
       }
-      // résistance aux bords (pas de pièce avant l'atelier ni après le bar)
-      const i = this.roomIndex;
-      sw.dx = (i === 0 && dx > 0) || (i === ROOMS.length - 1 && dx < 0) ? dx / 3 : dx;
+      // résistance aux bords (rien avant le tableau de bord ni après le magasin)
+      const i = this.viewIndex;
+      sw.dx = (i === 0 && dx > 0) || (i === TABS.length - 1 && dx < 0) ? dx / 3 : dx;
       this.placeTrack(sw.dx);
     });
     const end = (e: PointerEvent) => {
@@ -1187,10 +1387,10 @@ export class App {
       st.classList.remove('dragging');
       const fast = Math.abs(sw.dx) / Math.max(1, performance.now() - sw.t) > 0.5;
       const far = Math.abs(sw.dx) > window.innerWidth * 0.22;
-      const i = this.roomIndex + (fast || far ? (sw.dx < 0 ? 1 : -1) : 0);
-      const target = ROOMS[Math.max(0, Math.min(ROOMS.length - 1, i))]!.id;
-      this.roomsDrawUntil = performance.now() + 400;
-      if (target !== this.room) this.goRoom(target);
+      const i = this.viewIndex + (fast || far ? (sw.dx < 0 ? 1 : -1) : 0);
+      const target = TABS[Math.max(0, Math.min(TABS.length - 1, i))]!.id;
+      this.roomsDrawUntil = performance.now() + 600;
+      if (target !== this.view) this.goView(target);
       else this.placeTrack();
     };
     st.addEventListener('pointerup', end);
@@ -1442,13 +1642,14 @@ export class App {
   // ------------------------------------------------------------------ pages
 
   private renderPage(): void {
-    if (this.view === 'dashboard') {
+    // le tableau de bord vit quand il est affiché, et juste à côté (pour qu'il soit à jour quand on y glisse)
+    if (this.view === 'dashboard' || this.view === 'workshop') {
       // en direct, mais une fois par seconde suffit
       const now = Math.floor(performance.now() / 1000);
       if (now === this.dashAt) return;
       this.dashAt = now;
       this.dashboardPage(this.game());
-    } else if (this.view === 'shop' && !this.pages.shop.childElementCount) this.shopPage();
+    }
   }
 
   /** Tableau de bord : un aperçu en direct des ventes et de la brasserie. */

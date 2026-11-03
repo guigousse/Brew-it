@@ -24,6 +24,8 @@ export type Format = 'bottle' | 'keg';
 export interface PlannedBrew {
   beerId: number;
   format: Format;
+  /** Nombre de brassins identiques à la suite. */
+  count: number;
 }
 
 /** Tireuse du bar et le fût qui y est branché. */
@@ -381,15 +383,59 @@ export class Game {
   }
 
   /** Programme un brassin d'une bière de la gamme, en bouteilles ou en fûts. */
-  planBrew(beerId: number, format: Format): CommandResult {
+  planBrew(beerId: number, format: Format, count = 1): CommandResult {
     if (!this.beers.some((b) => b.id === beerId)) return { ok: false, reason: 'Bière introuvable' };
-    if (this.plan.length >= MAX_PLAN) return { ok: false, reason: `${MAX_PLAN} brassins programmés au plus` };
-    this.plan.push({ beerId, format });
+    count = Math.floor(count);
+    if (count < 1) return { ok: false, reason: 'Aucun brassin' };
+    if (count > this.planRoom) return { ok: false, reason: `${this.planCap} brassins programmés au plus` };
+    // à la suite d'un groupe identique, on l'allonge
+    const last = this.plan[this.plan.length - 1];
+    if (last && last.beerId === beerId && last.format === format) last.count += count;
+    else this.plan.push({ beerId, format, count });
     return { ok: true };
   }
 
+  /** Retire un groupe de brassins programmés. */
   unplan(index: number): void {
     this.plan.splice(index, 1);
+  }
+
+  /** Change le nombre de brassins d'un groupe (0 le retire). */
+  setPlanCount(index: number, count: number): void {
+    const p = this.plan[index];
+    if (!p) return;
+    count = Math.max(0, Math.min(Math.floor(count), p.count + this.planRoom));
+    if (count === 0) this.plan.splice(index, 1);
+    else p.count = count;
+  }
+
+  /** Avance (-1) ou recule (+1) un groupe dans la file ; deux groupes identiques qui se touchent fusionnent. */
+  movePlan(index: number, dir: -1 | 1): void {
+    const j = index + dir;
+    if (!this.plan[index] || !this.plan[j]) return;
+    [this.plan[index], this.plan[j]] = [this.plan[j]!, this.plan[index]!];
+    for (let i = this.plan.length - 1; i > 0; i--) {
+      const a = this.plan[i - 1]!;
+      const b = this.plan[i]!;
+      if (a.beerId === b.beerId && a.format === b.format) {
+        a.count += b.count;
+        this.plan.splice(i, 1);
+      }
+    }
+  }
+
+  /** Brassins programmés au total. */
+  get planned(): number {
+    return this.plan.reduce((s, p) => s + p.count, 0);
+  }
+
+  /** Brassins qu'on peut programmer d'avance : la file s'allonge avec le niveau de la brasserie. */
+  get planCap(): number {
+    return PLAN_CAP[this.breweryLevel - 1] ?? PLAN_CAP[PLAN_CAP.length - 1]!;
+  }
+
+  get planRoom(): number {
+    return Math.max(0, this.planCap - this.planned);
   }
 
   private launch(recipe: Recipe, beerId: number | null, format: Format = 'bottle'): void {
@@ -796,7 +842,7 @@ export class Game {
       } else if (planned && next) {
         // brassin programmé : il attend l'argent et la place nécessaires
         if ((this.money >= this.brewCost(planned.recipe, this.batchLiters, next.format) || this.broke) && this.roomFor(next.format)) {
-          this.plan.shift();
+          if (--next.count <= 0) this.plan.shift();
           this.launch(planned.recipe, planned.id, next.format);
         }
       } else if (this.autoBrew && this.roomForBatch) {
@@ -1077,6 +1123,8 @@ export class Game {
     while (g.taps.length < g.barTaps) g.taps.push({ beerId: null, glasses: 0, capacity: 0 });
     g.trends ??= [];
     g.plan ??= [];
+    // avant les groupes, chaque brassin programmé était une ligne
+    for (const p of g.plan) p.count ??= 1;
     g.format ??= 'bottle';
     g.orders ??= [];
     g.orderTimer ??= FIRST_ORDER_S;
@@ -1098,7 +1146,11 @@ export class Game {
 }
 
 /** Brassins programmés au plus. */
-export const MAX_PLAN = 6;
+/**
+ * Brassins programmables d'avance, par niveau de la brasserie : de quoi remplir le stockage
+ * plusieurs fois (une nuit d'absence), sans faire une liste interminable.
+ */
+export const PLAN_CAP: readonly number[] = [10, 25, 50, 100, 200];
 /** Étapes lentes où l'on peut ajouter des cuves en parallèle, et leur nombre maximal. */
 export const TANK_STAGES: readonly StationId[] = ['fermenter', 'conditioning'];
 export const MAX_TANKS = 4;

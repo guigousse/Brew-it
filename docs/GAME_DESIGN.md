@@ -1,7 +1,7 @@
 # Brew It : simulation de brassage
 
 ## Concept
-La brasserie compte **trois pièces**, chacune en plein écran et en **portrait**. On passe de l'une à l'autre en **glissant le doigt** ou par la **barre de navigation en bas de l'écran** :
+La brasserie compte **trois pièces**, chacune en plein écran et en **portrait**. Chaque écran occupe toute la largeur (une pièce plus haute que l'écran défile verticalement). On passe de l'un à l'autre en **glissant le doigt**, du tableau de bord au magasin, ou par la **barre de navigation en bas de l'écran** :
 
 **Atelier ↔ Stockage ↔ Bar** : le trajet de la bière, de la cuve au verre.
 
@@ -9,6 +9,10 @@ La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Sto
 
 - **Tableau de bord** : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
 - **Magasin** : on y achètera plus tard des décorations, du mobilier, des enseignes et d'autres objets. Pour l'instant, les rayons sont annoncés « Bientôt ».
+
+**Brasser** ouvre la file des brassins programmés : des groupes « bière × format × nombre » qui partent dans l'ordre, chacun dès que le moulin est libre et qu'il y a l'argent et la place nécessaires. Le groupe en tête dit ce qui le retient. On peut changer le nombre d'un groupe, le monter ou le descendre dans la file, ou le retirer. « + Programmer des brassins » ouvre un assistant en trois étapes : 1. la bière de la gamme (ou un nouvel essai avec les réglages des machines), 2. le format (bouteilles pour le stock et les commandes, fûts pour le bar), 3. le nombre de brassins. Cette dernière étape montre une caisse ou un fût par brassin, la production, le coût et la place au stockage. Le brassage continu prend le relais quand la file est vide.
+
+La file s'allonge avec le niveau de la brasserie : **10, 25, 50, 100, puis 200 brassins**. Au niveau 1, 10 brassins remplissent à peu près le stockage. Ensuite, c'est de quoi tenir une nuit d'absence sans liste interminable.
 
 Au-dessus de chaque appareil, l'étape en cours affiche son **temps restant** (m:ss, ou h:mm:ss au-delà d'une heure). Avec plusieurs cuves, c'est celle qui finit la première qui compte.
 
@@ -124,7 +128,7 @@ Chaque appareil exécute ta recette avec sa propre précision (`src/core/brewing
 ## Brassins : bouteilles ou fûts, et programmation
 Dans « Brasser », une bière de la gamme se brasse **en bouteilles** (pour le stock et les commandes) ou **en fûts** (pour le bar). Un essai est toujours en bouteilles, puisqu'on goûte la première.
 
-- **Programmer** ajoute le brassin à une file d'attente (6 au plus). Les brassins programmés partent dans l'ordre dès que le moulin est libre, avant le brassage continu. Chacun attend d'avoir l'argent et la place au stockage.
+- **Programmer** ajoute des brassins à une file d'attente (10 à 200 selon le niveau de la brasserie, voir plus haut). Les brassins programmés partent dans l'ordre dès que le moulin est libre, avant le brassage continu. Chacun attend d'avoir l'argent et la place au stockage.
 - Le **brassage continu** prend le relais quand la file est vide. Il met en bouteilles la bière de la gamme la moins en stock.
 - Sur la ligne, les fûts se remplissent sous le bec, puis sont rangés au **stockage**.
 - **Taille des fûts**, selon le volume des brassins (donc le matériel) : 5 L (20 verres) au début, puis 10, 20, 30 et 50 L (200 verres). Un fût plein prend au stockage environ la place de son volume en bouteilles : celui de 5 L occupe à peu près une caisse.

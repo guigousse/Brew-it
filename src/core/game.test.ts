@@ -113,7 +113,29 @@ describe('jeu', () => {
     g.planBrew(g.beers[0]!.id, 'bottle');
     g.step();
     expect(g.batchAt('mill')!.format).toBe('keg');
-    expect(g.plan.length).toBe(1);
+    expect(g.plan).toEqual([{ beerId: g.beers[0]!.id, format: 'bottle', count: 1 }]);
+  });
+
+  it('la file de brassins : des groupes bière × format × nombre, limités selon le niveau de la brasserie', () => {
+    const g = withBeer(1e5);
+    runUntil(g, () => g.batches.length === 0);
+    const id = g.beers[0]!.id;
+    expect(g.planCap).toBe(10);
+    expect(g.planBrew(id, 'bottle', 3).ok).toBe(true);
+    expect(g.planBrew(id, 'bottle', 2).ok).toBe(true); // s'ajoute au même groupe
+    expect(g.planBrew(id, 'keg', 4).ok).toBe(true);
+    expect(g.plan).toEqual([{ beerId: id, format: 'bottle', count: 5 }, { beerId: id, format: 'keg', count: 4 }]);
+    expect(g.planned).toBe(9);
+    expect(g.planBrew(id, 'keg', 2).ok).toBe(false); // 11 > 10
+    g.setPlanCount(1, 99);
+    expect(g.plan[1]!.count).toBe(5); // plafonné à la place restante
+    g.movePlan(1, -1);
+    expect(g.plan[0]!.format).toBe('keg');
+    g.step();
+    expect(g.batchAt('mill')!.format).toBe('keg');
+    expect(g.plan[0]!.count).toBe(4);
+    g.setPlanCount(0, 0);
+    expect(g.plan).toEqual([{ beerId: id, format: 'bottle', count: 5 }]);
   });
 
   it('le bar sert des verres tirés du fût branché, 1 client toutes les 10 min au début ; il faut changer le fût vide', () => {

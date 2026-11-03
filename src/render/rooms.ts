@@ -423,7 +423,7 @@ export class StorageRoom extends Room {
 }
 
 /** Petit fût inox rangé au stockage, cerclé à la couleur de l'étiquette. */
-function drawKeg(g: CanvasRenderingContext2D, x: number, y: number, s: number, label: Label): void {
+export function drawKeg(g: CanvasRenderingContext2D, x: number, y: number, s: number, label: Label): void {
   const px = painter(g);
   const w = Math.max(3, Math.round(s * 0.8));
   const ox = x + Math.floor((s - w) / 2);
