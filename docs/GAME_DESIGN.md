@@ -46,7 +46,7 @@ En bas, au **premier plan**, la ligne d'embouteillage déroule le parcours de ch
    - le **bar** sert des verres tirés des **fûts** branchés dans sa cave, même appli fermée. Il fait surtout connaître la marque.
    Chaque brassin se fait **en bouteilles ou en fûts**, et on peut **programmer les prochains brassins**.
 7. **Progresser** : améliorer les machines (volume, cadence, qualité), agrandir le stockage, le bar et l'ordinateur, ouvrir de nouvelles places dans la gamme. On peut améliorer une machine même pendant un brassin.
-8. **Hors ligne** : la brasserie et le bar continuent de tourner (jusqu'à 8 h), tant que les fûts branchés ne sont pas vides. Les commandes s'accumulent sur l'ordinateur et le stock s'entasse pour les remplir. Au retour, la fenêtre « Pendant ton absence » permet de récolter les gains du bar.
+8. **Hors ligne** : la brasserie et le bar continuent de tourner (jusqu'à 8 h), tant que les fûts branchés ne sont pas vides. Les commandes s'accumulent sur l'ordinateur et le stock s'entasse pour les remplir. Au retour, pas de fenêtre qui bloque l'écran : une petite bourse « 💰 +x € » attend sous l'argent, et on la touche quand on veut. L'argent défile alors dans le compteur, et une notification résume l'absence (durée, bouteilles vendues). Les gains de plusieurs absences s'additionnent tant qu'on ne les a pas récoltés.
 
 ## Les machines et leurs réglages
 | Étape | Réglages | Niveaux 1 → 5 |

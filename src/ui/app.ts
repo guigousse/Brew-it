@@ -96,6 +96,11 @@ export class App {
   readonly scene = new Scene();
   private header = h('header', 'topbar');
   private moneyEl = h('span', 'money-value');
+  private moneyPill = h('div', 'money');
+  /** Gains de l'absence à récolter : une petite bourse sous l'argent, qu'on touche quand on veut. */
+  private harvest = h('button', 'harvest hidden');
+  /** Compteur d'argent qui défile après une récolte. */
+  private moneyAnim: { from: number; to: number; start: number } | null = null;
   private stage = h('main', 'stage');
   private sceneWrap = h('div', 'scene-wrap');
   private overlays = new Map<StationId, { btn: HTMLButtonElement; label: HTMLElement; bar: HTMLElement; text: HTMLElement }>();
@@ -165,8 +170,9 @@ export class App {
     // header
     const logo = h('div', 'logo');
     logo.append(img(stationCanvas('boil', 1), 'pix logo-icon'), h('span', 'logo-text', 'Brew It'));
-    const pill = h('div', 'money');
+    const pill = this.moneyPill;
     pill.append(h('span', 'coin'), this.moneyEl);
+    this.harvest.onclick = () => this.collectOffline();
     const opts = h('button', 'icon-btn', '⚙');
     opts.setAttribute('aria-label', 'Options');
     opts.onclick = () => this.openOptions();
@@ -253,7 +259,7 @@ export class App {
     drawGaston(av);
     this.mentor.append(av, h('div', 'mentor-body'));
 
-    root.append(this.header, this.stage, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
+    root.append(this.header, this.stage, this.harvest, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }
@@ -292,6 +298,16 @@ export class App {
 
   frame(t: number): void {
     const g = this.game();
+    if (this.moneyAnim) {
+      const a = this.moneyAnim;
+      const k = Math.min(1, (performance.now() - a.start) / 900);
+      const v = a.from + (a.to - a.from) * (1 - (1 - k) ** 3);
+      this.moneyEl.textContent = moneyInt(k >= 1 ? g.money : v);
+      if (k >= 1) {
+        this.moneyAnim = null;
+        this.moneyPill.classList.remove('gain');
+      }
+    }
     // On ne dessine que la pièce affichée (et ses voisines pendant un glissement).
     const all = !!this.swipe?.on || performance.now() < this.roomsDrawUntil;
     if (all || this.view === 'storage') this.storageRoom.draw(g, t);
@@ -334,7 +350,19 @@ export class App {
   /** Rafraîchissement de l'interface DOM (≈ 4 Hz). */
   update(): void {
     const g = this.game();
-    this.moneyEl.textContent = moneyInt(g.money);
+    if (!this.moneyAnim) this.moneyEl.textContent = moneyInt(g.money);
+    const off = g.offline;
+    if (off && off.earned <= 0) g.collectOffline(); // rien à récolter : on n'en parle pas
+    const earned = g.offline?.earned ?? 0;
+    this.harvest.classList.toggle('hidden', earned <= 0);
+    if (earned > 0) {
+      const text = `+${moneyShort(earned)}`;
+      if (this.harvest.dataset.text !== text) {
+        this.harvest.dataset.text = text;
+        this.harvest.replaceChildren(h('span', 'harvest-bag', '💰'), h('span', 'harvest-value', text));
+        this.harvest.setAttribute('aria-label', `Récolter ${moneyInt(earned)} gagnés pendant ton absence`);
+      }
+    }
     this.plaque.textContent = `★ ${g.breweryLevel} · ${g.breweryName}`;
     const can = g.canBrew();
     const sub = g.planned ? `${g.planned} programmé${g.planned > 1 ? 's' : ''}` : g.autoBrew ? '⟳ En continu' : g.beers.length ? 'Programmer' : can.ok ? (g.broke ? 'Offert par Gaston' : moneyInt(g.brewCost())) : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants';
@@ -680,11 +708,12 @@ export class App {
 
   /** Étape 2 : bouteilles ou fûts ? */
   private formatStep(g: Game, body: HTMLElement, beer: Beer): void {
-    body.append(h('div', 'wiz-q', `${beer.name} : en bouteilles ou en fûts\u00a0?`));
+    body.append(h('div', 'wiz-q', 'Bouteilles ou fûts\u00a0?'));
     const grid = h('div', 'pick-grid');
     for (const [f, name, use] of [['bottle', 'Bouteilles', 'Pour le stock et les commandes'], ['keg', 'Fûts', 'Pour les tireuses du bar']] as const) {
       const card = h('button', `card pick-card format${this.wiz?.format === f ? ' selected' : ''}`);
-      card.append(this.beerVisual(beer, f), h('span', 'beer-name', name), h('span', 'stats-line strong', this.batchOutput(g, f, 1)), h('span', 'stats-line', use), h('span', 'stats-line', `${moneyInt(g.brewCost(beer.recipe, g.batchLiters, f))} / brassin`));
+      card.setAttribute('aria-label', `${name} : ${use}`);
+      card.append(this.beerVisual(beer, f), h('span', 'beer-name', name));
       card.onclick = () => this.wizGo('count', { format: f, count: Math.min(this.wiz?.count ?? 1, Math.max(1, g.planRoom)) });
       grid.append(card);
     }
@@ -1540,25 +1569,20 @@ export class App {
     }
   }
 
-  openOffline(): void {
+  /** Récolte les gains de l'absence : l'argent défile, un petit mot résume l'absence. */
+  collectOffline(): void {
     const g = this.game();
     const o = g.offline;
     if (!o) return;
-    const card = this.modalCard('Pendant ton absence');
+    const from = g.money;
+    g.collectOffline();
+    this.moneyAnim = { from, to: g.money, start: performance.now() };
+    this.moneyPill.classList.add('gain');
+    this.harvest.classList.add('hidden');
     const hrs = Math.floor(o.seconds / 3600);
     const min = Math.floor((o.seconds % 3600) / 60);
-    card.append(h('p', 'hint', `${hrs ? `${hrs} h ` : ''}${min} min d'absence`));
-    const stats = h('div', 'tasting-stats');
-    for (const [k, v] of [['Brassins', String(o.batches)], ['Vendues', `${o.sold} btl`], ['Gains', moneyInt(o.earned)]] as const) {
-      const c = h('div', 'stat');
-      c.append(h('div', 'section-title', k), h('div', 'stat-value', v));
-      stats.append(c);
-    }
-    card.append(stats, this.btn('btn primary big', `Récolter ${moneyInt(o.earned)}`, () => {
-      g.collectOffline();
-      this.closeModal();
-      this.toast(`+${moneyInt(o.earned)} récoltés`, 'good');
-    }));
+    this.toast(`+${moneyInt(o.earned)} · ${hrs ? `${hrs} h ` : ''}${min} min d'absence, ${o.sold} vendues`, 'good');
+    this.onSent?.();
   }
 
   /** Fiche de la brasserie : son niveau, ce qui manque pour le suivant et ce qu'il débloque. */

@@ -403,3 +403,17 @@ button:disabled { cursor: default; opacity: .5; }
 .plan-name { flex: 1; min-width: 0; display: grid; }
 .plan-ctl { display: flex; align-items: center; gap: 6px; }
 .plan-ctl .stepper { margin-right: auto; }
+
+/* --- Gains de l'absence : une bourse discrète sous l'argent ------------------------------ */
+.harvest {
+  position: absolute; z-index: 6; right: 10px; top: calc(var(--top-h, 60px) + 6px); display: flex; align-items: center; gap: 4px;
+  padding: 3px 10px 3px 6px; font-family: var(--font-title); font-size: 13px; color: var(--ink);
+  background: var(--accent); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #ffe7a0, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008;
+  animation: harvest-bob 1.4s steps(2) infinite;
+}
+.harvest.hidden { display: none; }
+.harvest:active { transform: translateY(1px); }
+.harvest-bag { font-size: 16px; line-height: 1; }
+@keyframes harvest-bob { 50% { transform: translateY(-2px); } }
+.money.gain { box-shadow: 0 0 0 2px var(--accent); }
+@media (prefers-reduced-motion: reduce) { .harvest { animation: none; } }

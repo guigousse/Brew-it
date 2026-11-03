@@ -53,7 +53,6 @@ async function boot() {
       }
     });
     app.update();
-    if (game.offline) app.openOffline();
     void saves.save(game);
   }
   start(game);
@@ -93,8 +92,7 @@ async function boot() {
       simulateOffline(game, (Date.now() - pausedAt) / 1000);
       muted = false;
       last = performance.now();
-      if (game.offline) app.openOffline();
-    },
+      },
   );
 
   (window as unknown as { brewit: unknown }).brewit = { get game() { return game; }, app, saves };
