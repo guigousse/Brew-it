@@ -7,12 +7,21 @@
 import type { Game } from '../core/game';
 import type { Label } from '../core/label';
 import { crateList, drawCrate } from './bottleArt';
+import { STORAGE } from '../core/warehouse';
 import { drawMiniLabel } from './labelArt';
 import { PAL } from './painter';
 import type { Rect } from './sprites';
+import { boxShadow, dropShadow, floor, floorLight, from, mix, rgb, seam, shade, dim, trap, wallLight, type Bounds } from './space';
 
 export const ROOM_W = 160;
 export const ROOM_H = 300;
+
+/** Limites d'un écran de w × h px natifs, le plan de 160 × 300 au centre. */
+export function boundsFor(w: number, h: number): Bounds {
+  const ox = Math.floor((w - ROOM_W) / 2);
+  const oy = Math.floor((h - ROOM_H) / 2);
+  return { L: -ox, R: w - ox, T: -oy, B: h - oy, ox, oy };
+}
 /** Ligne du sol (comme la salle d'embouteillage de l'atelier). */
 const FLOOR = 210;
 
@@ -40,12 +49,18 @@ export const hash = (a: number, b = 0) => {
   return ((x ^ (x >>> 16)) >>> 0) / 4294967296;
 };
 
-/** Pièce commune : canvas, décors en cache par niveau, récupération après une purge mémoire d'iOS. */
+/**
+ * Pièce commune : canvas, décors en cache par niveau, récupération après une purge mémoire d'iOS.
+ * La pièce garde son plan de 160 × 300 au centre, mais son canvas prend tout l'écran (ROOM_W × ROOM_H au moins) :
+ * murs et sols sont peints d'un seul tenant jusqu'aux bords, sans rien recopier.
+ */
 export abstract class Room {
   readonly canvas = document.createElement('canvas');
   protected g: CanvasRenderingContext2D;
   protected bgs = new Map<number, HTMLCanvasElement>();
   private checkedAt = 0;
+  /** Limites de la pièce (dans son plan) et position de son origine dans le canvas. */
+  b: Bounds = { L: 0, R: ROOM_W, T: 0, B: ROOM_H, ox: 0, oy: 0 };
   /** Objet sélectionné (liseré clignotant). */
   selected: string | null = null;
 
@@ -54,6 +69,15 @@ export abstract class Room {
     this.canvas.height = ROOM_H;
     this.g = this.canvas.getContext('2d')!;
     this.g.imageSmoothingEnabled = false;
+  }
+
+  /** Taille de l'écran de la pièce en pixels natifs : le plan reste centré, le décor s'étend jusqu'aux bords. */
+  resize(w: number, h: number): void {
+    this.b = boundsFor(w, h);
+    if (this.canvas.width === w && this.canvas.height === h) return;
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.invalidate();
   }
 
   invalidate(): void {
@@ -73,25 +97,30 @@ export abstract class Room {
     let c = this.bgs.get(level);
     if (!c) {
       c = document.createElement('canvas');
-      c.width = ROOM_W;
-      c.height = ROOM_H;
+      c.width = this.canvas.width;
+      c.height = this.canvas.height;
       const g = c.getContext('2d')!;
       g.imageSmoothingEnabled = false;
+      g.translate(this.b.ox, this.b.oy);
       this.paintBackground(g, level);
       this.bgs.set(level, c);
     }
     return c;
   }
 
+  /** Début d'une image : le décor, puis on dessine dans le plan de la pièce. */
+  protected begin(level: number, t: number): void {
+    const g = this.g;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(this.background(level, t), 0, 0);
+    g.setTransform(1, 0, 0, 1, this.b.ox, this.b.oy);
+  }
+
   protected abstract paintBackground(g: CanvasRenderingContext2D, level: number): void;
 
   /** Niveau qui choisit le décor. */
   protected abstract levelOf(game: Game): number;
-
-  /** Décor actuel (sans rien d'animé), une fois dessiné : sert à prolonger la pièce sur les côtés. */
-  backdrop(game: Game): HTMLCanvasElement | undefined {
-    return this.bgs.get(this.levelOf(game));
-  }
 
   protected outline(r: Rect, t: number): void {
     if (Math.floor(t * 3) % 2) return;
@@ -102,47 +131,51 @@ export abstract class Room {
 }
 
 /** Murs et sols communs aux pièces, du plus modeste au plus futuriste. */
-export function wall(g: CanvasRenderingContext2D, px: Px, style: 'brick' | 'stone' | 'cold' | 'metal' | 'future' | 'plank' | 'green', bottom: number): void {
-  const W = ROOM_W;
+export function wall(g: CanvasRenderingContext2D, px: Px, style: 'brick' | 'stone' | 'cold' | 'metal' | 'future' | 'plank' | 'green', bottom: number, b: Bounds): void {
+  const { L, R, T } = b;
+  const WW = R - L;
+  const H = bottom - T;
+  const m = (a: number, n: number) => ((a % n) + n) % n;
   if (style === 'brick') {
-    px(0, 0, W, bottom, '#7a3a2c');
-    for (let y = 0; y < bottom; y += 6) {
-      px(0, y + 5, W, 1, '#4a221a');
-      for (let x = ((y / 6) % 2) * 6; x < W; x += 12) {
+    px(L, T, WW, H, '#7a3a2c');
+    for (let y = from(0, 6, T); y < bottom; y += 6) {
+      px(L, y + 5, WW, 1, '#4a221a');
+      for (let x = from(m(y / 6, 2) * 6, 12, L - 12); x < R; x += 12) {
         px(x, y, 1, 5, '#4a221a');
         px(x + 1, y, 10, 1, '#9a4e3a');
         if (hash(x, y) < 0.12) px(x + 1, y + 1, 10, 4, '#6a3226');
       }
     }
   } else if (style === 'stone') {
-    px(0, 0, W, bottom, '#4a4038');
-    for (let y = 0, row = 0; y < bottom; y += 9, row++) {
-      for (let x = -((row * 7) % 16); x < W; x += 16) {
-        px(x + 1, y + 1, 14, 7, ['#5e5248', '#56493f', '#665a4e', '#4e4238'][(x * 3 + row * 5) & 3]!);
+    px(L, T, WW, H, '#4a4038');
+    for (let y = from(0, 9, T); y < bottom; y += 9) {
+      const row = y / 9;
+      for (let x = from(-m(row * 7, 16), 16, L - 16); x < R; x += 16) {
+        px(x + 1, y + 1, 14, 7, ['#5e5248', '#56493f', '#665a4e', '#4e4238'][m(x * 3 + row * 5, 4)]!);
         px(x + 1, y + 1, 14, 1, '#76685a');
       }
     }
   } else if (style === 'cold') {
     // panneaux isothermes blancs, joints verticaux, givre en haut
-    px(0, 0, W, bottom, '#dfe8ee');
-    for (let x = 0; x < W; x += 20) { px(x, 0, 1, bottom, '#aebcc8'); px(x + 1, 0, 1, bottom, '#f4f8fc'); }
-    for (let x = 0; x < W; x++) px(x, 0, 1, 2 + Math.round(hash(x) * 4), '#ffffff');
+    px(L, T, WW, H, '#dfe8ee');
+    for (let x = from(0, 20, L); x < R; x += 20) { px(x, T, 1, H, '#aebcc8'); px(x + 1, T, 1, H, '#f4f8fc'); }
+    for (let x = L; x < R; x++) px(x, T, 1, 2 + Math.round(hash(x) * 4) - Math.min(0, T), '#ffffff');
   } else if (style === 'metal') {
-    for (let x = 0; x < W; x++) px(x, 0, 1, bottom, ['#5c6878', '#6c788a', '#7c889a', '#6c788a', '#56606e', '#4a5462'][x % 6]!);
+    for (let x = L; x < R; x++) px(x, T, 1, H, ['#5c6878', '#6c788a', '#7c889a', '#6c788a', '#56606e', '#4a5462'][m(x, 6)]!);
   } else if (style === 'future') {
-    px(0, 0, W, bottom, '#e8eef4');
-    for (let y = 0; y < bottom; y += 22) px(0, y, W, 1, '#c4d0dc');
-    for (let x = 0; x < W; x += 32) px(x, 0, 1, bottom, '#c4d0dc');
+    px(L, T, WW, H, '#e8eef4');
+    for (let y = from(0, 22, T); y < bottom; y += 22) px(L, y, WW, 1, '#c4d0dc');
+    for (let x = from(0, 32, L); x < R; x += 32) px(x, T, 1, H, '#c4d0dc');
   } else if (style === 'plank') {
     // lambris de bois clair
-    for (let x = 0; x < W; x += 8) {
-      px(x, 0, 8, bottom, ['#a8743c', '#9a6a36', '#b07a40'][(x / 8) % 3]!);
-      px(x, 0, 1, bottom, '#6a4422');
+    for (let x = from(0, 8, L); x < R; x += 8) {
+      px(x, T, 8, H, ['#a8743c', '#9a6a36', '#b07a40'][m(x / 8, 3)]!);
+      px(x, T, 1, H, '#6a4422');
     }
   } else {
     // vert anglais en haut, lambris sombre en bas
-    px(0, 0, W, bottom, '#2c4a3a');
-    for (let y = 4; y < bottom; y += 14) for (let x = 6; x < W; x += 14) px(x, y, 1, 1, '#3c5e4a');
+    px(L, T, WW, H, '#2c4a3a');
+    for (let y = from(4, 14, T); y < bottom; y += 14) for (let x = from(6, 14, L); x < R; x += 14) px(x, y, 1, 1, '#3c5e4a');
   }
 }
 
@@ -152,6 +185,101 @@ export function wall(g: CanvasRenderingContext2D, px: Px, style: 'brick' | 'ston
 const RACKS: Rect = { x: 6, y: 30, w: 148, h: 174 };
 /** Le diable et ses caisses vides, au premier plan à gauche. */
 const TROLLEY = { x: 14, y: 226 };
+/** Point de fuite du stockage : au milieu, à hauteur des yeux. */
+const EYE_STORE = 128;
+const STORAGE_CRATES = STORAGE.map((s) => s.crates);
+
+/** La grille des rayonnages d'un niveau : la plus grande taille de caisse qui fait tout tenir. */
+function rackGrid(lv: number) {
+  // Au-delà de 160 emplacements, chaque case est une palette de plusieurs caisses.
+  const crateCap = STORAGE_CRATES[lv - 1]!;
+  const per = Math.max(1, Math.ceil(crateCap / 160));
+  const cap = Math.ceil(crateCap / per);
+  let cell = 34;
+  let cols = 1;
+  let rows = 1;
+  let gap = 1;
+  for (; cell > 3; cell--) {
+    gap = Math.max(1, Math.round(cell / 6));
+    cols = Math.floor((RACKS.w - 6) / cell);
+    rows = Math.ceil(cap / cols);
+    if (rows * (cell + gap) <= RACKS.h - 4) break;
+  }
+  cols = Math.min(cols, Math.ceil(cap / rows));
+  const rowH = cell + gap;
+  const gw = cols * cell;
+  const ox = RACKS.x + Math.floor((RACKS.w - gw) / 2);
+  const base = RACKS.y + RACKS.h;
+  return { per, cap, cell, cols, rows, gap, rowH, gw, ox, base, top: base - rows * rowH };
+}
+
+const mixHex = (a: string, c: string, k: number) => {
+  const [r, gg, bb] = mix(rgb(a), rgb(c), k);
+  return `rgb(${Math.round(r)},${Math.round(gg)},${Math.round(bb)})`;
+};
+
+/** Sol du stockage en perspective : dalle de béton, vieux pavés, résine blanche, résine d'entrepôt, dalles sombres. */
+function paintStorageFloor(g: CanvasRenderingContext2D, b: Bounds, lv: number): void {
+  const VX = 80;
+  const mod = (a: number) => a - Math.floor(a);
+  if (lv === 1) {
+    const base = rgb('#6a6e74');
+    const joint = rgb('#4e5258');
+    const spot = rgb('#5a5e64');
+    const light = rgb('#7a7e84');
+    const oil = rgb('#2a2630');
+    floor(g, b, FLOOR, VX, EYE_STORE, 44, (u, v, du, dv) => {
+      if (seam(u + 0.5, du) || seam(v / 1.2, dv / 1.2)) return joint;
+      const n = hash(Math.floor(u * 24), Math.floor(v * 24));
+      // tache d'huile, à sa place dans la perspective
+      const e = ((u - 0.75) / 0.42) ** 2 + ((v - 3.25) / 0.3) ** 2;
+      if (e < 1) return mix(base, oil, 0.55 * (1 - e) ** 0.4 + (n < 0.3 ? 0.08 : 0));
+      return n < 0.12 ? spot : n > 0.94 ? light : base;
+    });
+  } else if (lv === 2) {
+    const stones = ['#5e4430', '#664a34', '#54402c', '#6e5038'].map(rgb);
+    const mortar = rgb('#2e2016');
+    floor(g, b, FLOOR, VX, EYE_STORE, 13, (u, v, du, dv) => {
+      const row = Math.floor(v * 1.4);
+      const uu = u + (row & 1) * 0.5 + hash(row, 5) * 0.3;
+      if (seam(uu, du) || seam(v * 1.4, dv * 1.4)) return mortar;
+      const c = stones[Math.floor(hash(Math.floor(uu), row) * 4)]!;
+      const fv = mod(v * 1.4);
+      const fu = mod(uu);
+      if (fv > 1 - 2.2 * dv * 1.4) return mix(c, rgb('#8a6a4a'), 0.5); // arête éclairée (le haut du pavé)
+      if (fv < 2 * dv * 1.4 || fu > 1 - 1.5 * du) return dim(c, 0.72); // flanc dans l'ombre
+      return c;
+    });
+  } else if (lv === 3) {
+    const base = rgb('#c4ced8');
+    const joint = rgb('#9aa8b6');
+    const dot = rgb('#b0bcc8');
+    floor(g, b, FLOOR, VX, EYE_STORE, 22, (u, v, du, dv) => {
+      if (seam(u, du) || seam(v, dv)) return joint;
+      return mod(u * 6) < 0.25 && mod(v * 6) < 0.25 ? dot : base;
+    });
+  } else if (lv === 4) {
+    const base = rgb('#6a6e74');
+    const speck = rgb('#5e6268');
+    const lane = rgb('#f2c14e');
+    const dark = rgb('#1b1424');
+    floor(g, b, FLOOR, VX, EYE_STORE, 30, (u, v, du) => {
+      // allée de circulation : deux bandes jaunes qui fuient vers le fond, hachures au premier plan
+      for (const lx of [-1.7, 1.7]) if (Math.abs(u - lx) < 0.07 + du / 2) return lane;
+      if (Math.abs(u) > 2.3 && Math.abs(u) < 2.9 && v < 4.4) return mod((u + v) * 2.5) < 0.5 ? lane : dark;
+      return hash(Math.floor(u * 30), Math.floor(v * 30)) < 0.15 ? speck : base;
+    });
+  } else {
+    const base = rgb('#1c2230');
+    const joint = rgb('#2a3244');
+    const neon = rgb('#5ef0ff');
+    floor(g, b, FLOOR, VX, EYE_STORE, 26, (u, v, du, dv) => {
+      if (Math.abs(u) < 0.03 + du / 2) return neon;
+      if (seam(u, du) || seam(v, dv)) return joint;
+      return base;
+    });
+  }
+}
 
 export class StorageRoom extends Room {
   private crates?: { key: string; c: HTMLCanvasElement };
@@ -174,19 +302,20 @@ export class StorageRoom extends Room {
     const g = this.g;
     g.imageSmoothingEnabled = false;
     const lv = game.storageLevel;
-    g.drawImage(this.background(lv, t), 0, 0);
+    this.begin(lv, t);
     g.drawImage(this.crateLayer(game), 0, 0);
     this.drawPallet(game, lv);
     // lumière qui vacille dans le coin du garage et la cave
     if (lv <= 2) {
       const k = 0.06 + 0.02 * Math.sin(t * 7) * Math.sin(t * 2.3);
       g.fillStyle = `rgba(255,210,130,${k})`;
-      g.fillRect(0, 0, ROOM_W, FLOOR);
+      g.fillRect(this.b.L, this.b.T, this.b.R - this.b.L, FLOOR - this.b.T);
     }
     // chambre froide : brume qui flotte au sol
     if (lv === 3) {
-      for (let i = 0; i < 14; i++) {
-        const x = ((i * 23 + t * 6) % (ROOM_W + 20)) - 10;
+      for (let i = 0; i < Math.round((14 * (this.b.R - this.b.L)) / ROOM_W); i++) {
+        const span = this.b.R - this.b.L + 20;
+        const x = this.b.L + ((i * 23 * span / ROOM_W + t * 6) % span) - 10;
         g.fillStyle = 'rgba(230,245,255,0.18)';
         g.fillRect(Math.round(x), FLOOR + 2 + (i % 3) * 3, 14, 2);
       }
@@ -194,13 +323,11 @@ export class StorageRoom extends Room {
     if (this.selected === 'racks') this.outline(RACKS, t);
   }
 
-  /** Les caisses, redessinées seulement quand le stock change. */
+  /** Les caisses, redessinées seulement quand le stock change (les rayonnages sont dans le décor). */
   private crateLayer(game: Game): HTMLCanvasElement {
-    // Au-delà de 160 emplacements, chaque case est une palette de plusieurs caisses.
-    const crateCap = game.storageCap / 12;
-    const per = Math.max(1, Math.ceil(crateCap / 160));
-    const cap = Math.ceil(crateCap / per);
-    const key = `${game.storageLevel}|${game.beers.map((b) => `${b.id}:${b.stock}:${b.kegs.length}:${b.label.bg}`).join(',')}`;
+    const lv = game.storageLevel;
+    const { per, cap, cell, cols, rows, rowH, gw, ox, base, top } = rackGrid(lv);
+    const key = `${lv}|${game.beers.map((b) => `${b.id}:${b.stock}:${b.kegs.length}:${b.label.bg}`).join(',')}`;
     if (this.crates?.key === key) return this.crates.c;
     const c = this.crates?.c ?? document.createElement('canvas');
     c.width = ROOM_W;
@@ -209,38 +336,6 @@ export class StorageRoom extends Room {
     g.clearRect(0, 0, ROOM_W, ROOM_H);
     g.imageSmoothingEnabled = false;
     const px = painter(g);
-    const lv = game.storageLevel;
-    // grille : la plus grande taille de caisse qui fait tout tenir
-    let cell = 34;
-    let cols = 1;
-    let rows = 1;
-    let gap = 1;
-    for (; cell > 3; cell--) {
-      gap = Math.max(1, Math.round(cell / 6));
-      cols = Math.floor((RACKS.w - 6) / cell);
-      rows = Math.ceil(cap / cols);
-      if (rows * (cell + gap) <= RACKS.h - 4) break;
-    }
-    cols = Math.min(cols, Math.ceil(cap / rows));
-    const rowH = cell + gap;
-    const gw = cols * cell;
-    const ox = RACKS.x + Math.floor((RACKS.w - gw) / 2);
-    const base = RACKS.y + RACKS.h;
-    const top = base - rows * rowH;
-    // montants et planches des rayonnages
-    const [post, postHi, plank, plankHi] =
-      lv <= 2 ? ['#5a3a1c', '#7a5228', '#8a5a2c', '#c88a4a'] : lv === 3 ? ['#98a6b6', '#e8eef4', '#6c7a8c', '#c4d0dc'] : lv === 4 ? ['#2e5a9a', '#4e8ad0', '#e8742a', '#ffb070'] : ['#dce6f0', '#ffffff', '#8a9ab0', '#5ef0ff'];
-    for (const x of [ox - 4, ox + gw + 2]) { px(x, top - 3, 2, base - top + 3, post); px(x, top - 3, 1, base - top + 3, postHi); }
-    if (lv <= 2 && cell >= 10) {
-      // parpaings sous les planches du garage
-      px(ox - 6, base - 1, 6, 4, '#8a8a8a');
-      px(ox + gw, base - 1, 6, 4, '#8a8a8a');
-    }
-    for (let r = 0; r < rows; r++) {
-      const y = base - r * rowH - gap;
-      px(ox - 3, y, gw + 6, gap, plank);
-      px(ox - 3, y, gw + 6, 1, plankHi);
-    }
     type Cell = { beer: (typeof game.beers)[number]; count: number; keg?: boolean };
     const crates: Cell[] = per === 1 ? crateList(game.beers) : game.beers.flatMap((beer) => {
       const out: Cell[] = [];
@@ -253,14 +348,14 @@ export class StorageRoom extends Room {
       const x = ox + (i % cols) * cell;
       const y = base - (Math.floor(i / cols) + 1) * rowH;
       const crate = crates[i];
-      if (crate?.keg) drawKeg(g, x, y, cell - 1, crate.beer.label);
-      else if (crate) {
+      if (!crate) continue;
+      // chaque caisse fait de l'ombre sur le mur, en haut à droite, et sur la planche
+      g.fillStyle = 'rgba(10,6,16,0.28)';
+      g.fillRect(x + 2, y + 1, cell - 1, cell - 2);
+      if (crate.keg) drawKeg(g, x, y, cell - 1, crate.beer.label);
+      else {
         drawCrate(g, x, y, cell - 1 - (per > 1 ? 1 : 0), crate);
         if (per > 1) px(x, y + cell - 2, cell - 1, 1, '#a06830'); // palette
-      }
-      else {
-        g.fillStyle = lv === 3 || lv === 5 ? '#00000018' : '#ffffff18';
-        for (let k = 0; k < cell - 1; k += 2) g.fillRect(x + k, y + cell - 2, 1, 1);
       }
     }
     // plein : bande rouge en haut
@@ -274,82 +369,107 @@ export class StorageRoom extends Room {
 
   protected paintBackground(g: CanvasRenderingContext2D, lv: number): void {
     const px = painter(g);
-    const W = ROOM_W;
-    wall(g, px, lv === 1 ? 'brick' : lv === 2 ? 'stone' : lv === 3 ? 'cold' : lv === 4 ? 'metal' : 'future', FLOOR);
+    const b = this.b;
+    const { L, R, T } = b;
+    const WW = R - L;
+    wall(g, px, lv === 1 ? 'brick' : lv === 2 ? 'stone' : lv === 3 ? 'cold' : lv === 4 ? 'metal' : 'future', FLOOR, b);
+    // décor du haut du mur, et ses lampes (qui éclairent le mur et le sol)
+    let lamps: [number, number, number, number][] = [];
     if (lv === 1) {
       // ampoule nue au bout de son fil, toiles d'araignée
-      px(80, 0, 1, 12, '#1b1424'); px(78, 12, 5, 5, '#fff4b0'); px(79, 13, 3, 3, '#ffffff');
-      g.fillStyle = 'rgba(255,220,140,0.08)'; g.beginPath(); g.arc(80, 15, 40, 0, Math.PI * 2); g.fill();
+      px(80, T, 1, 12 - T, '#1b1424'); px(78, 12, 5, 5, '#fff4b0'); px(79, 13, 3, 3, '#ffffff');
       g.strokeStyle = 'rgba(255,255,255,0.2)';
-      g.beginPath(); g.moveTo(0, 2); g.lineTo(14, 2); g.moveTo(0, 2); g.lineTo(0, 16); g.moveTo(0, 2); g.lineTo(11, 13); g.stroke();
+      g.beginPath(); g.moveTo(L, 2); g.lineTo(L + 14, 2); g.moveTo(L, 2); g.lineTo(L, 16); g.moveTo(L, 2); g.lineTo(L + 11, 13); g.stroke();
       // outils accrochés
-      px(130, 8, 18, 14, '#8a5a2c'); px(133, 10, 2, 10, '#98a6b6'); px(139, 10, 3, 8, '#c4d0dc'); px(144, 11, 2, 9, '#e85a3a');
+      boxShadow(g, b, { x: 132, y: 10, w: 18, h: 14 }, 3, 0.6);
+      px(130, 8, 18, 14, '#8a5a2c'); px(130, 8, 18, 1, '#b07a40'); px(133, 10, 2, 10, '#98a6b6'); px(139, 10, 3, 8, '#c4d0dc'); px(144, 11, 2, 9, '#e85a3a');
+      lamps = [[80, 15, 70, 0.35]];
     } else if (lv === 2) {
       // voûte en arc et lanternes
-      px(0, 0, W, 8, '#3a3028');
-      g.fillStyle = '#3a3028'; g.beginPath(); g.ellipse(80, 0, 90, 24, 0, 0, Math.PI); g.fill();
-      for (const lx of [20, 140]) { px(lx - 2, 12, 5, 7, '#2a1a10'); px(lx - 1, 13, 3, 5, '#ffb050'); g.fillStyle = 'rgba(255,190,90,0.10)'; g.beginPath(); g.arc(lx, 15, 20, 0, Math.PI * 2); g.fill(); }
+      px(L, T, WW, 8 - T, '#3a3028');
+      g.fillStyle = '#3a3028'; g.beginPath(); g.ellipse(80, 0, 90 + (WW - 160) / 2, 24, 0, 0, Math.PI); g.fill();
+      for (const lx of [20, 140]) { px(lx - 2, 12, 5, 7, '#2a1a10'); px(lx - 1, 13, 3, 5, '#ffb050'); }
+      lamps = [[20, 15, 40, 0.35], [140, 15, 40, 0.35]];
     } else if (lv === 3) {
       // groupe froid et thermomètre
+      boxShadow(g, b, { x: 56, y: 6, w: 52, h: 14 }, 3, 0.7);
       px(54, 4, 52, 14, '#98a6b6'); px(55, 5, 50, 12, '#c4d0dc');
       for (let x = 58; x < 102; x += 3) px(x, 7, 1, 8, '#6c7a8c');
       px(124, 6, 22, 12, '#1c2a3a'); px(126, 8, 18, 8, '#0c1420');
       g.fillStyle = '#5ef0ff'; g.font = '8px monospace'; g.fillText('2°C', 127, 15);
+      lamps = [[80, 0, 90, 0.12]];
     } else if (lv === 4) {
       // verrière et poutre rouge
-      px(0, 0, W, 6, '#3a4250');
-      for (let wx = 10; wx < W - 10; wx += 48) { px(wx, 8, 40, 16, '#2a303a'); for (let i = 0; i < 4; i++) px(wx + 2 + i * 10, 10, 8, 12, '#7ab0d0'); }
-      px(0, 26, W, 3, '#c85a2c'); px(0, 26, W, 1, '#e88a5a');
+      px(L, T, WW, 6 - T, '#3a4250');
+      for (let wx = from(10, 48, L - 40); wx < R; wx += 48) { px(wx, 8, 40, 16, '#2a303a'); for (let i = 0; i < 4; i++) px(wx + 2 + i * 10, 10, 8, 12, '#7ab0d0'); px(wx + 2, 10, 38, 2, '#b0d8f0'); }
+      shade(g, b, { x: L, y: 29, w: WW, h: 4 }, (_, y) => 0.6 + (y - 29) * 0.1);
+      px(L, 26, WW, 3, '#c85a2c'); px(L, 26, WW, 1, '#e88a5a');
+      lamps = [[34, 24, 50, 0.16], [126, 24, 50, 0.16]];
     } else {
       // néons et bras robotisé au plafond
-      px(0, 4, W, 1, '#5ef0ff'); px(0, 5, W, 1, '#1c8ca8');
+      px(L, 4, WW, 1, '#5ef0ff'); px(L, 5, WW, 1, '#1c8ca8');
       px(20, 6, 120, 3, '#b8c6d6'); px(70, 9, 6, 12, '#8a9ab0'); px(66, 20, 14, 3, '#5a6a82'); px(72, 23, 2, 3, '#5ef0ff');
+      lamps = [[80, 5, 110, 0.1]];
     }
-    // sol
-    const top = FLOOR;
-    if (lv === 1) {
-      px(0, top, W, ROOM_H - top, '#6a6e74');
-      for (let i = 0; i < 70; i++) px(Math.floor(hash(i, 1) * W), top + Math.floor(hash(i, 2) * (ROOM_H - top)), 1, 1, '#585c62');
-      g.fillStyle = 'rgba(20,16,24,0.35)'; g.beginPath(); g.ellipse(120, 270, 16, 5, 0, 0, Math.PI * 2); g.fill(); // tache d'huile
-    } else if (lv === 2) {
-      // terre battue et vieux pavés, plus sombres et plus chauds que les murs de pierre
-      px(0, top, W, ROOM_H - top, '#4a3424');
-      for (let i = 0; i < 70; i++) {
-        const x = Math.floor(hash(i, 31) * W);
-        const y = top + 4 + Math.floor(hash(i, 32) * (ROOM_H - top - 6));
-        const w = 6 + Math.floor(hash(i, 33) * 6);
-        px(x, y, w, 3, '#5e4430'); px(x, y, w, 1, '#6e5038'); px(x, y + 3, w, 1, '#2e2016');
-      }
-      // plinthe au pied du mur
-      px(0, top, W, 3, '#2e2622'); px(0, top + 3, W, 1, '#1e1814');
-    } else if (lv === 3) {
-      px(0, top, W, ROOM_H - top, '#b8c4ce');
-      for (let x = 0; x < W; x += 6) px(x, top, 1, ROOM_H - top, '#a4b0bc');
-    } else if (lv === 4) {
-      px(0, top, W, ROOM_H - top, '#6a6e74');
-      px(0, top + 6, W, 2, '#f2c14e'); px(0, ROOM_H - 10, W, 2, '#f2c14e');
-    } else {
-      px(0, top, W, ROOM_H - top, '#1c2230');
-      for (let y = top; y < ROOM_H; y += 10) px(0, y, W, 1, '#2a3244');
-      px(0, top + 4, W, 1, '#5ef0ff');
+    wallLight(g, b, T, FLOOR, lamps, lv === 3 || lv === 5 ? 0.8 : 0.66);
+    // ---- le sol en perspective
+    paintStorageFloor(g, b, lv);
+    floorLight(g, b, FLOOR, lamps.map(([x, , r, k]) => [x, FLOOR + 30, r * 1.2, k * 0.6] as const), lv === 3 || lv === 5 ? 0.62 : 0.5);
+    // ---- les rayonnages : montants, planches vues d'en haut ou d'en dessous, ombres sur le mur et au sol
+    const { cell, rows, rowH, gap, gw, ox, base, top } = rackGrid(lv);
+    const [post, postHi, plank, plankHi] =
+      lv <= 2 ? ['#5a3a1c', '#7a5228', '#8a5a2c', '#c88a4a'] : lv === 3 ? ['#98a6b6', '#e8eef4', '#6c7a8c', '#c4d0dc'] : lv === 4 ? ['#2e5a9a', '#4e8ad0', '#e8742a', '#ffb070'] : ['#dce6f0', '#ffffff', '#8a9ab0', '#5ef0ff'];
+    const feet = FLOOR + 5;
+    boxShadow(g, b, { x: ox - 1, y: top - 1, w: gw + 6, h: FLOOR - top + 1 }, 5, 0.55); // ombre du meuble sur le mur
+    shade(g, b, { x: ox - 10, y: FLOOR, w: gw + 20, h: 10 }, (x, y) => {
+      const dx = Math.max(ox - 4 - x, 0, x - (ox + gw + 4)) / 6;
+      return Math.min(1, 0.45 + 0.55 * Math.max(dx, (y - FLOOR) / 10));
+    });
+    for (const x of [ox - 4, ox + gw + 2]) { px(x, top - 3, 2, feet - top + 3, post); px(x, top - 3, 1, feet - top + 3, postHi); px(x, feet - 1, 3, 1, '#1b1424'); }
+    if (lv <= 2 && cell >= 10) {
+      // parpaings sous les montants du garage
+      px(ox - 6, feet - 3, 6, 4, '#8a8a8a'); px(ox - 6, feet - 3, 6, 1, '#aaaaaa');
+      px(ox + gw, feet - 3, 6, 4, '#8a8a8a'); px(ox + gw, feet - 3, 6, 1, '#aaaaaa');
     }
-    px(0, top, W, 2, '#00000040');
-    // le diable, et des caisses vides empilées contre lui
+    for (let r = 0; r < rows; r++) {
+      const y = base - r * rowH - gap;
+      // l'ombre de la planche sur le mur, sous elle
+      shade(g, b, { x: ox - 3, y: y + gap, w: gw + 6, h: 3 }, (_, yy) => 0.6 + (yy - y - gap) * 0.13);
+      if (y > EYE_STORE) px(ox - 2, y - 1, gw + 4, 1, mixHex(plankHi, '#ffffff', 0.35)); // dessus de la planche, vu d'en haut
+      px(ox - 3, y, gw + 6, gap, plank);
+      px(ox - 3, y, gw + 6, 1, plankHi);
+      if (y <= EYE_STORE) px(ox - 2, y + gap, gw + 4, 1, '#00000060'); // dessous, vu d'en bas
+    }
+    // places vides : la trace des caisses sur les planches
+    const grid = rackGrid(lv);
+    g.fillStyle = lv === 3 || lv === 5 ? '#00000018' : '#ffffff18';
+    for (let i = 0; i < Math.min(grid.cap, rows * grid.cols); i++) {
+      const x = ox + (i % grid.cols) * cell;
+      const y = base - (Math.floor(i / grid.cols) + 1) * rowH;
+      for (let k = 0; k < cell - 1; k += 2) g.fillRect(x + k, y + cell - 2, 1, 1);
+    }
+    // ---- le diable, et des caisses vides empilées contre lui
     const tx = TROLLEY.x;
     const ty = TROLLEY.y;
+    dropShadow(g, b, tx + 16, ty + 70, 24, 4, 0.45);
     const metal = lv === 5 ? ['#ffffff', '#b8c6d6', '#8a9ab0'] : lv >= 3 ? ['#e8eef4', '#98a6b6', '#5a6a82'] : ['#e85a3a', '#a8483a', '#6e2a22'];
     px(tx, ty, 3, 62, metal[1]!); px(tx, ty, 1, 62, metal[0]!); px(tx + 30, ty, 3, 62, metal[1]!); px(tx + 30, ty, 1, 62, metal[0]!);
     px(tx - 4, ty - 4, 8, 3, '#2c283a'); px(tx + 28, ty - 4, 8, 3, '#2c283a'); // poignées
     for (const k of [14, 34]) px(tx + 2, ty + k, 30, 2, metal[2]!);
-    px(tx - 2, ty + 60, 38, 4, metal[2]!); px(tx - 2, ty + 60, 38, 1, metal[0]!); // bavette
+    trap(g, ty + 58, ty + 60, tx, tx + 34, tx - 2, tx + 36, metal[0]!); // bavette, vue d'en haut
+    px(tx - 2, ty + 60, 38, 3, metal[2]!);
     for (const wx of [tx - 4, tx + 30]) { px(wx, ty + 62, 8, 8, '#1b1424'); px(wx + 2, ty + 64, 4, 4, '#545068'); px(wx + 3, ty + 65, 2, 2, '#98a6b6'); }
     const crate = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : ['#a06830', '#d09050', '#5a3418'];
     for (let k = 0; k < 3; k++) {
       const cy = ty + 36 - k * 17;
+      if (k === 2) trap(g, cy - 3, cy, tx + 6, tx + 27, tx + 4, tx + 29, crate[2]!); // l'intérieur de la caisse du haut
       px(tx + 4, cy, 25, 16, crate[0]!); px(tx + 4, cy, 25, 1, crate[1]!); px(tx + 4, cy + 15, 25, 1, crate[2]!);
       px(tx + 7, cy + 3, 19, 6, '#00000040');
       px(tx + 12, cy + 10, 9, 3, crate[2]!);
     }
+    shade(g, b, { x: tx + 4, y: ty + 2, w: 25, h: 50 }, (x) => 1.05 - ((x - tx - 4) / 25) * 0.25);
+    // ---- l'emplacement de la palette des commandes
+    dropShadow(g, b, 122, 293, 32, 4, 0.45);
   }
 
   /** Une palette au premier plan : les caisses prêtes à partir quand une commande peut être remplie. */
@@ -570,7 +690,7 @@ export class BarRoom extends Room {
     const g = this.g;
     g.imageSmoothingEnabled = false;
     const lv = game.barLevel;
-    g.drawImage(this.background(lv, t), 0, 0);
+    this.begin(lv, t);
     this.drawBoard(game, lv);
     this.drawEventItem(game, lv, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
@@ -596,7 +716,7 @@ export class BarRoom extends Room {
       const x = 20 + i * 40;
       const sweep = Math.sin(t * 1.6 + i * 1.7) * 40;
       g.fillStyle = `rgba(${cols[i]},0.13)`;
-      g.beginPath(); g.moveTo(x - 2, 0); g.lineTo(x + 2, 0); g.lineTo(x + sweep + 18, CELLAR_Y); g.lineTo(x + sweep - 18, CELLAR_Y); g.fill();
+      g.beginPath(); g.moveTo(x - 2, this.b.T); g.lineTo(x + 2, this.b.T); g.lineTo(x + sweep + 18, CELLAR_Y); g.lineTo(x + sweep - 18, CELLAR_Y); g.fill();
     }
     for (let i = 0; i < 40; i++) {
       const k = (t * 0.25 + hash(i, 21)) % 1;
@@ -621,20 +741,23 @@ export class BarRoom extends Room {
   protected paintBackground(g: CanvasRenderingContext2D, lv: number): void {
     const px = painter(g);
     const W = ROOM_W;
+    const { L, R, T, B } = this.b;
+    const WW = R - L;
+    const m = (a: number, n: number) => ((a % n) + n) % n;
     const back = COUNTER.top;
-    wall(g, px, lv <= 2 ? 'plank' : lv === 3 ? 'green' : lv === 4 ? 'brick' : 'future', COUNTER.front);
+    wall(g, px, lv <= 2 ? 'plank' : lv === 3 ? 'green' : lv === 4 ? 'brick' : 'future', COUNTER.front, this.b);
     if (lv === 1) {
       // bois grisé par la poussière, fissure, toiles d'araignée, une seule ampoule
-      g.fillStyle = 'rgba(90,80,70,0.45)'; g.fillRect(0, 0, W, COUNTER.front);
+      g.fillStyle = 'rgba(90,80,70,0.45)'; g.fillRect(L, T, WW, COUNTER.front - T);
       px(104, 26, 1, 10, '#3a2c20'); px(105, 35, 1, 8, '#3a2c20');
       g.strokeStyle = 'rgba(255,255,255,0.22)';
-      for (const [x0, dir] of [[0, 1], [W - 1, -1]] as const) {
+      for (const [x0, dir] of [[L, 1], [R - 1, -1]] as const) {
         g.beginPath();
         g.moveTo(x0, 1); g.lineTo(x0 + dir * 18, 1); g.moveTo(x0, 1); g.lineTo(x0, 20); g.moveTo(x0, 1); g.lineTo(x0 + dir * 14, 14);
         g.moveTo(x0 + dir * 6, 1); g.lineTo(x0, 7); g.moveTo(x0 + dir * 11, 1); g.lineTo(x0, 12);
         g.stroke();
       }
-      px(80, 0, 1, 14, '#1b1424'); px(78, 14, 5, 5, '#f0d890'); px(79, 15, 3, 3, '#fff4b0');
+      px(80, T, 1, 14 - T, '#1b1424'); px(78, 14, 5, 5, '#f0d890'); px(79, 15, 3, 3, '#fff4b0');
       g.fillStyle = 'rgba(255,230,160,0.06)';
       g.beginPath(); g.moveTo(76, 18); g.lineTo(85, 18); g.lineTo(118, back); g.lineTo(44, back); g.fill();
       g.save(); g.translate(22, 30); g.rotate(-0.12);
@@ -647,8 +770,8 @@ export class BarRoom extends Room {
         g.fillStyle = 'rgba(255,220,140,0.07)'; g.beginPath(); g.moveTo(lx - 4, 18); g.lineTo(lx + 5, 18); g.lineTo(lx + 24, back); g.lineTo(lx - 23, back); g.fill();
       }
     } else if (lv === 3) {
-      px(0, 76, W, COUNTER.front - 76, '#4a2c14');
-      for (let x = 0; x < W; x += 20) { px(x + 2, 80, 16, 26, '#5a3a1c'); px(x + 2, 80, 16, 1, '#744620'); }
+      px(L, 76, WW, COUNTER.front - 76, '#4a2c14');
+      for (let x = from(0, 20, L); x < R; x += 20) { px(x + 2, 80, 16, 26, '#5a3a1c'); px(x + 2, 80, 16, 1, '#744620'); }
       for (const lx of [24, 64, 104]) { px(lx, 0, 1, 8, '#8a5c14'); px(lx - 4, 8, 9, 3, '#e8b030'); px(lx - 3, 11, 7, 1, '#fff4b0'); }
     } else if (lv === 4) {
       px(30, 4, 72, 16, '#1b1424');
@@ -692,9 +815,9 @@ export class BarRoom extends Room {
     const f = front;
     const fh = CELLAR_Y - f;
     if (lv === 1) {
-      px(0, f, W, fh, '#5a4a3a');
-      for (let y = f; y < CELLAR_Y; y += 6) { px(0, y, W, 1, '#3a2e24'); for (let x = (y * 7) % 30; x < W; x += 30) px(x, y, 1, 6, '#3a2e24'); }
-      for (let i = 0; i < 25; i++) px(Math.floor(hash(i, 5) * W), f + Math.floor(hash(i, 6) * fh), 2, 1, '#6e5e4c');
+      px(L, f, WW, fh, '#5a4a3a');
+      for (let y = f; y < CELLAR_Y; y += 6) { px(L, y, WW, 1, '#3a2e24'); for (let x = from((y * 7) % 30, 30, L); x < R; x += 30) px(x, y, 1, 6, '#3a2e24'); }
+      for (let i = 0; i < Math.round((25 * WW) / W); i++) px(L + Math.floor(hash(i, 5) * WW), f + Math.floor(hash(i, 6) * fh), 2, 1, '#6e5e4c');
       // vieux tonneau, caisse de bouteilles vides, balai oublié
       const bx = 116, by = 166;
       px(bx, by, 18, 24, '#6a4422'); px(bx + 2, by, 14, 24, '#7a5228'); px(bx + 5, by, 5, 24, '#8a5a2c');
@@ -705,41 +828,41 @@ export class BarRoom extends Room {
       for (let i = 0; i < 16; i++) px(152 - Math.floor(i * 0.5), 140 + i * 3, 1, 3, '#8a5a2c');
       px(141, 186, 8, 6, '#c8a860');
     } else if (lv === 2) {
-      for (let j = 0; f + j * 8 < CELLAR_Y; j++) for (let i = 0; i * 8 < W; i++) px(i * 8, f + j * 8, 8, 8, (i + j) % 2 ? '#e8e4dc' : '#3e3a50');
+      for (let j = 0; f + j * 8 < CELLAR_Y; j++) for (let x = from(0, 8, L); x < R; x += 8) px(x, f + j * 8, 8, 8, m(x / 8 + j, 2) ? '#e8e4dc' : '#3e3a50');
     } else if (lv === 3) {
-      px(0, f, W, fh, '#6a2a22');
-      for (let y = f + 4; y < CELLAR_Y; y += 12) for (let x = (y % 24) ? 0 : 6; x < W; x += 12) px(x, y, 4, 4, '#8a3a2a');
+      px(L, f, WW, fh, '#6a2a22');
+      for (let y = f + 4; y < CELLAR_Y; y += 12) for (let x = from((y % 24) ? 0 : 6, 12, L); x < R; x += 12) px(x, y, 4, 4, '#8a3a2a');
     } else if (lv === 4) {
-      px(0, f, W, fh, '#5a5e64');
-      for (let i = 0; i < 40; i++) px(Math.floor(hash(i, 7) * W), f + Math.floor(hash(i, 8) * fh), 1, 1, '#4a4e54');
+      px(L, f, WW, fh, '#5a5e64');
+      for (let i = 0; i < Math.round((40 * WW) / W); i++) px(L + Math.floor(hash(i, 7) * WW), f + Math.floor(hash(i, 8) * fh), 1, 1, '#4a4e54');
     } else {
-      px(0, f, W, fh, '#1c2230');
-      for (let y = f; y < CELLAR_Y; y += 10) px(0, y, W, 1, '#2a3244');
+      px(L, f, WW, fh, '#1c2230');
+      for (let y = f; y < CELLAR_Y; y += 10) px(L, y, WW, 1, '#2a3244');
     }
-    px(0, f, W, 2, '#00000060');
+    px(L, f, WW, 2, '#00000060');
     // ---------------------------------------------------------------- la cave
     const c = CELLAR_Y;
     // dalle du plancher
-    px(0, c, W, 6, lv === 5 ? '#b8c6d6' : lv === 4 ? '#6a6e74' : '#4a2e14');
-    px(0, c, W, 1, lv === 5 ? '#ffffff' : lv === 4 ? '#8a8e94' : '#7a5228');
-    for (let x = 6; x < W; x += 22) px(x, c + 6, 4, 6, lv >= 4 ? '#3e3a50' : '#3a240e'); // solives
+    px(L, c, WW, 6, lv === 5 ? '#b8c6d6' : lv === 4 ? '#6a6e74' : '#4a2e14');
+    px(L, c, WW, 1, lv === 5 ? '#ffffff' : lv === 4 ? '#8a8e94' : '#7a5228');
+    for (let x = from(6, 22, L); x < R; x += 22) px(x, c + 6, 4, 6, lv >= 4 ? '#3e3a50' : '#3a240e'); // solives
     // mur de cave : pierre, brique ou béton selon le niveau
     const cw = c + 6;
     if (lv <= 3) {
-      px(0, cw, W, ROOM_H - cw, '#2e2622');
-      for (let y = cw, row = 0; y < ROOM_H; y += 8, row++)
-        for (let x = -((row * 5) % 14); x < W; x += 14) { px(x + 1, y + 1, 12, 6, ['#3e342c', '#38302a', '#443a30'][(x + row) & 1 ? 0 : row % 3]!); px(x + 1, y + 1, 12, 1, '#4e4236'); }
+      px(L, cw, WW, B - cw, '#2e2622');
+      for (let y = cw, row = 0; y < B; y += 8, row++)
+        for (let x = from(-((row * 5) % 14), 14, L - 14); x < R; x += 14) { px(x + 1, y + 1, 12, 6, ['#3e342c', '#38302a', '#443a30'][(x + row) & 1 ? 0 : row % 3]!); px(x + 1, y + 1, 12, 1, '#4e4236'); }
     } else if (lv === 4) {
-      px(0, cw, W, ROOM_H - cw, '#3a3e46');
-      for (let y = cw; y < ROOM_H; y += 12) px(0, y, W, 1, '#2c3038');
+      px(L, cw, WW, B - cw, '#3a3e46');
+      for (let y = cw; y < B; y += 12) px(L, y, WW, 1, '#2c3038');
     } else {
-      px(0, cw, W, ROOM_H - cw, '#141a26');
-      for (let y = cw + 10; y < ROOM_H; y += 20) px(0, y, W, 1, '#1c8ca8');
+      px(L, cw, WW, B - cw, '#141a26');
+      for (let y = cw + 10; y < B; y += 20) px(L, y, WW, 1, '#1c8ca8');
     }
-    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, cw, W, 6); // ombre sous le plancher
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(L, cw, WW, 6); // ombre sous le plancher
     // sol de la cave
-    px(0, KEG_FLOOR, W, ROOM_H - KEG_FLOOR, lv === 5 ? '#0c1018' : '#1e1814');
-    px(0, KEG_FLOOR, W, 1, lv === 5 ? '#5ef0ff' : '#4a3e32');
+    px(L, KEG_FLOOR, WW, B - KEG_FLOOR, lv === 5 ? '#0c1018' : '#1e1814');
+    px(L, KEG_FLOOR, WW, 1, lv === 5 ? '#5ef0ff' : '#4a3e32');
     if (lv <= 2) {
       // soupirail
       px(66, cw + 4, 28, 8, '#1b1424'); px(67, cw + 5, 26, 6, '#2a3a5a');

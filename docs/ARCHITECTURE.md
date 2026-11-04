@@ -23,7 +23,7 @@ src/
 │   ├── officeRoom.ts     le bureau : fenêtre sur l'atelier (en direct), panneau des commandes, présentoir de la gamme, ordinateur ; 5 décors
 │   ├── shopRoom.ts       le magasin : étagères, objet en vente, comptoir du marchand
 │   ├── icons.ts          icônes en pixel art (actions, enveloppe, objets du magasin)
-│   └── extend.ts         décor prolongé autour d'une pièce (remplit l'écran, quel que soit son format)
+│   └── space.ts          profondeur : sols en perspective (point de fuite), ombrage tramé, ombres portées
 ├── ui/                   interface DOM : header, barre de navigation en bas (pièces, magasin), boutons d'action carrés et objets du décor à toucher, glissement, panneaux,
 │                         ordinateur du bureau (menu d'applications, tableau de bord, messages…), dégustation, Gaston
 ├── platform/             Capacitor : stockage fichier, cycle de vie, haptique
@@ -32,5 +32,5 @@ src/
 
 - **Simulation :** à pas fixe, déterministe (PRNG sérialisé). Chaque lot porte une copie de sa recette. La température réelle de chaque étape est tirée à l'entrée dans la machine, selon la précision de son niveau.
 - **Pièces :** les canvas (bureau, atelier, stockage, bar, magasin) sont posés côte à côte sur une piste qui glisse au doigt. Seule la pièce affichée est redessinée, et ses voisines pendant un glissement ; au bureau, l'atelier l'est aussi, car on le voit par la fenêtre. Un glissement « avale » le clic qui suit, pour ne pas ouvrir la machine sous le doigt.
-- **Rendu :** un canvas de 160 px de large, agrandi au pixel près (`image-rendering: pixelated`). Les sprites sont peints une seule fois puis mis en cache, et les effets sont redessinés à chaque image.
+- **Rendu :** chaque pièce a un plan de 160 × 300 px, agrandi au pixel près (`image-rendering: pixelated`) pour tenir entier à l'écran. Son canvas couvre tout l'écran : le décor (murs, sols, passerelles) est peint d'un seul tenant jusqu'aux bords, plus large ou plus haut que le plan selon le format, sans rien recopier. Les sols du bureau, du stockage et du magasin fuient vers un point à hauteur des yeux ; l'ombrage (coins, pied des murs, lampes, ombres portées) est tramé au pixel, une fois, quand le décor est mis en cache. Les sprites sont peints une seule fois puis mis en cache, et les effets sont redessinés à chaque image.
 - **iOS :** chaque push sur la branche lance `.github/workflows/testflight.yml`, qui compile, signe et envoie le build sur TestFlight (voir `docs/TESTFLIGHT.md`).

@@ -1,31 +1,43 @@
 /**
- * Le bureau, au même format que les autres pièces (160 × 300) : une grande fenêtre donne sur l'atelier (on y voit
- * les machines tourner en direct), le panneau de liège où s'épinglent les commandes, l'horloge, le présentoir de la gamme,
- * et le bureau avec l'ordinateur. Son décor suit le niveau de l'ordinateur (5 décors).
+ * Le bureau, au format des autres pièces (plan de 160 × 300, décor peint jusqu'aux bords de l'écran) :
+ * une grande fenêtre, creusée dans le mur, donne sur l'atelier (on y voit les machines tourner en direct) ;
+ * le panneau de liège où s'épinglent les commandes, l'horloge, le présentoir de la gamme, et le bureau avec l'ordinateur.
+ * Le sol fuit vers un point à hauteur des yeux ; murs, meubles et sol sont ombrés (coins, pied des murs, ombres portées).
+ * Son décor suit le niveau de l'ordinateur (5 décors), et ses murs ne ressemblent jamais à ceux de l'atelier
+ * (pierre, brique, carreaux blancs, tôle, panneaux blancs) : lambris de bois, papier peint, vert anglais, plâtre bleu, panneaux sombres.
  */
 import type { Game } from '../core/game';
 import type { Label } from '../core/label';
 import { MAX_RANGE } from '../core/warehouse';
 import { drawMiniLabel } from './labelArt';
-import { drawDigits, hash, painter, Room, ROOM_H, ROOM_W, wall, type Px } from './rooms';
+import { drawDigits, hash, painter, Room, type Px } from './rooms';
+import { boxShadow, dim, dropShadow, floor, floorLight, from, mix, rgb, seam, shade, skew, trap, wallLight, type Bounds } from './space';
 import type { Rect } from './sprites';
 
 const FLOOR = 206;
-/** Fenêtre sur l'atelier (cadre extérieur), et la vitre dedans. */
+/** Point de fuite : au milieu, à hauteur des yeux. */
+const VX = 80;
+const EYE = 122;
+/** Fenêtre : l'ouverture dans le mur (nu du mur), et la vitre au fond de l'embrasure. */
 const WIN: Rect = { x: 8, y: 14, w: 144, h: 92 };
-const GLASS: Rect = { x: WIN.x + 5, y: WIN.y + 5, w: WIN.w - 10, h: WIN.h - 10 };
-/** Partie de l'atelier (en pixels de l'atelier) vue par la fenêtre, à l'échelle 1. */
+const GLASS: Rect = { x: 13, y: 22, w: 134, h: 84 };
+/** Partie de l'atelier (dans le plan de l'atelier) vue par la fenêtre, à l'échelle 1. */
 const VIEW = { x: 13, y: 58 };
 /** Panneau de liège : une feuille épinglée par commande. */
-const BOARD: Rect = { x: 8, y: 118, w: 58, h: 42 };
-const CLOCK = { x: 82, y: 132, r: 9 };
-/** Présentoir de la gamme : 2 étagères de 4 bouteilles. */
-const DISPLAY: Rect = { x: 100, y: 114, w: 54, h: 92 };
-/** Bureau et ordinateur, au premier plan. */
+const BOARD: Rect = { x: 8, y: 120, w: 58, h: 42 };
+const CLOCK = { x: 82, y: 136, r: 9 };
+/** Présentoir de la gamme, contre le mur : 2 étagères de 4 bouteilles. */
+const DISPLAY: Rect = { x: 100, y: 114, w: 54, h: 98 };
+const SHOWCASE = { x: DISPLAY.x + 3, y: DISPLAY.y + 14, w: DISPLAY.w - 6, h: DISPLAY.h - 22 };
+const SHELF_Y = [SHOWCASE.y + Math.floor(SHOWCASE.h / 2) - 1, SHOWCASE.y + SHOWCASE.h - 2];
+/** Bureau et ordinateur, au premier plan ; DESK_TOP : là où se posent les objets (milieu du plateau). */
 const DESK: Rect = { x: 6, y: 212, w: 104, h: 84 };
-const DESK_TOP = 250;
+const DESK_TOP = 248;
 
 export type OfficeHit = 'window' | 'board' | 'display' | 'computer';
+
+/** Ce que le bureau voit de l'atelier par sa fenêtre : son canvas, et où se trouve son plan dedans. */
+export interface WorkshopView { canvas: HTMLCanvasElement; b: Bounds }
 
 export class OfficeRoom extends Room {
   hits(): { id: OfficeHit; rect: Rect }[] {
@@ -41,12 +53,9 @@ export class OfficeRoom extends Room {
     return Math.max(1, Math.min(5, game.computerLevel));
   }
 
-  /** `workshop` : le canvas de l'atelier, qu'on aperçoit par la fenêtre. */
-  draw(game: Game, t: number, workshop: HTMLCanvasElement): void {
-    const g = this.g;
-    g.imageSmoothingEnabled = false;
+  draw(game: Game, t: number, workshop: WorkshopView): void {
     const lv = this.levelOf(game);
-    g.drawImage(this.background(lv, t), 0, 0);
+    this.begin(lv, t);
     this.drawWindow(lv, t, workshop);
     this.drawBoard(game);
     this.drawClock(game, lv);
@@ -57,14 +66,18 @@ export class OfficeRoom extends Room {
 
   // ---------------------------------------------------------------- fenêtre
 
-  private drawWindow(lv: number, t: number, workshop: HTMLCanvasElement): void {
+  private drawWindow(lv: number, t: number, workshop: WorkshopView): void {
     const g = this.g;
     const px = painter(g);
     const { x, y, w, h } = GLASS;
-    g.drawImage(workshop, VIEW.x, VIEW.y, w, h, x, y, w, h);
-    // la vitre : un voile bleuté, deux reflets en biais qui glissent lentement
-    g.fillStyle = 'rgba(170,210,240,0.14)';
+    g.drawImage(workshop.canvas, VIEW.x + workshop.b.ox, VIEW.y + workshop.b.oy, w, h, x, y, w, h);
+    // la vitre : un voile bleuté, plus sombre en haut (l'embrasure y fait de l'ombre), deux reflets qui glissent
+    g.fillStyle = 'rgba(150,190,225,0.16)';
     g.fillRect(x, y, w, h);
+    g.fillStyle = 'rgba(10,8,20,0.22)';
+    g.fillRect(x, y, w, 3);
+    g.fillStyle = 'rgba(10,8,20,0.12)';
+    g.fillRect(x, y + 3, w, 3);
     g.save();
     g.beginPath();
     g.rect(x, y, w, h);
@@ -80,19 +93,47 @@ export class OfficeRoom extends Room {
       g.fill();
     }
     g.restore();
-    // petits bois : 3 carreaux sur 2
-    const bar = lv === 5 ? '#dce6f0' : lv === 4 ? '#3a4250' : lv === 3 ? '#e8e4dc' : '#5a3a1c';
-    const hi = lv === 5 ? '#ffffff' : lv === 4 ? '#5c6878' : lv === 3 ? '#ffffff' : '#8a5a2c';
+    // petits bois : 3 carreaux sur 2, avec leur ombre sur la vitre
+    const [bar, hi] = WINDOW_WOOD[lv - 1]!;
     for (const k of [1, 2]) {
       const bx = x + Math.round((w * k) / 3) - 1;
+      px(bx + 2, y, 1, h, 'rgba(0,0,0,0.25)');
       px(bx, y, 2, h, bar);
       px(bx, y, 1, h, hi);
     }
     if (lv < 5) {
       const by = y + Math.round(h * 0.48) - 1;
+      px(x, by + 2, w, 1, 'rgba(0,0,0,0.25)');
       px(x, by, w, 2, bar);
       px(x, by, w, 1, hi);
     }
+  }
+
+  // ---------------------------------------------------------------- présentoir : les bouteilles de la gamme
+
+  private drawDisplay(game: Game, lv: number): void {
+    const g = this.g;
+    const px = painter(g);
+    const s = SHOWCASE;
+    for (let i = 0; i < Math.min(MAX_RANGE, 8); i++) {
+      const bx = s.x + 3 + (i % 4) * 12;
+      const base = SHELF_Y[Math.floor(i / 4)]!;
+      const beer = game.beers[i];
+      if (beer) {
+        px(bx + 1, base - 1, 8, 1, 'rgba(0,0,0,0.35)'); // ombre sur l'étagère
+        drawMiniBottle(px, g, bx, base - 22, beer.label);
+      } else if (i < game.rangeSlots) drawBottleGhost(px, bx, base - 22, lv === 5 ? '#1b142440' : '#ffffff30'); // place libre
+    }
+    // étagères de verre (dessus visible : elles sont sous les yeux) et la vitre
+    for (const sy of SHELF_Y) {
+      px(s.x, sy - 1, s.w, 1, 'rgba(220,240,255,0.45)');
+      px(s.x, sy, s.w, 2, '#c4e4f0');
+      px(s.x, sy + 2, s.w, 1, '#6c8a9a');
+    }
+    g.fillStyle = 'rgba(200,230,255,0.10)';
+    g.fillRect(s.x, s.y, s.w, s.h);
+    g.fillStyle = 'rgba(255,255,255,0.16)';
+    for (let k = 0; k < 18; k++) g.fillRect(s.x + 30 + k - Math.floor(k / 2), s.y + k * 2, 2, 2);
   }
 
   // ---------------------------------------------------------------- panneau de liège et horloge
@@ -151,56 +192,6 @@ export class OfficeRoom extends Room {
     };
     hand(mAng, r - 2, ink);
     hand(hAng, r - 4, lv === 5 ? '#ffffff' : '#e8553a');
-  }
-
-  // ---------------------------------------------------------------- présentoir de la gamme
-
-  private drawDisplay(game: Game, lv: number): void {
-    const g = this.g;
-    const px = painter(g);
-    const d = DISPLAY;
-    const [wood, woodHi, woodLo] = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : lv === 4 ? ['#2c283a', '#545068', '#1b1424'] : ['#6a4422', '#a8743c', '#3a2010'];
-    // le meuble
-    px(d.x, d.y, d.w, d.h, wood);
-    px(d.x, d.y, d.w, 1, woodHi);
-    px(d.x, d.y, 1, d.h, woodHi);
-    px(d.x + d.w - 1, d.y, 1, d.h, woodLo);
-    // enseigne en haut
-    px(d.x + 3, d.y + 3, d.w - 6, 9, '#1b1424');
-    g.fillStyle = lv === 5 ? '#5ef0ff' : '#f2c14e';
-    g.font = '8px monospace';
-    g.textBaseline = 'alphabetic';
-    g.fillText('GAMME', d.x + 12, d.y + 10);
-    // fond éclairé de la vitrine
-    const inX = d.x + 3;
-    const inW = d.w - 6;
-    const inY = d.y + 14;
-    const inH = d.h - 22;
-    px(inX, inY, inW, inH, lv === 5 ? '#e8f8ff' : '#3a2a34');
-    g.fillStyle = lv === 5 ? 'rgba(94,240,255,0.15)' : 'rgba(255,220,150,0.16)';
-    g.fillRect(inX, inY, inW, 6);
-    // deux étagères de verre, 4 bouteilles chacune
-    const shelfY = [inY + Math.floor(inH / 2) - 1, inY + inH - 2];
-    for (const sy of shelfY) {
-      px(inX, sy, inW, 2, '#c4e4f0');
-      px(inX, sy + 1, inW, 1, '#6c8a9a');
-    }
-    const slots = Math.min(MAX_RANGE, 8);
-    for (let i = 0; i < slots; i++) {
-      const bx = inX + 3 + (i % 4) * 12;
-      const base = shelfY[Math.floor(i / 4)]!;
-      const beer = game.beers[i];
-      if (beer) drawMiniBottle(px, g, bx, base - 22, beer.label);
-      else if (i < game.rangeSlots) drawBottleGhost(px, bx, base - 22, '#ffffff30'); // place libre
-    }
-    // la vitre et son reflet
-    g.fillStyle = 'rgba(200,230,255,0.10)';
-    g.fillRect(inX, inY, inW, inH);
-    g.fillStyle = 'rgba(255,255,255,0.16)';
-    for (let k = 0; k < 18; k++) g.fillRect(inX + 30 + k - Math.floor(k / 2), inY + k * 2, 2, 2);
-    // socle
-    px(d.x - 1, d.y + d.h - 6, d.w + 2, 6, woodLo);
-    px(d.x - 1, d.y + d.h - 6, d.w + 2, 1, woodHi);
   }
 
   // ---------------------------------------------------------------- ordinateur
@@ -275,107 +266,332 @@ export class OfficeRoom extends Room {
 
   protected paintBackground(g: CanvasRenderingContext2D, lv: number): void {
     const px = painter(g);
-    const W = ROOM_W;
-    wall(g, px, lv === 1 ? 'plank' : lv === 2 ? 'brick' : lv === 3 ? 'green' : lv === 4 ? 'metal' : 'future', FLOOR);
-    if (lv === 3) {
-      // lambris sombre sous la cimaise
-      px(0, 168, W, FLOOR - 168, '#3a2416');
-      for (let x = 0; x < W; x += 20) { px(x, 172, 18, FLOOR - 178, '#4a2e1c'); px(x, 172, 18, 1, '#5e3c24'); }
-      px(0, 166, W, 3, '#8a5a2c'); px(0, 166, W, 1, '#c88a4a');
-    }
-    // fenêtre : cadre et appui
+    const b = this.b;
+    const { L, R, T } = b;
+    const WW = R - L;
+    // ---- le mur
+    paintWall(g, px, b, lv);
+    const lamp: [number, number, number, number] = [DESK.x + DESK.w - 13, DESK_TOP - 18, 34, 0.12];
+    wallLight(g, b, T, FLOOR, [[VX, WIN.y + WIN.h + 8, 70, 0.1], lamp], lv === 5 ? 0.6 : 0.7);
+    // ---- le sol, qui fuit vers le point de fuite
+    paintFloor(g, b, lv);
+    floorLight(g, b, FLOOR, [[VX, FLOOR + 6, 80, lv === 5 ? 0.35 : 0.16]], lv === 5 ? 0.45 : 0.55);
+    // plinthe : un dessus éclairé, une face, une ombre au sol
+    const [base, baseHi] = lv === 5 ? ['#0c1020', '#5ef0ff'] : lv === 4 ? ['#4a5462', '#8a96a6'] : lv === 2 ? ['#3a2010', '#7a5030'] : ['#3a2010', '#6a4422'];
+    px(L, FLOOR - 4, WW, 4, base);
+    px(L, FLOOR - 4, WW, 1, baseHi);
+    shade(g, b, { x: L, y: FLOOR, w: WW, h: 3 }, (_, y) => 0.6 + (y - FLOOR) * 0.13);
+
+    // ---- la fenêtre, creusée dans le mur
+    const [wood, woodHi, woodLo] = CASING[lv - 1]!;
     const f = WIN;
-    const [frame, frameHi, frameLo] = lv === 5 ? ['#b8c6d6', '#ffffff', '#8a9ab0'] : lv === 4 ? ['#2a303a', '#4a5462', '#1b1424'] : lv === 3 ? ['#e8e4dc', '#ffffff', '#a8a49c'] : ['#6a4422', '#a8743c', '#3a2010'];
-    px(f.x - 1, f.y - 1, f.w + 2, f.h + 2, '#1b1424');
-    px(f.x, f.y, f.w, f.h, frame);
-    px(f.x, f.y, f.w, 1, frameHi);
-    px(f.x, f.y, 1, f.h, frameHi);
-    px(f.x + f.w - 1, f.y, 1, f.h, frameLo);
-    px(f.x, f.y + f.h - 1, f.w, 1, frameLo);
-    px(GLASS.x - 1, GLASS.y - 1, GLASS.w + 2, GLASS.h + 2, frameLo);
-    px(f.x - 4, f.y + f.h, f.w + 8, 4, frame);
-    px(f.x - 4, f.y + f.h, f.w + 8, 1, frameHi);
-    px(f.x - 4, f.y + f.h + 4, f.w + 8, 1, '#00000060');
-    if (lv === 4) {
-      // store vénitien relevé
-      px(f.x + 2, f.y + 2, f.w - 4, 3, '#c4d0dc');
-      px(f.x + 2, f.y + 4, f.w - 4, 1, '#98a6b6');
-    }
-    // panneau de liège
-    const b = BOARD;
-    px(b.x - 1, b.y - 1, b.w + 2, b.h + 2, '#1b1424');
-    px(b.x, b.y, b.w, b.h, lv === 5 ? '#e8eef4' : '#8a5a2c');
-    px(b.x + 2, b.y + 2, b.w - 4, b.h - 4, lv === 5 ? '#c4d0dc' : '#c48a50');
-    if (lv !== 5) for (let i = 0; i < 60; i++) px(b.x + 2 + Math.floor(hash(i, 41) * (b.w - 4)), b.y + 2 + Math.floor(hash(i, 42) * (b.h - 4)), 1, 1, '#a8703c');
-    // sol
-    const top = FLOOR;
-    if (lv === 1) {
-      for (let y = top; y < ROOM_H; y += 7) {
-        px(0, y, W, 7, (y / 7) % 2 ? '#7a5228' : '#84582c');
-        px(0, y, W, 1, '#4a2e14');
-        for (let x = Math.floor(hash(y) * 40); x < W; x += 40) px(x, y, 1, 7, '#4a2e14');
-      }
-    } else if (lv === 2) {
-      // parquet à bâtons rompus
-      px(0, top, W, ROOM_H - top, '#9a6a36');
-      for (let y = top; y < ROOM_H; y += 6) for (let x = ((y - top) / 6) % 2 ? 0 : 6; x < W; x += 12) { px(x, y, 12, 1, '#6a4422'); px(x, y, 1, 6, '#6a4422'); px(x + 1, y + 1, 10, 1, '#b07a40'); }
-    } else if (lv === 3) {
-      // moquette bordeaux
-      px(0, top, W, ROOM_H - top, '#6a2a32');
-      for (let i = 0; i < 160; i++) px(Math.floor(hash(i, 51) * W), top + Math.floor(hash(i, 52) * (ROOM_H - top)), 1, 1, i % 2 ? '#7a343c' : '#5a222a');
-    } else if (lv === 4) {
-      // dalles de moquette grises
-      for (let y = top; y < ROOM_H; y += 16) for (let x = 0; x < W; x += 16) {
-        px(x, y, 16, 16, ((x + y) / 16) % 2 ? '#5a5e66' : '#62666e');
-        for (let k = 0; k < 16; k += 3) px(x + (((x + y) / 16) % 2 ? k : 0), y + (((x + y) / 16) % 2 ? 0 : k), 1, 16 - k > 0 ? 1 : 0, '#6e727a');
-      }
-    } else {
-      px(0, top, W, ROOM_H - top, '#1c2230');
-      for (let y = top; y < ROOM_H; y += 10) px(0, y, W, 1, '#2a3244');
-      px(0, top + 4, W, 1, '#5ef0ff');
-    }
-    px(0, top, W, 2, '#00000040');
-    // plinthe
-    px(0, top - 3, W, 3, lv === 5 ? '#dce6f0' : '#3a2010');
-    // la plante verte, à droite
+    const gl = GLASS;
+    // chambranle autour de l'ouverture, avec son ombre sur le mur
+    boxShadow(g, b, { x: f.x - 3, y: f.y - 2, w: f.w + 6, h: f.h + 6 }, 5, 0.7);
+    px(f.x - 5, f.y - 5, f.w + 10, f.h + 5, '#1b1424');
+    px(f.x - 4, f.y - 4, f.w + 8, f.h + 4, wood);
+    px(f.x - 4, f.y - 4, f.w + 8, 1, woodHi);
+    px(f.x - 4, f.y - 4, 1, f.h + 4, woodHi);
+    px(f.x + f.w + 3, f.y - 4, 1, f.h + 4, woodLo);
+    // embrasure : le dessous du linteau (dans l'ombre), les côtés, qui fuient vers le point de fuite
+    const reveal = REVEAL[lv - 1]!;
+    trap(g, f.y, gl.y, f.x, f.x + f.w, gl.x, gl.x + gl.w, reveal[0]);
+    skew(g, f.x, gl.x, f.y, f.y + f.h, gl.y, gl.y + gl.h, reveal[1]);
+    skew(g, f.x + f.w, gl.x + gl.w, f.y, f.y + f.h, gl.y, gl.y + gl.h, reveal[1]);
+    shade(g, b, { x: f.x, y: f.y, w: f.w, h: gl.y - f.y + 4 }, (x, y) => (x < gl.x || x > gl.x + gl.w || y < gl.y ? 0.75 + 0.25 * ((y - f.y) / (gl.y - f.y + 4)) : 1));
+    // appui : son dessus (on le voit d'en haut), sa face, son ombre
+    const sy = f.y + f.h;
+    trap(g, sy - 1, sy + 3, f.x - 4, f.x + f.w + 4, f.x - 7, f.x + f.w + 7, woodHi);
+    px(f.x - 7, sy + 3, f.w + 14, 3, wood);
+    px(f.x - 7, sy + 6, f.w + 14, 1, woodLo);
+    shade(g, b, { x: f.x - 7, y: sy + 7, w: f.w + 14, h: 5 }, (_, y) => 0.55 + (y - sy - 7) * 0.09);
+
+    // ---- panneau de liège et horloge, accrochés au mur (ombre portée en bas à droite)
+    const bd = BOARD;
+    boxShadow(g, b, { x: bd.x + 2, y: bd.y + 3, w: bd.w, h: bd.h }, 3, 0.55);
+    px(bd.x - 1, bd.y - 1, bd.w + 2, bd.h + 2, '#1b1424');
+    px(bd.x, bd.y, bd.w, bd.h, lv === 5 ? '#e8eef4' : '#8a5a2c');
+    px(bd.x, bd.y, bd.w, 1, lv === 5 ? '#ffffff' : '#b07a40');
+    px(bd.x + 2, bd.y + 2, bd.w - 4, bd.h - 4, lv === 5 ? '#c4d0dc' : '#c48a50');
+    px(bd.x + 2, bd.y + 2, bd.w - 4, 1, lv === 5 ? '#98a6b6' : '#8a5a2c'); // ombre du cadre sur le liège
+    if (lv !== 5) for (let i = 0; i < 70; i++) px(bd.x + 2 + Math.floor(hash(i, 41) * (bd.w - 4)), bd.y + 3 + Math.floor(hash(i, 42) * (bd.h - 5)), 1, 1, i % 3 ? '#a8703c' : '#d89c60');
+    dropShadow(g, b, CLOCK.x + 2, CLOCK.y + 3, CLOCK.r + 2, CLOCK.r + 2, 0.55);
+
+    // ---- le présentoir, posé au sol contre le mur
+    const d = DISPLAY;
+    const [cab, cabHi, cabLo] = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : lv === 4 ? ['#2c283a', '#545068', '#1b1424'] : lv === 3 ? ['#4a2c18', '#7a5030', '#24140a'] : ['#6a4422', '#a8743c', '#3a2010'];
+    boxShadow(g, b, { x: d.x + 3, y: d.y + 2, w: d.w, h: FLOOR - d.y }, 5, 0.6);
+    shade(g, b, { x: d.x - 6, y: FLOOR, w: d.w + 12, h: d.y + d.h - FLOOR + 5 }, (x, y) => {
+      const k = Math.min(1, Math.max(0, (y - FLOOR) / (d.y + d.h - FLOOR + 5)));
+      const side = x < d.x ? (d.x - x) / 6 : x > d.x + d.w ? (x - d.x - d.w) / 6 : 0;
+      return 0.5 + 0.5 * Math.max(k ** 0.5, side);
+    });
+    // face latérale gauche (on la voit : le meuble est à droite du point de fuite)
+    skew(g, d.x - 3, d.x, d.y + 1, FLOOR, d.y, d.y + d.h, cabLo);
+    px(d.x, d.y, d.w, d.h, cab);
+    px(d.x, d.y, d.w, 1, cabHi);
+    px(d.x, d.y, 1, d.h, cabHi);
+    px(d.x + d.w - 1, d.y, 1, d.h, cabLo);
+    // enseigne
+    px(d.x + 3, d.y + 3, d.w - 6, 9, '#1b1424');
+    g.fillStyle = lv === 5 ? '#5ef0ff' : '#f2c14e';
+    g.font = '8px monospace';
+    g.textBaseline = 'alphabetic';
+    g.fillText('GAMME', d.x + 12, d.y + 10);
+    // le fond de la vitrine, éclairé d'en haut
+    const s = SHOWCASE;
+    px(s.x - 1, s.y - 1, s.w + 2, s.h + 2, '#1b1424');
+    px(s.x, s.y, s.w, s.h, lv === 5 ? '#e8f8ff' : '#3a2a34');
+    shade(g, b, s, (_, y) => 1.35 - ((y - s.y) / s.h) * 0.45);
+    // socle
+    px(d.x - 1, d.y + d.h - 6, d.w + 2, 6, cabLo);
+    px(d.x - 1, d.y + d.h - 6, d.w + 2, 1, cabHi);
+
+    // ---- la plante verte, à droite
     const pxp = 126;
-    px(pxp, 270, 22, 22, lv === 5 ? '#dce6f0' : '#b05a32'); px(pxp, 270, 22, 2, lv === 5 ? '#ffffff' : '#d8843a'); px(pxp + 2, 292, 18, 2, '#00000040');
-    for (let i = 0; i < 14; i++) {
-      const a = -Math.PI / 2 + (hash(i, 61) - 0.5) * 2.4;
-      const len = 14 + hash(i, 62) * 16;
-      for (let s = 0; s < len; s++) {
-        const lx = Math.round(pxp + 11 + Math.cos(a) * s);
-        const ly = Math.round(270 + Math.sin(a) * s);
-        px(lx, ly, 2, 2, s > len - 6 ? '#7ee081' : i % 2 ? '#2c8a4a' : '#3a9a52');
+    dropShadow(g, b, pxp + 13, 295, 16, 4, 0.5);
+    const pot = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : ['#b05a32', '#d8843a', '#6e3418'];
+    trap(g, 273, 294, pxp, pxp + 24, pxp + 3, pxp + 21, pot[0]!);
+    skew(g, pxp + 21, pxp + 24, 294, 294, 273, 273, pot[2]!); // flanc dans l'ombre
+    shade(g, b, { x: pxp, y: 273, w: 24, h: 21 }, (x) => 1.12 - ((x - pxp) / 24) * 0.35);
+    trap(g, 270, 274, pxp - 1, pxp + 25, pxp - 1, pxp + 25, pot[1]!); // bord du pot
+    trap(g, 271, 273, pxp + 1, pxp + 23, pxp + 1, pxp + 23, '#2a1a10'); // terreau
+    for (let i = 0; i < 16; i++) {
+      const a = -Math.PI / 2 + (hash(i, 61) - 0.5) * 2.5;
+      const len = 14 + hash(i, 62) * 18;
+      for (let k = 0; k < len; k++) {
+        const lx = Math.round(pxp + 12 + Math.cos(a) * k);
+        const ly = Math.round(272 + Math.sin(a) * k + (k / len) ** 2 * 4);
+        const tip = k > len - 6;
+        px(lx, ly, 2, 2, tip ? '#7ee081' : a > -Math.PI / 2 ? '#2c8a4a' : '#3aa05a');
+        if (!tip && a > -Math.PI / 2) px(lx, ly + 2, 2, 1, '#1c5a30');
       }
     }
-    // le bureau
-    const d = DESK;
-    const dt = DESK_TOP;
+
+    // ---- le bureau : plateau vu d'en haut, face avant, pieds ; ombres dessous
+    const dk = DESK;
+    const front = DESK_TOP + 2;
+    const back = DESK_TOP - 6;
+    const kk = (back - front) / (EYE - front); // fuite du plateau vers le point de fuite
+    const bl = dk.x + (VX - dk.x) * kk;
+    const br = dk.x + dk.w + (VX - dk.x - dk.w) * kk;
+    const [top, face, edge, hi] = DESK_WOOD[lv - 1]!;
+    // l'ombre sous le bureau, et son ombre portée au sol
+    shade(g, b, { x: dk.x - 4, y: front + 4, w: dk.w + 10, h: 300 - front - 2 }, (x, y) => {
+      const inside = x >= dk.x && x <= dk.x + dk.w;
+      const k = (y - front - 4) / (300 - front - 2);
+      return inside ? 0.42 + 0.3 * k : 0.8 + 0.2 * Math.min(1, Math.abs(x < dk.x ? dk.x - x : x - dk.x - dk.w) / 4);
+    });
+    trap(g, back, front, bl, br, dk.x, dk.x + dk.w, top);
+    px(Math.round(bl), back, Math.round(br - bl), 1, hi);
+    shade(g, b, { x: dk.x, y: back, w: dk.w, h: front - back }, (_, y) => 0.88 + ((y - back) / (front - back)) * 0.2);
+    px(dk.x, front, dk.w, 5, face);
+    px(dk.x, front, dk.w, 1, hi);
+    px(dk.x, front + 4, dk.w, 1, edge);
     if (lv <= 2) {
-      px(d.x, dt, d.w, 6, '#8a5a2c'); px(d.x, dt, d.w, 1, '#c88a4a'); px(d.x, dt + 5, d.w, 1, '#4c2c14');
-      px(d.x + 2, dt + 6, d.w - 4, 30, '#744620'); px(d.x + 2, dt + 6, d.w - 4, 1, '#4c2c14');
-      for (let k = 0; k < 3; k++) { px(d.x + 6, dt + 9 + k * 9, 30, 7, '#8a5a2c'); px(d.x + 19, dt + 12 + k * 9, 4, 1, '#c88a4a'); }
-      px(d.x + 2, dt + 36, 4, d.h - 42, '#744620'); px(d.x + d.w - 6, dt + 36, 4, d.h - 42, '#744620');
+      // caisson à tiroirs à gauche, pied à droite
+      px(dk.x + 2, front + 5, 36, 296 - front - 5, face);
+      px(dk.x + 2, front + 5, 1, 296 - front - 5, hi);
+      for (let k = 0; k < 3; k++) {
+        const ty = front + 8 + k * 12;
+        px(dk.x + 5, ty, 30, 10, top); px(dk.x + 5, ty, 30, 1, hi); px(dk.x + 5, ty + 9, 30, 1, edge);
+        px(dk.x + 17, ty + 4, 6, 2, '#c8a860');
+      }
+      px(dk.x + dk.w - 7, front + 5, 5, 296 - front - 5, face);
+      px(dk.x + dk.w - 7, front + 5, 1, 296 - front - 5, hi);
     } else {
-      const s = lv === 5 ? ['#ffffff', '#dce6f0', '#8a9ab0'] : lv === 4 ? ['#c4d0dc', '#98a6b6', '#465264'] : ['#c88a4a', '#8a5a2c', '#4c2c14'];
-      px(d.x, dt, d.w, 5, s[1]!); px(d.x, dt, d.w, 1, s[0]!); px(d.x, dt + 4, d.w, 1, s[2]!);
-      px(d.x + 3, dt + 5, 30, d.h - 11, s[1]!); px(d.x + 3, dt + 5, 1, d.h - 11, s[0]!);
-      for (let k = 0; k < 3; k++) px(d.x + 8, dt + 12 + k * 12, 20, 1, s[2]!);
-      px(d.x + d.w - 6, dt + 5, 3, d.h - 11, s[2]!);
+      // piétement : un caisson fin et un pied
+      px(dk.x + 3, front + 5, 32, 296 - front - 5, top);
+      px(dk.x + 3, front + 5, 1, 296 - front - 5, hi);
+      for (let k = 0; k < 3; k++) px(dk.x + 8, front + 12 + k * 12, 22, 1, edge);
+      px(dk.x + dk.w - 6, front + 5, 3, 296 - front - 5, edge);
     }
-    // lampe de bureau
-    const lx = d.x + d.w - 18;
-    px(lx, dt - 2, 10, 2, '#2c283a'); px(lx + 4, dt - 16, 2, 14, '#2c283a'); px(lx, dt - 20, 10, 5, lv === 5 ? '#5ef0ff' : '#2c8a4a'); px(lx + 1, dt - 15, 8, 1, '#fff4b0');
-    g.fillStyle = 'rgba(255,240,180,0.10)'; g.beginPath(); g.moveTo(lx + 1, dt - 15); g.lineTo(lx + 9, dt - 15); g.lineTo(lx + 16, dt); g.lineTo(lx - 6, dt); g.fill();
-    // une tasse et des papiers
-    px(d.x + 4, dt - 6, 6, 6, '#f6ecd6'); px(d.x + 10, dt - 5, 2, 3, '#f6ecd6'); px(d.x + 5, dt - 6, 4, 1, '#6a4422');
+    shade(g, b, { x: dk.x, y: front + 5, w: dk.w, h: 296 - front - 5 }, (_, y) => 1 - ((y - front - 5) / (296 - front - 5)) * 0.3);
+    dropShadow(g, b, dk.x + 20, 297, 22, 3, 0.45);
+    // lampe de bureau, et sa lumière sur le plateau
+    const lx = dk.x + dk.w - 18;
+    shade(g, b, { x: lx - 16, y: back, w: 40, h: front - back }, (x) => 1.25 - Math.min(1, Math.abs(x - lx - 5) / 18) * 0.25);
+    px(lx - 1, DESK_TOP - 1, 12, 2, 'rgba(0,0,0,0.35)');
+    px(lx, DESK_TOP - 3, 10, 2, '#2c283a'); px(lx + 4, DESK_TOP - 17, 2, 14, '#2c283a'); px(lx, DESK_TOP - 21, 10, 5, lv === 5 ? '#5ef0ff' : '#2c8a4a');
+    px(lx, DESK_TOP - 21, 10, 1, lv === 5 ? '#ffffff' : '#5ec07a'); px(lx + 1, DESK_TOP - 16, 8, 1, '#fff4b0');
+    g.fillStyle = 'rgba(255,240,180,0.10)'; g.beginPath(); g.moveTo(lx + 1, DESK_TOP - 16); g.lineTo(lx + 9, DESK_TOP - 16); g.lineTo(lx + 16, DESK_TOP + 1); g.lineTo(lx - 6, DESK_TOP + 1); g.fill();
+    // une tasse
+    px(dk.x + 4, DESK_TOP - 1, 8, 1, 'rgba(0,0,0,0.35)');
+    px(dk.x + 4, DESK_TOP - 7, 6, 6, '#f6ecd6'); px(dk.x + 10, DESK_TOP - 6, 2, 3, '#f6ecd6'); px(dk.x + 5, DESK_TOP - 7, 4, 1, '#6a4422'); px(dk.x + 8, DESK_TOP - 6, 2, 5, '#c8bca4');
     // chaise, de dos, devant le bureau
-    const cx = d.x + 34;
-    const back = lv === 5 ? '#f4f8fc' : lv >= 3 ? '#2c283a' : '#3e3a50';
-    px(cx, dt + 8, 26, 22, back); px(cx, dt + 8, 26, 1, '#ffffff30'); px(cx + 2, dt + 10, 22, 18, lv === 5 ? '#dce6f0' : '#4a4660');
-    px(cx + 12, dt + 30, 2, 10, '#2c283a'); px(cx + 4, dt + 40, 18, 2, '#2c283a');
-    px(cx + 3, dt + 42, 2, 2, '#1b1424'); px(cx + 21, dt + 42, 2, 2, '#1b1424');
+    const cx = dk.x + 34;
+    const seat = front + 8;
+    dropShadow(g, b, cx + 13, 296, 15, 3, 0.4);
+    const backc = lv === 5 ? '#f4f8fc' : lv >= 3 ? '#2c283a' : '#3e3a50';
+    const cushion = lv === 5 ? '#dce6f0' : lv >= 3 ? '#3a3650' : '#4a4660';
+    px(cx + 12, seat + 22, 3, 12, '#2c283a'); px(cx + 12, seat + 22, 1, 12, '#545068');
+    px(cx + 3, seat + 33, 21, 2, '#2c283a');
+    for (const wx of [cx + 2, cx + 12, cx + 22]) px(wx, seat + 35, 3, 2, '#1b1424');
+    px(cx - 1, seat, 28, 23, '#1b1424');
+    px(cx, seat, 26, 22, backc);
+    px(cx + 2, seat + 2, 22, 18, cushion);
+    px(cx + 2, seat + 2, 22, 1, '#ffffff30');
+    shade(g, b, { x: cx, y: seat, w: 26, h: 22 }, (x, y) => 1.08 - ((x - cx) / 26) * 0.2 - ((y - seat) / 22) * 0.12);
+  }
+}
+
+// ==================================================================== matières
+
+const WINDOW_WOOD: readonly (readonly [string, string])[] = [
+  ['#5a3a1c', '#8a5a2c'], ['#e8e0cc', '#ffffff'], ['#3a2010', '#6a4422'], ['#4a5462', '#8a96a6'], ['#2a3248', '#5ef0ff'],
+];
+/** Chambranle de la fenêtre : teinte, lumière, ombre. */
+const CASING: readonly (readonly [string, string, string])[] = [
+  ['#6a4422', '#a8743c', '#3a2010'], ['#e8e0cc', '#ffffff', '#a89e88'], ['#4a2c18', '#7a5030', '#24140a'], ['#8a96a6', '#c4d0dc', '#4a5462'], ['#2a3248', '#4a5878', '#0c1020'],
+];
+/** Embrasure : dessous du linteau, côtés. */
+const REVEAL: readonly (readonly [string, string])[] = [
+  ['#5a3a1c', '#7a5228'], ['#b8ac90', '#d4c8ac'], ['#1c3226', '#24402e'], ['#7a8a9c', '#8e9eb0'], ['#141a2c', '#1c2438'],
+];
+/** Bureau : dessus, face, arête sombre, lumière. */
+const DESK_WOOD: readonly (readonly [string, string, string, string])[] = [
+  ['#a06830', '#7a4a22', '#3a2010', '#c88a4a'], ['#b07a40', '#8a5a2c', '#4c2c14', '#d8a060'], ['#6a3c20', '#4a2a14', '#24140a', '#8a5a30'],
+  ['#d8e0ea', '#a4b2c2', '#5a6878', '#ffffff'], ['#f4f8fc', '#c8d4e0', '#8a9ab0', '#ffffff'],
+];
+
+/**
+ * Le mur du bureau, selon le niveau : 1 lambris de bois clair, 2 papier peint à rayures sur soubassement de noyer,
+ * 3 vert anglais et boiseries sombres, 4 plâtre bleu-gris et bandeau orange, 5 panneaux bleu nuit à tasseaux de noyer.
+ */
+function paintWall(g: CanvasRenderingContext2D, px: Px, b: Bounds, lv: number): void {
+  const { L, R, T } = b;
+  const WW = R - L;
+  const H = FLOOR - T;
+  if (lv === 1) {
+    for (let x = from(0, 8, L); x < R; x += 8) {
+      const k = Math.floor(x / 8);
+      px(x, T, 8, H, ['#b8844a', '#ac7a42', '#c08c50'][((k % 3) + 3) % 3]!);
+      px(x, T, 1, H, '#6a4422');
+      px(x + 1, T, 1, H, '#d8a468');
+      for (let y = T; y < FLOOR; y += 4) if (hash(k, y) < 0.12) px(x + 2 + Math.floor(hash(k, y + 1) * 4), y, 2, 3, '#9a6a36');
+    }
+    // cimaise et soubassement à panneaux
+    px(L, 166, WW, 4, '#7a4a22'); px(L, 166, WW, 1, '#d8a468'); px(L, 169, WW, 1, '#3a2010');
+    px(L, 170, WW, FLOOR - 170, '#8a5a2c');
+    for (let x = from(2, 30, L); x < R; x += 30) {
+      px(x, 174, 26, FLOOR - 182, '#9a6a36');
+      px(x, 174, 26, 1, '#5a3a1c'); px(x, 174, 1, FLOOR - 182, '#5a3a1c');
+      px(x + 25, 174, 1, FLOOR - 182, '#c08c50'); px(x, FLOOR - 9, 26, 1, '#c08c50');
+    }
+  } else if (lv === 2) {
+    // papier peint crème à rayures vert sauge et petits fleurons
+    px(L, T, WW, H, '#e4d6b2');
+    for (let x = from(0, 16, L); x < R; x += 16) {
+      px(x, T, 6, H, '#a4b890'); px(x, T, 1, H, '#7e9470'); px(x + 5, T, 1, H, '#7e9470');
+      for (let y = from(4, 12, T); y < 160; y += 12) {
+        const fx = x + 11;
+        const fy = y + ((Math.floor(y / 12) & 1) ? 6 : 0);
+        px(fx, fy, 1, 3, '#a8483a'); px(fx - 1, fy + 1, 3, 1, '#a8483a'); px(fx, fy + 3, 1, 1, '#7e9470');
+      }
+    }
+    // soubassement en noyer, cimaise
+    px(L, 160, WW, 5, '#3a2010'); px(L, 160, WW, 1, '#8a5a2c'); px(L, 163, WW, 1, '#6a4422');
+    px(L, 165, WW, FLOOR - 165, '#5a3420');
+    for (let x = from(3, 26, L); x < R; x += 26) {
+      px(x, 169, 22, FLOOR - 177, '#6a4028');
+      px(x, 169, 22, 1, '#2a1408'); px(x, 169, 1, FLOOR - 177, '#2a1408');
+      px(x + 21, 169, 1, FLOOR - 177, '#8a5a38'); px(x, FLOOR - 9, 22, 1, '#8a5a38');
+    }
+  } else if (lv === 3) {
+    // vert anglais à motif damassé, frise dorée, boiseries sombres
+    px(L, T, WW, H, '#2c4a3a');
+    for (let y = from(4, 14, T); y < 164; y += 14) for (let x = from(6 + ((Math.floor(y / 14) & 1) ? 7 : 0), 14, L); x < R; x += 14) {
+      px(x, y, 1, 3, '#3c5e4a'); px(x - 1, y + 1, 3, 1, '#3c5e4a');
+    }
+    px(L, 6, WW, 2, '#a8843c'); px(L, 6, WW, 1, '#e0c070');
+    px(L, 164, WW, FLOOR - 164, '#3a2416');
+    for (let x = from(0, 20, L); x < R; x += 20) { px(x + 1, 170, 18, FLOOR - 178, '#4a2e1c'); px(x + 1, 170, 18, 1, '#24140a'); px(x + 18, 170, 1, FLOOR - 178, '#6a4428'); }
+    px(L, 162, WW, 3, '#8a5a2c'); px(L, 162, WW, 1, '#c88a4a');
+  } else if (lv === 4) {
+    // plâtre bleu-gris, légèrement nuancé, bandeau orange, soubassement plus sombre
+    for (let y = T; y < FLOOR; y++) for (let x = L; x < R; x += 4) px(x, y, 4, 1, hash(Math.floor(x / 4), y) < 0.3 ? '#a2b2c2' : '#a8b8c8');
+    px(L, 170, WW, 4, '#e8742a'); px(L, 170, WW, 1, '#ffb070'); px(L, 173, WW, 1, '#a84a14');
+    px(L, 174, WW, FLOOR - 174, '#7a8a9c');
+    for (let x = from(0, 40, L); x < R; x += 40) px(x, 174, 1, FLOOR - 174, '#6a7a8c');
+  } else {
+    // panneaux bleu nuit, tasseaux de noyer, bandeau lumineux
+    px(L, T, WW, H, '#161c30');
+    for (let x = from(0, 6, L); x < R; x += 6) { px(x, 44, 3, FLOOR - 44, '#5a3a24'); px(x, 44, 1, FLOOR - 44, '#7a5234'); }
+    px(L, 40, WW, 4, '#0c1020'); px(L, 41, WW, 1, '#5ef0ff'); px(L, 42, WW, 1, '#1c8ca8');
+    for (let x = from(0, 40, L); x < R; x += 40) px(x, T, 1, 40 - T, '#222a44');
+  }
+}
+
+/** Le sol du bureau, en perspective : planches, parquet, moquette et tapis, dalles de moquette, résine. */
+function paintFloor(g: CanvasRenderingContext2D, b: Bounds, lv: number): void {
+  if (lv === 1) {
+    const woods = ['#8a5a2c', '#7e5228', '#946232'].map(rgb);
+    const seamC = rgb('#3a2010');
+    floor(g, b, FLOOR, VX, EYE, 24, (u, v, du, dv) => {
+      const bi = Math.floor(u * 2);
+      if (seam(u * 2, du * 2)) return seamC;
+      const ve = v + hash(bi, 7) * 4;
+      if (seam(ve / 4, dv / 4)) return seamC;
+      let c = woods[Math.floor(hash(bi, Math.floor(ve / 4)) * 3)]!;
+      if (hash(Math.floor(u * 18), Math.floor(v * 3)) < 0.18) c = dim(c, 0.9);
+      return c;
+    });
+  } else if (lv === 2) {
+    // parquet en vannerie : des carrés de trois lames, alternés
+    const oak = ['#b8864a', '#ac7c42', '#c29052', '#a47440'].map(rgb);
+    const seamC = rgb('#5a3418');
+    floor(g, b, FLOOR, VX, EYE, 18, (u, v, du, dv) => {
+      if (seam(u, du) || seam(v, dv)) return seamC;
+      const ci = Math.floor(u);
+      const cj = Math.floor(v);
+      const along = ((ci + cj) & 1) === 0;
+      const w = along ? u : v;
+      const dw = along ? du : dv;
+      if (seam(w * 3, dw * 3)) return mix(seamC, oak[0]!, 0.5);
+      return oak[Math.floor(hash(ci * 7 + Math.floor(w * 3), cj) * 4)]!;
+    });
+  } else if (lv === 3) {
+    // moquette bordeaux et grand tapis à bordure dorée sous le bureau
+    const carpet = [rgb('#6a2a32'), rgb('#74323a'), rgb('#5e242c')];
+    const navy = rgb('#24305a');
+    const navy2 = rgb('#2c3a6a');
+    const gold = rgb('#c8963c');
+    const red = rgb('#8a2a32');
+    floor(g, b, FLOOR, VX, EYE, 20, (u, v) => {
+      const n = hash(Math.floor(u * 10), Math.floor(v * 10));
+      const inRug = u > -4.2 && u < 2.4 && v > 5.8 && v < 9.4;
+      if (!inRug) return carpet[n < 0.25 ? 1 : n > 0.8 ? 2 : 0]!;
+      const e = Math.min(u + 4.2, 2.4 - u, v - 5.8, 9.4 - v);
+      if (e < 0.12) return rgb('#e8d8a8'); // frange
+      if (e < 0.45) return (Math.floor((u + v) * 6) & 1) ? gold : dim(gold, 0.8);
+      if (e < 0.55) return red;
+      const m = ((u + 0.9) / 2.2) ** 2 + ((v - 7.6) / 1.1) ** 2; // médaillon
+      if (m < 0.5) return n < 0.5 ? red : dim(red, 0.85);
+      if (m < 0.62) return gold;
+      return n < 0.5 ? navy : navy2;
+    });
+  } else if (lv === 4) {
+    // dalles de moquette grises, posées en alternance
+    const a = rgb('#5c626c');
+    const c = rgb('#686e78');
+    const seamC = rgb('#4a5058');
+    floor(g, b, FLOOR, VX, EYE, 14, (u, v, du, dv) => {
+      if (seam(u, du) || seam(v, dv)) return seamC;
+      const ci = Math.floor(u);
+      const cj = Math.floor(v);
+      const w = ((ci + cj) & 1) ? u : v;
+      let col = Math.floor(w * 6) & 1 ? a : c;
+      if (hash(ci, cj) < 0.3) col = dim(col, 0.95);
+      return col;
+    });
+  } else {
+    // résine noire brillante, quadrillage lumineux
+    const base = rgb('#141a28');
+    const line = rgb('#1c8ca8');
+    floor(g, b, FLOOR, VX, EYE, 16, (u, v, du, dv) => {
+      if (seam(u / 2, du / 2) || seam(v / 2, dv / 2)) return line;
+      return hash(Math.floor(u * 8), Math.floor(v * 8)) < 0.04 ? rgb('#222a3c') : base;
+    });
   }
 }
 
@@ -386,6 +602,7 @@ function drawMiniBottle(px: Px, g: CanvasRenderingContext2D, x: number, y: numbe
   px(x + 1, y + 7, 5, 2, '#6a3c1c');
   px(x, y + 9, 7, 13, '#7a4a24');
   px(x + 1, y + 9, 1, 12, '#b07a40');
+  px(x + 6, y + 9, 1, 12, '#4a2a14');
   px(x, y + 12, 7, 7, label.bg);
   drawMiniLabel(g, label, x + 1, y + 13, 5);
   px(x, y + 21, 7, 1, '#4a2a14');

@@ -7,6 +7,7 @@ import { STATION_ORDER, type StationId } from '../core/stations';
 import { PAL } from './painter';
 import { clearSpriteCache, SPRITES, stationCanvas, type Pt, type Rect } from './sprites';
 import { drawMiniLabel } from './labelArt';
+import { from, type Bounds } from './space';
 
 export const SCENE_W = 160;
 export const SCENE_H = 300;
@@ -62,6 +63,8 @@ export class Scene {
   /** Instant (s) du dernier transfert vers chaque étape, pour animer le liquide dans les tuyaux. */
   private flows = new Map<number, number>();
   selected: StationId | null = null;
+  /** Limites de la pièce (le plan de 160 × 300 au centre du canvas, le décor peint jusqu'aux bords). */
+  b: Bounds = { L: 0, R: SCENE_W, T: 0, B: SCENE_H, ox: 0, oy: 0 };
 
   constructor() {
     this.canvas.width = SCENE_W;
@@ -70,9 +73,13 @@ export class Scene {
     this.g.imageSmoothingEnabled = false;
   }
 
-  /** Décor actuel (sans rien d'animé), une fois dessiné : sert à prolonger la pièce sur les côtés. */
-  backdrop(game: Game): HTMLCanvasElement | undefined {
-    return this.bgs.get(game.breweryLevel);
+  /** Taille de l'écran en pixels natifs (voir Room.resize). */
+  resize(w: number, h: number, b: Bounds): void {
+    this.b = b;
+    if (this.canvas.width === w && this.canvas.height === h) return;
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.bgs.clear();
   }
 
   onStage(stage: number, t: number): void {
@@ -150,15 +157,17 @@ export class Scene {
       this.checkedAt = t;
       if (this.cacheLost(game.breweryLevel)) this.invalidate();
     }
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.imageSmoothingEnabled = false; // réinitialisé si le contexte est restauré
     g.drawImage(this.background(game.breweryLevel), 0, 0);
+    g.setTransform(1, 0, 0, 1, this.b.ox, this.b.oy);
     this.drawPipes(game, t);
     for (const id of STATION_ORDER) if (id !== 'bottling') this.drawStation(game, id, t);
     this.drawLine(game, t);
     const k = t - this.flashAt;
     if (k >= 0 && k < 1.2) {
       g.fillStyle = `rgba(255,248,220,${(1 - k / 1.2) * 0.85})`;
-      g.fillRect(0, 0, SCENE_W, SCENE_H);
+      g.fillRect(this.b.L, this.b.T, this.b.R - this.b.L, this.b.B - this.b.T);
     }
   }
 
@@ -172,9 +181,12 @@ export class Scene {
     const cached = this.bgs.get(level);
     if (cached) return cached;
     const c = document.createElement('canvas');
-    c.width = SCENE_W;
-    c.height = SCENE_H;
+    c.width = this.canvas.width;
+    c.height = this.canvas.height;
     const g = c.getContext('2d')!;
+    const { L, R, T, B, ox, oy } = this.b;
+    g.translate(ox, oy);
+    const WW = R - L;
     const px = (x: number, y: number, w: number, h: number, col: string) => {
       g.fillStyle = col;
       g.fillRect(x, y, w, h);
@@ -190,16 +202,17 @@ export class Scene {
     // ---------------------------------------------------------------- murs
     if (level === 1) {
       // cave voûtée en pierre, poutres, étagères de bocaux
-      px(0, 0, W, SCENE_H, '#4a4038');
-      for (let y = 0, row = 0; y < top; y += 9, row++) {
-        for (let x = -((row * 7) % 16); x < W; x += 16) {
+      px(L, T, WW, B - T, '#4a4038');
+      for (let y = from(0, 9, T), row = Math.round(y / 9); y < top; y += 9, row++) {
+        for (let x = from(-((((row % 16) + 16) * 7) % 16), 16, L - 16); x < R; x += 16) {
           const shade = ['#5e5248', '#56493f', '#665a4e', '#4e4238'][(x * 3 + row * 5) & 3]!;
           px(x + 1, y + 1, 14, 7, shade);
           px(x + 1, y + 1, 14, 1, '#76685a');
         }
       }
       for (const bx of [4, 152]) { px(bx, 0, 5, top, '#5a3a1c'); px(bx, 0, 1, top, '#7a5228'); }
-      px(0, 0, W, 5, '#5a3a1c'); px(0, 4, W, 1, '#3a240e');
+      px(L, 0, WW, 5, '#5a3a1c'); px(L, 4, WW, 1, '#3a240e');
+      for (let bx = from(4, 148, L); bx < R; bx += 148) if (bx !== 4 && bx !== 152) { px(bx, 0, 5, top, '#5a3a1c'); px(bx, 0, 1, top, '#7a5228'); }
       // lucarne ronde au clair de lune
       g.fillStyle = '#2a2030'; g.beginPath(); g.arc(80, 18, 11, 0, Math.PI * 2); g.fill();
       g.fillStyle = '#1c2a4a'; g.beginPath(); g.arc(80, 18, 9, 0, Math.PI * 2); g.fill();
@@ -217,10 +230,10 @@ export class Scene {
     } else if (level === 2) {
       // garage : mur de briques, fenêtres hautes
       const bricks = ['#9a4a3a', '#8a4232', '#7a3a2c', '#6a3226', '#5a2a20'];
-      for (let y = 0; y < SCENE_H; y++) px(0, y, W, 1, bricks[Math.min(4, Math.floor((y / SCENE_H) * 3 + ((y * 7) % 3 === 0 ? 0.5 : 0)))]!);
-      for (let y = 0; y < SCENE_H; y += 6) {
-        px(0, y + 5, W, 1, '#4a221a');
-        for (let x = ((y / 6) % 2) * 6; x < W; x += 12) { px(x, y, 1, 5, '#4a221a'); px(x + 1, y, 10, 1, '#b2604a'); }
+      for (let y = T; y < B; y++) px(L, y, WW, 1, bricks[Math.max(0, Math.min(4, Math.floor((y / SCENE_H) * 3 + ((((y * 7) % 3) + 3) % 3 === 0 ? 0.5 : 0))))]!);
+      for (let y = from(0, 6, T); y < B; y += 6) {
+        px(L, y + 5, WW, 1, '#4a221a');
+        for (let x = from((((y / 6) % 2) + 2) % 2 * 6, 12, L - 12); x < R; x += 12) { px(x, y, 1, 5, '#4a221a'); px(x + 1, y, 10, 1, '#b2604a'); }
       }
       for (const wx of [62, 84]) {
         px(wx - 1, 3, 16, 24, '#2a1a20'); px(wx, 4, 14, 22, '#6cc0f0'); px(wx, 4, 14, 8, '#a8e0ff');
@@ -229,13 +242,13 @@ export class Scene {
       }
     } else if (level === 3) {
       // microbrasserie : carreaux métro blancs, poutres en bois, grandes baies en arc
-      px(0, 0, W, SCENE_H, '#e4ddd0');
-      for (let y = 0; y < top; y += 5) {
-        px(0, y + 4, W, 1, '#b8ae9c');
-        for (let x = ((y / 5) % 2) * 5; x < W; x += 10) px(x, y, 1, 4, '#b8ae9c');
+      px(L, T, WW, B - T, '#e4ddd0');
+      for (let y = from(0, 5, T); y < top; y += 5) {
+        px(L, y + 4, WW, 1, '#b8ae9c');
+        for (let x = from((((y / 5) % 2) + 2) % 2 * 5, 10, L - 10); x < R; x += 10) px(x, y, 1, 4, '#b8ae9c');
       }
-      px(0, 0, W, 6, '#8a5a2c'); px(0, 5, W, 1, '#5a3a18');
-      for (const bx of [0, 78, 156]) px(bx, 0, 4, top, '#8a5a2c');
+      px(L, Math.min(0, T), WW, 6 - Math.min(0, T), '#8a5a2c'); px(L, 5, WW, 1, '#5a3a18');
+      for (let bx = from(0, 78, L - 4); bx < R; bx += 78) px(bx, T, 4, top - T, '#8a5a2c');
       for (const wx of [24, 104]) {
         px(wx, 10, 32, 30, '#3a2c20');
         g.fillStyle = '#3a2c20'; g.beginPath(); g.arc(wx + 16, 10, 16, Math.PI, 0); g.fill();
@@ -249,9 +262,9 @@ export class Scene {
       for (let i = 0; i < 4; i++) px(70, 98 + i * 3, 10 + ((i * 7) % 9), 1, '#e8e4dc');
     } else if (level === 4) {
       // usine : tôle ondulée, verrière quadrillée, poutres IPN
-      for (let x = 0; x < W; x++) px(x, 0, 1, SCENE_H, ['#5c6878', '#6c788a', '#7c889a', '#6c788a', '#56606e', '#4a5462'][x % 6]!);
-      px(0, 0, W, 8, '#3a4250'); px(0, 7, W, 1, '#2a303a');
-      for (let wx = 8; wx < W - 8; wx += 38) {
+      for (let x = L; x < R; x++) px(x, T, 1, B - T, ['#5c6878', '#6c788a', '#7c889a', '#6c788a', '#56606e', '#4a5462'][((x % 6) + 6) % 6]!);
+      px(L, Math.min(0, T), WW, 8 - Math.min(0, T), '#3a4250'); px(L, 7, WW, 1, '#2a303a');
+      for (let wx = from(8, 38, L - 30); wx < R - 4; wx += 38) {
         px(wx, 12, 34, 30, '#2a303a');
         for (let j = 0; j < 3; j++) for (let i = 0; i < 4; i++) {
           px(wx + 2 + i * 8, 14 + j * 9, 7, 8, '#7ab0d0');
@@ -259,34 +272,34 @@ export class Scene {
         }
         cone(wx + 17, 42, 20, 26, 0.05, '220,240,255');
       }
-      for (const bx of [0, 78, 154]) { px(bx, 0, 6, top, '#c85a2c'); px(bx + 1, 0, 1, top, '#e88a5a'); px(bx + 4, 0, 1, top, '#8a3a1a'); }
+      for (let bx = from(0, 77, L - 6); bx < R; bx += 77) { px(bx, 0, 6, top, '#c85a2c'); px(bx + 1, 0, 1, top, '#e88a5a'); px(bx + 4, 0, 1, top, '#8a3a1a'); }
     } else {
       // laboratoire du futur : panneaux blancs, néons, baie sur la ville de nuit
-      px(0, 0, W, SCENE_H, '#e8eef4');
-      for (let y = 0; y < top; y += 22) px(0, y, W, 1, '#c4d0dc');
-      for (let x = 0; x < W; x += 32) px(x, 0, 1, top, '#c4d0dc');
+      px(L, T, WW, B - T, '#e8eef4');
+      for (let y = from(0, 22, T); y < top; y += 22) px(L, y, WW, 1, '#c4d0dc');
+      for (let x = from(0, 32, L); x < R; x += 32) px(x, T, 1, top - T, '#c4d0dc');
       px(30, 6, 100, 28, '#0c1420');
       for (let i = 0; i < 40; i++) px(31 + ((i * 37) % 98), 7 + ((i * 13) % 12), 1, 1, i % 5 ? '#ffffff' : '#5ef0ff');
       for (let i = 0; i < 12; i++) { const h = 6 + ((i * 11) % 12); px(32 + i * 8, 34 - h, 6, h, '#1c2a44'); px(33 + i * 8, 35 - h, 1, 1, '#f2c14e'); px(35 + i * 8, 37 - h, 1, 1, '#5ef0ff'); }
       px(30, 5, 100, 1, '#5ef0ff'); px(30, 34, 100, 1, '#5ef0ff');
-      for (const y of [98, 168]) { px(0, y, W, 1, '#5ef0ff'); px(0, y + 1, W, 1, '#1c8ca8'); }
+      for (const y of [98, 168]) { px(L, y, WW, 1, '#5ef0ff'); px(L, y + 1, WW, 1, '#1c8ca8'); }
     }
     // ---------------------------------------------------------------- passerelles
     for (const f of FLOORS) {
       if (level === 1) {
-        px(0, f, W, 5, '#7a5228'); px(0, f, W, 1, '#a87a48'); px(0, f + 4, W, 1, '#4a2e14');
-        for (let x = 13; x < W; x += 26) px(x, f + 1, 1, 3, '#5a3a1c');
+        px(L, f, WW, 5, '#7a5228'); px(L, f, WW, 1, '#a87a48'); px(L, f + 4, WW, 1, '#4a2e14');
+        for (let x = from(13, 26, L); x < R; x += 26) px(x, f + 1, 1, 3, '#5a3a1c');
       } else if (level === 5) {
-        px(0, f, W, 5, '#f4f8fc'); px(0, f, W, 1, '#ffffff'); px(0, f + 4, W, 1, '#8a9ab0'); px(0, f + 2, W, 1, '#5ef0ff');
+        px(L, f, WW, 5, '#f4f8fc'); px(L, f, WW, 1, '#ffffff'); px(L, f + 4, WW, 1, '#8a9ab0'); px(L, f + 2, WW, 1, '#5ef0ff');
       } else {
         const metal = level === 3 ? ['#2c5a3a', '#6aa078', '#1c3c26'] : ['#3e3a50', '#8c88a0', '#2c283a'];
-        px(0, f, W, 5, metal[0]!); px(0, f, W, 1, metal[1]!);
-        for (let x = 0; x < W; x += 3) px(x, f + 2, 1, 2, metal[2]!);
-        if (level === 4) for (let x = 0; x < W; x += 8) { px(x, f + 4, 4, 1, '#f2c14e'); px(x + 4, f + 4, 4, 1, '#1b1424'); }
+        px(L, f, WW, 5, metal[0]!); px(L, f, WW, 1, metal[1]!);
+        for (let x = from(0, 3, L); x < R; x += 3) px(x, f + 2, 1, 2, metal[2]!);
+        if (level === 4) for (let x = from(0, 8, L); x < R; x += 8) { px(x, f + 4, 4, 1, '#f2c14e'); px(x + 4, f + 4, 4, 1, '#1b1424'); }
       }
-      px(0, f + 5, W, 1, '#1c1828');
+      px(L, f + 5, WW, 1, '#1c1828');
       g.fillStyle = 'rgba(0,0,0,0.25)';
-      g.fillRect(0, f + 6, W, 3);
+      g.fillRect(L, f + 6, WW, 3);
     }
     // ---------------------------------------------------------------- éclairage
     for (const [lx, ly] of [[80, 68], [80, 138]] as const) {
@@ -307,34 +320,34 @@ export class Scene {
     }
     // ---------------------------------------------------------------- sol de la salle d'embouteillage
     if (level === 1) {
-      px(0, top, W, SCENE_H - top, '#6a4422');
-      for (let y = top; y < SCENE_H; y += 6) { px(0, y, W, 1, '#4a2e14'); for (let x = (y * 7) % 30; x < W; x += 30) px(x, y, 1, 6, '#4a2e14'); }
+      px(L, top, WW, B - top, '#6a4422');
+      for (let y = top; y < B; y += 6) { px(L, y, WW, 1, '#4a2e14'); for (let x = from((y * 7) % 30, 30, L); x < R; x += 30) px(x, y, 1, 6, '#4a2e14'); }
     } else if (level === 3) {
-      for (let y = top; y < SCENE_H; y += 8) for (let x = 0; x < W; x += 8) px(x, y, 8, 8, ((x + y) / 8) % 2 ? '#a8582c' : '#c87a44');
+      for (let y = top; y < B; y += 8) for (let x = from(0, 8, L); x < R; x += 8) px(x, y, 8, 8, ((((x + y) / 8) % 2) + 2) % 2 ? '#a8582c' : '#c87a44');
     } else if (level === 4) {
-      px(0, top, W, SCENE_H - top, '#6a6e74');
-      for (let i = 0; i < 60; i++) px((i * 53) % W, top + ((i * 29) % (SCENE_H - top)), 1, 1, '#585c62');
-      px(0, top + 10, W, 2, '#f2c14e');
+      px(L, top, WW, B - top, '#6a6e74');
+      for (let i = 0; i < Math.round((60 * WW) / W); i++) px(L + ((i * 53) % WW), top + ((i * 29) % (B - top)), 1, 1, '#585c62');
+      px(L, top + 10, WW, 2, '#f2c14e');
     } else if (level === 5) {
-      px(0, top, W, SCENE_H - top, '#1c2230');
-      for (let y = top; y < SCENE_H; y += 10) px(0, y, W, 1, '#2a3244');
-      px(0, top + 12, W, 1, '#5ef0ff');
+      px(L, top, WW, B - top, '#1c2230');
+      for (let y = top; y < B; y += 10) px(L, y, WW, 1, '#2a3244');
+      px(L, top + 12, WW, 1, '#5ef0ff');
     } else {
-      px(0, top, W, SCENE_H - top, '#3a2c2c');
-      for (let y = top; y < SCENE_H; y += 8) px(0, y, W, 1, '#2a1e20');
-      for (let x = -60; x < W + 60; x += 14) {
+      px(L, top, WW, B - top, '#3a2c2c');
+      for (let y = top; y < B; y += 8) px(L, y, WW, 1, '#2a1e20');
+      for (let x = from(-60, 14, L - 160); x < R + 160; x += 14) {
         g.fillStyle = '#2a1e20';
-        for (let y = top; y < SCENE_H; y++) g.fillRect(Math.round(x + ((x - W / 2) * (y - top)) / 160), y, 1, 1);
+        for (let y = top; y < B; y++) g.fillRect(Math.round(x + ((x - W / 2) * (y - top)) / 160), y, 1, 1);
       }
     }
-    px(0, top, W, 2, level === 5 ? '#5ef0ff' : '#5c4848');
+    px(L, top, WW, 2, level === 5 ? '#5ef0ff' : '#5c4848');
     // tapis roulant (châssis, la bande est animée)
-    px(0, LINE.belt, W, 6, level === 1 ? '#5a3a1c' : '#2c283a');
-    px(0, LINE.belt, W, 1, level === 1 ? '#a87a48' : '#8c88a0');
-    px(0, LINE.belt + 6, W, 2, '#1c1828');
-    for (const x of [8, 56, 104, 150]) {
-      px(x, LINE.belt + 8, 3, SCENE_H - LINE.belt - 8, '#3e3a50');
-      px(x, LINE.belt + 8, 1, SCENE_H - LINE.belt - 8, '#6c6884');
+    px(L, LINE.belt, WW, 6, level === 1 ? '#5a3a1c' : '#2c283a');
+    px(L, LINE.belt, WW, 1, level === 1 ? '#a87a48' : '#8c88a0');
+    px(L, LINE.belt + 6, WW, 2, '#1c1828');
+    for (let x = from(8, 48, L - 3); x < R; x += 48) {
+      px(x, LINE.belt + 8, 3, B - LINE.belt - 8, '#3e3a50');
+      px(x, LINE.belt + 8, 1, B - LINE.belt - 8, '#6c6884');
     }
     this.bgs.set(level, c);
     return c;
@@ -545,7 +558,7 @@ export class Scene {
     // bande du tapis qui défile
     const shift = Math.floor((done * spacing) % 4);
     g.fillStyle = '#4a4458';
-    for (let x = -4 + shift; x < SCENE_W; x += 4) g.fillRect(x, belt + 2, 2, 1);
+    for (let x = from(-4 + shift, 4, this.b.L - 4); x < this.b.R; x += 4) g.fillRect(x, belt + 2, 2, 1);
 
     this.drawPallet(game);
     this.drawFiller(lv, !!b && !b.waiting, t);

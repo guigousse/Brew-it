@@ -9,9 +9,8 @@ import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
-import { BarRoom, drawKeg, StorageRoom } from '../render/rooms';
+import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
-import { extendBackdrop } from '../render/extend';
 import { SHOP_SPOTS, ShopRoom } from '../render/shopRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
@@ -219,11 +218,8 @@ export class App {
   private dashPick: number | null = null;
   private track = h('div', 'rooms-track');
   private wraps: HTMLElement[] = [];
-  /**
-   * Chaque pièce est entière à l'écran ; autour, son décor est prolongé jusqu'aux bords (ext) pour qu'il n'y ait
-   * pas de bandes noires, quel que soit le format de l'écran.
-   */
-  private views: { view: HTMLElement; ext: HTMLCanvasElement; src: { backdrop(g: Game): HTMLCanvasElement | undefined }; key: string; bg?: HTMLCanvasElement }[] = [];
+  /** Écran de chaque pièce : le canvas le remplit entièrement, le plan de la pièce (et ses zones tactiles) au centre. */
+  private views: HTMLElement[] = [];
   /** Taille de l'écran d'une pièce en pixels natifs, et position de la pièce dedans. */
   private viewBox = { w: SCENE_W, h: SCENE_H, ox: 0, oy: 0 };
   private storageWrap = h('div', 'scene-wrap');
@@ -372,16 +368,14 @@ export class App {
     this.shopWrap.append(this.saleTag);
     // Le défilé des écrans suit l'ordre des onglets : bureau, atelier, stockage, bar, magasin.
     const wraps: Record<View, HTMLElement> = { office: this.officeWrap, workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap, shop: this.shopWrap };
-    const srcs = { office: this.officeRoom, workshop: this.scene, storage: this.storageRoom, bar: this.barRoom, shop: this.shopRoom };
     for (const t of TABS) {
       const pane = h('div', 'room');
       const view = h('div', 'room-view');
-      const ext = h('canvas', 'room-ext');
-      view.append(ext, wraps[t.id]);
+      view.append(wraps[t.id]);
       pane.append(view);
       this.track.append(pane);
       this.wraps.push(wraps[t.id]);
-      this.views.push({ view, ext, src: srcs[t.id], key: '' });
+      this.views.push(view);
     }
     this.track.style.width = `${TABS.length * 100}vw`;
     this.stage.append(this.track);
@@ -416,9 +410,9 @@ export class App {
   // ------------------------------------------------------------------ mise en page
 
   /**
-   * Chaque pièce tient entière entre le header et la barre du bas, agrandie autant que possible.
-   * La place qui reste (sur les côtés, ou en haut et en bas selon le format de l'écran) est remplie
-   * par le décor de la pièce, prolongé : pas de défilement, pas de bandes noires.
+   * Le plan de chaque pièce (160 × 300) tient entier entre le header et la barre du bas, agrandi autant que possible.
+   * Le canvas de la pièce, lui, couvre tout l'écran : son décor est peint d'un seul tenant jusqu'aux bords
+   * (plus large ou plus haut que le plan selon le format), sans défilement ni bandes.
    */
   layout(): void {
     const top = this.header.getBoundingClientRect().bottom;
@@ -428,19 +422,19 @@ export class App {
     this.scale = Math.min(availW / SCENE_W, availH / SCENE_H);
     const w = Math.floor(SCENE_W * this.scale);
     const hh = Math.floor(SCENE_H * this.scale);
-    // l'écran de la pièce, en pixels natifs : la pièce au centre, le décor prolongé autour
+    // l'écran de la pièce, en pixels natifs : le plan au centre, le décor peint jusqu'aux bords
     const vw = Math.ceil(availW / this.scale);
     const vh = Math.ceil(availH / this.scale);
-    const ox = Math.floor((vw - SCENE_W) / 2);
-    const oy = Math.floor((vh - SCENE_H) / 2);
+    const b = boundsFor(vw, vh);
+    const { ox, oy } = b;
     this.viewBox = { w: vw, h: vh, ox, oy };
-    for (const v of this.views) {
-      Object.assign(v.view.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px` });
-      Object.assign(v.ext.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px` });
-    }
+    for (const v of this.views) Object.assign(v.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px` });
     for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px`, left: `${ox * this.scale}px`, top: `${oy * this.scale}px` });
-    this.syncBackdrops();
-    for (const c of [this.officeRoom.canvas, this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas, this.shopRoom.canvas]) Object.assign(c.style, { width: `${w}px`, height: `${hh}px` });
+    this.scene.resize(vw, vh, b);
+    for (const r of [this.officeRoom, this.storageRoom, this.barRoom, this.shopRoom]) r.resize(vw, vh);
+    for (const c of [this.officeRoom.canvas, this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas, this.shopRoom.canvas]) {
+      Object.assign(c.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px`, left: `${-ox * this.scale}px`, top: `${-oy * this.scale}px` });
+    }
     const s = this.scale;
     for (const { el, x, y } of this.roomTags) Object.assign(el.style, { left: `${x * s}px`, top: `${y * s}px` });
     for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
@@ -456,23 +450,8 @@ export class App {
 
   // ------------------------------------------------------------------ boucle d'affichage
 
-  /** Redessine le décor prolongé d'une pièce quand son décor change (niveau) ou que l'écran change de taille. */
-  private syncBackdrops(): void {
-    const g = this.game();
-    const { w, h: vh, ox, oy } = this.viewBox;
-    const size = `${w}x${vh}`;
-    for (const v of this.views) {
-      const bg = v.src.backdrop(g);
-      if (!bg || (bg === v.bg && v.key === size)) continue;
-      v.bg = bg;
-      v.key = size;
-      extendBackdrop(bg, v.ext, w, vh, ox, oy);
-    }
-  }
-
   frame(t: number): void {
     const g = this.game();
-    this.syncBackdrops();
     if (this.moneyAnim) {
       const a = this.moneyAnim;
       const k = Math.min(1, (performance.now() - a.start) / 900);
@@ -491,7 +470,7 @@ export class App {
     // l'atelier se voit aussi par la fenêtre du bureau
     if (!all && this.view !== 'workshop' && this.view !== 'office') return;
     this.scene.draw(g, t);
-    if (all || this.view === 'office') this.officeRoom.draw(g, t, this.scene.canvas);
+    if (all || this.view === 'office') this.officeRoom.draw(g, t, this.scene);
     // étiquettes des appareils
     for (const id of STATION_ORDER) {
       const o = this.overlays.get(id)!;
