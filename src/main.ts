@@ -68,6 +68,7 @@ async function boot() {
         app.log(`Nouvelle commande : ${e.client}`, 'good', 'envelope');
         tapFeedback(false);
       }
+      if (e.type === 'autoSent') app.log(`Livreur : commande « ${e.client} » livrée, +${Math.round(e.amount).toLocaleString('fr-FR')} €`, 'good', 'courier');
       if (e.type === 'orderExpired') app.log(`Commande expirée : ${e.client}`, 'bad', 'clipboard');
     });
     app.update();

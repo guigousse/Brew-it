@@ -8,13 +8,14 @@ import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type St
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
-import { BOTTLE_SCALE, drawCrate, drawShelfBottle, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
+import { BOTTLE_SCALE, drawCrate, drawShelfBottle, labelSpot, type ShelfBottleKind } from '../render/bottleArt';
 import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { SHOP_SPOTS, ShopRoom } from '../render/shopRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
-import { DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
+import { BOOST_GROUPS, BOOSTS, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type UnlockKind } from '../core/shop';
+import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
 
@@ -119,11 +120,12 @@ const SOURCE: Record<SaleSource, { name: string; color: string }> = {
 };
 
 /** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
-export type PcApp = 'dashboard' | 'messages' | 'orders' | 'trends' | 'wholesale';
+export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'wholesale';
 const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'dashboard', name: 'Tableau de bord', icon: 'chart' },
   { id: 'messages', name: 'Messages', icon: 'bubble' },
   { id: 'orders', name: 'Commandes', icon: 'clipboard' },
+  { id: 'staff', name: 'Personnel', icon: 'staff' },
   { id: 'trends', name: 'Tendances', icon: 'trend' },
   { id: 'wholesale', name: 'Grossiste', icon: 'truck' },
 ];
@@ -202,6 +204,8 @@ export class App {
   /** Étiquettes posées sur le décor (prix de l'objet en vente, « bientôt »…), en coordonnées de la pièce. */
   private roomTags: { el: HTMLElement; x: number; y: number }[] = [];
   private saleTag = h('div', 'shop-tag');
+  /** Étiquettes des rayons du magasin (boosts en cours, prochain meuble…). */
+  private sectionTags = new Map<string, HTMLElement>();
   private computerHit?: HTMLButtonElement;
   // --- les pièces
   readonly officeRoom = new OfficeRoom();
@@ -342,7 +346,11 @@ export class App {
     this.barWrap.append(roomTitle(this.ups.bar, this.barPlaque));
     // magasin : les étagères et leurs objets
     this.shopWrap.append(this.shopRoom.canvas);
-    const SOON = ['Décorations', 'Mobilier', 'Enseignes', 'Ambiance'];
+    const SECTION: Record<string, { label: string; run: () => void }> = {
+      boosts: { label: 'Boosts', run: () => this.openBoosts() },
+      furniture: { label: 'Mobilier du bar', run: () => this.openFurniture() },
+      labels: { label: 'Étiquettes et bouteilles', run: () => this.openLabelShop() },
+    };
     for (const hit of this.shopRoom.hits()) {
       const el = h('button', 'station-hit');
       if (hit.id === 'sale') {
@@ -351,11 +359,19 @@ export class App {
       } else if (hit.id === 'mystery') {
         el.setAttribute('aria-label', 'Objet suivant');
         el.onclick = () => this.toast(this.game().nextItem ? 'Une surprise : elle se débloque avec l\'objet en vente' : 'Rien de plus pour l\'instant', 'info');
+      } else if (hit.id === 'soon') {
+        el.setAttribute('aria-label', 'Bientôt');
+        el.onclick = () => this.toast('Nouveautés bientôt en rayon', 'info');
+        const tag = h('div', 'shop-tag soon', 'Bientôt');
+        this.roomTags.push({ el: tag, x: hit.rect.x + hit.rect.w / 2, y: hit.rect.y + hit.rect.h + 6 });
+        this.shopWrap.append(tag);
       } else {
-        const name = SOON[Number(hit.id.slice(4))]!;
-        el.setAttribute('aria-label', `${name} : bientôt`);
-        el.onclick = () => this.toast(`${name} : bientôt en rayon`, 'info');
-        const tag = h('div', 'shop-tag soon', `Bientôt · ${name}`);
+        const sec = SECTION[hit.id]!;
+        el.setAttribute('aria-label', sec.label);
+        el.onclick = sec.run;
+        const tag = h('button', 'shop-tag section', hit.id === 'boosts' ? 'Boosts' : hit.id === 'furniture' ? 'Mobilier' : 'Étiquettes');
+        tag.onclick = sec.run;
+        this.sectionTags.set(hit.id, tag);
         this.roomTags.push({ el: tag, x: hit.rect.x + hit.rect.w / 2, y: hit.rect.y + hit.rect.h + 6 });
         this.shopWrap.append(tag);
       }
@@ -1072,10 +1088,11 @@ export class App {
     if (f === 'bottle') {
       const bottle = h('div', 'shelf-bottle');
       const c = h('canvas', 'shelf-glass');
-      drawShelfBottle(c, 'beer');
+      drawShelfBottle(c, 'beer', beer.label.bottle);
       const lab = h('canvas', 'shelf-label');
       drawLabel(lab, beer.label, beer.name);
-      Object.assign(lab.style, { left: `${LABEL_SPOT.x * BOTTLE_SCALE}px`, top: `${LABEL_SPOT.y * BOTTLE_SCALE}px` });
+      const spot = labelSpot(beer.label.bottle);
+      Object.assign(lab.style, { left: `${spot.x * BOTTLE_SCALE}px`, top: `${spot.y * BOTTLE_SCALE}px` });
       bottle.append(c, lab);
       box.append(bottle);
     } else {
@@ -1132,12 +1149,13 @@ export class App {
       const item = h('button', `shelf-item ${kind}${beer && beer.id === this.shelfSel ? ' selected' : ''}`);
       const bottle = h('div', 'shelf-bottle');
       const c = h('canvas', 'shelf-glass');
-      drawShelfBottle(c, kind === 'locked' ? 'empty' : kind);
+      drawShelfBottle(c, kind === 'locked' ? 'empty' : kind, beer?.label.bottle);
       bottle.append(c);
       if (beer) {
         const lab = h('canvas', 'shelf-label');
         drawLabel(lab, beer.label, beer.name);
-        Object.assign(lab.style, { left: `${LABEL_SPOT.x * BOTTLE_SCALE}px`, top: `${LABEL_SPOT.y * BOTTLE_SCALE}px` });
+        const spot = labelSpot(beer.label.bottle);
+        Object.assign(lab.style, { left: `${spot.x * BOTTLE_SCALE}px`, top: `${spot.y * BOTTLE_SCALE}px` });
         bottle.append(lab);
       }
       item.append(bottle, h('span', 'shelf-tag', tag));
@@ -1380,9 +1398,12 @@ export class App {
       this.onSent?.();
       this.closeModal();
     });
-    go.disabled = tooLong;
-    if (!tooLong) this.costGate(go, cost);
-    card.append(go, this.btn('btn', 'Fermer', () => this.closeModal()));
+    const full = !g.barmanOn && g.staffBusy >= g.staffSlots;
+    if (full) go.textContent = `Aucun poste libre (${g.staffBusy}/${g.staffSlots})`;
+    go.disabled = tooLong || full;
+    if (!go.disabled) this.costGate(go, cost);
+    card.append(h('p', 'hint', `Personnel : ${g.staffBusy}/${g.staffSlots} postes occupés.`));
+    card.append(go, this.btn('btn', 'Tout le personnel (bureau)', () => this.openComputer('staff')), this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
   /** Les événements du bar : la fête, puis ceux qu'on débloque en achetant des objets au magasin. */
@@ -1484,6 +1505,7 @@ export class App {
   private computerKey(g: Game): string {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
+      app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
       app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.advertising, g.money >= g.adCost, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10)]), [...this.picks]] : 0]);
   }
 
@@ -1545,6 +1567,7 @@ export class App {
       this.dashboardPage(g, body);
     } else if (st.app === 'messages') this.messagesTab(g, body);
     else if (st.app === 'orders') this.ordersTab(g, body);
+    else if (st.app === 'staff') this.staffTab(g, body);
     else if (st.app === 'trends') this.trendsTab(g, body);
     else this.wholesaleTab(g, body);
     body.scrollTop = scroll;
@@ -1558,6 +1581,7 @@ export class App {
       dashboard: { text: '', hot: false },
       messages: { text: this.unread ? String(this.unread) : '', hot: false },
       orders: { text: g.orders.length ? String(g.orders.length) : '', hot: ready > 0 },
+      staff: { text: `${g.staffBusy}/${g.staffSlots}`, hot: false },
       trends: { text: '', hot: false },
       wholesale: { text: '', hot: false },
     };
@@ -1589,6 +1613,39 @@ export class App {
       home.append(n);
     }
     return home;
+  }
+
+  /** Le personnel : des postes selon le niveau de la brasserie, des contrats de 8 h qu'on prolonge jusqu'à 24 h. */
+  private staffTab(g: Game, card: HTMLElement): void {
+    const next = STAFF_SLOTS.findIndex((n, i) => i >= g.breweryLevel && n > g.staffSlots);
+    card.append(h('div', 'stats-line strong', `Postes occupés : ${g.staffBusy} / ${g.staffSlots}`));
+    card.append(h('p', 'hint', next >= 0 ? `Un poste de plus quand la brasserie passe ★${next + 1}.` : 'Tous les postes sont ouverts.'));
+    for (const def of STAFF) {
+      const on = g.staffOn(def.id);
+      const left = g.staffEnd(def.id) - g.time;
+      const el = h('div', `card staff${on ? ' banner' : ''}`);
+      const head = h('div', 'event-head');
+      const title = h('div', 'event-title');
+      title.append(h('span', 'beer-name', def.name), h('span', 'hint', def.role));
+      head.append(iconCanvas(def.id, 3), title);
+      el.append(head, h('p', 'hint', def.text));
+      const state = h('div', 'stats-line', on ? `En poste · encore ${duration(left)}` : 'Libre');
+      el.append(state);
+      const cost = g.staffCost(def.id);
+      const full = !on && g.staffBusy >= g.staffSlots;
+      const tooLong = on && left + STAFF_CONTRACT.duration > STAFF_CONTRACT.maxAhead;
+      const b = this.btn('btn primary', full ? 'Aucun poste libre' : tooLong ? 'Contrat au maximum (24 h)' : `${on ? 'Prolonger de 8 h' : 'Embaucher pour 8 h'} · ${moneyShort(cost)}`, () => {
+        const r = g.hire(def.id);
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.toast(on ? 'Contrat prolongé' : `${def.name} embauché !`, 'good');
+        this.computer!.key = '';
+        this.refreshComputer();
+      });
+      b.disabled = full || tooLong;
+      if (!b.disabled) this.costGate(b, cost);
+      el.append(b);
+      card.append(el);
+    }
   }
 
   /** La boîte de réception : tout ce qui s'est passé à la brasserie ; l'ouvrir marque tout comme lu. */
@@ -1950,9 +2007,10 @@ export class App {
     const card = this.modalCard('Ton étiquette');
     const preview = h('div', 'label-preview');
     const big = h('canvas', 'label-big');
-    const bottle = h('div', 'bottle-preview');
-    const small = h('canvas', 'label-on-bottle');
-    bottle.append(small);
+    const bottle = h('div', 'shelf-bottle');
+    const glass = h('canvas', 'shelf-glass');
+    const small = h('canvas', 'shelf-label');
+    bottle.append(glass, small);
     preview.append(big, bottle);
     const input = h('input', 'name-input');
     input.maxLength = 22;
@@ -1961,13 +2019,20 @@ export class App {
     const redraw = () => {
       drawLabel(big, label, input.value);
       drawLabel(small, label, input.value);
+      drawShelfBottle(glass, 'beer', label.bottle);
+      const spot = labelSpot(label.bottle);
+      Object.assign(small.style, { left: `${spot.x * BOTTLE_SCALE}px`, top: `${spot.y * BOTTLE_SCALE}px` });
     };
+    const g = this.game();
     input.oninput = redraw;
     card.append(preview, h('div', 'section-title', 'Nom'), input);
-    const chooser = <K extends keyof Label>(title: string, key: K, options: { id: Label[K]; name: string }[]) => {
+    const chooser = <K extends keyof Label>(title: string, key: K, options: { id: Label[K]; name: string }[], kind?: UnlockKind) => {
       const row = h('div', 'chips');
       for (const o of options) {
-        const c = this.btn(`chip${label[key] === o.id ? ' active' : ''}`, o.name, () => {
+        const open = !kind || g.isUnlocked(kind, String(o.id)) || initial[key] === o.id;
+        const price = LABEL_UNLOCKS.find((x) => x.kind === kind && x.value === o.id)?.cost ?? 0;
+        const c = this.btn(`chip${(label[key] ?? 'classic') === o.id ? ' active' : ''}${open ? '' : ' locked'}`, open ? o.name : `🔒 ${o.name}`, () => {
+          if (!open) return this.toast(`« ${o.name} » se débloque au magasin, rayon Étiquettes · ${moneyShort(price)}`, 'info');
           label[key] = o.id;
           row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('active', x === c));
           redraw();
@@ -1990,11 +2055,12 @@ export class App {
       }
       card.append(h('div', 'section-title', title), row);
     };
-    chooser('Forme', 'shape', SHAPES);
+    chooser('Bouteille', 'bottle', BOTTLES, 'bottle');
+    chooser('Forme', 'shape', SHAPES, 'shape');
     colors('Fond', 'bg');
-    chooser('Motif', 'pattern', PATTERNS);
+    chooser('Motif', 'pattern', PATTERNS, 'pattern');
     colors('Couleur du motif', 'patternColor');
-    chooser('Emblème', 'emblem', EMBLEMS);
+    chooser('Emblème', 'emblem', EMBLEMS, 'emblem');
     chooser('Police du nom', 'font', FONTS);
     colors('Couleur du texte et du contour', 'textColor');
     card.append(this.btn('btn primary big', 'Valider l\'étiquette', () => onDone(input.value, label)));
@@ -2142,6 +2208,16 @@ export class App {
     const tag = item ? `${item.name} · ${moneyShort(item.cost)}` : 'Tout est vendu';
     if (this.saleTag.textContent !== tag) this.saleTag.textContent = tag;
     this.saleTag.classList.toggle('afford', !!item && g0.money >= item.cost);
+    const live = (['brew', 'yeast', 'bar', 'wholesale'] as BoostChannel[]).map((c) => g0.boostOf(c)).filter((b) => !!b);
+    const soonest = live.length ? Math.min(...live.map((b) => b!.until)) - g0.time : g0.advertising ? g0.adUntil - g0.time : 0;
+    const texts: Record<string, string> = {
+      boosts: soonest > 0 ? `⚡ Boosts · ${clock(soonest)}` : 'Boosts',
+      furniture: g0.nextFurniture ? `Mobilier · ${moneyShort(g0.nextFurniture.cost)}` : 'Mobilier ✓',
+      labels: 'Étiquettes',
+    };
+    for (const [id, el] of this.sectionTags) if (el.textContent !== texts[id]) el.textContent = texts[id]!;
+    this.sectionTags.get('furniture')?.classList.toggle('afford', !!g0.nextFurniture && g0.money >= g0.nextFurniture.cost);
+    this.sectionTags.get('boosts')?.classList.toggle('on', soonest > 0);
   }
 
   /** Tableau de bord (application de l'ordinateur) : un aperçu en direct des ventes et de la brasserie. */
@@ -2320,6 +2396,124 @@ export class App {
       ctx.fillStyle = '#f6ecd6';
       ctx.fillRect(this.dashPick * slot, base - 1, bw, 2);
     }
+  }
+
+  // ------------------------------------------------------------------ rayons du magasin
+
+  /** Les boosts : brasserie, bar et généraux ; prix selon ce qu'ils rapportent aujourd'hui. */
+  openBoosts(): void {
+    const g = this.game();
+    const card = this.modalCard('Boosts');
+    card.classList.add('catalog');
+    for (const grp of BOOST_GROUPS) {
+      card.append(h('div', 'section-title', grp.name), h('p', 'hint', grp.text));
+      for (const def of BOOSTS.filter((b) => b.group === grp.id)) {
+        const cur = def.channel ? g.boostOf(def.channel) : def.id === 'ad' && g.advertising ? { id: 'ad' as const, until: g.adUntil } : null;
+        const mine = cur?.id === def.id;
+        const row = h('div', `card shop-row${mine ? ' banner' : ''}`);
+        const head = h('div', 'beer-head');
+        head.append(h('span', 'beer-name', def.name), h('span', 'order-time', mine ? `⚡ ${clock(cur!.until - g.time)}` : def.minutes ? duration(def.minutes * 60) : 'immédiat'));
+        row.append(head, h('p', 'hint', def.text));
+        const cost = g.boostCost(def.id);
+        const busy = !!cur && !mine;
+        const b = this.btn('btn primary', busy ? `Attends la fin de « ${BOOSTS.find((x) => x.id === cur!.id)?.name} »` : `${mine && def.id !== 'ad' ? 'Prolonger' : 'Acheter'} · ${moneyShort(cost)}`, () => {
+          const r = g.buyBoost(def.id);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          this.toast(`${def.name} !`, 'good');
+          this.onSent?.();
+          this.openBoosts();
+        });
+        b.disabled = busy || (def.id === 'ad' && g.advertising);
+        if (!b.disabled) this.costGate(b, cost);
+        row.append(b);
+        card.append(row);
+      }
+    }
+    if (!g.batches.length && !g.planned) card.append(h('p', 'note bad', 'Rien ne brasse en ce moment : un boost de brasserie n\'aurait aucun effet.'));
+    card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
+  }
+
+  /** Le mobilier du bar : un meuble après l'autre ; chacun s'installe dans le bar, à tous ses niveaux. */
+  openFurniture(): void {
+    const g = this.game();
+    const card = this.modalCard('Mobilier du bar');
+    card.classList.add('catalog');
+    card.append(h('p', 'hint', 'Chaque meuble s\'installe au bar et garde sa place quand tu l\'agrandis.'));
+    const next = g.nextFurniture;
+    for (const f of FURNITURE) {
+      const owned = g.hasFurniture(f.id);
+      const row = h('div', `card shop-row${owned ? ' banner' : ''}`);
+      const head = h('div', 'beer-head');
+      head.append(h('span', 'beer-name', f.name), h('span', 'order-time', owned ? '✓ installé' : next?.id === f.id ? '' : '🔒'));
+      row.append(head, h('p', 'hint', f.text));
+      if (!owned && next?.id === f.id) {
+        const b = this.btn('btn primary', `Installer · ${moneyShort(f.cost)}`, () => {
+          const r = g.buyFurniture(f.id);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          this.toast(`${f.name} : au bar !`, 'good');
+          this.onSent?.();
+          this.openFurniture();
+        });
+        this.costGate(b, f.cost);
+        row.append(b);
+      } else if (!owned) row.append(h('p', 'note', `Après « ${next?.name} » · ${moneyShort(f.cost)}`));
+      card.append(row);
+    }
+    card.append(this.btn('btn', 'Voir le bar', () => {
+      this.closeModal();
+      this.goView('bar');
+    }), this.btn('btn', 'Fermer', () => this.closeModal()));
+  }
+
+  /** Étiquettes : nouvelles bouteilles, formes, logos et motifs pour l'éditeur. */
+  private labelTab: UnlockKind = 'bottle';
+  openLabelShop(kind: UnlockKind = this.labelTab): void {
+    const g = this.game();
+    this.labelTab = kind;
+    const card = this.modalCard('Étiquettes et bouteilles');
+    card.classList.add('catalog');
+    const tabs = h('div', 'chips');
+    for (const k of UNLOCK_KINDS) tabs.append(this.btn(`chip${k.id === kind ? ' active' : ''}`, k.name, () => this.openLabelShop(k.id)));
+    card.append(tabs);
+    const sample = g.beers[0]?.label ?? DEFAULT_LABEL;
+    const name = g.beers[0]?.name ?? 'Ma bière';
+    const grid = h('div', 'unlock-grid');
+    for (const x of LABEL_UNLOCKS.filter((y) => y.kind === kind)) {
+      const owned = g.unlocked.includes(x.id);
+      const cell = h('div', `unlock${owned ? ' owned' : ''}`);
+      const preview = h('div', 'unlock-preview');
+      const l = { ...sample, [x.kind === 'bottle' ? 'bottle' : x.kind]: x.value } as Label;
+      if (x.kind === 'bottle') {
+        const bottle = h('div', 'shelf-bottle');
+        const c = h('canvas', 'shelf-glass');
+        drawShelfBottle(c, 'beer', l.bottle);
+        const lab = h('canvas', 'shelf-label');
+        drawLabel(lab, l, name);
+        const spot = labelSpot(l.bottle);
+        Object.assign(lab.style, { left: `${spot.x * BOTTLE_SCALE}px`, top: `${spot.y * BOTTLE_SCALE}px` });
+        bottle.append(c, lab);
+        preview.append(bottle);
+      } else {
+        const c = h('canvas', 'label-thumb big');
+        drawLabel(c, l, name);
+        preview.append(c);
+      }
+      cell.append(preview, h('span', 'unlock-name', x.name));
+      if (owned) cell.append(h('span', 'note', '✓ débloqué'));
+      else {
+        const b = this.btn('btn small primary', moneyShort(x.cost), () => {
+          const r = g.buyUnlock(x.id);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          this.toast(`${x.name} : dans l'éditeur d'étiquettes !`, 'good');
+          this.onSent?.();
+          this.openLabelShop(kind);
+        });
+        this.costGate(b, x.cost);
+        cell.append(b);
+      }
+      grid.append(cell);
+    }
+    card.append(grid, h('p', 'hint', 'Ce que tu débloques apparaît dans l\'éditeur d\'étiquettes (Ma gamme → Étiquette).'), this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
   /** L'objet en vente au magasin : ce qu'il débloque, son prix, l'acheter. */

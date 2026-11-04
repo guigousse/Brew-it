@@ -20,17 +20,20 @@ const SHELVES = [92, 150, 204];
 const FLOOR = 226;
 /** Hauteur des yeux (point de fuite du sol), au milieu. */
 const EYE = 140;
-/** L'objet en vente (icône ×2), la caisse mystère, les quatre objets sous leur drap. */
+/**
+ * L'objet en vente (icône ×2), la caisse mystère ; puis les rayons : boosts, mobilier, étiquettes,
+ * et un dernier objet encore sous son drap.
+ */
 export const SHOP_SPOTS = {
   sale: { x: 30, y: SHELVES[0]! - 34, w: 36, h: 34 } as Rect,
   mystery: { x: 98, y: SHELVES[0]! - 20, w: 26, h: 20 } as Rect,
-  soon: [
-    { x: 18, y: SHELVES[1]! - 24, w: 50, h: 24 },
-    { x: 92, y: SHELVES[1]! - 24, w: 50, h: 24 },
-    { x: 18, y: SHELVES[2]! - 24, w: 50, h: 24 },
-    { x: 92, y: SHELVES[2]! - 24, w: 50, h: 24 },
-  ] as Rect[],
+  boosts: { x: 18, y: SHELVES[1]! - 36, w: 50, h: 36 } as Rect,
+  furniture: { x: 92, y: SHELVES[1]! - 36, w: 50, h: 36 } as Rect,
+  labels: { x: 18, y: SHELVES[2]! - 36, w: 50, h: 36 } as Rect,
+  soon: { x: 92, y: SHELVES[2]! - 24, w: 50, h: 24 } as Rect,
 };
+/** Rayons du magasin et l'icône qui les représente sur l'étagère. */
+export const SHOP_SECTIONS = { boosts: 'bolt', furniture: 'jukebox', labels: 'labels' } as const satisfies Record<string, IconId>;
 const ITEM_ICON: Record<ShopItemId, IconId> = { darts: 'darts', tv: 'tv', disco: 'disco' };
 
 export class ShopRoom extends Room {
@@ -39,7 +42,11 @@ export class ShopRoom extends Room {
   }
 
   hits(): { id: string; rect: Rect }[] {
-    return [{ id: 'sale', rect: SHOP_SPOTS.sale }, { id: 'mystery', rect: SHOP_SPOTS.mystery }, ...SHOP_SPOTS.soon.map((r, i) => ({ id: `soon${i}`, rect: r }))];
+    return [
+      { id: 'sale', rect: SHOP_SPOTS.sale }, { id: 'mystery', rect: SHOP_SPOTS.mystery },
+      { id: 'boosts', rect: SHOP_SPOTS.boosts }, { id: 'furniture', rect: SHOP_SPOTS.furniture }, { id: 'labels', rect: SHOP_SPOTS.labels },
+      { id: 'soon', rect: SHOP_SPOTS.soon },
+    ];
   }
 
   protected paintBackground(g: CanvasRenderingContext2D): void {
@@ -96,6 +103,7 @@ export class ShopRoom extends Room {
 
   draw(game: Game, t: number): void {
     const g = this.g;
+    const boosting = !!(game.boostOf('brew') || game.boostOf('yeast') || game.boostOf('bar') || game.boostOf('wholesale') || game.advertising);
     g.imageSmoothingEnabled = false;
     this.begin(1, t);
     const px = painter(g);
@@ -123,8 +131,22 @@ export class ShopRoom extends Room {
       const q = ['.kkk.', 'k...k', '...k.', '..k..', '.....', '..k..'];
       q.forEach((row, j) => [...row].forEach((c, i) => c === 'k' && px(m.x + 10 + i, m.y + 5 + j, 1, 1, '#1b1424')));
     }
-    // objets « bientôt » sous leur drap
-    for (const r of SHOP_SPOTS.soon) {
+    // les rayons : chaque icône sur son socle, avec son ombre ; celle des boosts crépite quand un boost tourne
+    for (const key of ['boosts', 'furniture', 'labels'] as const) {
+      const r = SHOP_SPOTS[key];
+      const cx = r.x + r.w / 2;
+      const base = r.y + r.h;
+      px(cx - 14, base - 3, 28, 3, '#3a2010'); px(cx - 14, base - 3, 28, 1, '#8a5a2c');
+      g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(cx - 12, base - 4, 26, 1);
+      const bob = key === 'boosts' && boosting ? Math.round(Math.sin(t * 6)) : 0;
+      paintIcon(g, SHOP_SECTIONS[key], cx - 16, base - 35 + bob, 2);
+      if (key === 'boosts' && boosting && Math.floor(t * 4) % 2 === 0) {
+        px(cx + 14, base - 30, 1, 3, '#fff4b0'); px(cx + 13, base - 29, 3, 1, '#fff4b0');
+        px(cx - 16, base - 14, 1, 3, '#fff4b0'); px(cx - 17, base - 13, 3, 1, '#fff4b0');
+      }
+    }
+    // un dernier objet, encore sous son drap
+    for (const r of [SHOP_SPOTS.soon]) {
       g.fillStyle = '#1b1424';
       g.beginPath(); g.moveTo(r.x + 2, r.y + r.h); g.quadraticCurveTo(r.x + r.w / 2, r.y - 6, r.x + r.w - 2, r.y + r.h); g.fill();
       g.fillStyle = '#d8d0c0';

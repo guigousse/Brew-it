@@ -4,35 +4,52 @@
  * surimpression à 120 × 76 px, soit exactement la taille native de l'étiquette — nette au pixel près.
  */
 import type { Beer } from '../core/game';
+import type { BottleShape } from '../core/label';
 import { CRATE } from '../core/warehouse';
 import { drawMiniLabel } from './labelArt';
 
 export const BOTTLE_W = 34;
 export const BOTTLE_H = 72;
 export const BOTTLE_SCALE = 2;
-/** Zone de l'étiquette sur le corps de la bouteille (px natifs). */
+/** Zone de l'étiquette sur le corps de la bouteille (px natifs), selon sa forme. */
 export const LABEL_SPOT = { x: 2, y: 36, w: 30, h: 19 };
+const SPOTS: Record<BottleShape, number> = { classic: 36, longneck: 42, stubby: 44, swing: 38, champagne: 44 };
+export const labelSpot = (shape: BottleShape = 'classic') => ({ ...LABEL_SPOT, y: SPOTS[shape] ?? 36 });
 
 const CX = 17;
+/** Profil de chaque bouteille : haut du goulot, fin du col, fin de l'épaule (px natifs). */
+const PROFILE: Record<BottleShape, { top: number; neck: number; shoulder: number; neckW: number; body: number }> = {
+  classic: { top: 0, neck: 18, shoulder: 28, neckW: 5, body: 17 },
+  longneck: { top: 0, neck: 26, shoulder: 34, neckW: 4, body: 16 },
+  stubby: { top: 14, neck: 22, shoulder: 28, neckW: 6, body: 17 },
+  swing: { top: 4, neck: 18, shoulder: 30, neckW: 6, body: 17 },
+  champagne: { top: 0, neck: 14, shoulder: 38, neckW: 5, body: 17 },
+};
 /** Demi-largeur de la bouteille à la ligne y : capsule, col, épaule, corps arrondi en bas. */
-function halfWidth(y: number): number {
-  if (y < 0 || y >= BOTTLE_H) return 0;
-  if (y < 4) return 6;
-  if (y < 18) return 5;
-  if (y < 28) return Math.round(5 + ((y - 18) / 9) * 11);
-  if (y === BOTTLE_H - 1) return 14;
-  if (y === BOTTLE_H - 2) return 16;
-  return 17;
+function halfWidth(y: number, shape: BottleShape = 'classic'): number {
+  const p = PROFILE[shape] ?? PROFILE.classic;
+  if (y < p.top || y >= BOTTLE_H) return 0;
+  if (y < p.top + 4) return p.neckW + 1;
+  if (y < p.neck) return p.neckW;
+  if (y < p.shoulder) {
+    const k = (y - p.neck) / (p.shoulder - p.neck - 1);
+    const e = shape === 'champagne' ? Math.sin((k * Math.PI) / 2) : k; // épaule longue et galbée
+    return Math.round(p.neckW + e * (p.body - p.neckW));
+  }
+  if (y === BOTTLE_H - 1) return p.body - 3;
+  if (y === BOTTLE_H - 2) return p.body - 1;
+  return p.body;
 }
 
 export type ShelfBottleKind = 'beer' | 'empty' | 'add' | 'locked';
 
-export function drawShelfBottle(canvas: HTMLCanvasElement, kind: ShelfBottleKind): void {
+export function drawShelfBottle(canvas: HTMLCanvasElement, kind: ShelfBottleKind, shape: BottleShape = 'classic'): void {
   canvas.width = BOTTLE_W;
   canvas.height = BOTTLE_H;
   const g = canvas.getContext('2d')!;
   g.clearRect(0, 0, BOTTLE_W, BOTTLE_H);
-  if (kind === 'beer') return glassBottle(g);
+  if (kind === 'beer') return glassBottle(g, shape);
+  const halfWidth = (y: number) => halfWidthOf(y, shape);
   // silhouette : contour en pointillés, intérieur sombre
   const dim = kind === 'add' ? '#a894bc' : '#5c4a6e';
   g.fillStyle = kind === 'add' ? 'rgba(242,193,78,0.07)' : 'rgba(0,0,0,0.18)';
@@ -64,7 +81,11 @@ export function drawShelfBottle(canvas: HTMLCanvasElement, kind: ShelfBottleKind
   }
 }
 
-function glassBottle(g: CanvasRenderingContext2D): void {
+const halfWidthOf = halfWidth;
+
+function glassBottle(g: CanvasRenderingContext2D, shape: BottleShape): void {
+  const p = PROFILE[shape] ?? PROFILE.classic;
+  const halfWidth = (y: number) => halfWidthOf(y, shape);
   // contour
   g.fillStyle = '#1a0c06';
   for (let y = 0; y < BOTTLE_H; y++) {
@@ -83,24 +104,46 @@ function glassBottle(g: CanvasRenderingContext2D): void {
   }
   // reflets
   g.fillStyle = 'rgba(255,240,210,0.55)';
-  g.fillRect(CX - 11, 30, 2, 36);
-  g.fillRect(CX - 3, 6, 1, 11);
+  g.fillRect(CX - p.body + 6, p.shoulder + 2, 2, BOTTLE_H - p.shoulder - 8);
+  g.fillRect(CX - 3, p.top + 6, 1, Math.max(3, p.neck - p.top - 7));
   g.fillStyle = 'rgba(255,240,210,0.25)';
-  g.fillRect(CX - 9, 30, 1, 30);
-  // capsule dorée
-  g.fillStyle = '#1a0c06';
-  g.fillRect(CX - 7, 0, 14, 5);
-  g.fillStyle = '#f2c14e';
-  g.fillRect(CX - 6, 0, 12, 4);
-  g.fillStyle = '#a8742a';
-  g.fillRect(CX - 6, 3, 12, 1);
-  g.fillStyle = '#ffe7a0';
-  for (let x = CX - 6; x < CX + 6; x += 2) g.fillRect(x, 0, 1, 1);
-  // collerette (étiquette de col)
-  g.fillStyle = '#e8dcc0';
-  g.fillRect(CX - 4, 12, 8, 4);
-  g.fillStyle = '#bdb59e';
-  g.fillRect(CX - 4, 15, 8, 1);
+  g.fillRect(CX - p.body + 8, p.shoulder + 2, 1, BOTTLE_H - p.shoulder - 12);
+  const t = p.top;
+  if (shape === 'swing') {
+    // bouchon mécanique : porcelaine blanche, joint rouge, étrier de fil
+    g.fillStyle = '#1a0c06'; g.fillRect(CX - 6, t - 4, 12, 6);
+    g.fillStyle = '#f6ecd6'; g.fillRect(CX - 5, t - 4, 10, 4);
+    g.fillStyle = '#c8bca4'; g.fillRect(CX - 5, t - 1, 10, 1);
+    g.fillStyle = '#e8553a'; g.fillRect(CX - 6, t + 1, 12, 1);
+    g.fillStyle = '#98a6b6';
+    for (let y = t - 3; y < t + 12; y++) { g.fillRect(CX - 8, y, 1, 1); g.fillRect(CX + 7, y, 1, 1); }
+    g.fillRect(CX - 8, t + 11, 16, 1);
+  } else if (shape === 'champagne') {
+    // feuille d'or sur le goulot, muselet
+    g.fillStyle = '#a8742a';
+    for (let y = t; y < t + 16; y++) { const hw = halfWidth(y); g.fillRect(CX - hw, y, hw * 2, 1); }
+    g.fillStyle = '#f2c14e';
+    for (let y = t; y < t + 15; y++) { const hw = halfWidth(y) - 1; g.fillRect(CX - hw, y, hw * 2 - 1, 1); }
+    g.fillStyle = '#ffe7a0'; g.fillRect(CX - 3, t + 1, 1, 12);
+    g.fillStyle = '#6a4220'; g.fillRect(CX - 5, t + 15, 10, 1);
+  } else {
+    // capsule dorée
+    g.fillStyle = '#1a0c06';
+    g.fillRect(CX - p.neckW - 2, t, (p.neckW + 2) * 2, 5);
+    g.fillStyle = '#f2c14e';
+    g.fillRect(CX - p.neckW - 1, t, (p.neckW + 1) * 2, 4);
+    g.fillStyle = '#a8742a';
+    g.fillRect(CX - p.neckW - 1, t + 3, (p.neckW + 1) * 2, 1);
+    g.fillStyle = '#ffe7a0';
+    for (let x = CX - p.neckW - 1; x < CX + p.neckW + 1; x += 2) g.fillRect(x, t, 1, 1);
+    // collerette (étiquette de col)
+    if (p.neck - t > 10) {
+      g.fillStyle = '#e8dcc0';
+      g.fillRect(CX - p.neckW + 1, t + 12, (p.neckW - 1) * 2, 4);
+      g.fillStyle = '#bdb59e';
+      g.fillRect(CX - p.neckW + 1, t + 15, (p.neckW - 1) * 2, 1);
+    }
+  }
 }
 
 /** Couleur dominante d'une caisse : le fond de l'étiquette de la bière. */

@@ -506,6 +506,17 @@ button:disabled { cursor: default; opacity: .5; }
   font-size: 15px; line-height: 1.1; color: var(--ink); background: #e8dcc0; border: 2px solid var(--ink); box-shadow: 0 2px 0 #0008; cursor: pointer;
 }
 .shop-tag.afford { background: var(--accent); animation: pulse 1.2s steps(4) infinite; }
+.shop-tag.section { cursor: pointer; }
+.shop-tag.on { background: var(--good); color: var(--ink); }
+.catalog .shop-row { display: grid; gap: 6px; }
+.catalog .shop-row .hint { margin: 0; }
+.unlock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.unlock { display: grid; justify-items: center; gap: 4px; padding: 8px 4px; background: var(--panel-2); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 var(--border-hi); }
+.unlock.owned { box-shadow: inset 0 0 0 2px var(--good); }
+.unlock-preview { min-height: 80px; display: grid; place-items: center; }
+.chip.locked { opacity: .6; }
+.unlock-preview .label-thumb.big { width: 96px; height: auto; image-rendering: pixelated; }
+.unlock-name { font-size: 16px; text-align: center; line-height: 1; }
 .shop-tag.soon { font-size: 14px; color: var(--dim); background: #2a2035e0; border-color: #5c4a6e; cursor: default; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .shop-tag.afford { animation: none; } }
 

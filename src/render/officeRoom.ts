@@ -595,16 +595,26 @@ function paintFloor(g: CanvasRenderingContext2D, b: Bounds, lv: number): void {
   }
 }
 
-/** Petite bouteille brune (7 × 22) avec son étiquette, sur le présentoir. */
+/** Petite bouteille brune (7 × 22) avec son étiquette, sur le présentoir, dans la forme choisie pour la bière. */
 function drawMiniBottle(px: Px, g: CanvasRenderingContext2D, x: number, y: number, label: Label): void {
-  px(x + 2, y, 3, 2, '#f2c14e'); // capsule
-  px(x + 2, y + 2, 3, 5, '#5a3418');
-  px(x + 1, y + 7, 5, 2, '#6a3c1c');
-  px(x, y + 9, 7, 13, '#7a4a24');
-  px(x + 1, y + 9, 1, 12, '#b07a40');
-  px(x + 6, y + 9, 1, 12, '#4a2a14');
-  px(x, y + 12, 7, 7, label.bg);
-  drawMiniLabel(g, label, x + 1, y + 13, 5);
+  const shape = label.bottle ?? 'classic';
+  const top = shape === 'stubby' ? y + 6 : y;
+  const neckEnd = shape === 'longneck' ? y + 9 : shape === 'stubby' ? y + 9 : y + 7;
+  const neckW = shape === 'stubby' ? 5 : 3;
+  const nx = x + Math.floor((7 - neckW) / 2);
+  // goulot et capsule (ou bouchon mécanique, ou feuille d'or)
+  if (shape === 'champagne') px(nx, top, neckW, 6, '#f2c14e');
+  else if (shape === 'swing') { px(nx, top, neckW, 2, '#f6ecd6'); px(nx - 1, top + 2, 1, 3, '#98a6b6'); px(nx + neckW, top + 2, 1, 3, '#98a6b6'); }
+  else px(nx, top, neckW, 2, '#f2c14e');
+  if (shape !== 'champagne') px(nx, top + 2, neckW, neckEnd - top - 2, '#5a3418');
+  else px(nx, top + 6, neckW, Math.max(0, neckEnd - top - 6), '#5a3418');
+  px(x + 1, neckEnd, 5, 2, '#6a3c1c');
+  px(x, neckEnd + 2, 7, y + 22 - neckEnd - 2, '#7a4a24');
+  px(x + 1, neckEnd + 2, 1, y + 21 - neckEnd - 2, '#b07a40');
+  px(x + 6, neckEnd + 2, 1, y + 21 - neckEnd - 2, '#4a2a14');
+  const ly = shape === 'classic' || shape === 'swing' ? y + 12 : y + 13;
+  px(x, ly, 7, 7, label.bg);
+  drawMiniLabel(g, label, x + 1, ly + 1, 5);
   px(x, y + 21, 7, 1, '#4a2a14');
 }
 
