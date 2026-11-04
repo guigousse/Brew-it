@@ -1,7 +1,7 @@
 # Brew It : simulation de brassage
 
 ## Concept
-La brasserie compte **trois pièces**, chacune en plein écran et en **portrait**. Chaque écran occupe toute la largeur (une pièce plus haute que l'écran défile verticalement). On passe de l'un à l'autre en **glissant le doigt**, du tableau de bord au magasin, ou par la **barre de navigation en bas de l'écran** :
+La brasserie compte **trois pièces**, chacune en plein écran et en **portrait**. Chaque pièce tient entière à l'écran, sans défilement. La place qui reste (sur les côtés, ou en haut et en bas selon le format de l'écran) est remplie par le décor de la pièce, prolongé : murs, passerelles et sols continuent jusqu'aux bords, légèrement assombris. On passe de l'un à l'autre en **glissant le doigt**, du tableau de bord au magasin, ou par la **barre de navigation en bas de l'écran** :
 
 **Atelier ↔ Stockage ↔ Bar** : le trajet de la bière, de la cuve au verre.
 

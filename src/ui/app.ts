@@ -10,6 +10,7 @@ import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
 import { BarRoom, drawKeg, StorageRoom } from '../render/rooms';
+import { extendBackdrop } from '../render/extend';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
@@ -132,6 +133,13 @@ export class App {
   private dashPick: number | null = null;
   private track = h('div', 'rooms-track');
   private wraps: HTMLElement[] = [];
+  /**
+   * Chaque pièce est entière à l'écran ; autour, son décor est prolongé jusqu'aux bords (ext) pour qu'il n'y ait
+   * pas de bandes noires, quel que soit le format de l'écran.
+   */
+  private views: { view: HTMLElement; ext: HTMLCanvasElement; src: { backdrop(g: Game): HTMLCanvasElement | undefined }; key: string; bg?: HTMLCanvasElement }[] = [];
+  /** Taille de l'écran d'une pièce en pixels natifs, et position de la pièce dedans. */
+  private viewBox = { w: SCENE_W, h: SCENE_H, ox: 0, oy: 0 };
   private storageWrap = h('div', 'scene-wrap');
   private barWrap = h('div', 'scene-wrap');
   private roomHits: { el: HTMLButtonElement; rect: { x: number; y: number; w: number; h: number } }[] = [];
@@ -229,15 +237,20 @@ export class App {
     this.barWrap.append(this.barPlaque);
     // Le défilé des écrans suit l'ordre des onglets : tableau de bord, les trois pièces, magasin.
     const wraps: Record<RoomId, HTMLElement> = { workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap };
+    const srcs = { workshop: this.scene, storage: this.storageRoom, bar: this.barRoom };
     for (const t of TABS) {
       if (!isRoom(t.id)) {
         this.track.append(this.pages[t.id]);
         continue;
       }
       const pane = h('div', 'room');
-      pane.append(wraps[t.id]);
+      const view = h('div', 'room-view');
+      const ext = h('canvas', 'room-ext');
+      view.append(ext, wraps[t.id]);
+      pane.append(view);
       this.track.append(pane);
       this.wraps.push(wraps[t.id]);
+      this.views.push({ view, ext, src: srcs[t.id], key: '' });
     }
     this.track.style.width = `${TABS.length * 100}vw`;
     this.shopPage();
@@ -267,18 +280,30 @@ export class App {
   // ------------------------------------------------------------------ mise en page
 
   /**
-   * Chaque pièce occupe toute la largeur de l'écran ; si elle est plus haute que la place disponible,
-   * on la fait défiler verticalement. Sur un écran très large (tablette, ordinateur), on limite la hauteur.
+   * Chaque pièce tient entière entre le header et la barre du bas, agrandie autant que possible.
+   * La place qui reste (sur les côtés, ou en haut et en bas selon le format de l'écran) est remplie
+   * par le décor de la pièce, prolongé : pas de défilement, pas de bandes noires.
    */
   layout(): void {
     const top = this.header.getBoundingClientRect().bottom;
     const bottom = this.dock.getBoundingClientRect().top;
     const availW = window.innerWidth;
     const availH = Math.max(100, bottom - top);
-    this.scale = Math.min(availW / SCENE_W, (availH * 1.35) / SCENE_H);
+    this.scale = Math.min(availW / SCENE_W, availH / SCENE_H);
     const w = Math.floor(SCENE_W * this.scale);
     const hh = Math.floor(SCENE_H * this.scale);
-    for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px` });
+    // l'écran de la pièce, en pixels natifs : la pièce au centre, le décor prolongé autour
+    const vw = Math.ceil(availW / this.scale);
+    const vh = Math.ceil(availH / this.scale);
+    const ox = Math.floor((vw - SCENE_W) / 2);
+    const oy = Math.floor((vh - SCENE_H) / 2);
+    this.viewBox = { w: vw, h: vh, ox, oy };
+    for (const v of this.views) {
+      Object.assign(v.view.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px` });
+      Object.assign(v.ext.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px` });
+    }
+    for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px`, left: `${ox * this.scale}px`, top: `${oy * this.scale}px` });
+    this.syncBackdrops();
     for (const c of [this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas]) Object.assign(c.style, { width: `${w}px`, height: `${hh}px` });
     const s = this.scale;
     for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
@@ -296,8 +321,23 @@ export class App {
 
   // ------------------------------------------------------------------ boucle d'affichage
 
+  /** Redessine le décor prolongé d'une pièce quand son décor change (niveau) ou que l'écran change de taille. */
+  private syncBackdrops(): void {
+    const g = this.game();
+    const { w, h: vh, ox, oy } = this.viewBox;
+    const size = `${w}x${vh}`;
+    for (const v of this.views) {
+      const bg = v.src.backdrop(g);
+      if (!bg || (bg === v.bg && v.key === size)) continue;
+      v.bg = bg;
+      v.key = size;
+      extendBackdrop(bg, v.ext, w, vh, ox, oy);
+    }
+  }
+
   frame(t: number): void {
     const g = this.game();
+    this.syncBackdrops();
     if (this.moneyAnim) {
       const a = this.moneyAnim;
       const k = Math.min(1, (performance.now() - a.start) / 900);

@@ -19,7 +19,8 @@ src/
 │   ├── sprites.ts        les 21 sprites (7 machines × 3 niveaux) et leurs points d'accroche
 │   ├── scene.ts          l'atelier : la brasserie verticale (canvas 160 × 300 agrandi au pixel près)
 │   ├── rooms.ts          le stockage et le bar (salle en haut, cave à fûts en bas), 5 décors chacun
-│   └── bottleArt.ts      bouteilles de l'étagère, caisses
+│   ├── bottleArt.ts      bouteilles de l'étagère, caisses
+│   └── extend.ts         décor prolongé autour d'une pièce (remplit l'écran, quel que soit son format)
 ├── ui/                   interface DOM : header, barre de navigation en bas (pièces, tableau de bord, magasin), sous-menu par pièce, glissement, panneaux,
 │                         ordinateur des commandes, dégustation, Gaston
 ├── platform/             Capacitor : stockage fichier, cycle de vie, haptique

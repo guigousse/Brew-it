@@ -70,6 +70,11 @@ export class Scene {
     this.g.imageSmoothingEnabled = false;
   }
 
+  /** Décor actuel (sans rien d'animé), une fois dessiné : sert à prolonger la pièce sur les côtés. */
+  backdrop(game: Game): HTMLCanvasElement | undefined {
+    return this.bgs.get(game.breweryLevel);
+  }
+
   onStage(stage: number, t: number): void {
     this.flows.set(stage, t);
   }

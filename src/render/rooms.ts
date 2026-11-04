@@ -75,6 +75,14 @@ abstract class Room {
 
   protected abstract paintBackground(g: CanvasRenderingContext2D, level: number): void;
 
+  /** Niveau qui choisit le décor. */
+  protected abstract levelOf(game: Game): number;
+
+  /** Décor actuel (sans rien d'animé), une fois dessiné : sert à prolonger la pièce sur les côtés. */
+  backdrop(game: Game): HTMLCanvasElement | undefined {
+    return this.bgs.get(this.levelOf(game));
+  }
+
   protected outline(r: Rect, t: number): void {
     if (Math.floor(t * 3) % 2) return;
     this.g.strokeStyle = '#f2c14e';
@@ -154,6 +162,10 @@ export class StorageRoom extends Room {
   override invalidate(): void {
     super.invalidate();
     this.crates = undefined;
+  }
+
+  protected levelOf(game: Game): number {
+    return game.storageLevel;
   }
 
   draw(game: Game, t: number): void {
@@ -493,6 +505,10 @@ export class BarRoom extends Room {
       out.push({ id: `keg${i}`, rect: { x: r.x - 3, y: CELLAR_Y + 18, w: r.w + 6, h: KEG_FLOOR - CELLAR_Y - 14 } });
     }
     return out;
+  }
+
+  protected levelOf(game: Game): number {
+    return game.barLevel;
   }
 
   draw(game: Game, t: number): void {
