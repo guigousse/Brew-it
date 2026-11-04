@@ -10,12 +10,9 @@
 #   IOS_BUNDLE_ID      (facultatif) remplace le Bundle ID par défaut com.guigousse.brewit
 name: TestFlight
 
-# Envoi à chaque push sur la branche (hors documentation), ou à la main (Actions → TestFlight → Run workflow).
+# Envoi à la demande seulement (Actions → TestFlight → Run workflow) : un build macOS consomme vite le quota d'Actions.
 on:
   workflow_dispatch:
-  push:
-    branches: [main, claude/project-foundation]
-    paths-ignore: ['docs/**', '**/*.md']
 
 concurrency:
   group: testflight
