@@ -396,10 +396,6 @@ button:disabled { cursor: default; opacity: .5; }
 .stepper-value { min-width: 52px; text-align: center; font-size: 24px; color: var(--accent); }
 .plan-list { display: grid; gap: 6px; }
 .plan-card { gap: 4px; }
-.plan-top { display: flex; align-items: center; gap: 8px; }
-.plan-name { flex: 1; min-width: 0; display: grid; }
-.plan-ctl { display: flex; align-items: center; gap: 6px; }
-.plan-ctl .stepper { margin-right: auto; }
 
 /* --- Gains de l'absence : une bourse discrète sous l'argent ------------------------------ */
 .harvest {
@@ -432,8 +428,6 @@ button:disabled { cursor: default; opacity: .5; }
 .eta { color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .eta.big { font-size: 24px; }
 .eta-total { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 8px; background: var(--ink); border: 2px solid #5c4a6e; }
-.plan-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.plan-foot .note { flex: 1; min-width: 0; }
 .plan-eta { color: var(--dim); white-space: nowrap; }
 
 /* --- Boutons d'action carrés (icône en pixel art) ----------------------------------------- */
@@ -474,3 +468,30 @@ button:disabled { cursor: default; opacity: .5; }
 .shop-tag.afford { background: var(--accent); animation: pulse 1.2s steps(4) infinite; }
 .shop-tag.soon { font-size: 13px; color: var(--dim); background: #2a2035e0; border-color: #5c4a6e; cursor: default; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .shop-tag.afford { animation: none; } }
+
+/* --- File des brassins : une carte par groupe ------------------------------------------- */
+.plan-card { position: relative; padding: 6px 8px 8px; }
+.plan-title { font-size: 20px; color: var(--accent); padding-right: 30px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-close {
+  position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; padding: 0; font-size: 15px; line-height: 1;
+  background: var(--panel); border: 2px solid var(--ink); box-shadow: inset 1px 1px 0 var(--border-hi); color: var(--dim);
+}
+.plan-close:active { transform: translateY(1px); }
+.plan-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+/* aperçu du brassin : la bouteille étiquetée ou le fût, à moitié de sa taille d'étagère */
+.plan-pic { width: 34px; height: 75px; overflow: hidden; }
+.plan-pic .beer-visual { transform: scale(.5); transform-origin: 0 0; width: 68px; height: 150px; }
+.plan-info { display: grid; gap: 2px; min-width: 0; }
+.plan-ctl { display: grid; justify-items: end; gap: 6px; }
+.plan-moves { display: flex; gap: 6px; }
+.plan-ctl .stepper .knob-btn { width: 32px; height: 32px; }
+.plan-ctl .stepper-value { min-width: 44px; font-size: 22px; }
+.plan-pic { width: 48px; }
+.plan-pic .beer-visual { width: 96px; }
+
+.keg-wrap { position: relative; width: 96px; height: 96px; margin-bottom: 10px; }
+.keg-wrap .keg-big { margin: 0; }
+.keg-label { position: absolute; left: 50%; top: 50%; width: 56px; height: auto; transform: translate(-50%, -62%); image-rendering: pixelated; filter: drop-shadow(0 1px 0 #0006); }
+.batch-side .keg-wrap { width: 72px; height: 72px; }
+.batch-side .keg-wrap .keg-big { width: 72px; height: 72px; }
+.batch-side .keg-label { width: 44px; }

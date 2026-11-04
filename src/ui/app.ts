@@ -807,16 +807,29 @@ export class App {
     g.plan.forEach((p, i) => {
       const b = g.beer(p.beerId);
       if (!b) return;
+      // carte : le nom en haut ; à gauche l'aperçu du brassin ; au milieu le format et le temps ; à droite les réglages
       const card = h('div', `card plan-card${i === 0 ? ' banner' : ''}`);
-      const top = h('div', 'plan-top');
-      const thumb = h('canvas', 'label-thumb');
-      drawLabel(thumb, b.label, b.name);
-      const name = h('div', 'plan-name');
-      name.append(h('span', 'stock-name', b.name), h('span', 'stats-line', p.format === 'keg' ? '🛢 Fûts' : '🍾 Bouteilles'));
-      top.append(h('span', 'plan-rank', `${i + 1}.`), thumb, name, this.btn('icon-btn small', '✕', () => {
+      const close = this.btn('plan-close', '✕', () => {
         g.unplan(i);
         this.refreshSheet();
-      }));
+      });
+      close.setAttribute('aria-label', 'Retirer de la file');
+      card.append(h('div', 'plan-title', `${i + 1}. ${b.name}`), close);
+      const row = h('div', 'plan-row');
+      const pic = h('div', 'plan-pic');
+      pic.append(this.beerVisual(b, p.format));
+      const info = h('div', 'plan-info');
+      info.append(h('span', 'stats-line strong', p.format === 'keg' ? 'Fûts' : 'Bouteilles'));
+      // fin du dernier brassin de ce groupe
+      const done = inLine + g.plan.slice(0, i + 1).reduce((n, x) => n + x.count, 0) - 1;
+      if (fc) {
+        const w = h('span', 'plan-eta');
+        if (fc.res.ends[done] != null) w.append(h('span', '', 'prêt dans '));
+        w.append(this.etaEl(fc, done));
+        info.append(w);
+      }
+      const status = i === 0 ? this.planStatus(g) : '';
+      if (status) info.append(h('span', 'note bad', status));
       const ctl = h('div', 'plan-ctl');
       const up = this.btn('btn small', '▲', () => {
         g.movePlan(i, -1);
@@ -830,22 +843,14 @@ export class App {
       });
       down.disabled = i === g.plan.length - 1;
       down.setAttribute('aria-label', 'Reculer dans la file');
+      const moves = h('div', 'plan-moves');
+      moves.append(up, down);
       ctl.append(this.stepper(p.count, 1, Math.max(1, g.planLimit(p.format, i)), (n) => {
         g.setPlanCount(i, n);
         this.refreshSheet();
-      }), up, down);
-      card.append(top, ctl);
-      const foot = h('div', 'plan-foot');
-      foot.append(h('span', 'note bad', i === 0 ? this.planStatus(g) : ''));
-      // fin du dernier brassin de ce groupe
-      const done = inLine + g.plan.slice(0, i + 1).reduce((n, x) => n + x.count, 0) - 1;
-      if (fc) {
-        const w = h('span', 'plan-eta');
-        if (fc.res.ends[done] != null) w.append(h('span', '', 'prêt dans '));
-        w.append(this.etaEl(fc, done));
-        foot.append(w);
-      }
-      card.append(foot);
+      }), moves);
+      row.append(pic, info, ctl);
+      card.append(row);
       list.append(card);
     });
     body.append(list);
@@ -997,11 +1002,16 @@ export class App {
       bottle.append(c, lab);
       box.append(bottle);
     } else {
+      // le fût, et l'étiquette de la bière collée dessus
+      const wrap = h('div', 'keg-wrap');
       const c = h('canvas', 'keg-big');
       c.width = 24;
       c.height = 24;
       drawKeg(c.getContext('2d')!, 0, 0, 24, beer.label);
-      box.append(c);
+      const lab = h('canvas', 'keg-label');
+      drawLabel(lab, beer.label, beer.name);
+      wrap.append(c, lab);
+      box.append(wrap);
     }
     return box;
   }
