@@ -153,3 +153,18 @@ Après chaque réglage, relancer `npm run balance` et vérifier :
 ## Événements à débloquer
 
 - La fête demande maintenant une **boule à facettes** (150 €). Le joueur simulé l'achète au premier jour. Il finit en J30, contre J31 avant (les écarts d'un jour viennent du hasard des commandes).
+
+## Étude : lancer un brassin seulement s'il ne bloquera pas les machines
+
+Aujourd'hui, le moulin lance un brassin dès qu'il est libre. Les brassins s'accumulent alors dans les machines chaudes (moulin, cuve d'empâtage, ébullition, refroidissement) en attendant une cuve de fermentation : ces machines sont bloquées 76 à 88 % du temps. Simulation sur 6 h, file de 400 brassins (`brassins/h` · machines chaudes bloquées · durée d'un brassin) :
+
+| Niveau, cuves | Actuel | Lancement à cuve libre | Lancement anticipé | Une ligne = un brassin à la fois |
+|---|---|---|---|---|
+| 1, 1 cuve | 15,7 · 88 % · 19 min | 10,8 · 0 % · 7 min | **15,8 · 0 % · 7 min** | 8,2 · 0 % |
+| 2, 2 cuves | 39,5 · 76 % · 10 min | 26,8 · 0 % · 6 min | **39,3 · 0 % · 6 min** | 10,0 · 0 % |
+| 3, 2 cuves | 49,3 · 76 % · 9 min | 33,5 · 0 % · 5 min | **49,3 · 0 % · 5 min** | 11,7 · 0 % |
+| 5, 4 cuves | 66,7 · 76 % · 8 min | 66,7 · 0 % · 5 min | 66,7 · 68 % · 7 min | 21,5 · 0 % |
+
+- *Lancement à cuve libre* : on ne lance que si une cuve de fermentation est libre. Plus de blocage, mais un tiers de cadence en moins (la cuve attend le brassage chaud).
+- *Lancement anticipé* : on lance quand une cuve se sera libérée à l'arrivée du moût. Même cadence qu'aujourd'hui, plus de blocage, et chaque brassin dure 2 à 3 fois moins longtemps. Au niveau 5, le goulot n'est plus la fermentation mais la garde : la règle doit regarder tout le trajet, pas seulement la première cuve.
+- *Une ligne, un brassin à la fois* : la cadence chute de 50 à 75 %. Il faudrait des lignes supplémentaires à acheter, et la place manque à l'écran.

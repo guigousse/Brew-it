@@ -405,6 +405,7 @@ export class Game {
     count = Math.floor(count);
     if (count < 1) return { ok: false, reason: 'Aucun brassin' };
     if (count > this.planRoom) return { ok: false, reason: `${this.planCap} brassins programmés au plus` };
+    if (count > this.planLimit(format)) return { ok: false, reason: 'Pas assez de place au stockage' };
     // à la suite d'un groupe identique, on l'allonge
     const last = this.plan[this.plan.length - 1];
     if (last && last.beerId === beerId && last.format === format) last.count += count;
@@ -421,7 +422,7 @@ export class Game {
   setPlanCount(index: number, count: number): void {
     const p = this.plan[index];
     if (!p) return;
-    count = Math.max(0, Math.min(Math.floor(count), p.count + this.planRoom));
+    count = Math.max(0, Math.min(Math.floor(count), this.planLimit(p.format, index)));
     if (count === 0) this.plan.splice(index, 1);
     else p.count = count;
   }
@@ -478,6 +479,28 @@ export class Game {
       else blocked = 'slow';
     }
     return { ends, total: ends[ends.length - 1] ?? 0, done, blocked };
+  }
+
+  /**
+   * Combien de brassins de ce format on peut encore programmer (ou porter, pour le groupe `index`) :
+   * il faut une place dans la file, et que le stockage puisse les accueillir. Les fûts n'en partent qu'au bar,
+   * aux commandes ou pendant un événement : ils doivent tenir dans la place libre, en comptant ceux déjà sur la ligne
+   * et dans la file. Les bouteilles aussi, sauf si le grossiste écoule le surplus tout seul (elles ne bloquent alors jamais).
+   */
+  planLimit(format: Format, index = -1): number {
+    const own = this.plan[index];
+    const room = this.planRoom + (own ? own.count : 0);
+    const limited = (f: Format) => f === 'keg' || !this.autoWholesale;
+    if (!limited(format)) return room;
+    const pending = this.batches.reduce((s, b) => s + (limited(b.format) ? this.pendingSpace(b) : 0), 0);
+    const queued = this.plan.reduce((s, p, i) => s + (i !== index && limited(p.format) ? p.count * this.batchSpace(p.format) : 0), 0);
+    const bottles = this.autoWholesale ? 0 : this.beers.reduce((s, b) => s + b.stock, 0);
+    const kegs = this.stored - this.beers.reduce((s, b) => s + b.stock, 0);
+    const used = kegs + bottles + pending + queued;
+    const unit = this.batchSpace(format);
+    // un brassin plus gros que tout le stockage peut partir quand tout est vide (il se rangera au fil des ventes)
+    const fits = used === 0 && unit > this.storageCap ? 1 : Math.floor(Math.max(0, this.storageCap - used) / Math.max(1, unit));
+    return Math.max(0, Math.min(room, fits));
   }
 
   /** Brassins programmés au total. */

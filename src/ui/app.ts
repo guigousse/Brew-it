@@ -736,10 +736,9 @@ export class App {
     const b = head && g.beer(head.beerId);
     if (!head || !b) return '';
     const cost = g.brewCost(b.recipe, g.batchLiters, head.format);
-    if (g.batchAt('mill')) return 'Part dès que le moulin se libère';
     if (g.money < cost && !g.broke) return `⏸ Il manque ${moneyInt(cost - g.money)}`;
     if (!g.roomFor(head.format)) return '⏸ Stockage plein';
-    return 'Part maintenant';
+    return '';
   }
 
   /** La file : les groupes de brassins, dans l'ordre où ils partiront. */
@@ -774,7 +773,7 @@ export class App {
       const thumb = h('canvas', 'label-thumb');
       drawLabel(thumb, b.label, b.name);
       const name = h('div', 'plan-name');
-      name.append(h('span', 'stock-name', b.name), h('span', 'stats-line', `${p.format === 'keg' ? '🛢 Fûts' : '🍾 Bouteilles'} · ${this.batchOutput(g, p.format, p.count)}`));
+      name.append(h('span', 'stock-name', b.name), h('span', 'stats-line', p.format === 'keg' ? '🛢 Fûts' : '🍾 Bouteilles'));
       top.append(h('span', 'plan-rank', `${i + 1}.`), thumb, name, this.btn('icon-btn small', '✕', () => {
         g.unplan(i);
         this.refreshSheet();
@@ -792,14 +791,13 @@ export class App {
       });
       down.disabled = i === g.plan.length - 1;
       down.setAttribute('aria-label', 'Reculer dans la file');
-      ctl.append(this.stepper(p.count, 1, p.count + g.planRoom, (n) => {
+      ctl.append(this.stepper(p.count, 1, Math.max(1, g.planLimit(p.format, i)), (n) => {
         g.setPlanCount(i, n);
         this.refreshSheet();
       }), up, down);
       card.append(top, ctl);
       const foot = h('div', 'plan-foot');
-      if (i === 0) foot.append(h('span', this.planStatus(g).startsWith('⏸') ? 'note bad' : 'note', this.planStatus(g)));
-      else foot.append(h('span'));
+      foot.append(h('span', 'note bad', i === 0 ? this.planStatus(g) : ''));
       // fin du dernier brassin de ce groupe
       const done = inLine + g.plan.slice(0, i + 1).reduce((n, x) => n + x.count, 0) - 1;
       if (fc) {
@@ -843,7 +841,7 @@ export class App {
       const card = h('button', `card pick-card format${this.wiz?.format === f ? ' selected' : ''}`);
       card.setAttribute('aria-label', `${name} : ${use}`);
       card.append(this.beerVisual(beer, f), h('span', 'beer-name', name));
-      card.onclick = () => this.wizGo('count', { format: f, count: Math.min(this.wiz?.count ?? 1, Math.max(1, g.planRoom)) });
+      card.onclick = () => this.wizGo('count', { format: f, count: Math.min(this.wiz?.count ?? 1, Math.max(1, g.planLimit(f))) });
       grid.append(card);
     }
     body.append(grid);
@@ -852,7 +850,8 @@ export class App {
   /** Étape 3 : combien de brassins ? Le visuel montre chaque brassin (une caisse ou un fût). */
   private countStep(g: Game, body: HTMLElement, beer: Beer, f: Format): void {
     const w = this.wiz!;
-    const room = g.planRoom;
+    // au plus : la place dans la file, et ce que le stockage peut recevoir
+    const room = g.planLimit(f);
     const n = Math.max(1, Math.min(w.count, room || 1));
     body.append(h('div', 'wiz-q', 'Combien de brassins\u00a0?'));
     const visual = h('div', 'batch-visual');
@@ -869,9 +868,6 @@ export class App {
     body.append(row);
     // bilan
     const unit = g.brewCost(beer.recipe, g.batchLiters, f);
-    const space = g.batchSpace(f);
-    const free = Math.max(0, g.storageCap - g.stored);
-    const fits = space > 0 ? Math.floor(free / space) : n;
     const sum = h('div', 'card');
     const line = (k: string, v: string, cls = '') => {
       const r = h('div', `live-row ${cls}`);
@@ -880,7 +876,7 @@ export class App {
     };
     line('Production', this.batchOutput(g, f, n));
     line('Ingrédients', `${moneyInt(unit * n)} (${moneyInt(unit)} / brassin)`);
-    line('Place libre au stockage', fits >= n ? `${n} / ${n} brassins` : `${fits} / ${n} brassins`, fits >= n ? '' : 'bad');
+    line('Au plus', room < g.planRoom ? `${room} (place au stockage)` : `${room} (place dans la file)`);
     // quand ces brassins seraient prêts, après ceux déjà programmés
     const fc = this.forecast(g, { beerId: beer.id, format: f, count: n });
     if (fc) {
@@ -891,7 +887,7 @@ export class App {
     }
     sum.append(h('p', 'hint', 'Payés au lancement de chaque brassin. Un brassin attend l\'argent et la place dont il a besoin.'));
     body.append(sum);
-    const go = this.btn('btn primary big', room ? `Programmer ${n} brassin${n > 1 ? 's' : ''}` : 'File pleine', () => {
+    const go = this.btn('btn primary big', room ? `Programmer ${n} brassin${n > 1 ? 's' : ''}` : g.planRoom ? 'Stockage plein' : 'File pleine', () => {
       const r = g.planBrew(beer.id, f, n);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       if (g.tips === 2 || g.tips === 1) g.tips = 3;
@@ -900,7 +896,9 @@ export class App {
     });
     go.disabled = !room;
     body.append(go);
-    if (!room) body.append(h('p', 'note bad', `La file est pleine (${g.planCap} brassins). Elle s'allonge avec le niveau de la brasserie.`));
+    if (!room) body.append(h('p', 'note bad', g.planRoom
+      ? `Plus de place au stockage (en comptant les brassins déjà programmés). ${f === 'keg' ? 'Sers des fûts au bar, livre des commandes de fûts' : 'Livre des commandes, vends au grossiste'}, ou agrandis le stockage.`
+      : `La file est pleine (${g.planCap} brassins). Elle s'allonge avec le niveau de la brasserie.`));
   }
 
   /** Un essai : les réglages actuels des machines ; on goûtera la première bouteille. */

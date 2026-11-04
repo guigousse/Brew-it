@@ -125,16 +125,16 @@ describe('jeu', () => {
     expect(g.planBrew(id, 'keg', 4).ok).toBe(true);
     expect(g.plan).toEqual([{ beerId: id, format: 'bottle', count: 5 }, { beerId: id, format: 'keg', count: 4 }]);
     expect(g.planned).toBe(9);
-    expect(g.planBrew(id, 'keg', 42).ok).toBe(false); // 51 > 50
-    g.setPlanCount(1, 99);
-    expect(g.plan[1]!.count).toBe(45); // plafonné à la place restante
+    expect(g.planBrew(id, 'bottle', 42).ok).toBe(false); // 51 > 50
+    g.setPlanCount(0, 99);
+    expect(g.plan[0]!.count).toBe(46); // plafonné à la place restante dans la file
     g.movePlan(1, -1);
     expect(g.plan[0]!.format).toBe('keg');
     g.step();
     expect(g.batchAt('mill')!.format).toBe('keg');
-    expect(g.plan[0]!.count).toBe(44);
+    expect(g.plan[0]!.count).toBe(3);
     g.setPlanCount(0, 0);
-    expect(g.plan).toEqual([{ beerId: id, format: 'bottle', count: 5 }]);
+    expect(g.plan).toEqual([{ beerId: id, format: 'bottle', count: 46 }]);
   });
 
   it('le bar sert des verres tirés du fût branché, 1 client toutes les 10 min au début ; il faut changer le fût vide', () => {
@@ -458,10 +458,28 @@ describe('jeu', () => {
     expect(g.forecast({ beerId: id, format: 'bottle', count: 2 }).ends).toHaveLength(2);
   });
 
-  it('prévision : une file de fûts qui remplit le stockage est annoncée bloquée, sans tourner 24 h', () => {
+  it('programmer : pas plus de fûts que le stockage n\'en peut recevoir ; les bouteilles, si le grossiste écoule le surplus', () => {
     const g = withBeer(1e5);
     runUntil(g, () => g.batches.length === 0);
-    g.planBrew(g.beers[0]!.id, 'keg', 40); // 40 fûts : le stockage du début n'en tient qu'une dizaine
+    const id = g.beers[0]!.id;
+    const kegs = g.planLimit('keg');
+    expect(kegs).toBeGreaterThan(0);
+    expect(kegs).toBeLessThan(g.planCap);
+    expect(g.planBrew(id, 'keg', kegs + 1).ok).toBe(false);
+    expect(g.planBrew(id, 'keg', kegs).ok).toBe(true);
+    expect(g.planLimit('keg')).toBe(0);
+    g.setPlanCount(0, 999);
+    expect(g.plan[0]!.count).toBe(kegs); // on ne peut pas dépasser la place en ajustant
+    expect(g.planLimit('bottle')).toBe(g.planRoom); // le grossiste écoule les bouteilles
+    g.autoWholesale = false;
+    expect(g.planLimit('bottle')).toBeLessThan(g.planRoom);
+  });
+
+    it('prévision : une file de fûts qui remplit le stockage est annoncée bloquée, sans tourner 24 h', () => {
+    const g = withBeer(1e5);
+    runUntil(g, () => g.batches.length === 0);
+    // 40 fûts (programmés avant la limite, ou le stockage s'est rempli entre-temps) : il n'en tient qu'une dizaine
+    g.plan = [{ beerId: g.beers[0]!.id, format: 'keg', count: 40 }];
     const t = performance.now();
     const f = g.forecast();
     expect(f.done).toBe(false);
