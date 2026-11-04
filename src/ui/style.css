@@ -420,3 +420,33 @@ button:disabled { cursor: default; opacity: .5; }
 @keyframes harvest-bob { 50% { transform: translateY(-2px); } }
 .money.gain { box-shadow: 0 0 0 2px var(--accent); }
 @media (prefers-reduced-motion: reduce) { .harvest { animation: none; } }
+
+/* --- Boutons d'action flottants (en bas à droite de la pièce) ----------------------------- */
+.fabs {
+  position: absolute; z-index: 4; right: 10px; bottom: calc(var(--bottom-h, 70px) + 24px);
+  display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none;
+}
+.fabs.hidden { display: none; }
+.fab {
+  position: relative; pointer-events: auto; width: 48px; height: 48px; padding: 0; display: grid; place-items: center;
+  border-radius: 50%; background: var(--panel-2); border: 3px solid var(--ink);
+  box-shadow: inset 2px 2px 0 var(--border-hi), inset -2px -3px 0 #1b142480, 0 3px 0 #0009;
+}
+.fab.main { width: 64px; height: 64px; background: #6e5a3a; box-shadow: inset 3px 3px 0 #a88a5a, inset -3px -3px 0 #3a2a18, 0 3px 0 #0009; }
+.fab:active { transform: translateY(2px); box-shadow: inset 2px 2px 0 #1b142480; }
+.fab.ready { background: var(--accent); box-shadow: inset 3px 3px 0 #ffe7a0, inset -3px -3px 0 var(--accent-dark), 0 3px 0 #0009; animation: pulse 1s steps(4) infinite; }
+.fab.alert { box-shadow: 0 0 0 2px var(--accent), inset 2px 2px 0 var(--border-hi), 0 3px 0 #0009; animation: pulse 1s steps(4) infinite; }
+.fab-icon { font-size: 22px; line-height: 1; }
+.fab.main .fab-icon { font-size: 30px; }
+.fab-label {
+  position: absolute; top: 100%; left: 50%; transform: translate(-50%, 1px); white-space: nowrap; pointer-events: none;
+  font-size: 15px; line-height: 1; color: var(--text); text-shadow: 1px 1px 0 var(--ink), -1px 1px 0 var(--ink), 1px -1px 0 var(--ink), -1px -1px 0 var(--ink);
+}
+.fab-badge {
+  position: absolute; top: -5px; right: -7px; min-width: 20px; height: 20px; padding: 0 4px; display: grid; place-items: center;
+  font-size: 16px; line-height: 1; color: var(--ink); background: #e8dcc0; border: 2px solid var(--ink); white-space: nowrap;
+}
+.fab.ready .fab-badge, .fab.alert .fab-badge { background: var(--accent); }
+.fab-badge.hidden { display: none; }
+.fabs .fab + .fab { margin-top: 8px; } /* place pour le nom sous le bouton */
+@media (prefers-reduced-motion: reduce) { .fab.ready, .fab.alert { animation: none; } }

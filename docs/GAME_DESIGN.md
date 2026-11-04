@@ -5,7 +5,7 @@ La brasserie compte **trois pièces**, chacune en plein écran et en **portrait*
 
 **Atelier ↔ Stockage ↔ Bar** : le trajet de la bière, de la cuve au verre.
 
-La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Stockage · Bar · Magasin**. Juste au-dessus, un sous-menu propose les actions de la pièce affichée : Gamme et Brasser à l'atelier, Stock et Commandes au stockage, Agrandir, Fête et Les fûts au bar.
+La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Stockage · Bar · Magasin**. Les actions de la pièce affichée sont des **boutons ronds flottants**, en bas à droite de la pièce : l'action principale en gros (Brasser à l'atelier, Commandes au stockage, Les fûts au bar), les autres en plus petit au-dessus (Gamme ; Stock ; Agrandir et Fête). Chacun porte son nom dessous et une pastille d'info (brassins programmés, commandes en attente, verres restants, durée de la fête…). Il devient doré et pulse quand il y a quelque chose à faire. Ils s'effacent quand un panneau est ouvert, et sur le tableau de bord et le magasin.
 
 - **Tableau de bord** : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
 - **Magasin** : on y achètera plus tard des décorations, du mobilier, des enseignes et d'autres objets. Pour l'instant, les rayons sont annoncés « Bientôt ».

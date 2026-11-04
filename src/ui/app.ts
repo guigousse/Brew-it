@@ -28,6 +28,23 @@ const moneyShort = (v: number) => (v >= 1e6 ? `${(v / 1e6).toLocaleString('fr-FR
 const fmtRate = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: v < 10 ? 1 : 0 });
 const VERDICT_CLASS: Record<string, string> = { Imbuvable: 'v-bad', Médiocre: 'v-meh', Correcte: 'v-ok', Bonne: 'v-good', Excellente: 'v-top' };
 
+/** Bouton d'action rond : une icône, une pastille d'info, un petit nom dessous. */
+function fab(icon: string, label: string, main = false): HTMLButtonElement {
+  const b = h('button', `fab${main ? ' main' : ''}`);
+  b.append(h('span', 'fab-icon', icon), h('span', 'fab-badge hidden'), h('span', 'fab-label', label));
+  b.setAttribute('aria-label', label);
+  return b;
+}
+
+function setFab(b: HTMLButtonElement, badge: string, state: '' | 'ready' | 'alert', aria: string): void {
+  const el = b.querySelector<HTMLElement>('.fab-badge')!;
+  if (el.textContent !== badge) el.textContent = badge;
+  el.classList.toggle('hidden', !badge);
+  b.classList.toggle('ready', state === 'ready');
+  b.classList.toggle('alert', state === 'alert');
+  if (b.getAttribute('aria-label') !== aria) b.setAttribute('aria-label', aria);
+}
+
 function img(canvas: HTMLCanvasElement, cls = 'pix'): HTMLImageElement {
   const i = h('img', cls);
   i.src = canvas.toDataURL();
@@ -111,15 +128,16 @@ export class App {
   private announcedTaste = -1;
   /** Bas de l'écran : les actions de la pièce (sous-menu), puis la barre de navigation. */
   private dock = h('div', 'dock');
-  private bottom = h('div', 'bottombar');
+  /** Actions de la pièce : des boutons ronds flottants en bas à droite, l'action principale en dessous. */
+  private fabs = h('div', 'fabs');
   private tabbar = h('nav', 'tabbar');
-  private brewBtn = h('button', 'brew-btn');
-  private rangeBtn = h('button', 'side-btn');
-  private stockBtn = h('button', 'side-btn');
-  private ordersBtn = h('button', 'brew-btn');
-  private menuBtn = h('button', 'brew-btn');
-  private barUpBtn = h('button', 'side-btn');
-  private partyBtn = h('button', 'side-btn');
+  private brewBtn = fab('🍺', 'Brasser', true);
+  private rangeBtn = fab('📚', 'Gamme');
+  private stockBtn = fab('📦', 'Stock');
+  private ordersBtn = fab('📨', 'Commandes', true);
+  private menuBtn = fab('🛢️', 'Les fûts', true);
+  private barUpBtn = fab('🔨', 'Agrandir');
+  private partyBtn = fab('🎉', 'Fête');
   // --- les pièces
   readonly storageRoom = new StorageRoom();
   readonly barRoom = new BarRoom();
@@ -194,7 +212,7 @@ export class App {
       this.tabbar.append(btn);
       this.navTabs.set(t.id, { btn, badge });
     }
-    this.dock.append(this.bottom, this.tabbar);
+    this.dock.append(this.tabbar);
 
     // scène + étiquettes cliquables
     this.sceneWrap.append(this.scene.canvas);
@@ -272,7 +290,7 @@ export class App {
     drawGaston(av);
     this.mentor.append(av, h('div', 'mentor-body'));
 
-    root.append(this.header, this.stage, this.harvest, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
+    root.append(this.header, this.stage, this.fabs, this.harvest, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }
@@ -405,27 +423,23 @@ export class App {
     }
     this.plaque.textContent = `★ ${g.breweryLevel} · ${g.breweryName}`;
     const can = g.canBrew();
-    const sub = g.planned ? `${g.planned} programmé${g.planned > 1 ? 's' : ''}` : g.autoBrew ? '⟳ En continu' : g.beers.length ? 'Programmer' : can.ok ? (g.broke ? 'Offert par Gaston' : moneyInt(g.brewCost())) : g.batchAt('mill') ? 'Moulin occupé' : 'Fonds insuffisants';
-    this.brewBtn.replaceChildren(h('span', 'brew-title', 'Brasser'), h('span', 'brew-sub', sub));
-    this.brewBtn.classList.toggle('ready', can.ok && !g.autoBrew);
     const trial = g.tastable;
-    this.rangeBtn.replaceChildren(h('span', 'side-title', 'Gamme'), h('span', 'side-sub', `${g.beers.length}/${g.rangeSlots}`));
-    this.stockBtn.replaceChildren(h('span', 'side-title', 'Stock'), h('span', 'side-sub', g.storageFull ? 'Plein !' : `${Math.round((g.stored / g.storageCap) * 100)} %`));
-    this.stockBtn.classList.toggle('alert', g.bottlingBlocked);
+    // pastilles des boutons d'action : l'essentiel en un coup d'œil ; « ready » = il y a quelque chose à faire
+    setFab(this.brewBtn, g.planned ? String(g.planned) : g.autoBrew ? '⟳' : '', can.ok && !g.autoBrew && !g.planned ? 'ready' : '',
+      g.planned ? `Brasser : ${g.planned} programmé${g.planned > 1 ? 's' : ''}` : 'Brasser');
+    setFab(this.rangeBtn, trial ? '!' : '', trial ? 'alert' : '', `Ma gamme : ${g.beers.length}/${g.rangeSlots}`);
+    setFab(this.stockBtn, g.storageFull ? '!' : '', g.bottlingBlocked ? 'alert' : '', g.storageFull ? 'Stock : plein' : `Stock : ${Math.round((g.stored / g.storageCap) * 100)} %`);
     const ready = g.readyOrders.length;
-    this.ordersBtn.replaceChildren(h('span', 'brew-title', 'Commandes'), h('span', 'brew-sub', g.orders.length ? `${g.orders.length}${ready ? ` · ${ready} prête${ready > 1 ? 's' : ''}` : ''}` : '—'));
-    this.ordersBtn.classList.toggle('ready', ready > 0);
+    setFab(this.ordersBtn, g.orders.length ? String(g.orders.length) : '', ready > 0 ? 'ready' : '', `Commandes : ${g.orders.length}${ready ? `, ${ready} prête${ready > 1 ? 's' : ''}` : ''}`);
     const emptyTap = g.taps.some((t) => t.glasses <= 0);
     const kegsReady = g.beers.some((b) => b.kegs.length > 0);
-    this.menuBtn.replaceChildren(h('span', 'brew-title', 'Les fûts'), h('span', 'brew-sub', g.barServing ? `${g.glassesLeft} verres` : kegsReady ? 'Branche un fût !' : 'Vides'));
-    this.menuBtn.classList.toggle('ready', emptyTap && kegsReady);
+    setFab(this.menuBtn, emptyTap && kegsReady ? '!' : g.barServing ? String(g.glassesLeft) : '', emptyTap && kegsReady ? 'ready' : '',
+      g.barServing ? `Les fûts : ${g.glassesLeft} verres` : kegsReady ? 'Les fûts : branche un fût' : 'Les fûts : vides');
     this.syncKegHits();
     const nextBar = BAR[g.barLevel];
-    this.barUpBtn.replaceChildren(h('span', 'side-title', 'Agrandir'), h('span', 'side-sub', nextBar ? moneyShort(nextBar.cost) : 'Au max'));
-    this.barUpBtn.classList.toggle('alert', !!nextBar && g.money >= nextBar.cost);
-    const partySub = g.partying ? `🎉 ${duration(g.partyUntil - g.time)}` : g.time < g.partyReadyAt ? `dans ${duration(g.partyReadyAt - g.time)}` : moneyShort(g.partyCost);
-    this.partyBtn.replaceChildren(h('span', 'side-title', 'Fête'), h('span', 'side-sub', partySub));
-    this.partyBtn.classList.toggle('alert', g.partying);
+    setFab(this.barUpBtn, '', nextBar && g.money >= nextBar.cost ? 'alert' : '', nextBar ? `Agrandir le bar : ${moneyInt(nextBar.cost)}` : 'Bar au maximum');
+    setFab(this.partyBtn, g.partying ? clock(g.partyUntil - g.time) : '', g.partying ? 'alert' : '', g.partying ? 'Fête en cours' : 'Organiser une fête');
+    this.fabs.classList.toggle('hidden', !isRoom(this.view) || !!this.openSheet);
     this.storagePlaque.textContent = `▣ ${STORAGE[g.storageLevel - 1]!.name}`;
     this.barPlaque.textContent = `★ ${g.barLevel} · ${g.bar.name}`;
     this.ordersBadge.classList.toggle('hidden', !g.orders.length);
@@ -483,6 +497,7 @@ export class App {
     const g = this.game();
     const s = this.openSheet;
     this.sheet.classList.toggle('hidden', !s);
+    this.fabs.classList.toggle('hidden', !!s || !isRoom(this.view));
     if (!s) return;
     const key = JSON.stringify([
       s, g.level(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer, g.autoBrew,
@@ -1414,12 +1429,11 @@ export class App {
     this.track.style.transform = `translateX(calc(${-this.viewIndex * 100}vw + ${dx}px))`;
   }
 
-  /** La barre du bas propose les actions de la pièce affichée. */
+  /** Les boutons flottants proposent les actions de la pièce affichée (l'action principale en bas). */
   private setBottom(): void {
-    const btns = !isRoom(this.view) ? [] : this.view === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.room === 'storage' ? [this.stockBtn, this.ordersBtn] : [this.barUpBtn, this.partyBtn, this.menuBtn];
-    this.bottom.replaceChildren(...btns);
-    this.bottom.classList.toggle('three', btns.length === 3);
-    this.bottom.classList.toggle('hidden', !btns.length);
+    const btns = !isRoom(this.view) ? [] : this.view === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.view === 'storage' ? [this.stockBtn, this.ordersBtn] : [this.barUpBtn, this.partyBtn, this.menuBtn];
+    this.fabs.replaceChildren(...btns);
+    this.fabs.classList.toggle('hidden', !btns.length || !!this.openSheet);
   }
 
   /** Glisser horizontalement passe d'une pièce à l'autre ; un glissement n'ouvre pas ce qu'il y a sous le doigt. */

@@ -21,7 +21,7 @@ src/
 │   ├── rooms.ts          le stockage et le bar (salle en haut, cave à fûts en bas), 5 décors chacun
 │   ├── bottleArt.ts      bouteilles de l'étagère, caisses
 │   └── extend.ts         décor prolongé autour d'une pièce (remplit l'écran, quel que soit son format)
-├── ui/                   interface DOM : header, barre de navigation en bas (pièces, tableau de bord, magasin), sous-menu par pièce, glissement, panneaux,
+├── ui/                   interface DOM : header, barre de navigation en bas (pièces, tableau de bord, magasin), boutons d'action flottants par pièce, glissement, panneaux,
 │                         ordinateur des commandes, dégustation, Gaston
 ├── platform/             Capacitor : stockage fichier, cycle de vie, haptique
 └── main.ts               boucle à pas fixe (20 ticks/s), sauvegarde auto, production hors-ligne
