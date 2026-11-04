@@ -131,11 +131,11 @@ button:disabled { cursor: default; opacity: .5; }
 .sheet-icon { height: 40px; width: auto; }
 .sheet-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .sheet-body > * { flex-shrink: 0; }
-.step-tag { font-family: var(--font-title); font-size: 11px; color: var(--good); letter-spacing: 1px; text-transform: uppercase; }
+.step-tag { font-family: var(--font-title); font-size: 12px; color: var(--good); letter-spacing: 1px; text-transform: uppercase; }
 .hint { margin: 0; color: var(--dim); line-height: 1.15; }
 .note { margin: 0; color: var(--good); line-height: 1.15; }
 .note.bad { color: #ffb4a4; }
-.section-title { font-family: var(--font-title); font-size: 11px; color: var(--dim); text-transform: uppercase; }
+.section-title { font-family: var(--font-title); font-size: 12px; color: var(--dim); text-transform: uppercase; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .card { display: grid; gap: 6px; padding: 8px; background: var(--panel-2); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 var(--border-hi); }
 .card.selected { box-shadow: inset 0 0 0 2px var(--good); }
@@ -166,7 +166,7 @@ button:disabled { cursor: default; opacity: .5; }
 /* --- Molettes ------------------------------------------------------------------------ */
 .knob-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px 4px; }
 .knob { display: grid; justify-items: center; gap: 4px; }
-.knob-label { font-family: var(--font-title); font-size: 10px; color: var(--dim); text-transform: uppercase; }
+.knob-label { font-family: var(--font-title); font-size: 12px; color: var(--dim); text-transform: uppercase; }
 .knob-dial {
   --fill: 0deg; position: relative; width: 64px; height: 64px; border-radius: 50%; touch-action: none; cursor: grab;
   background: conic-gradient(from 225deg, var(--accent) 0deg, var(--accent) var(--fill), var(--ink) var(--fill), var(--ink) 270deg, transparent 270deg);
@@ -185,7 +185,7 @@ button:disabled { cursor: default; opacity: .5; }
 .modal-card { width: min(420px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 10px; padding: 12px; background: var(--panel); border: 3px solid var(--ink); box-shadow: inset 0 0 0 2px var(--accent), 0 6px 0 #0008; }
 .modal-card .sheet-head { padding: 0; font-family: var(--font-title); font-size: 14px; }
 .modal-card .sheet-head strong { flex: 1; }
-.verdict { font-family: var(--font-title); font-size: 11px; padding: 2px 6px; border: 2px solid var(--ink); white-space: nowrap; }
+.verdict { font-family: var(--font-title); font-size: 12px; padding: 2px 6px; border: 2px solid var(--ink); white-space: nowrap; }
 .verdict.big { font-size: 22px; text-align: center; padding: 10px; }
 .v-bad { background: #6e2a22; color: #ffd0c4; }
 .v-meh { background: #5a4a24; color: #ffe7a0; }
@@ -213,7 +213,11 @@ button:disabled { cursor: default; opacity: .5; }
 .mentor-body .btn { justify-self: start; }
 
 /* --- Notifications ----------------------------------------------------------------------- */
-.toasts { position: absolute; z-index: 11; left: 50%; transform: translateX(-50%); top: calc(var(--top-h, 60px) + 8px); display: grid; gap: 6px; pointer-events: none; width: max-content; max-width: calc(100vw - 24px); }
+.toasts {
+  /* en bas à gauche, au-dessus de la navigation (et des panneaux ouverts) : elles ne cachent plus Gaston ni les titres */
+  position: absolute; z-index: 11; left: 10px; bottom: calc(var(--toast-bottom, var(--bottom-h, 70px)) + 10px);
+  display: grid; justify-items: start; gap: 6px; pointer-events: none; max-width: calc(100vw - 84px);
+}
 .toast { background: #2a2035f0; border: 2px solid var(--ink); box-shadow: inset 0 0 0 2px #5c4a6e; padding: 4px 10px; font-size: 17px; animation: pop .2s steps(3); }
 .toast.bad { box-shadow: inset 0 0 0 2px var(--bad); }
 .toast.good { box-shadow: inset 0 0 0 2px var(--good); }
@@ -223,7 +227,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 /* --- Bouton Goûter sur la ligne d'embouteillage ----------------------------------- */
 .taste-btn {
-  position: absolute; transform: translate(-50%, -100%); z-index: 2; padding: 6px 12px; font-family: var(--font-title); font-size: 13px;
+  position: absolute; transform: translate(-50%, -100%); z-index: 2; padding: 6px 12px; font-family: var(--font-title); font-size: 14px;
   background: var(--accent); color: var(--ink); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #ffe7a0, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008;
   animation: bob 0.8s steps(2) infinite;
 }
@@ -286,7 +290,7 @@ button:disabled { cursor: default; opacity: .5; }
 .deal-pips .pip.on { background: var(--accent); border-color: var(--accent-dark); }
 
 /* --- Plaque et fiche de la brasserie ------------------------------------------------ */
-.plaque { font-family: var(--font-title); font-size: 11px; color: var(--accent); z-index: 2; }
+.plaque { font-family: var(--font-title); font-size: 12px; color: var(--accent); z-index: 2; }
 .brewery-list { display: grid; gap: 4px; }
 .brewery-row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 8px; padding: 2px 8px; background: var(--panel-2); border: 2px solid var(--ink); cursor: pointer; }
 .brewery-row.ok { opacity: .6; }
@@ -306,7 +310,7 @@ button:disabled { cursor: default; opacity: .5; }
 .computer .card.banner { box-shadow: inset 0 0 0 2px var(--good); }
 .computer .sheet-head { gap: 8px; }
 .pc-tabs { flex: 1; display: flex; gap: 6px; }
-.pc-tab { flex: 1; white-space: nowrap; padding: 4px 4px; font-family: var(--font-title); font-size: 11px; text-transform: uppercase; color: #7cff9c; background: #0c1a10; border: 2px solid var(--ink); }
+.pc-tab { flex: 1; white-space: nowrap; padding: 4px 4px; font-family: var(--font-title); font-size: 12px; text-transform: uppercase; color: #7cff9c; background: #0c1a10; border: 2px solid var(--ink); }
 .pc-tab.active { color: var(--ink); background: #7cff9c; }
 .order-time { color: var(--dim); white-space: nowrap; }
 .beer-chip { display: flex; align-items: center; gap: 6px; }
@@ -321,7 +325,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 /* --- Commandes ------------------------------------------------------------------------- */
 .order-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 19px; }
-.kind-tag { font-family: var(--font-title); font-size: 10px; text-transform: uppercase; padding: 1px 5px; color: var(--ink); background: var(--dim); border: 1px solid var(--ink); }
+.kind-tag { font-family: var(--font-title); font-size: 12px; text-transform: uppercase; padding: 1px 5px; color: var(--ink); background: var(--dim); border: 1px solid var(--ink); }
 .kind-tag.kind-style { background: var(--good); }
 .kind-tag.kind-keg { background: #c4d0dc; }
 .kind-tag.kind-mix { background: #8cd0ff; }
@@ -370,7 +374,7 @@ button:disabled { cursor: default; opacity: .5; }
 /* --- Brasser : file et assistant -------------------------------------------------------- */
 .wiz-steps { display: flex; align-items: center; gap: 4px; }
 .wiz-back { flex-shrink: 0; }
-.wiz-step { flex: 1; padding: 4px 2px; font-family: var(--font-title); font-size: 10px; text-transform: uppercase; white-space: nowrap; color: var(--dim); background: var(--panel); border: 2px solid var(--ink); }
+.wiz-step { flex: 1; padding: 4px 2px; font-family: var(--font-title); font-size: 12px; text-transform: uppercase; white-space: nowrap; color: var(--dim); background: var(--panel); border: 2px solid var(--ink); }
 .wiz-step.done { color: var(--good); }
 .wiz-step.active { color: var(--ink); background: var(--accent); }
 .wiz-step:disabled { opacity: .6; }
@@ -466,7 +470,7 @@ button:disabled { cursor: default; opacity: .5; }
   font-size: 15px; line-height: 1.1; color: var(--ink); background: #e8dcc0; border: 2px solid var(--ink); box-shadow: 0 2px 0 #0008; cursor: pointer;
 }
 .shop-tag.afford { background: var(--accent); animation: pulse 1.2s steps(4) infinite; }
-.shop-tag.soon { font-size: 13px; color: var(--dim); background: #2a2035e0; border-color: #5c4a6e; cursor: default; pointer-events: none; }
+.shop-tag.soon { font-size: 14px; color: var(--dim); background: #2a2035e0; border-color: #5c4a6e; cursor: default; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .shop-tag.afford { animation: none; } }
 
 /* --- File des brassins : une carte par groupe ------------------------------------------- */
@@ -495,3 +499,23 @@ button:disabled { cursor: default; opacity: .5; }
 .batch-side .keg-wrap { width: 72px; height: 72px; }
 .batch-side .keg-wrap .keg-big { width: 72px; height: 72px; }
 .batch-side .keg-label { width: 44px; }
+
+/* --- Accessibilité (lot 1) --------------------------------------------------------------- */
+/* Zones à toucher d'au moins 44 × 44 px, sans changer l'aspect des petits boutons */
+.btn.small, .chip, .pc-tab, .wiz-step, .knob-btn, .swatch, .act.up, .plan-close, .map-btn, .icon-btn.small, .mentor-body .btn, .toast-action, .tap-line { position: relative; }
+.room-title .map-btn { position: relative; }
+.btn.small::after, .chip::after, .pc-tab::after, .wiz-step::after, .knob-btn::after, .swatch::after, .act.up::after, .plan-close::after,
+.map-btn::after, .icon-btn.small::after, .mentor-body .btn::after, .toast-action::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+}
+/* le nom des machines reste lisible sur le décor */
+.station-label .label-text { background: #1b1424c8; padding: 0 3px; color: var(--text); }
+/* bouton trop cher : touchable, il dit ce qui manque */
+.btn.short, .act.short { filter: grayscale(.7) brightness(.8); }
+/* action sans retour : second appui pour confirmer */
+.btn.armed { background: var(--bad); color: #fff; box-shadow: inset 0 0 0 2px #ffd0c4; }
+/* le tutoriel désigne le bouton dont il parle */
+.act.tuto { box-shadow: 0 0 0 3px var(--accent), 0 0 12px 2px #f2c14e; animation: pulse .8s steps(4) infinite; }
+/* notification avec action (Annuler) */
+.toast.with-action { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+.toast-action { padding: 2px 8px; font: inherit; font-size: 16px; color: var(--ink); background: var(--accent); border: 2px solid var(--ink); }

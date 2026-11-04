@@ -357,6 +357,15 @@ export class App {
     drawGaston(av);
     this.mentor.append(av, h('div', 'mentor-body'));
 
+    root.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-cost]');
+      if (!b) return;
+      const missing = Number(b.dataset.cost) - this.game().money;
+      if (missing <= 0) return;
+      e.stopPropagation();
+      e.preventDefault();
+      this.toast(`Il te manque ${moneyInt(Math.ceil(missing))}`, 'bad');
+    }, true);
     root.append(this.header, this.stage, this.fabs, this.harvest, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
     window.addEventListener('resize', () => this.layout());
     this.layout();
@@ -516,6 +525,11 @@ export class App {
     // l'ordinateur (l'enveloppe est dessinée sur son écran) : son nom dit les commandes en attente
     this.computerHit?.setAttribute('aria-label', `Ordinateur : ${g.orders.length} commande${g.orders.length > 1 ? 's' : ''}${ready ? `, ${ready} à livrer` : ''}`);
     this.fabs.classList.toggle('hidden', !isRoom(this.view) || !!this.openSheet);
+    // les notifications se posent au-dessus du panneau ouvert
+    const sheetTop = this.openSheet ? this.sheet.getBoundingClientRect().top : 0;
+    this.root.style.setProperty('--toast-bottom', sheetTop ? `${Math.round(window.innerHeight - sheetTop)}px` : 'var(--bottom-h, 70px)');
+    // le tutoriel montre le bouton dont il parle
+    this.brewBtn.classList.toggle('tuto', g.tips === 2);
     this.storagePlaque.textContent = `▣ ${STORAGE[g.storageLevel - 1]!.name}`;
     this.barPlaque.textContent = `★ ${g.barLevel} · ${g.bar.name}`;
     // pastilles des onglets de pièces
@@ -536,7 +550,6 @@ export class App {
     this.placeTaste();
     if (trial && trial.id !== this.announcedTaste) {
       this.announcedTaste = trial.id;
-      this.toast('Première bouteille : goûte-la !', 'good');
       this.onTasteReady?.();
     }
     this.refreshComputer();
@@ -599,7 +612,7 @@ export class App {
   /** Met à jour sans reconstruire ce qui dépend de l'argent. */
   private refreshLive(): void {
     const g = this.game();
-    this.sheet.querySelectorAll<HTMLButtonElement>('[data-cost]').forEach((b) => (b.disabled = g.money < Number(b.dataset.cost)));
+    this.root.querySelectorAll<HTMLButtonElement>('[data-cost]').forEach((b) => b.classList.toggle('short', g.money < Number(b.dataset.cost)));
     this.sheet.querySelectorAll<HTMLElement>('[data-eta]').forEach((el) => (el.textContent = clock(Number(el.dataset.eta) - g.time)));
   }
 
@@ -614,6 +627,37 @@ export class App {
     const body = h('div', 'sheet-body');
     this.sheet.append(head, body);
     return body;
+  }
+
+  /** Bouton d'une action sans retour : le premier appui demande confirmation, le second agit (3 s pour confirmer). */
+  private confirmBtn(cls: string, text: string, ask: string, onclick: () => void): HTMLButtonElement {
+    const b = h('button', cls, text);
+    let timer = 0;
+    b.onclick = () => {
+      if (b.dataset.armed) {
+        clearTimeout(timer);
+        onclick();
+        return;
+      }
+      b.dataset.armed = '1';
+      b.classList.add('armed');
+      b.textContent = ask;
+      timer = window.setTimeout(() => {
+        delete b.dataset.armed;
+        b.classList.remove('armed');
+        b.textContent = text;
+      }, 3000);
+    };
+    return b;
+  }
+
+  /**
+   * Bouton payant : s'il manque de l'argent, il reste touchable mais grisé, et dit combien il manque
+   * (au lieu d'être désactivé sans explication).
+   */
+  private costGate(b: HTMLButtonElement, cost: number): void {
+    b.dataset.cost = String(cost);
+    b.classList.toggle('short', this.game().money < cost);
   }
 
   private btn(cls: string, text: string, onclick: () => void): HTMLButtonElement {
@@ -659,8 +703,7 @@ export class App {
           this.toast('Nouvelle cuve installée', 'good');
           this.sheetKey = '';
         });
-        b.dataset.cost = String(tankCost);
-        b.disabled = g.money < tankCost;
+        this.costGate(b, tankCost);
         row.append(b);
       }
       body.append(row);
@@ -686,8 +729,7 @@ export class App {
         this.toast(`${def.names[lv]} installé !`, 'good');
         this.sheetKey = '';
       });
-      b.dataset.cost = String(cost);
-      b.disabled = g.money < cost;
+      this.costGate(b, cost);
       up.append(b);
     } else up.append(h('p', 'note', 'Niveau maximal'));
     body.append(up);
@@ -810,8 +852,14 @@ export class App {
       // carte : le nom en haut ; à gauche l'aperçu du brassin ; au milieu le format et le temps ; à droite les réglages
       const card = h('div', `card plan-card${i === 0 ? ' banner' : ''}`);
       const close = this.btn('plan-close', '✕', () => {
+        const removed = { ...p };
         g.unplan(i);
         this.refreshSheet();
+        // on peut se raviser
+        this.toast(`${removed.count} × ${b.name} retiré${removed.count > 1 ? 's' : ''}`, 'info', { label: 'Annuler', run: () => {
+          g.plan.splice(Math.min(i, g.plan.length), 0, removed);
+          this.refreshSheet();
+        } }, 5000);
       });
       close.setAttribute('aria-label', 'Retirer de la file');
       card.append(h('div', 'plan-title', `${i + 1}. ${b.name}`), close);
@@ -961,7 +1009,7 @@ export class App {
       const r = busy ? g.queueBrew() : g.brew();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       if (g.tips === 2 || g.tips === 1) g.tips = 3;
-      this.toast(busy ? 'En file d\'attente' : 'Brassin lancé !', 'good');
+      if (busy) this.toast('En file d\'attente', 'good');
       this.close();
     });
     go.disabled = g.queued || (!can.ok && !(busy && g.money >= cost));
@@ -1106,7 +1154,7 @@ export class App {
       this.sheetKey = '';
       this.toast('Nouvelle place !', 'good');
     });
-    buy.disabled = g.money < cost;
+    this.costGate(buy, cost);
     card.append(buy);
     if (g.money < cost) card.append(h('p', 'note bad', `Il te manque ${moneyInt(cost - g.money)}.`));
     card.append(this.btn('btn', 'Annuler', () => this.closeModal()));
@@ -1161,8 +1209,7 @@ export class App {
         this.toast(`${next.name} !`, 'good');
         this.sheetKey = '';
       });
-      b.dataset.cost = String(next.cost);
-      b.disabled = g.money < next.cost;
+      this.costGate(b, next.cost);
       up.append(b);
     } else up.append(h('p', 'note', 'Niveau maximal'));
     body.append(up);
@@ -1188,7 +1235,7 @@ export class App {
       this.sheetKey = '';
       this.closeModal();
     })));
-    actions.append(this.btn('btn small bad', 'Retirer', () => {
+    actions.append(this.confirmBtn('btn small bad', 'Retirer', 'Retirer de la gamme ?', () => {
       g.removeBeer(b.id);
       this.sheetKey = '';
     }));
@@ -1280,8 +1327,7 @@ export class App {
         this.syncKegHits();
         this.sheetKey = '';
       });
-      b.dataset.cost = String(next.cost);
-      b.disabled = g.money < next.cost;
+      this.costGate(b, next.cost);
       body.append(b);
     } else body.append(h('p', 'note', 'Niveau maximal'));
   }
@@ -1305,7 +1351,8 @@ export class App {
       this.onSent?.();
       this.closeModal();
     });
-    go.disabled = tooLong || g.money < cost;
+    go.disabled = tooLong;
+    if (!tooLong) this.costGate(go, cost);
     card.append(go, this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
@@ -1346,7 +1393,8 @@ export class App {
           this.onSent?.();
           this.closeModal();
         });
-        go.disabled = !can || g.money < cost;
+        go.disabled = !can;
+        if (can) this.costGate(go, cost);
         el.append(go);
       }
       card.append(el);
@@ -1417,7 +1465,7 @@ export class App {
         this.computer!.key = '';
         this.refreshComputer();
       });
-      b.disabled = g.money < next.cost;
+      this.costGate(b, next.cost);
       foot.append(b);
     }
     card.append(foot);
@@ -1480,7 +1528,7 @@ export class App {
       this.refreshComputer();
     });
     send.disabled = !q.ok;
-    row.append(send, this.btn('btn small bad', 'Refuser', () => {
+    row.append(send, this.confirmBtn('btn small bad', 'Refuser', 'Refuser ?', () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
       this.refreshComputer();
@@ -1706,11 +1754,11 @@ export class App {
           this.sheetKey = '';
           this.openTasting();
         });
-        buy.disabled = g.money < slotCost;
+        this.costGate(buy, slotCost);
         card.append(buy);
       }
     }
-    card.append(keep, this.btn('btn bad', 'Jeter', () => {
+    card.append(keep, this.confirmBtn('btn bad', 'Jeter', 'Jeter ce brassin ? Toucher pour confirmer', () => {
       g.discardTrial();
       this.closeModal();
       this.toast('Brassin jeté', 'info');
@@ -1880,7 +1928,8 @@ export class App {
       chips.append(c);
     }
     speed.append(h('div', 'section-title', 'Mode test : vitesse'), chips);
-    card.append(speed, fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
+    if (import.meta.env.DEV) card.append(speed);
+    card.append(fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
   private modalCard(title: string): HTMLElement {
@@ -2123,7 +2172,7 @@ export class App {
       this.onSent?.();
       this.closeModal();
     });
-    buy.disabled = g.money < item.cost;
+    this.costGate(buy, item.cost);
     card.append(buy);
     if (g.money < item.cost) card.append(h('p', 'note bad', `Il te manque ${moneyInt(item.cost - g.money)}.`));
     card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
@@ -2136,7 +2185,7 @@ export class App {
     const tips: Record<number, { text: string; action?: string }> = {
       0: { text: 'Salut, moi c\'est Gaston ! Le malt entre en haut, la bière sort en bas. J\'ai réglé les machines pour ma blonde.', action: 'Continuer' },
       1: { text: 'Touche une machine pour la régler.' },
-      2: { text: 'Appuie sur « Brasser » pour lancer ton premier brassin.' },
+      2: { text: 'Touche la cuve de cuivre, en bas à droite, pour lancer ton premier brassin.' },
       3: { text: 'Je t\'aide pour celui-ci : ça ira vite. On goûte à la première bouteille !' },
       4: { text: 'Glisse l\'écran : au stockage, touche l\'ordinateur pour les commandes ; au bar, touche les fûts pour les brancher. Bonne brasse !', action: 'Compris' },
     };
@@ -2157,10 +2206,26 @@ export class App {
 
   // ------------------------------------------------------------------ notifications
 
-  toast(text: string, kind: 'good' | 'bad' | 'info' = 'info'): void {
-    const t = h('div', `toast ${kind}`, text);
+  /** Notification : deux au plus à l'écran (la plus ancienne laisse sa place), avec un bouton d'action facultatif. */
+  toast(text: string, kind: 'good' | 'bad' | 'info' = 'info', action?: { label: string; run: () => void }, ms = 3000): void {
+    const t = h('div', `toast ${kind}`);
+    t.append(h('span', '', text));
+    if (action) {
+      t.classList.add('with-action');
+      const b = h('button', 'toast-action', action.label);
+      b.onclick = () => {
+        action.run();
+        t.remove();
+      };
+      t.append(b);
+    }
     this.toasts.append(t);
-    setTimeout(() => t.remove(), 3000);
+    this.trimToasts();
+    setTimeout(() => t.remove(), ms);
+  }
+
+  private trimToasts(): void {
+    while (this.toasts.childElementCount > 2) this.toasts.firstElementChild!.remove();
   }
 
   /** Argent gagné : une seule notification, dont le montant grimpe à chaque nouvelle vente rapprochée. */
@@ -2177,6 +2242,7 @@ export class App {
     } else {
       const el = h('div', 'toast good', `+${moneyInt(amount)}`);
       this.toasts.append(el);
+      this.trimToasts();
       this.gain = { el, amount, timer: 0 };
     }
     const g = this.gain!;

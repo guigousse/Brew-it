@@ -13,6 +13,15 @@ La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Sto
 
 Les boutons s'effacent quand un panneau est ouvert, et sur le tableau de bord et le magasin.
 
+**Confort et accessibilité**
+- Les notifications s'affichent en bas à gauche, au-dessus de la navigation (ou du panneau ouvert), deux au plus à la fois : elles ne cachent plus Gaston ni les titres. Les ventes rapprochées se cumulent dans une seule.
+- Toute zone à toucher fait au moins 44 × 44 px, même quand le bouton paraît plus petit.
+- Texte en police pixel : 12 px au minimum. Le nom des machines a un fond sombre, lisible sur tous les décors.
+- Un bouton payant reste touchable quand l'argent manque : il est grisé et dit « Il te manque x € ».
+- Les actions sans retour demandent un second appui (retirer une bière de la gamme, jeter un essai, refuser une commande). Retirer un groupe de la file propose « Annuler » pendant 5 s.
+- Le tutoriel désigne les boutons par leur place (« la cuve de cuivre, en bas à droite ») et fait briller celui dont il parle.
+- La vitesse du « mode test » n'apparaît que pendant le développement.
+
 - **Tableau de bord** : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
 - **Magasin** : une pièce en pixel art avec des étagères. La cible de fléchettes, puis la télévision, puis la boule à facettes y sont en vente l'une après l'autre ; elles débloquent les événements du bar. Les décorations, le mobilier, les enseignes et l'ambiance sont annoncés « Bientôt ».
 
