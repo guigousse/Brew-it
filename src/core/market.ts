@@ -74,7 +74,7 @@ export const PARTY = { mult: 50, duration: 30 * 60, cooldown: 6 * 3600 } as cons
 export const PARTY_COST = [100, 1000, 10000, 80000, 600000] as const;
 
 /** Objets à acheter au magasin pour débloquer des événements au bar (ils apparaissent dans le bar). */
-export type ShopItemId = 'darts' | 'tv';
+export type ShopItemId = 'disco' | 'darts' | 'tv';
 export interface ShopItem {
   id: ShopItemId;
   name: string;
@@ -82,6 +82,7 @@ export interface ShopItem {
   cost: number;
 }
 export const SHOP_ITEMS: readonly ShopItem[] = [
+  { id: 'disco', name: 'Boule à facettes', text: 'Débloque la fête : projecteurs et confettis', cost: 150 },
   { id: 'darts', name: 'Cible de fléchettes', text: 'Débloque le tournoi de fléchettes', cost: 600 },
   { id: 'tv', name: 'Télévision', text: 'Débloque la soirée foot', cost: 2500 },
 ];
@@ -105,7 +106,7 @@ export interface BarEvent {
   needs: ShopItemId | null;
 }
 export const BAR_EVENTS: readonly BarEvent[] = [
-  { id: 'party', name: 'Fête', text: '30 min : 50 fois plus de clients.', mult: PARTY.mult, duration: PARTY.duration, priceMult: 1, popMult: 1, cost: 1, needs: null },
+  { id: 'party', name: 'Fête', text: '30 min : 50 fois plus de clients.', mult: PARTY.mult, duration: PARTY.duration, priceMult: 1, popMult: 1, cost: 1, needs: 'disco' },
   { id: 'darts', name: 'Tournoi de fléchettes', text: '1 h : 15 fois plus de clients, et ta gamme se fait 3 fois plus vite connaître.', mult: 15, duration: 3600, priceMult: 1, popMult: 3, cost: 0.6, needs: 'darts' },
   { id: 'foot', name: 'Soirée foot', text: '1 h 30 de match : 20 fois plus de clients, et les verres 20 % plus chers.', mult: 20, duration: 90 * 60, priceMult: 1.2, popMult: 1, cost: 1.5, needs: 'tv' },
 ];

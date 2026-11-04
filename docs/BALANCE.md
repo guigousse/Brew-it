@@ -149,3 +149,7 @@ Après chaque réglage, relancer `npm run balance` et vérifier :
 - Le **brassage continu** disparaît : tout passe par la file de brassins programmés. C'est elle qui fait tourner la brasserie pendant l'absence.
 - Avec les premières tailles de file (10 à 200 brassins), la production des absences s'effondrait : au niveau 1, 10 brassins ne tiennent qu'environ 40 min (≈ 17 brassins/h). Le joueur simulé ne finissait plus en 45 jours.
 - Le joueur simulé remplit désormais la file avant chaque absence. Essais : 150–600 → J28, 100–600 → J29, **50–400 → J31**, 30–300 → J38. On garde **50, 80, 150, 250, 400**, au plus près de l'ancien rythme (J33).
+
+## Événements à débloquer
+
+- La fête demande maintenant une **boule à facettes** (150 €). Le joueur simulé l'achète au premier jour. Il finit en J30, contre J31 avant (les écarts d'un jour viennent du hasard des commandes).

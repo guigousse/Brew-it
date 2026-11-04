@@ -104,6 +104,7 @@ function shop() {
       if (lv >= MAX_LEVEL) continue;
       options.push({ cost: g.upgradeCost(id), label: `${id} → ${lv + 1}`, act: () => g.upgrade(id).ok });
     }
+    if (!g.owns('disco')) options.push({ cost: 150, label: 'Boule à facettes', act: () => g.buyItem('disco').ok });
     for (const id of ['fermenter', 'conditioning'] as const) {
       const c = g.tankCost(id);
       if (c != null) options.push({ cost: c, label: `Cuve ${id} ${g.tankCount(id) + 1}`, act: () => g.addTank(id).ok });

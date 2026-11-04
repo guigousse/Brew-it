@@ -308,6 +308,8 @@ describe('jeu', () => {
     beer.pop = 0.5;
     beer.kegs = [20, 20, 20, 20, 20];
     const normal = g.barRate;
+    expect(g.startParty().ok).toBe(false); // il faut d'abord la boule à facettes
+    expect(g.buyItem('disco').ok).toBe(true);
     expect(g.startParty().ok).toBe(true);
     expect(g.taps[0]!.glasses).toBe(20); // un fût est branché d'office
     expect(g.barRate).toBeCloseTo(normal * PARTY.mult);

@@ -1203,6 +1203,8 @@ export class Game {
     g.partyReadyAt ??= 0;
     g.eventId ??= 'party';
     g.owned ??= [];
+    // la fête demande désormais une boule à facettes : qui en a déjà organisé une la garde
+    if (g.partyReadyAt > 0 && !g.owned.includes('disco')) g.owned.push('disco');
     g.adUntil ??= 0;
     g.queued ??= false;
     g.trial ??= null;

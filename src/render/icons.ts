@@ -157,6 +157,25 @@ const GRIDS = {
     '.....kkkkkk.....',
     '................',
   ],
+  // boule à facettes (fête)
+  disco: [
+    '.......kk.......',
+    '.......SS.......',
+    '.....kkkkkk.....',
+    '...kkwsSwsSkk...',
+    '..kwsSwsSwsSWk..',
+    '..ksSwsSwsSwSk..',
+    '.kSwsSwsSwsSwSk.',
+    '.kwsSwsSwsSwsSk.',
+    '.ksSwsSwsSwsSWk.',
+    '.kSwsSwsSwsSwSk.',
+    '..kwsSwsSwsSWk..',
+    '..ksSwsSwsSwSk..',
+    '...kkSwsSwsSkk..',
+    '.....kkkkkk.....',
+    'p..............l',
+    '.......y........',
+  ],
   // ballon (soirée foot)
   ball: [
     '.....kkkkkk.....',

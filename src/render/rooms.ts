@@ -10,7 +10,6 @@ import { crateList, drawCrate } from './bottleArt';
 import { drawMiniLabel } from './labelArt';
 import { PAL } from './painter';
 import type { Rect } from './sprites';
-import { paintIcon } from './icons';
 
 export const ROOM_W = 160;
 export const ROOM_H = 300;
@@ -22,6 +21,16 @@ const painter = (g: CanvasRenderingContext2D): Px => (x, y, w, h, c) => {
   g.fillStyle = c;
   g.fillRect(x, y, w, h);
 };
+
+/** Chiffres de 3 × 5 px (écran de l'ordinateur). */
+const DIGITS = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
+function drawDigits(g: CanvasRenderingContext2D, text: string, x: number, y: number, col: string): void {
+  g.fillStyle = col;
+  for (let k = 0; k < text.length; k++) {
+    const d = DIGITS[Number(text[k])]!;
+    for (let i = 0; i < 15; i++) if (d[i] === '1') g.fillRect(x + k * 4 + (i % 3), y + Math.floor(i / 3), 1, 1);
+  }
+}
 
 /** Hachage déterministe 0..1 (décor, clients). */
 const hash = (a: number, b = 0) => {
@@ -393,21 +402,25 @@ export class StorageRoom extends Room {
     const fg = holo ? '#5ef0ff' : lv <= 2 ? '#7cff9c' : '#f2c14e';
     px(sx, sy, sw, sh, ink);
     if (!holo) for (let y = sy; y < sy + sh; y += 2) px(sx, y, sw, 1, '#ffffff08'); // lignes de balayage
-    if (n > 0) {
-      // enveloppe + nombre de commandes
-      const ex = sx + Math.floor(sw / 2) - 7;
-      const ey = sy + 3;
-      if (blink || ready === 0) {
-        px(ex, ey, 14, 9, fg);
-        g.fillStyle = ink;
-        for (let i = 0; i < 7; i++) { g.fillRect(ex + i, ey + i, 1, 1); g.fillRect(ex + 13 - i, ey + i, 1, 1); }
-      }
-      for (let i = 0; i < Math.min(n, 9); i++) px(sx + 3 + i * 3, sy + sh - 3, 2, 2, i < ready ? '#7ee081' : fg);
-    } else {
-      // curseur qui clignote
-      for (let i = 0; i < 3; i++) px(sx + 3, sy + 3 + i * 3, 6 + ((i * 7) % 9), 1, fg + '80');
-      if (blink) px(sx + 3, sy + 12, 3, 2, fg);
+    // au centre de l'écran : une enveloppe et le nombre de commandes ; elle scintille quand on peut en livrer
+    const digits = String(Math.min(n, 99));
+    const ew = 14;
+    const eh = 9;
+    const dw = digits.length * 4 - 1;
+    const total = ew + 2 + dw;
+    const ex = sx + Math.floor((sw - total) / 2);
+    const ey = sy + Math.floor((sh - eh) / 2);
+    const shine = ready > 0 ? 0.5 + 0.5 * Math.sin(t * 6) : 0;
+    const env = ready > 0 ? (shine > 0.5 ? '#ffffff' : '#f2c14e') : n > 0 ? fg : fg + '70';
+    if (ready > 0) {
+      g.fillStyle = `rgba(242,193,78,${0.15 + 0.25 * shine})`;
+      g.fillRect(ex - 2, ey - 2, ew + 4, eh + 4);
     }
+    px(ex, ey, ew, eh, env);
+    g.fillStyle = ink;
+    for (let i = 0; i < 7; i++) { g.fillRect(ex + i, ey + i, 1, 1); g.fillRect(ex + 13 - i, ey + i, 1, 1); }
+    if (ready > 0 && shine > 0.7) { px(ex - 2, ey - 2, 1, 1, '#ffffff'); px(ex + ew + 1, ey + eh, 1, 1, '#ffffff'); }
+    drawDigits(g, digits, ex + ew + 2, ey + 2, ready > 0 ? env : n > 0 ? fg : fg + '70');
   }
 
   /** Une palette au premier plan : les caisses prêtes à partir quand une commande peut être remplie. */
@@ -456,11 +469,11 @@ const COUNTER = { top: 112, front: 134, x0: 8, x1: 152 };
 const BAR_HIT: Rect = { x: 0, y: 24, w: ROOM_W, h: CELLAR_Y - 24 };
 /** Sol de la cave, où reposent les fûts. */
 const KEG_FLOOR = 290;
-/** Objets achetés au magasin, accrochés au mur du bar (16 × 16 px). */
-export const BAR_ITEMS: Record<'tv' | 'darts', Rect> = {
-  tv: { x: 126, y: 22, w: 16, h: 16 },
-  darts: { x: 12, y: 74, w: 16, h: 16 },
-};
+/**
+ * Coin du bar, en haut à droite, où s'installe l'objet de l'événement en cours (télé, cible, boule à facettes).
+ * Le décor de chaque niveau laisse cette place libre.
+ */
+export const EVENT_SLOT: Rect = { x: 118, y: 0, w: 38, h: 44 };
 
 interface Seat { x: number; y: number; kind: 'stool' | 'table' }
 
@@ -504,59 +517,119 @@ export class BarRoom extends Room {
     return Math.round(start + (taps === 1 ? span / 2 : (span * i) / (taps - 1)));
   }
 
-  hits(taps: number, owned: readonly string[] = []): { id: string; rect: Rect }[] {
+  hits(taps: number, eventOn = false): { id: string; rect: Rect }[] {
     const out = [{ id: 'counter', rect: BAR_HIT }];
     for (let i = 0; i < taps; i++) {
       const r = this.kegRect(i, taps);
       out.push({ id: `keg${i}`, rect: { x: r.x - 3, y: CELLAR_Y + 18, w: r.w + 6, h: KEG_FLOOR - CELLAR_Y - 14 } });
     }
-    for (const id of ['tv', 'darts'] as const) {
-      const r = BAR_ITEMS[id];
-      if (owned.includes(id)) out.push({ id, rect: { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 } });
-    }
+    if (eventOn) out.push({ id: 'event', rect: EVENT_SLOT });
     return out;
   }
 
-  /** La télé et la cible, si on les a achetées ; elles s'animent pendant leur événement. */
-  private drawItems(game: Game, t: number): void {
+  /** L'objet de l'événement en cours, dans le coin en haut à droite : il n'est là que le temps de l'événement. */
+  private drawEventItem(game: Game, lv: number, t: number): void {
+    if (!game.partying) return;
+    const ev = game.eventId;
+    if (ev === 'foot') this.drawTv(lv, t);
+    else if (ev === 'darts') this.drawDarts(lv, t);
+    else this.drawDisco(t);
+  }
+
+  /** Grande télé suspendue : cathodique en bois au début, écran plat ensuite, verre et néon au dernier niveau. Le match défile. */
+  private drawTv(lv: number, t: number): void {
     const g = this.g;
-    const ev = game.partying ? game.eventId : null;
-    if (game.owns('darts')) {
-      const r = BAR_ITEMS.darts;
-      paintIcon(g, 'darts', r.x, r.y);
-      // tournoi : les fléchettes se plantent l'une après l'autre
-      if (ev === 'darts') {
-        for (let i = 0; i < 3; i++) {
-          const k = (t * 0.8 + i / 3) % 1;
-          const a = hash(Math.floor(t * 0.8 + i / 3), i) * Math.PI * 2;
-          const x = Math.round(r.x + 8 + Math.cos(a) * 4 * k);
-          const y = Math.round(r.y + 7 + Math.sin(a) * 4 * k);
-          g.fillStyle = '#1b1424';
-          g.fillRect(x, y, 1, 1);
-          g.fillStyle = '#f2c14e';
-          g.fillRect(x + 1, y - 1, 2, 1);
-        }
-      }
+    const px = painter(g);
+    const W = 34;
+    const H = 24;
+    const x = EVENT_SLOT.x + Math.floor((EVENT_SLOT.w - W) / 2);
+    const y = 12;
+    // suspentes
+    px(x + 6, 0, 1, y, '#1b1424'); px(x + W - 7, 0, 1, y, '#1b1424');
+    let sx: number, sy: number, sw: number, sh: number;
+    if (lv <= 2) {
+      px(x, y, W, H, '#1b1424');
+      px(x + 1, y + 1, W - 2, H - 2, '#7a5228'); px(x + 1, y + 1, W - 2, 1, '#a8743c');
+      [sx, sy, sw, sh] = [x + 3, y + 3, W - 12, H - 6];
+      px(sx - 1, sy - 1, sw + 2, sh + 2, '#3a2c20');
+      px(x + W - 7, y + 5, 4, 4, '#c4b090'); px(x + W - 6, y + 6, 2, 2, '#5a4a3a');
+      px(x + W - 7, y + 12, 4, 4, '#c4b090'); px(x + W - 6, y + 13, 2, 2, '#5a4a3a');
+    } else {
+      const frame = lv === 5 ? '#dce6f0' : '#1b1424';
+      px(x, y, W, H - 2, frame);
+      if (lv === 5) { px(x, y + H - 3, W, 1, '#5ef0ff'); px(x, y, W, 1, '#ffffff'); }
+      else px(x, y, W, 1, '#545068');
+      [sx, sy, sw, sh] = [x + 1, y + 1, W - 2, H - 4];
     }
-    if (game.owns('tv')) {
-      const r = BAR_ITEMS.tv;
-      paintIcon(g, 'tv', r.x, r.y);
-      // écran : 9 × 4 px ; un match pendant la soirée foot, sinon de la neige qui scintille à peine
-      const sx = r.x + 3;
-      const sy = r.y + 7;
-      if (ev === 'foot') {
-        g.fillStyle = '#2c8a4a';
-        g.fillRect(sx, sy, 9, 4);
-        g.fillStyle = '#7ee081';
-        g.fillRect(sx + 4, sy, 1, 4);
-        const bx = sx + Math.round(4 + Math.sin(t * 2.3) * 4);
-        const by = sy + Math.round(1.5 + Math.sin(t * 3.1) * 1.5);
-        g.fillStyle = '#ffffff';
-        g.fillRect(bx, by, 1, 1);
-      } else if (Math.floor(t * 2) % 7 === 0) {
-        g.fillStyle = 'rgba(255,255,255,0.25)';
-        g.fillRect(sx, sy + (Math.floor(t * 8) % 4), 9, 1);
-      }
+    // le match : pelouse rayée, ligne médiane, rond central, joueurs et ballon
+    for (let i = 0; i < sw; i += 4) px(sx + i, sy, Math.min(2, sw - i), sh, '#2c8a4a');
+    for (let i = 2; i < sw; i += 4) px(sx + i, sy, Math.min(2, sw - i), sh, '#33a052');
+    const mid = sx + Math.floor(sw / 2);
+    px(mid, sy, 1, sh, '#c8f0d0');
+    g.strokeStyle = '#c8f0d0'; g.lineWidth = 1;
+    g.strokeRect(mid - 2.5, sy + sh / 2 - 2.5, 5, 5);
+    const bx = mid + Math.round(Math.sin(t * 1.3) * (sw / 2 - 3));
+    const by = sy + Math.round(sh / 2 + Math.sin(t * 2.1) * (sh / 2 - 2));
+    for (let i = 0; i < 3; i++) {
+      px(bx - 4 + Math.round(Math.sin(t * 1.7 + i * 2) * 3) - i * 3, sy + 2 + i * 4, 1, 2, '#e8553a');
+      px(bx + 3 + Math.round(Math.cos(t * 1.5 + i) * 3) + i * 2, sy + 3 + i * 4, 1, 2, '#3f88d4');
+    }
+    px(bx, by, 1, 1, '#ffffff');
+    // reflet
+    g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(sx, sy, sw, 2);
+  }
+
+  /** Cible de fléchettes sur son panneau (liège, puis bois sombre, puis blanc laqué) ; les fléchettes se plantent. */
+  private drawDarts(lv: number, t: number): void {
+    const g = this.g;
+    const px = painter(g);
+    const S = 28;
+    const x = EVENT_SLOT.x + Math.floor((EVENT_SLOT.w - S) / 2);
+    const y = 10;
+    const panel = lv <= 2 ? ['#a8743c', '#7a5228'] : lv <= 4 ? ['#3a2418', '#241410'] : ['#f4f8fc', '#c4d0dc'];
+    px(x, y, S, S, '#1b1424'); px(x + 1, y + 1, S - 2, S - 2, panel[0]!); px(x + 1, y + S - 3, S - 2, 2, panel[1]!);
+    const cx = x + S / 2;
+    const cy = y + S / 2;
+    for (const [r, c] of [[11, '#1b1424'], [10, '#b83a24'], [9, '#1b1424'], [8, '#e8dcc0'], [6, '#2c8a4a'], [5, '#e8dcc0'], [3, '#b83a24'], [1.5, '#2c8a4a']] as const) {
+      g.fillStyle = c; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    }
+    // secteurs
+    g.strokeStyle = 'rgba(27,20,36,0.5)';
+    for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * 9, cy + Math.sin(a) * 9); g.stroke(); }
+    // trois fléchettes, relancées à tour de rôle
+    for (let i = 0; i < 3; i++) {
+      const round = Math.floor(t * 0.7 + i / 3);
+      const a = hash(round, i) * Math.PI * 2;
+      const d = hash(round, i + 7) * 8;
+      const fx = Math.round(cx + Math.cos(a) * d);
+      const fy = Math.round(cy + Math.sin(a) * d);
+      px(fx, fy, 1, 1, '#1b1424'); px(fx + 1, fy - 1, 1, 1, '#c4d0dc'); px(fx + 2, fy - 2, 2, 1, '#f2c14e'); px(fx + 3, fy - 3, 1, 1, '#e8553a');
+    }
+  }
+
+  /** Boule à facettes de la fête : elle tourne, ses facettes scintillent. */
+  private drawDisco(t: number): void {
+    const g = this.g;
+    const px = painter(g);
+    const cx = EVENT_SLOT.x + Math.floor(EVENT_SLOT.w / 2);
+    const cy = 24;
+    const r = 9;
+    px(cx, 0, 1, cy - r, '#c4d0dc');
+    g.fillStyle = '#1b1424'; g.beginPath(); g.arc(cx + 0.5, cy + 0.5, r + 1, 0, Math.PI * 2); g.fill();
+    const spin = Math.floor(t * 6);
+    for (let y = -r; y <= r; y += 2) for (let x = -r; x <= r; x += 2) {
+      if (x * x + y * y > r * r) continue;
+      const k = hash(x * 31 + y + spin * 7, y);
+      const col = k > 0.9 ? '#ffffff' : k > 0.6 ? '#dce6f0' : k > 0.3 ? '#98a6b6' : '#6c7a8c';
+      px(cx + x, cy + y, 2, 2, col);
+    }
+    // éclats autour
+    for (let i = 0; i < 4; i++) {
+      if (hash(spin, i) < 0.5) continue;
+      const a = hash(spin, i + 3) * Math.PI * 2;
+      const sx = Math.round(cx + Math.cos(a) * (r + 4));
+      const sy = Math.round(cy + Math.sin(a) * (r + 4));
+      px(sx, sy - 1, 1, 3, '#ffffff'); px(sx - 1, sy, 3, 1, '#ffffff');
     }
   }
 
@@ -570,7 +643,7 @@ export class BarRoom extends Room {
     const lv = game.barLevel;
     g.drawImage(this.background(lv, t), 0, 0);
     this.drawBoard(game, lv);
-    this.drawItems(game, t);
+    this.drawEventItem(game, lv, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
     this.drawTaps(labels, game.taps.length, lv);
     this.drawBartender(game, lv, t);
@@ -581,7 +654,7 @@ export class BarRoom extends Room {
       g.fillStyle = `rgba(94,240,255,${0.25 + 0.2 * k})`;
       g.fillRect(COUNTER.x0, COUNTER.front - 1, COUNTER.x1 - COUNTER.x0, 1);
     }
-    if (game.partying) this.party(t);
+    if (game.partying && game.eventId === 'party') this.party(t); // projecteurs et confettis : seulement pour la fête
     this.drawCellar(game, lv, t);
     if (this.selected === 'counter') this.outline(BAR_HIT, t);
   }
@@ -624,7 +697,7 @@ export class BarRoom extends Room {
     if (lv === 1) {
       // bois grisé par la poussière, fissure, toiles d'araignée, une seule ampoule
       g.fillStyle = 'rgba(90,80,70,0.45)'; g.fillRect(0, 0, W, COUNTER.front);
-      px(118, 26, 1, 10, '#3a2c20'); px(119, 35, 1, 8, '#3a2c20');
+      px(104, 26, 1, 10, '#3a2c20'); px(105, 35, 1, 8, '#3a2c20');
       g.strokeStyle = 'rgba(255,255,255,0.22)';
       for (const [x0, dir] of [[0, 1], [W - 1, -1]] as const) {
         g.beginPath();
@@ -640,26 +713,24 @@ export class BarRoom extends Room {
       g.fillStyle = '#a8483a'; g.font = '8px monospace'; g.fillText('OUVERT', 2, 8);
       g.restore();
     } else if (lv === 2) {
-      for (const lx of [40, 120]) {
+      for (const lx of [36, 100]) {
         px(lx, 0, 1, 14, '#1b1424'); px(lx - 5, 14, 11, 4, '#2c5a3a'); px(lx - 3, 18, 7, 1, '#fff4b0');
         g.fillStyle = 'rgba(255,220,140,0.07)'; g.beginPath(); g.moveTo(lx - 4, 18); g.lineTo(lx + 5, 18); g.lineTo(lx + 24, back); g.lineTo(lx - 23, back); g.fill();
       }
     } else if (lv === 3) {
       px(0, 76, W, COUNTER.front - 76, '#4a2c14');
       for (let x = 0; x < W; x += 20) { px(x + 2, 80, 16, 26, '#5a3a1c'); px(x + 2, 80, 16, 1, '#744620'); }
-      g.fillStyle = '#1b1424'; g.beginPath(); g.arc(140, 24, 9, 0, Math.PI * 2); g.fill();
-      for (const [r, c] of [[8, '#e8dcc0'], [6, '#2c5a3a'], [4, '#e8dcc0'], [2, '#b83a24'], [1, '#f2c14e']] as const) { g.fillStyle = c; g.beginPath(); g.arc(140, 24, r, 0, Math.PI * 2); g.fill(); }
-      for (const lx of [30, 80, 130]) { px(lx, 0, 1, 8, '#8a5c14'); px(lx - 4, 8, 9, 3, '#e8b030'); px(lx - 3, 11, 7, 1, '#fff4b0'); }
+      for (const lx of [24, 64, 104]) { px(lx, 0, 1, 8, '#8a5c14'); px(lx - 4, 8, 9, 3, '#e8b030'); px(lx - 3, 11, 7, 1, '#fff4b0'); }
     } else if (lv === 4) {
-      px(44, 4, 72, 16, '#1b1424');
-      g.fillStyle = '#ff5ad0'; g.font = '11px monospace'; g.fillText('BREW IT', 54, 16);
-      g.fillStyle = 'rgba(255,90,208,0.10)'; g.fillRect(40, 0, 80, 24);
-      for (const lx of [16, 144]) { px(lx, 0, 1, 22, '#1b1424'); px(lx - 6, 22, 13, 5, '#2c283a'); px(lx - 5, 27, 11, 1, '#fff4b0'); }
+      px(30, 4, 72, 16, '#1b1424');
+      g.fillStyle = '#ff5ad0'; g.font = '11px monospace'; g.fillText('BREW IT', 40, 16);
+      g.fillStyle = 'rgba(255,90,208,0.10)'; g.fillRect(26, 0, 80, 24);
+      for (const lx of [14, 110]) { px(lx, 0, 1, 22, '#1b1424'); px(lx - 6, 22, 13, 5, '#2c283a'); px(lx - 5, 27, 11, 1, '#fff4b0'); }
     } else {
-      px(20, 4, 120, 22, '#0c1420');
-      for (let i = 0; i < 30; i++) px(21 + ((i * 37) % 118), 5 + ((i * 13) % 9), 1, 1, i % 5 ? '#ffffff' : '#5ef0ff');
-      for (let i = 0; i < 14; i++) { const h = 5 + ((i * 11) % 10); px(22 + i * 8, 26 - h, 6, h, '#1c2a44'); px(23 + i * 8, 27 - h, 1, 1, '#f2c14e'); }
-      px(20, 3, 120, 1, '#5ef0ff'); px(20, 26, 120, 1, '#5ef0ff');
+      px(8, 4, 104, 22, '#0c1420');
+      for (let i = 0; i < 26; i++) px(9 + ((i * 37) % 102), 5 + ((i * 13) % 9), 1, 1, i % 5 ? '#ffffff' : '#5ef0ff');
+      for (let i = 0; i < 12; i++) { const h = 5 + ((i * 11) % 10); px(10 + i * 8, 26 - h, 6, h, '#1c2a44'); px(11 + i * 8, 27 - h, 1, 1, '#f2c14e'); }
+      px(8, 3, 104, 1, '#5ef0ff'); px(8, 26, 104, 1, '#5ef0ff');
     }
     // étagères de bouteilles derrière le comptoir (vides et poussiéreuses au début)
     const shelves = lv === 1 ? [70] : lv <= 3 ? [66, 90] : [58, 78, 98];

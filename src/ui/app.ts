@@ -53,8 +53,8 @@ function roomTitle(up: HTMLButtonElement, plaque: HTMLElement): HTMLElement {
 }
 
 /** Icône de chaque événement du bar. */
-const EVENT_ICON: Record<BarEventId, IconId> = { party: 'events', darts: 'darts', foot: 'ball' };
-const ITEM_ICON: Record<ShopItemId, IconId> = { darts: 'darts', tv: 'tv' };
+const EVENT_ICON: Record<BarEventId, IconId> = { party: 'disco', darts: 'darts', foot: 'ball' };
+const ITEM_ICON: Record<ShopItemId, IconId> = { disco: 'disco', darts: 'darts', tv: 'tv' };
 
 function setFab(b: HTMLButtonElement, badge: string, state: '' | 'ready' | 'alert', aria: string): void {
   const el = b.querySelector<HTMLElement>('.fab-badge')!;
@@ -156,10 +156,8 @@ export class App {
   private eventsBtn = fab('events', 'Événements');
   /** Bouton d'amélioration (flèche vers le haut) à gauche du nom de chaque pièce. */
   private ups: Record<RoomId, HTMLButtonElement> = { workshop: upBtn('Améliorer la brasserie'), storage: upBtn('Agrandir le stockage'), bar: upBtn('Agrandir le bar') };
-  /** Enveloppe au centre du stockage : les commandes en attente (elle scintille quand on peut en livrer). */
-  private envelope = h('button', 'envelope');
-  private envelopeCount = h('span', 'envelope-count');
   private shopKey = '';
+  private computerHit?: HTMLButtonElement;
   // --- les pièces
   readonly storageRoom = new StorageRoom();
   readonly barRoom = new BarRoom();
@@ -260,14 +258,13 @@ export class App {
       const el = h('button', 'station-hit');
       el.setAttribute('aria-label', hit.id === 'computer' ? 'Ordinateur des commandes' : 'Rayonnages');
       el.onclick = () => (hit.id === 'computer' ? this.openComputer() : this.open({ kind: 'storage' }));
+      if (hit.id === 'computer') this.computerHit = el;
       this.storageWrap.append(el);
       this.roomHits.push({ el, rect: hit.rect });
     }
     this.storagePlaque.onclick = () => this.open({ kind: 'storageUp' });
     this.ups.storage.onclick = () => this.open({ kind: 'storageUp' });
-    this.envelope.append(iconCanvas('envelope', 3), this.envelopeCount);
-    this.envelope.onclick = () => this.openComputer();
-    this.storageWrap.append(roomTitle(this.ups.storage, this.storagePlaque), this.envelope);
+    this.storageWrap.append(roomTitle(this.ups.storage, this.storagePlaque));
     // bar : le comptoir
     this.barWrap.append(this.barRoom.canvas);
     const counter = this.barRoom.hits(1)[0]!;
@@ -461,11 +458,8 @@ export class App {
     this.ups.workshop.classList.toggle('alert', stationUp);
     this.ups.storage.classList.toggle('alert', !!nextStore && g.money >= nextStore.cost);
     this.ups.bar.classList.toggle('alert', !!nextBar && g.money >= nextBar.cost);
-    // enveloppe des commandes
-    this.envelopeCount.textContent = String(g.orders.length);
-    this.envelope.classList.toggle('ready', ready > 0);
-    this.envelope.classList.toggle('empty', !g.orders.length);
-    this.envelope.setAttribute('aria-label', `Commandes : ${g.orders.length}${ready ? `, ${ready} prête${ready > 1 ? 's' : ''} à livrer` : ''}`);
+    // l'ordinateur (l'enveloppe est dessinée sur son écran) : son nom dit les commandes en attente
+    this.computerHit?.setAttribute('aria-label', `Ordinateur : ${g.orders.length} commande${g.orders.length > 1 ? 's' : ''}${ready ? `, ${ready} à livrer` : ''}`);
     this.fabs.classList.toggle('hidden', !isRoom(this.view) || !!this.openSheet);
     this.storagePlaque.textContent = `▣ ${STORAGE[g.storageLevel - 1]!.name}`;
     this.barPlaque.textContent = `★ ${g.barLevel} · ${g.bar.name}`;
@@ -1498,7 +1492,7 @@ export class App {
   private syncKegHits(force = false): void {
     const g = this.game();
     const n = g.taps.length;
-    const key = `${n}|${g.owned.join(',')}`;
+    const key = `${n}|${g.partying}`;
     if (!force && this.kegKey === key) return;
     this.kegKey = key;
     for (const el of this.kegHits) {
@@ -1506,13 +1500,13 @@ export class App {
       this.roomHits = this.roomHits.filter((r) => r.el !== el);
     }
     this.kegHits = [];
-    for (const hit of this.barRoom.hits(n, g.owned).slice(1)) {
+    for (const hit of this.barRoom.hits(n, g.partying).slice(1)) {
       const el = h('button', 'station-hit');
       if (hit.id.startsWith('keg')) {
         el.setAttribute('aria-label', `Fût de la tireuse ${Number(hit.id.slice(3)) + 1} : les fûts`);
         el.onclick = () => this.open({ kind: 'bar' });
       } else {
-        el.setAttribute('aria-label', hit.id === 'tv' ? 'Télévision : événements' : 'Cible : événements');
+        el.setAttribute('aria-label', `${g.barEvent.name} : événements`);
         el.onclick = () => this.openEvents();
       }
       this.barWrap.append(el);
@@ -2027,12 +2021,12 @@ export class App {
       const owned = g.owns(item.id);
       const c = h('div', `card shop-item${owned ? ' owned' : ''}`);
       c.append(iconCanvas(ITEM_ICON[item.id], 3), h('div', 'beer-name', item.name), h('div', 'hint', item.text));
-      if (owned) c.append(h('span', 'note', '✓ Dans ton bar'));
+      if (owned) c.append(h('span', 'note', '✓ Achetée'));
       else {
         const b = this.btn('btn primary small', `Acheter · ${moneyInt(item.cost)}`, () => {
           const r = g.buyItem(item.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`${item.name} installée au bar !`, 'good');
+          this.toast(`${item.name} : nouvel événement au bar !`, 'good');
           this.barRoom.invalidate();
           this.syncKegHits(true);
           this.shopKey = '';
