@@ -11,6 +11,7 @@ src/
 │   ├── market.ts         niveaux du bar, fûts, prix
 │   ├── orders.ts         tableau de commandes : profils de clients, types de commandes, grossiste
 │   ├── trends.ts         tendances du moment et popularité (bières, marque)
+│   ├── shop.ts           catalogues : boosts, personnel, mobilier du bar, déblocages d'étiquettes
 │   ├── warehouse.ts      niveaux du stockage, places de la gamme
 │   ├── game.ts           état de la partie : lots dans la chaîne, gamme, bar, commandes, améliorations, hors-ligne
 │   └── save.ts           sauvegarde JSON (emplacement « brewit-sim-1 »)

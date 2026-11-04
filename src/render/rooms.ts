@@ -575,10 +575,10 @@ export const EVENT_SLOT: Rect = { x: 118, y: 0, w: 38, h: 44 };
 
 interface Seat { x: number; y: number; kind: 'stool' | 'table' }
 
-/** Les places : tabourets au comptoir d'abord, puis des tables devant. */
-function seatsFor(level: number, n: number): Seat[] {
+/** Les places : tabourets au comptoir d'abord, puis des tables devant (les places des banquettes sont toujours à table). */
+function seatsFor(level: number, n: number, bench = 0): Seat[] {
   const out: Seat[] = [];
-  const stools = Math.min(n, level === 1 ? 2 : 6);
+  const stools = Math.min(n - bench, level === 1 ? 2 : 6);
   const span = level === 1 ? 50 : COUNTER.x1 - COUNTER.x0 - 24;
   const start = level === 1 ? 48 : COUNTER.x0 + 12;
   for (let i = 0; i < stools; i++) out.push({ x: Math.round(start + (stools === 1 ? span / 2 : (span * i) / (stools - 1))), y: COUNTER.front + 14, kind: 'stool' });
@@ -741,6 +741,7 @@ export class BarRoom extends Room {
     const lv = game.barLevel;
     this.begin(lv, t);
     this.drawBoard(game, lv);
+    this.drawFurniture(game, lv, t);
     this.drawEventItem(game, lv, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
     this.drawTaps(labels, game.taps.length, lv);
@@ -996,6 +997,85 @@ export class BarRoom extends Room {
     });
   }
 
+  /**
+   * Le mobilier acheté au magasin, à sa place dans le bar et aux couleurs de son style (5 niveaux) :
+   * des plantes au bout du comptoir, deux affiches sous les lampes, une enseigne lumineuse sur la façade du comptoir,
+   * des banquettes derrière les tables (dessinées avec les clients), un juke-box dans le coin.
+   */
+  private drawFurniture(game: Game, lv: number, t: number): void {
+    const g = this.g;
+    const px = painter(g);
+    const { top, front } = COUNTER;
+    const frame = lv === 5 ? ['#dce6f0', '#ffffff'] : lv === 4 ? ['#2c283a', '#545068'] : ['#5a3a1c', '#8a5a2c'];
+    if (game.hasFurniture('posters')) {
+      // deux affiches encadrées, sous les lampes : une bouteille, une chope
+      const art = [
+        ['#e8553a', '#f2c14e', '#7a4a24'], ['#2c6a3a', '#f6ecd6', '#f2c14e'],
+      ];
+      [[4, 29], [104, 29]].forEach(([x, y], i) => {
+        g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(x! + 2, y! + 2, 12, 15);
+        px(x!, y!, 12, 15, frame[0]!); px(x!, y!, 12, 1, frame[1]!);
+        const [bg, a, b] = art[i]!;
+        px(x! + 2, y! + 2, 8, 11, lv === 1 ? '#c8b894' : bg!);
+        if (i === 0) { px(x! + 5, y! + 3, 2, 3, b!); px(x! + 4, y! + 6, 4, 6, b!); px(x! + 4, y! + 8, 4, 2, a!); }
+        else { px(x! + 3, y! + 5, 5, 6, a!); px(x! + 3, y! + 4, 5, 2, '#ffffff'); px(x! + 8, y! + 6, 1, 3, a!); }
+        if (lv === 1) g.fillStyle = 'rgba(90,80,70,0.35)', g.fillRect(x! + 2, y! + 2, 8, 11); // jaunies par la poussière
+      });
+    }
+    if (game.hasFurniture('plants')) {
+      // une plante en pot à chaque bout du comptoir
+      for (const [x, flip] of [[6, 1], [146, -1]] as const) {
+        const pot = lv === 5 ? ['#ffffff', '#b8c6d6'] : lv === 4 ? ['#3e3a50', '#2c283a'] : ['#b05a32', '#7a3a1c'];
+        g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(x + 1, top - 1, 9, 1);
+        px(x, top - 7, 8, 7, pot[0]!); px(x + 6, top - 7, 2, 7, pot[1]!); px(x - 1, top - 8, 10, 2, pot[0]!);
+        for (let i = 0; i < 7; i++) {
+          const a = -Math.PI / 2 + (i - 3) * 0.4 * flip;
+          const len = 7 + ((i * 5) % 6);
+          for (let k = 0; k < len; k++) px(Math.round(x + 4 + Math.cos(a) * k), Math.round(top - 9 + Math.sin(a) * k + (k / len) ** 2 * 3), 1, 2, k > len - 3 ? '#7ee081' : i % 2 ? '#2c8a4a' : '#3aa05a');
+        }
+      }
+    }
+    if (game.hasFurniture('neon')) {
+      // enseigne au néon sur la façade du comptoir ; elle grésille de temps en temps
+      const col = ['#ff9a3a', '#7ee081', '#f2c14e', '#ff5ad0', '#5ef0ff'][lv - 1]!;
+      const on = Math.floor(t * 8) % 37 !== 0;
+      const x = 58;
+      const y = top + 8;
+      px(x - 2, y - 2, 48, front - top - 14, '#1b1424');
+      if (on) {
+        g.fillStyle = col + '30'; g.fillRect(x - 6, y - 5, 56, front - top - 6);
+      }
+      g.fillStyle = on ? col : '#3a3048';
+      g.font = '8px monospace';
+      g.textBaseline = 'alphabetic';
+      g.fillText('BIÈRES', x + 6, y + 8);
+      if (on) { g.fillStyle = '#ffffff60'; g.fillText('BIÈRES', x + 6, y + 7); }
+    }
+    if (game.hasFurniture('jukebox')) {
+      // le juke-box, dans le coin de la salle : ses lumières suivent la musique
+      const x = 145;
+      const y = 152;
+      const body = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : lv === 4 ? ['#2c283a', '#545068', '#1b1424'] : ['#8a2a1c', '#c85a2c', '#4a1408'];
+      const ks = ellipseShadow(10, 3, 0.8);
+      g.drawImage(ks, x - 3, y + 39);
+      px(x, y + 6, 14, 35, body[0]!);
+      g.fillStyle = body[0]!; g.beginPath(); g.ellipse(x + 7, y + 7, 7, 7, 0, Math.PI, 0); g.fill();
+      px(x, y + 6, 1, 35, body[1]!); px(x + 13, y + 6, 1, 35, body[2]!);
+      const k = Math.floor(t * 4);
+      const glow = ['#f2c14e', '#ff5ad0', '#5ef0ff', '#7ee081'];
+      px(x + 2, y + 4, 10, 4, glow[k % 4]!);
+      px(x + 2, y + 10, 10, 8, '#1b1424'); px(x + 4, y + 12, 6, 4, '#3a3048'); px(x + 6, y + 13, 2, 2, glow[(k + 1) % 4]!); // la vitrine et son disque
+      for (let i = 0; i < 4; i++) px(x + 2 + i * 3, y + 20, 2, 2, glow[(k + i) % 4]!);
+      for (let yy = y + 25; yy < y + 38; yy += 2) px(x + 2, yy, 10, 1, body[2]!); // grille du haut-parleur
+      px(x - 1, y + 40, 16, 2, body[2]!);
+      // les notes s'envolent
+      if (game.barServing) {
+        const n = (t * 0.7) % 1;
+        px(x + 3 + Math.round(Math.sin(t * 3) * 3), Math.round(y - 2 - n * 12), 2, 2, glow[k % 4]!);
+      }
+    }
+  }
+
   /** Une tireuse par fût ; sa poignée prend la couleur de l'étiquette (grise quand le fût est vide). */
   private drawTaps(labels: (Label | null)[], taps: number, lv: number): void {
     const g = this.g;
@@ -1058,10 +1138,23 @@ export class BarRoom extends Room {
   private drawGuests(game: Game, lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
-    const seats = seatsFor(lv, game.bar.seats);
+    const seats = seatsFor(lv, game.barSeats, game.barSeats - game.bar.seats);
     const serving = game.barServing;
     // un client reste ~20 min : la salle compte en moyenne affluence × 20 personnes
     const busy = serving ? Math.min(0.95, (game.barRate * 20) / seats.length) : 0;
+    if (game.hasFurniture('benches')) {
+      // banquettes capitonnées derrière chaque table
+      const tone = lv === 5 ? ['#f4f8fc', '#dce6f0', '#8a9ab0'] : lv === 4 ? ['#3a6aa8', '#2e5a9a', '#1c3a6a'] : ['#8a2a32', '#a8343c', '#5a1a20'];
+      const xs = [...new Set(seats.filter((st) => st.kind === 'table').map((st, i, all) => Math.round((st.x + (all[i % 2 ? i - 1 : i + 1] ?? st).x) / 2)))];
+      for (const tx of xs) {
+        const y = 186;
+        g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(tx - 16, y - 1, 34, 2);
+        px(tx - 17, y - 17, 34, 13, tone[2]!); px(tx - 16, y - 16, 32, 11, tone[0]!);
+        for (let k = 0; k < 4; k++) px(tx - 13 + k * 8, y - 13, 1, 1, tone[2]!); // capitons
+        px(tx - 17, y - 5, 34, 4, tone[1]!); px(tx - 17, y - 5, 34, 1, tone[0]!);
+        px(tx - 17, y - 1, 2, 2, '#2c283a'); px(tx + 15, y - 1, 2, 2, '#2c283a');
+      }
+    }
     for (let i = 0; i < seats.length; i++) {
       const s = seats[i]!;
       if (s.kind === 'stool') {
