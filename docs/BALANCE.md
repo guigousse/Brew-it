@@ -170,3 +170,9 @@ Aujourd'hui, le moulin lance un brassin dès qu'il est libre. Les brassins s'acc
 - *Une ligne, un brassin à la fois* : la cadence chute de 50 à 75 %. Il faudrait des lignes supplémentaires à acheter, et la place manque à l'écran.
 
 **Retenu : le lancement anticipé, vérifié sur tout le trajet.** Avant de lancer un brassin, le jeu prévoit son passage dans chaque appareil (en tenant compte des brassins déjà sur la ligne et des cuves) et attend s'il devait patienter quelque part. Mesures avec le vrai moteur : 15,8 / 39,5 / 48,7 / 66,7 brassins/h aux mêmes niveaux, **0 % d'appareils bloqués partout** (niveau 5 compris), et un brassin dure 2,8 à 6,7 min au lieu de 7,8 à 19. Le joueur simulé finit en J32 (J30 avant).
+
+## Objets en série, barman en renfort
+
+- Les objets du magasin s'achètent dans l'ordre : cible (300 €), télé (5 000 €), boule à facettes (60 000 €), au rythme des agrandissements du bar (400 €, 6 000 €, 120 000 €). La fête devient l'événement le plus fort (45 min, ×60 clients, ×1,5 le prix de référence).
+- Barman en renfort : 8 h à rebrancher les fûts, de 40 € à 150 000 € selon le bar. Le joueur simulé l'embauche avant de partir quand il a des fûts et dix fois son prix ; il lance le meilleur événement débloqué.
+- Le joueur simulé finit en J34 (J32 avant) : au début, il n'a plus que le tournoi de fléchettes, plus faible que l'ancienne fête bon marché.

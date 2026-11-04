@@ -2,7 +2,7 @@ import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Level
 import { EventBus } from './events';
 import type { Label } from './label';
 import { PARTY } from './market';
-import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, barEventById, SHOP_ITEMS, variety, type BarEventId, type ShopItemId } from './market';
+import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type BarEventId, type ShopItemId } from './market';
 import { CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, WHOLESALE_KEEP, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
@@ -180,6 +180,8 @@ export class Game {
   eventId: BarEventId = 'party';
   /** Objets achetés au magasin (télé, cible…). */
   owned: ShopItemId[] = [];
+  /** Fin du contrat du barman en renfort (s de jeu). */
+  barmanUntil = 0;
   /** Fin de la campagne de pub en cours. */
   adUntil = 0;
   barSold = 0;
@@ -752,11 +754,17 @@ export class Game {
     return this.owned.includes(item);
   }
 
-  /** Achète un objet au magasin. */
+  /** Le prochain objet en vente au magasin : chacun débloque le suivant. */
+  get nextItem() {
+    return SHOP_ITEMS.find((x) => !this.owns(x.id));
+  }
+
+  /** Achète un objet au magasin (dans l'ordre : chacun débloque le suivant). */
   buyItem(id: ShopItemId): CommandResult {
     const item = SHOP_ITEMS.find((x) => x.id === id);
     if (!item) return { ok: false, reason: 'Objet introuvable' };
     if (this.owns(id)) return { ok: false, reason: 'Déjà acheté' };
+    if (this.nextItem?.id !== id) return { ok: false, reason: `Il faut d'abord : ${this.nextItem?.name}` };
     if (this.money < item.cost) return { ok: false, reason: 'Pas assez d\'argent' };
     this.money -= item.cost;
     this.owned.push(id);
@@ -772,7 +780,27 @@ export class Game {
     return PARTY_COST[this.barLevel - 1] ?? PARTY_COST[0];
   }
 
-  /** Organise une fête au bar : 50 fois plus de clients pendant 30 min ; les fûts vides sont rebranchés tout seuls. */
+  /** Le barman en renfort est là : il rebranche les fûts vides tout seul. */
+  get barmanOn(): boolean {
+    return this.time < this.barmanUntil;
+  }
+
+  get barmanCost(): number {
+    return BARMAN_COST[this.barLevel - 1] ?? BARMAN_COST[0];
+  }
+
+  /** Embauche (ou prolonge) le barman pour 8 h, jusqu'à 24 h d'avance. */
+  hireBarman(): CommandResult {
+    const from = Math.max(this.time, this.barmanUntil);
+    if (from + BARMAN.duration - this.time > BARMAN.maxAhead) return { ok: false, reason: 'Contrat déjà assez long' };
+    if (this.money < this.barmanCost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= this.barmanCost;
+    this.barmanUntil = from + BARMAN.duration;
+    this.refillTaps();
+    return { ok: true };
+  }
+
+  /** Organise une fête au bar : 60 fois plus de clients pendant 45 min ; les fûts vides sont rebranchés tout seuls. */
   startParty(): CommandResult {
     return this.startEvent('party');
   }
@@ -1118,12 +1146,12 @@ export class Game {
    * qui coulent, attiré par les plus populaires et celles dans la tendance. Chaque verre fait connaître la bière.
    */
   private sellBar(dt: number): void {
-    if (this.partying) this.refillTaps();
+    if (this.partying || this.barmanOn) this.refillTaps();
     if (!this.barServing) return;
     this.barDemand = Math.min(this.partying ? 200 : 2, this.barDemand + (this.barRate / 60) * dt);
     let earned = 0;
     while (this.barDemand >= 1) {
-      if (this.partying && this.taps.some((t) => t.glasses <= 0)) this.refillTaps();
+      if ((this.partying || this.barmanOn) && this.taps.some((t) => t.glasses <= 0)) this.refillTaps();
       const flowing = this.flowing;
       if (!flowing.length) break;
       const weight = (t: Tap) => {
@@ -1245,7 +1273,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1303,6 +1331,7 @@ export class Game {
     g.partyReadyAt ??= 0;
     g.eventId ??= 'party';
     g.owned ??= [];
+    g.barmanUntil ??= 0;
     // la fête demande désormais une boule à facettes : qui en a déjà organisé une la garde
     if (g.partyReadyAt > 0 && !g.owned.includes('disco')) g.owned.push('disco');
     g.adUntil ??= 0;

@@ -14,7 +14,7 @@ La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Sto
 Les boutons s'effacent quand un panneau est ouvert, et sur le tableau de bord et le magasin.
 
 - **Tableau de bord** : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
-- **Magasin** : la boule à facettes, la cible de fléchettes et la télévision, qui débloquent les événements du bar. Les décorations, le mobilier, les enseignes et l'ambiance sont annoncés « Bientôt ».
+- **Magasin** : la cible de fléchettes, puis la télévision, puis la boule à facettes, qui débloquent les événements du bar l'un après l'autre. Les décorations, le mobilier, les enseignes et l'ambiance sont annoncés « Bientôt ».
 
 **Brasser** ouvre la file des brassins programmés : des groupes « bière × format × nombre » qui partent dans l'ordre. Comme chez un vrai brasseur, un brassin ne part que s'il pourra aller jusqu'au bout **sans attendre devant aucun appareil** : le jeu prévoit son trajet (cuves de fermentation et de garde comprises) et le lance juste à temps pour qu'il arrive quand la place se libère. Aucun appareil ne reste donc bloqué par un brassin fini, et la cadence est celle de l'appareil le plus lent. Il faut aussi l'argent et la place nécessaires. Le groupe en tête dit ce qui le retient. On peut changer le nombre d'un groupe, le monter ou le descendre dans la file, ou le retirer. « + Programmer des brassins » ouvre un assistant en trois étapes : 1. la bière de la gamme (ou un nouvel essai avec les réglages des machines), 2. le format (bouteilles pour le stock et les commandes, fûts pour le bar), 3. le nombre de brassins. Cette dernière étape montre une caisse ou un fût par brassin, la production, le coût, la place au stockage, et dans combien de temps ces brassins seraient prêts. En haut de la file, **« Production restante »** donne le temps jusqu'à la fin du dernier brassin (ceux déjà sur la ligne, puis toute la file), et chaque groupe affiche « prêt dans … ». Ces temps sont calculés en rejouant la brasserie sur une copie, ventes comprises : ils tiennent compte des cuves, des appareils et de l'attente d'argent ou de place. Si la file va se bloquer (stockage plein, souvent de fûts que seul le bar écoule, ou plus d'argent), la production restante l'indique (« ⏸ stockage plein ») et explique après combien de brassins ; les groupes qui ne sortiront pas affichent la même chose au lieu d'un temps. Il n'y a **plus de brassage continu** : quand la file est vide, la brasserie s'arrête. On ne peut pas programmer plus que la file n'en accepte, ni plus que le stockage ne peut recevoir : les fûts (qui ne partent qu'au bar, aux commandes ou pendant un événement) doivent tenir dans la place libre, en comptant ceux déjà sur la ligne et dans la file ; les bouteilles aussi, sauf si le grossiste écoule le surplus automatiquement. L'assistant affiche ce maximum et sa raison. Chaque groupe de la file n'indique que son format (Bouteilles ou Fûts) ; le groupe en tête ne signale que ce qui le bloque (argent, stockage).
 
@@ -159,20 +159,22 @@ L'écran du bar est coupé en deux :
 
 Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au sommet, et bien plus au début. Le bar rapporte peu (environ 1 % du chiffre d'affaires) : c'est là que la marque se fait connaître.
 
-**Événements** (bouton à l'étoile, ou la télé et la cible du bar). Un seul à la fois, puis 6 h de repos avant le suivant. Pendant un événement, le personnel rebranche tout seul les fûts vides avec ceux du stockage : il faut donc **prévoir des fûts d'avance**. Le prix est un multiple de celui d'une fête, qui coûte 100 € au comptoir poussiéreux, puis 1 000 €, 10 000 €, 80 000 € et 600 000 € selon le niveau du bar.
+**Barman en renfort** (bouton carré au barman, dans le bar) : on l'embauche pour **8 h**. Pendant ce temps, il rebranche tout seul les fûts vides avec ceux du stockage, même pendant l'absence. On peut prolonger son contrat d'avance, jusqu'à 24 h. Il faut ensuite le réembaucher. Il coûte 40 € au comptoir poussiéreux, puis 300 €, 2 500 €, 20 000 € et 150 000 € selon le niveau du bar. Il apparaît derrière le comptoir, en gilet sombre et nœud papillon, et la pastille du bouton donne les heures qui lui restent.
 
-| Événement | Durée | Effet | Prix | À débloquer |
+**Événements** (bouton à l'étoile, ou l'objet de l'événement dans le bar). Un seul à la fois, puis 6 h de repos avant le suivant. Pendant un événement, les fûts vides sont rebranchés tout seuls avec ceux du stockage : il faut donc **prévoir des fûts d'avance**. Ils se débloquent **l'un après l'autre**, en achetant leur objet au magasin. Chaque objet débloque l'achat du suivant, et les prix suivent les agrandissements du bar. Le prix d'un événement est un multiple d'un prix de référence, qui vaut 100 € au comptoir poussiéreux, puis 1 000 €, 10 000 €, 80 000 € et 600 000 € selon le niveau du bar.
+
+| Événement | Durée | Effet | Prix | Objet (magasin) |
 |---|---|---|---|---|
-| Fête | 30 min | 50 fois plus de clients | ×1 | **Boule à facettes** (150 €, magasin) |
-| Tournoi de fléchettes | 1 h | 15 fois plus de clients, la gamme se fait 3 fois plus vite connaître | ×0,6 | **Cible de fléchettes** (600 €, magasin) |
-| Soirée foot | 1 h 30 | 20 fois plus de clients, verres 20 % plus chers | ×1,5 | **Télévision** (2 500 €, magasin) |
+| Tournoi de fléchettes | 1 h | 15 fois plus de clients, la gamme se fait 3 fois plus vite connaître | ×0,5 | **Cible de fléchettes**, 300 € (vers le bistrot) |
+| Soirée foot | 1 h 30 | 20 fois plus de clients, verres 20 % plus chers | ×1 | **Télévision**, 5 000 € (vers le pub) |
+| Fête | 45 min | 60 fois plus de clients, la gamme se fait 1,5 fois plus vite connaître | ×1,5 | **Boule à facettes**, 60 000 € (vers la taproom) |
+
+Au magasin, seul le prochain objet de la série est en vente, suivi d'un « Objet suivant » mystère. Ceux qu'on possède disparaissent. Les parties qui avaient déjà la boule à facettes la gardent.
 
 L'objet d'un événement n'apparaît que pendant cet événement, toujours au même endroit : en haut à droite du bar, une place que le décor de chaque niveau laisse libre.
 - **Fête** : la boule à facettes tourne et scintille. Des projecteurs balaient la salle et des confettis tombent ; ces effets sont réservés à la fête.
 - **Soirée foot** : une grande télé suspendue diffuse le match. Elle est cathodique en bois aux niveaux 1 et 2, à écran plat aux niveaux 3 et 4, blanche et néon au niveau 5.
 - **Tournoi de fléchettes** : la cible est montée sur un panneau (liège, bois sombre, puis blanc laqué), et les fléchettes s'y plantent.
-
-Les parties où une fête a déjà été organisée reçoivent la boule à facettes d'office.
 
 ## Popularité et tendances
 **Popularité d'une bière (0 à 5 ★).** Chaque verre servi au bar (+0,4 % de l'écart à la cible) et chaque bouteille livrée sur commande (vingt fois moins) rapprochent sa popularité d'une **cible**. Cette cible dépend fortement de la qualité : ((qualité − 0,3) / 0,7) puissance 1,6, +10 % par tendance suivie.

@@ -66,14 +66,24 @@ export function glassPrice(level: number, t: Tasting, trends = 0): number {
 // ------------------------------------------------------------------ fêtes, publicité
 
 /**
- * Fête au bar : pendant 30 minutes, 50 fois plus de clients. Les fûts vides sont rebranchés automatiquement
- * avec ceux du stockage : il faut en avoir prévu d'avance.
+ * Fête au bar, le plus grand des événements : pendant 45 minutes, 60 fois plus de clients. Les fûts vides sont
+ * rebranchés automatiquement avec ceux du stockage : il faut en avoir prévu d'avance. Le repos (6 h) vaut pour tous les événements.
  */
-export const PARTY = { mult: 50, duration: 30 * 60, cooldown: 6 * 3600 } as const;
-/** Prix d'une fête selon le niveau du bar. */
+export const PARTY = { mult: 60, duration: 45 * 60, cooldown: 6 * 3600 } as const;
+/** Prix de référence des événements (une soirée foot), selon le niveau du bar. */
 export const PARTY_COST = [100, 1000, 10000, 80000, 600000] as const;
 
-/** Objets à acheter au magasin pour débloquer des événements au bar (ils apparaissent dans le bar). */
+/**
+ * Barman en renfort : pendant 8 h, il rebranche tout seul les fûts vides avec ceux du stockage (même pendant l'absence).
+ * On le réembauche régulièrement ; on peut prolonger d'avance, jusqu'à 24 h. Prix selon le niveau du bar.
+ */
+export const BARMAN = { duration: 8 * 3600, maxAhead: 24 * 3600 } as const;
+export const BARMAN_COST = [40, 300, 2500, 20000, 150000] as const;
+
+/**
+ * Objets à acheter au magasin pour débloquer les événements du bar, l'un après l'autre (chacun débloque le suivant).
+ * Leur prix suit les agrandissements du bar : la cible vers le bistrot, la télé vers le pub, la boule à facettes vers la taproom.
+ */
 export type ShopItemId = 'disco' | 'darts' | 'tv';
 export interface ShopItem {
   id: ShopItemId;
@@ -82,9 +92,9 @@ export interface ShopItem {
   cost: number;
 }
 export const SHOP_ITEMS: readonly ShopItem[] = [
-  { id: 'disco', name: 'Boule à facettes', text: 'Débloque la fête : projecteurs et confettis', cost: 150 },
-  { id: 'darts', name: 'Cible de fléchettes', text: 'Débloque le tournoi de fléchettes', cost: 600 },
-  { id: 'tv', name: 'Télévision', text: 'Débloque la soirée foot', cost: 2500 },
+  { id: 'darts', name: 'Cible de fléchettes', text: 'Débloque le tournoi de fléchettes', cost: 300 },
+  { id: 'tv', name: 'Télévision', text: 'Débloque la soirée foot', cost: 5000 },
+  { id: 'disco', name: 'Boule à facettes', text: 'Débloque la fête : projecteurs et confettis', cost: 60000 },
 ];
 
 /**
@@ -106,9 +116,9 @@ export interface BarEvent {
   needs: ShopItemId | null;
 }
 export const BAR_EVENTS: readonly BarEvent[] = [
-  { id: 'party', name: 'Fête', text: '30 min : 50 fois plus de clients.', mult: PARTY.mult, duration: PARTY.duration, priceMult: 1, popMult: 1, cost: 1, needs: 'disco' },
-  { id: 'darts', name: 'Tournoi de fléchettes', text: '1 h : 15 fois plus de clients, et ta gamme se fait 3 fois plus vite connaître.', mult: 15, duration: 3600, priceMult: 1, popMult: 3, cost: 0.6, needs: 'darts' },
-  { id: 'foot', name: 'Soirée foot', text: '1 h 30 de match : 20 fois plus de clients, et les verres 20 % plus chers.', mult: 20, duration: 90 * 60, priceMult: 1.2, popMult: 1, cost: 1.5, needs: 'tv' },
+  { id: 'darts', name: 'Tournoi de fléchettes', text: '1 h : 15 fois plus de clients, et ta gamme se fait 3 fois plus vite connaître.', mult: 15, duration: 3600, priceMult: 1, popMult: 3, cost: 0.5, needs: 'darts' },
+  { id: 'foot', name: 'Soirée foot', text: '1 h 30 de match : 20 fois plus de clients, et les verres 20 % plus chers.', mult: 20, duration: 90 * 60, priceMult: 1.2, popMult: 1, cost: 1, needs: 'tv' },
+  { id: 'party', name: 'Fête', text: '45 min : 60 fois plus de clients, la salle est en délire.', mult: PARTY.mult, duration: PARTY.duration, priceMult: 1, popMult: 1.5, cost: 1.5, needs: 'disco' },
 ];
 export const barEventById = (id: string) => BAR_EVENTS.find((e) => e.id === id);
 

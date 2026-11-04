@@ -8,7 +8,7 @@
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
 import { DEFAULT_LABEL } from '../src/core/label';
 import { Game, simulateOffline } from '../src/core/game';
-import { BAR } from '../src/core/market';
+import { BAR, BAR_EVENTS } from '../src/core/market';
 import { COMPUTERS } from '../src/core/orders';
 import { MAX_LEVEL, STATION_ORDER, upgradeCost } from '../src/core/stations';
 import { STORAGE } from '../src/core/warehouse';
@@ -56,9 +56,15 @@ function tendBar() {
   if (!g.beers.length) return;
   const kegs = g.beers.reduce((s, b) => s + b.kegs.length + g.pendingKegs(b.id), 0) + g.plan.filter((p) => p.format === 'keg').reduce((n, p) => n + p.count, 0);
   if (kegs < g.taps.length * 4 && g.planned < 2) g.planBrew(g.beers[g.batchesDone % g.beers.length]!.id, 'keg');
-  // une fête quand on a prévu assez de fûts
+  // le meilleur événement débloqué, quand on a prévu assez de fûts
   const full = g.beers.reduce((s, b) => s + b.kegs.length, 0);
-  if (full >= g.taps.length * 3 && g.money >= g.partyCost * 2 && g.startParty().ok) buy('Fête', g.partyCost);
+  for (const id of ['party', 'foot', 'darts'] as const) {
+    const cost = g.eventCost(id);
+    const ev = BAR_EVENTS.find((e) => e.id === id)!;
+    if (ev.needs && !g.owns(ev.needs)) continue;
+    if (full >= g.taps.length * 3 && g.money >= cost * 2 && g.startEvent(id).ok) buy(ev.name, cost);
+    break;
+  }
 }
 const brandByDay: number[] = [];
 
@@ -104,7 +110,8 @@ function shop() {
       if (lv >= MAX_LEVEL) continue;
       options.push({ cost: g.upgradeCost(id), label: `${id} → ${lv + 1}`, act: () => g.upgrade(id).ok });
     }
-    if (!g.owns('disco')) options.push({ cost: 150, label: 'Boule à facettes', act: () => g.buyItem('disco').ok });
+    const item = g.nextItem;
+    if (item) options.push({ cost: item.cost, label: item.name, act: () => g.buyItem(item.id).ok });
     for (const id of ['fermenter', 'conditioning'] as const) {
       const c = g.tankCost(id);
       if (c != null) options.push({ cost: c, label: `Cuve ${id} ${g.tankCount(id) + 1}`, act: () => g.addTank(id).ok });
@@ -148,6 +155,8 @@ function session(minutes: number) {
   deliver();
   wholesale();
   shop();
+  // avant de partir, un barman pour changer les fûts pendant l'absence (s'il y en a de quoi)
+  if (g.beers.some((b) => b.kegs.length) && !g.barmanOn && g.money >= g.barmanCost * 10 && g.hireBarman().ok) buy('Barman', g.barmanCost);
   // avant de partir, on remplit la file de brassins (en bouteilles, la gamme à tour de rôle)
   for (let i = 0; g.beers.length && g.planRoom > 0 && i < 500; i++) g.planBrew(g.beers[i % g.beers.length]!.id, 'bottle');
 }

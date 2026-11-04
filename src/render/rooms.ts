@@ -903,6 +903,8 @@ export class BarRoom extends Room {
 
   /** Gaston au comptoir, qui essuie un verre. */
   private drawBartender(game: Game, lv: number, t: number): void {
+    // le barman en renfort, gilet sombre et nœud papillon, de l'autre côté des tireuses
+    if (game.barmanOn) this.drawHelper(game, lv === 1 ? 26 : 16, t);
     const px = painter(this.g);
     const x = lv === 1 ? 106 : 128;
     const y = COUNTER.top - 26;
@@ -917,6 +919,22 @@ export class BarRoom extends Room {
       px(x + 10 + k, y + 14, 4, 6, '#c8f0e8');
       px(x + 9 + k, y + 16, 2, 3, '#e0a77f');
     }
+  }
+
+  /** Barman embauché en renfort. */
+  private drawHelper(game: Game, x: number, t: number): void {
+    const px = painter(this.g);
+    const y = COUNTER.top - 26;
+    px(x + 1, y, 8, 3, '#4a2a14');
+    px(x + 1, y + 3, 8, 7, '#c98563');
+    px(x + 2, y + 5, 1, 1, '#2b2135'); px(x + 6, y + 5, 1, 1, '#2b2135');
+    px(x - 1, y + 10, 12, 16, '#2c283a');
+    px(x + 3, y + 10, 4, 16, '#f3efe6');
+    px(x + 3, y + 10, 4, 2, '#b83a24');
+    // il essuie un verre
+    const k = Math.round(Math.sin(t * 3) * 1.5);
+    px(x + 10, y + 13 + k, 4, 5, '#c8f0e8');
+    px(x + 9, y + 15 + k, 2, 3, '#c98563');
   }
 
   /**

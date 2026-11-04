@@ -1,7 +1,7 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
-import { AD, BAR, BAR_EVENTS, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type BarEventId, type ShopItemId } from '../core/market';
+import { AD, BAR, BAR_EVENTS, BARMAN, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
@@ -170,6 +170,7 @@ export class App {
   private brewBtn = fab('brew', 'Brasser');
   private rangeBtn = fab('range', 'Ma gamme');
   private eventsBtn = fab('events', 'Événements');
+  private barmanBtn = fab('barman', 'Barman en renfort');
   /** Bouton d'amélioration (flèche vers le haut) à gauche du nom de chaque pièce. */
   private ups: Record<RoomId, HTMLButtonElement> = { workshop: upBtn('Améliorer la brasserie'), storage: upBtn('Agrandir le stockage'), bar: upBtn('Agrandir le bar') };
   private shopKey = '';
@@ -317,6 +318,7 @@ export class App {
     this.rangeBtn.onclick = () => this.open({ kind: 'range' });
     this.brewBtn.onclick = () => this.open({ kind: 'brew' });
     this.eventsBtn.onclick = () => this.openEvents();
+    this.barmanBtn.onclick = () => this.openBarman();
     this.setBottom();
 
     // Gaston
@@ -468,6 +470,10 @@ export class App {
     const eventReady = !g.partying && g.time >= g.partyReadyAt;
     setFab(this.eventsBtn, g.partying ? clock(g.partyUntil - g.time) : '', g.partying ? 'alert' : '', g.partying ? `${g.barEvent.name} en cours` : 'Événements');
     this.eventsBtn.classList.toggle('dim', !g.partying && !eventReady);
+    // barman : temps restant de son contrat ; le bouton s'allume quand un fût attend d'être branché
+    const left = g.barmanUntil - g.time;
+    setFab(this.barmanBtn, g.barmanOn ? (left >= 3600 ? `${Math.ceil(left / 3600)} h` : `${Math.ceil(left / 60)} min`) : '',
+      g.barmanOn ? 'alert' : emptyTap && kegsReady ? 'ready' : '', g.barmanOn ? `Barman en renfort : encore ${duration(left)}` : 'Embaucher un barman');
     // améliorations possibles : la flèche brille
     const stationUp = STATION_ORDER.some((id) => g.level(id) < MAX_LEVEL && g.money >= g.upgradeCost(id));
     const nextStore = STORAGE[g.storageLevel];
@@ -1237,6 +1243,29 @@ export class App {
     } else body.append(h('p', 'note', 'Niveau maximal'));
   }
 
+  /** Barman en renfort : 8 h à rebrancher les fûts vides, à renouveler. */
+  openBarman(): void {
+    const g = this.game();
+    const card = this.modalCard('Barman en renfort');
+    const head = h('div', 'event-head');
+    head.append(iconCanvas('barman', 2), h('p', 'hint', `Pendant ${BARMAN.duration / 3600} h, il rebranche tout seul les fûts vides avec ceux du stockage, même quand tu n'es pas là. Pense à renouveler son contrat.`));
+    card.append(head);
+    const kegs = g.beers.reduce((s, b) => s + b.kegs.length, 0);
+    card.append(h('div', g.barmanOn ? 'note' : 'stats-line', g.barmanOn ? `En poste encore ${duration(g.barmanUntil - g.time)}` : 'Pas de barman en renfort'));
+    card.append(h('div', kegs ? 'stats-line strong' : 'note bad', `Fûts pleins au stockage : ${kegs}`));
+    const cost = g.barmanCost;
+    const tooLong = Math.max(g.time, g.barmanUntil) + BARMAN.duration - g.time > BARMAN.maxAhead;
+    const go = this.btn('btn primary big', tooLong ? 'Contrat déjà prolongé au maximum (24 h)' : `${g.barmanOn ? 'Prolonger de 8 h' : 'Embaucher pour 8 h'} · ${moneyInt(cost)}`, () => {
+      const r = g.hireBarman();
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      this.toast(g.barmanUntil - g.time > BARMAN.duration + 1 ? 'Contrat prolongé' : 'Barman embauché !', 'good');
+      this.onSent?.();
+      this.closeModal();
+    });
+    go.disabled = tooLong || g.money < cost;
+    card.append(go, this.btn('btn', 'Fermer', () => this.closeModal()));
+  }
+
   /** Les événements du bar : la fête, puis ceux qu'on débloque en achetant des objets au magasin. */
   openEvents(): void {
     const g = this.game();
@@ -1260,7 +1289,8 @@ export class App {
       const item = ev.needs ? SHOP_ITEMS.find((x) => x.id === ev.needs) : undefined;
       if (item && !g.owns(item.id)) {
         el.classList.add('locked');
-        el.append(this.btn('btn small', `🔒 Achète « ${item.name} » au magasin`, () => {
+        const next = g.nextItem;
+        el.append(this.btn('btn small', next?.id === item.id ? `🔒 Achète « ${item.name} » au magasin` : `🔒 Après « ${next?.name} »`, () => {
           this.closeModal();
           this.goView('shop');
         }));
@@ -1546,7 +1576,7 @@ export class App {
 
   /** Les boutons flottants proposent les actions de la pièce affichée (l'action principale en bas). */
   private setBottom(): void {
-    const btns = this.view === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.view === 'bar' ? [this.eventsBtn] : [];
+    const btns = this.view === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.view === 'bar' ? [this.barmanBtn, this.eventsBtn] : [];
     this.fabs.replaceChildren(...btns);
     this.fabs.classList.toggle('hidden', !btns.length || !!this.openSheet);
   }
@@ -2028,7 +2058,7 @@ export class App {
 
   /** Le magasin : des objets pour le bar (ils débloquent des événements), et bientôt des décorations. */
   private shopPage(g: Game): void {
-    const key = JSON.stringify([g.owned, SHOP_ITEMS.map((x) => g.money >= x.cost)]);
+    const key = JSON.stringify([g.owned, g.money >= (g.nextItem?.cost ?? 0)]);
     if (key === this.shopKey) return;
     this.shopKey = key;
     const page = this.pages.shop;
@@ -2036,12 +2066,13 @@ export class App {
     page.replaceChildren(h('div', 'page-title', 'Magasin'));
     page.append(h('div', 'section-title', 'Pour le bar'));
     const items = h('div', 'shop-grid');
-    for (const item of SHOP_ITEMS) {
-      const owned = g.owns(item.id);
-      const c = h('div', `card shop-item${owned ? ' owned' : ''}`);
+    // un seul objet en vente : le suivant de la série (cible, télé, boule à facettes) ; ceux qu'on a ne s'affichent plus
+    const item = g.nextItem;
+    if (!item) page.append(h('p', 'note', 'Ton bar est entièrement équipé : tous les événements sont débloqués.'));
+    if (item) {
+      const c = h('div', 'card shop-item');
       c.append(iconCanvas(ITEM_ICON[item.id], 3), h('div', 'beer-name', item.name), h('div', 'hint', item.text));
-      if (owned) c.append(h('span', 'note', '✓ Achetée'));
-      else {
+      {
         const b = this.btn('btn primary small', `Acheter · ${moneyInt(item.cost)}`, () => {
           const r = g.buyItem(item.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
@@ -2055,6 +2086,12 @@ export class App {
         c.append(b);
       }
       items.append(c);
+      // l'objet suivant reste une surprise
+      if (SHOP_ITEMS.indexOf(item) < SHOP_ITEMS.length - 1) {
+        const next = h('div', 'card shop-item locked');
+        next.append(h('div', 'shop-icon', '❓'), h('div', 'beer-name', 'Objet suivant'), h('div', 'hint', 'Se débloque avec cet achat'));
+        items.append(next);
+      }
     }
     page.append(items, h('div', 'section-title', 'Bientôt'));
     const grid = h('div', 'shop-grid');

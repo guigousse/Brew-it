@@ -319,18 +319,20 @@ describe('jeu', () => {
     expect(back.salesMinutes()[59]!.wholesale).toBeGreaterThan(0);
   });
 
-  it('une fête : 50 fois plus de clients pendant 30 min, les fûts vides sont rebranchés avec ceux du stockage', () => {
+  it('une fête : 60 fois plus de clients pendant 45 min, les fûts vides sont rebranchés avec ceux du stockage', () => {
     const g = withBeer(1e4);
     const beer = g.beers[0]!;
     beer.pop = 0.5;
     beer.kegs = [20, 20, 20, 20, 20];
     const normal = g.barRate;
     expect(g.startParty().ok).toBe(false); // il faut d'abord la boule à facettes
-    expect(g.buyItem('disco').ok).toBe(true);
+    expect(g.buyItem('disco').ok).toBe(false); // les objets s'achètent dans l'ordre
+    g.money = 1e6;
+    for (const id of ['darts', 'tv', 'disco'] as const) expect(g.buyItem(id).ok).toBe(true);
     expect(g.startParty().ok).toBe(true);
     expect(g.taps[0]!.glasses).toBe(20); // un fût est branché d'office
     expect(g.barRate).toBeCloseTo(normal * PARTY.mult);
-    run(g, 30 * 60 + 1);
+    run(g, PARTY.duration + 1);
     expect(beer.kegs.length).toBe(0); // la fête a vidé tous les fûts prévus
     expect(g.partying).toBe(false);
     expect(g.startParty().ok).toBe(false); // il faut attendre avant la suivante
@@ -341,8 +343,12 @@ describe('jeu', () => {
   it('événements du bar : la soirée foot et le tournoi de fléchettes se débloquent au magasin', () => {
     const g = withBeer(1e5);
     expect(g.startEvent('foot').ok).toBe(false); // pas de télé
+    expect(g.buyItem('tv').ok).toBe(false); // la cible d'abord
+    expect(g.nextItem?.id).toBe('darts');
+    expect(g.buyItem('darts').ok).toBe(true);
+    expect(g.buyItem('darts').ok).toBe(false); // déjà achetée
     expect(g.buyItem('tv').ok).toBe(true);
-    expect(g.buyItem('tv').ok).toBe(false); // déjà achetée
+    expect(g.nextItem?.id).toBe('disco');
     const money = g.money;
     expect(g.startEvent('foot').ok).toBe(true);
     expect(money - g.money).toBe(g.eventCost('foot'));
@@ -352,6 +358,23 @@ describe('jeu', () => {
     const back = Game.fromJSON(JSON.parse(JSON.stringify(g)));
     expect(back.owns('tv')).toBe(true);
     expect(back.eventId).toBe('foot');
+  });
+
+  it('barman en renfort : 8 h à rebrancher les fûts tout seul, à renouveler', () => {
+    const g = withBeer(1e5);
+    const beer = g.beers[0]!;
+    beer.kegs = [20, 20, 20];
+    expect(g.hireBarman().ok).toBe(true);
+    expect(g.barmanOn).toBe(true);
+    expect(g.taps[0]!.glasses).toBe(20); // il branche un fût d'office
+    g.taps[0]!.glasses = 0;
+    g.step();
+    expect(g.taps[0]!.glasses).toBeGreaterThan(0); // et rebranche le suivant
+    expect(g.hireBarman().ok).toBe(true); // prolongé : 16 h
+    expect(g.hireBarman().ok).toBe(true); // 24 h
+    expect(g.hireBarman().ok).toBe(false); // pas plus de 24 h d'avance
+    g.time += 24 * 3600 + 1;
+    expect(g.barmanOn).toBe(false);
   });
 
   it('une campagne de pub rend la gamme plus populaire', () => {

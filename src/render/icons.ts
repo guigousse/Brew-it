@@ -157,6 +157,25 @@ const GRIDS = {
     '.....kkkkkk.....',
     '................',
   ],
+  // barman : chemise blanche, gilet, nœud papillon, un torchon sur l'épaule
+  barman: [
+    '.....kkkkkk.....',
+    '....kBBBBBBk....',
+    '....kbbbbbbk....',
+    '....khhhhhhk....',
+    '....khkhhkhk....',
+    '....khhhhhhk....',
+    '.....khrrhk.....',
+    '...kkkwRRwkkk...',
+    '..kSkwwkkwwkSk..',
+    '..kSSkwwwwkSSkk.',
+    '..kSSkwwwwkSSkek',
+    '..kSSkwwwwkSSkek',
+    '..khkkwwwwkkhkk.',
+    '....kSSkkSSk....',
+    '....kSSk.kSSk...',
+    '....kkk...kkk...',
+  ],
   // boule à facettes (fête)
   disco: [
     '.......kk.......',
