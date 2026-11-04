@@ -115,6 +115,23 @@ describe('jeu', () => {
     expect(g.plan).toEqual([{ beerId: g.beers[0]!.id, format: 'bottle', count: 1 }]);
   });
 
+  it('lancement anticipé : un brassin ne part que s\'il ne devra attendre devant aucun appareil, sans perdre de cadence', () => {
+    const g = withBeer(1e5);
+    runUntil(g, () => g.batches.length === 0);
+    g.planBrew(g.beers[0]!.id, 'bottle', 6);
+    let blocked = 0;
+    const t0 = g.time;
+    for (let i = 0; i < 20 * 4000 && (g.planned > 0 || g.batches.length > 0); i++) {
+      g.step();
+      blocked += g.batches.filter((b) => b.waiting && b.stage < STATION_ORDER.length - 1).length;
+    }
+    expect(g.planned).toBe(0);
+    expect(blocked).toBe(0); // aucun appareil n'a gardé un brassin fini en attendant le suivant
+    // la cadence reste celle du goulot : 6 brassins en à peine plus de 6 passages dans l'appareil le plus lent
+    const slowest = (15 / g.productionRate(g.beers[0]!.recipe)) * 60;
+    expect(g.time - t0).toBeLessThan(slowest * 6 + 600);
+  });
+
   it('la file de brassins : des groupes bière × format × nombre, limités selon le niveau de la brasserie', () => {
     const g = withBeer(1e5);
     runUntil(g, () => g.batches.length === 0);

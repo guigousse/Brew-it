@@ -517,6 +517,56 @@ export class Game {
     return Math.max(0, this.planCap - this.planned);
   }
 
+  /** Prochain instant où l'on revérifie si un brassin peut partir sans attendre (le calcul n'est pas refait à chaque image). */
+  private launchCheckAt = 0;
+
+  /**
+   * Lancement anticipé, comme un vrai brasseur : on ne lance un brassin que s'il pourra aller jusqu'au bout sans
+   * attendre nulle part. On prévoit le trajet des brassins déjà sur la ligne et du nouveau, appareil par appareil
+   * (cuves comprises) ; si le nouveau devait patienter devant un appareil occupé, il reste dans la file.
+   * Résultat : plus d'appareil bloqué par un brassin en attente, et la même cadence (le goulot ne chôme pas).
+   */
+  private smoothLaunch(recipe: Recipe, format: Format): boolean {
+    if (this.time < this.launchCheckAt) return false;
+    const last = STATION_ORDER.length - 1;
+    const liters = this.batchLiters;
+    const dur = (r: Recipe, f: Format, l: number, s: number) => {
+      const id = STATION_ORDER[s]!;
+      const d = stationDuration(id, r, this.level(id), l);
+      return id === 'bottling' && f === 'keg' ? d * 0.5 : d;
+    };
+    type Slot = { stage: number; left: number; r: Recipe; f: Format; l: number; mine?: boolean };
+    const line: Slot[] = this.batches.map((b) => ({
+      stage: b.stage,
+      // un essai qui attend d'être goûté reste sur la ligne : rien ne passera derrière lui avant
+      left: this.awaitingTaste(b) ? Infinity : b.waiting ? 0 : Math.max(0, b.duration - b.elapsed),
+      r: b.recipe, f: b.format, l: b.liters,
+    }));
+    const me: Slot = { stage: 0, left: dur(recipe, format, liters, 0), r: recipe, f: format, l: liters, mine: true };
+    line.push(me);
+    const cap = STATION_ORDER.map((id) => this.tankCount(id));
+    const count = (s: number) => line.reduce((n, x) => n + (x.stage === s ? 1 : 0), 0);
+    let ok = true;
+    for (let t = 0; t < 24 * 3600; t++) {
+      line.sort((a, b) => b.stage - a.stage);
+      for (let i = 0; i < line.length; i++) {
+        const x = line[i]!;
+        if (x.left > 0) { x.left -= 1; if (x.left > 0) continue; }
+        if (x.stage === last) { line.splice(i--, 1); continue; }
+        if (count(x.stage + 1) >= cap[x.stage + 1]!) {
+          if (x.mine) { ok = false; break; } // le nouveau brassin devrait attendre : on ne le lance pas encore
+          continue;
+        }
+        x.stage++;
+        x.left = dur(x.r, x.f, x.l, x.stage);
+        if (x.mine && x.stage === last) return true;
+      }
+      if (!ok || !line.includes(me)) break;
+    }
+    if (!ok) this.launchCheckAt = this.time + 5;
+    return ok;
+  }
+
   private launch(recipe: Recipe, beerId: number | null, format: Format = 'bottle'): void {
     const liters = this.batchLiters;
     if (beerId == null) format = 'bottle';
@@ -950,11 +1000,13 @@ export class Game {
       const next = this.plan[0];
       const planned = next && this.beer(next.beerId);
       if (this.queued) {
-        this.queued = false;
-        this.brew();
+        if (this.smoothLaunch(this.recipe, 'bottle')) {
+          this.queued = false;
+          this.brew();
+        }
       } else if (planned && next) {
-        // brassin programmé : il attend l'argent et la place nécessaires
-        if ((this.money >= this.brewCost(planned.recipe, this.batchLiters, next.format) || this.broke) && this.roomFor(next.format)) {
+        // brassin programmé : il attend l'argent, la place nécessaire, et que son trajet soit libre
+        if ((this.money >= this.brewCost(planned.recipe, this.batchLiters, next.format) || this.broke) && this.roomFor(next.format) && this.smoothLaunch(planned.recipe, next.format)) {
           if (--next.count <= 0) this.plan.shift();
           this.launch(planned.recipe, planned.id, next.format);
         }
