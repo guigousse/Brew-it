@@ -9,6 +9,12 @@ const EMBLEM_PIXELS: Record<Exclude<Label['emblem'], 'none'>, string[]> = {
   crown: ['#...#...#', '##.###.##', '#########', '#########', '#.#.#.#.#', '#########', '.........', '.........', '.........'],
   anchor: ['...###...', '...#.#...', '...###...', '....#....', '.#######.', '....#....', '#...#...#', '.#..#..#.', '..#####..'],
   mountain: ['.........', '....#....', '...###...', '..##.##..', '..#...#..', '.#.....#.', '#..#....#', '#.###...#', '#########'],
+  leaf: ['.......##', '.....####', '...######', '..####.##', '.####.###', '.###.####', '.##.####.', '.#.####..', '#........'],
+  bee: ['..#...#..', '...#.#...', '.#######.', '#.#.#.#.#', '#########', '#.#.#.#.#', '.#######.', '...###...', '....#....'],
+  sun: ['....#....', '.#..#..#.', '..#####..', '..#####..', '#########', '..#####..', '..#####..', '.#..#..#.', '....#....'],
+  fish: ['.........', '..####...', '.######.#', '##.#####.', '########.', '.######.#', '..####...', '.........', '.........'],
+  castle: ['#.#...#.#', '###...###', '###.#.###', '#########', '#########', '###...###', '###...###', '###...###', '#########'],
+  skull: ['..#####..', '.#######.', '#########', '#..#.#..#', '#..#.#..#', '#########', '.###.###.', '..#.#.#..', '..#####..'],
 };
 
 const FONT_FAMILY: Record<Label['font'], string> = {
@@ -30,6 +36,20 @@ function shapePath(g: CanvasRenderingContext2D, shape: Label['shape'], w: number
       g.moveTo(0, h * 0.15); g.lineTo(w * 0.08, 0); g.lineTo(w * 0.92, 0); g.lineTo(w, h * 0.15); g.lineTo(w * 0.94, h / 2); g.lineTo(w, h * 0.85);
       g.lineTo(w * 0.92, h); g.lineTo(w * 0.08, h); g.lineTo(0, h * 0.85); g.lineTo(w * 0.06, h / 2);
       break;
+    case 'round': {
+      const r = Math.min(w, h) * 0.22;
+      g.roundRect(0, 0, w, h, r);
+      break;
+    }
+    case 'arch':
+      g.moveTo(0, h); g.lineTo(0, h * 0.42); g.ellipse(w / 2, h * 0.42, w / 2, h * 0.42, 0, Math.PI, 0); g.lineTo(w, h);
+      break;
+    case 'notched': {
+      const r = Math.min(w, h) * 0.2;
+      g.moveTo(r, 0); g.lineTo(w - r, 0); g.arc(w, 0, r, Math.PI, Math.PI / 2, true); g.lineTo(w, h - r); g.arc(w, h, r, -Math.PI / 2, Math.PI, true);
+      g.lineTo(r, h); g.arc(0, h, r, 0, -Math.PI / 2, true); g.lineTo(0, r); g.arc(0, 0, r, Math.PI / 2, 0, true);
+      break;
+    }
     default:
       g.rect(0, 0, w, h);
   }
@@ -56,6 +76,28 @@ function pattern(g: CanvasRenderingContext2D, l: Label, w: number, h: number, un
       break;
     case 'checks':
       for (let y = 0; y < h; y += u * 3) for (let x = 0; x < w; x += u * 3) if (((x + y) / (u * 3)) % 2 === 0) g.fillRect(x, y, u * 3, u * 3);
+      break;
+    case 'zigzag':
+      for (let y = 0; y < h; y += u * 6) for (let x = 0; x < w; x += u) g.fillRect(x, y + Math.abs(((x / u) % 6) - 3) * u, u, u);
+      break;
+    case 'scales':
+      for (let y = 0, row = 0; y < h + u * 4; y += u * 3, row++) for (let x = (row % 2) * u * 3 - u * 3; x < w; x += u * 6) {
+        g.beginPath(); g.arc(x + u * 3, y, u * 3, 0, Math.PI); g.lineTo(x + u * 2, y); g.arc(x + u * 3, y, u * 2, Math.PI, 0, true); g.fill();
+      }
+      break;
+    case 'herringbone':
+      for (let y = 0; y < h; y += u * 4) for (let x = 0; x < w; x += u * 4) {
+        const up = ((x / (u * 4)) % 2) === 0;
+        for (let k = 0; k < 4; k++) g.fillRect(x + k * u, y + (up ? 3 - k : k) * u, u, u);
+      }
+      break;
+    case 'tartan':
+      g.globalAlpha = 0.45;
+      for (let x = 0; x < w; x += u * 10) g.fillRect(x, 0, u * 4, h);
+      for (let y = 0; y < h; y += u * 10) g.fillRect(0, y, w, u * 4);
+      g.globalAlpha = 1;
+      for (let x = u * 7; x < w; x += u * 10) g.fillRect(x, 0, u, h);
+      for (let y = u * 7; y < h; y += u * 10) g.fillRect(0, y, w, u);
       break;
     case 'rays':
       g.save();

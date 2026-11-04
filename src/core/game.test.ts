@@ -588,3 +588,121 @@ describe('jeu', () => {
     expect(openTypes(g.breweryLevel, 1).some((c) => c.id === 'caviste')).toBe(true);
   });
 });
+
+describe('boosts', () => {
+  it('cadence ×2 : les machines finissent leur étape deux fois plus vite', () => {
+    const slow = withBeer(1e6);
+    const fast = withBeer(1e6);
+    expect(fast.buyBoost('cadence').ok).toBe(true);
+    slow.planBrew(slow.beers[0]!.id, 'bottle', 1);
+    fast.planBrew(fast.beers[0]!.id, 'bottle', 1);
+    run(slow, 120);
+    run(fast, 120);
+    const at = (g: Game) => Math.max(...g.batches.map((b) => b.stage * 1e6 + b.elapsed));
+    expect(at(fast)).toBeGreaterThan(at(slow));
+    expect(fast.boostMult('brew')).toBe(2);
+    expect(fast.stageMult('fermenter')).toBe(2);
+  });
+
+  it('un même boost se prolonge, un autre du même canal attend', () => {
+    const g = withBeer(1e7);
+    expect(g.buyBoost('rush').ok).toBe(true);
+    const until = g.boostOf('brew')!.until;
+    expect(g.buyBoost('rush').ok).toBe(true);
+    expect(g.boostOf('brew')!.until).toBe(until + 15 * 60);
+    expect(g.buyBoost('cadence').ok).toBe(false);
+    // la levure express a son propre canal
+    expect(g.buyBoost('yeast').ok).toBe(true);
+    expect(g.stageMult('fermenter')).toBe(6);
+    expect(g.stageMult('mill')).toBe(2);
+  });
+
+  it('son prix suit la production, sans descendre sous le plancher', () => {
+    const g = withBeer(1e6);
+    const cost = g.boostCost('cadence');
+    expect(cost).toBeGreaterThanOrEqual(15);
+    expect(g.boostCost('nightShift')).toBeGreaterThan(cost);
+    expect(g.boostCost('ad')).toBe(g.adCost);
+  });
+
+  it('happy hour : deux fois plus de clients, des verres moins chers ; le grossiste généreux paie plus', () => {
+    const g = withBeer(1e6);
+    const rate = g.barRate;
+    g.buyBoost('happyHour');
+    expect(g.barRate).toBeCloseTo(rate * 2);
+    expect(g.barPriceMult).toBeCloseTo(0.8);
+    g.beers[0]!.stock = 10;
+    const before = g.money;
+    g.sellWholesale(g.beers[0]!.id, 1);
+    const normal = g.money - before;
+    g.buyBoost('broker');
+    const mid = g.money;
+    g.sellWholesale(g.beers[0]!.id, 1);
+    expect(g.money - mid).toBeCloseTo(normal * 1.5);
+  });
+
+  it('prospection : une commande arrive tout de suite', () => {
+    const g = withBeer(1e6);
+    g.orders = [];
+    expect(g.buyBoost('prospect').ok).toBe(true);
+    expect(g.orders.length).toBe(1);
+  });
+});
+
+describe('personnel', () => {
+  it('les postes dépendent du niveau de la brasserie', () => {
+    const g = withBeer(1e6);
+    expect(g.staffSlots).toBe(1);
+    expect(g.hire('courier').ok).toBe(true);
+    expect(g.hire('apprentice').ok).toBe(false); // un seul poste au niveau 1
+    expect(g.hire('courier').ok).toBe(true); // prolonger reste possible
+    for (const id of STATION_ORDER) g.stations[id] = { level: 3 };
+    expect(g.staffSlots).toBe(2);
+    expect(g.hire('apprentice').ok).toBe(true);
+  });
+
+  it('le livreur envoie les commandes remplissables', () => {
+    const g = withBeer(1e6);
+    g.beers[0]!.stock = 500;
+    g.orders = [{ ...drawOrder(999, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'classic', qty: 12, minQuality: 0 } as Order];
+    expect(g.readyOrders.length).toBe(1);
+    g.hire('courier');
+    run(g, 40);
+    expect(g.orders.find((o) => o.id === 999)).toBeUndefined();
+  });
+
+  it("l'apprenti reprogramme le dernier brassin quand la file est vide", () => {
+    const g = withBeer(1e6);
+    g.planBrew(g.beers[0]!.id, 'bottle', 1);
+    g.plan = [];
+    g.hire('apprentice');
+    run(g, 10);
+    expect(g.planned + g.batches.length).toBeGreaterThan(0);
+  });
+});
+
+describe('mobilier et étiquettes', () => {
+  it('le mobilier se débloque dans l\'ordre et agit sur le bar', () => {
+    const g = withBeer(1e7);
+    expect(g.buyFurniture('neon').ok).toBe(false);
+    const rate = g.barRate;
+    for (const id of ['plants', 'posters', 'neon', 'benches', 'jukebox'] as const) expect(g.buyFurniture(id).ok).toBe(true);
+    expect(g.barRate).toBeCloseTo(rate * 1.05 * 1.15 * 1.1);
+    expect(g.barSeats).toBe(g.bar.seats + 2);
+    expect(g.barPriceMult).toBeCloseTo(1.1);
+  });
+
+  it('les déblocages d\'étiquettes s\'achètent et sont sauvegardés', () => {
+    const g = withBeer(1e6);
+    expect(g.isUnlocked('emblem', 'hop')).toBe(true);
+    expect(g.isUnlocked('emblem', 'bee')).toBe(false);
+    expect(g.buyUnlock('emblem:bee').ok).toBe(true);
+    expect(g.isUnlocked('emblem', 'bee')).toBe(true);
+    g.buyBoost('cadence');
+    g.hire('courier');
+    const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
+    expect(back.isUnlocked('emblem', 'bee')).toBe(true);
+    expect(back.boostMult('brew')).toBe(2);
+    expect(back.staffOn('courier')).toBe(true);
+  });
+});

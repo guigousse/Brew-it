@@ -9,7 +9,9 @@ export type GameEvent =
   | { type: 'trend'; id: string }
   | { type: 'upgraded'; station: string; level: number }
   | { type: 'breweryLevel'; level: number }
-  | { type: 'batchRuined'; beerId: number };
+  | { type: 'batchRuined'; beerId: number }
+  | { type: 'autoSent'; client: string; amount: number }
+  | { type: 'apprenticePlanned'; beerId: number };
 
 type Listener = (e: GameEvent) => void;
 

@@ -8,6 +8,7 @@ import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
+import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, BOOST_MIN_COST, BOOST_PRICE_SHARE, boostById, COURIER_COST, COURIER_ROUND_S, FURNITURE, nicePrice, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -184,6 +185,18 @@ export class Game {
   barmanUntil = 0;
   /** Fin de la campagne de pub en cours. */
   adUntil = 0;
+  /** Boosts en cours, un par canal (brasserie, levure, bar, grossiste). */
+  boosts: Partial<Record<BoostChannel, { id: BoostId; until: number }>> = {};
+  /** Fin des contrats du livreur et de l'apprenti (le barman a le sien : barmanUntil). */
+  staffUntil: { courier: number; apprentice: number } = { courier: 0, apprentice: 0 };
+  /** Mobilier du bar, dans l'ordre d'achat. */
+  furniture: FurnitureId[] = [];
+  /** Formes de bouteille, d'étiquette, logos et motifs débloqués (`kind:value`). */
+  unlocked: string[] = [];
+  /** Dernier brassin programmé : l'apprenti le reprogramme quand la file se vide. */
+  lastPlan: { beerId: number; format: Format } | null = null;
+  private courierClock = 0;
+  private apprenticeClock = 0;
   barSold = 0;
   barRevenue = 0;
   /** Commandes en attente sur l'ordinateur. */
@@ -412,6 +425,7 @@ export class Game {
     const last = this.plan[this.plan.length - 1];
     if (last && last.beerId === beerId && last.format === format) last.count += count;
     else this.plan.push({ beerId, format, count });
+    this.lastPlan = { beerId, format };
     return { ok: true };
   }
 
@@ -737,7 +751,13 @@ export class Game {
   /** Clients par minute : 1 toutes les 10 minutes au début, plus avec la popularité, le niveau du bar et la variété. */
   get barRate(): number {
     const beers = new Set(this.flowing.map((t) => t.beerId)).size;
-    return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers)) * (this.partying ? this.barEvent.mult : 1);
+    return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers)) * (this.partying ? this.barEvent.mult : 1)
+      * this.boostMult('bar') * this.furnitureMult('clients');
+  }
+
+  /** Places du bar, banquettes comprises. */
+  get barSeats(): number {
+    return this.bar.seats + FURNITURE.reduce((s, f) => s + (this.hasFurniture(f.id) ? f.seats ?? 0 : 0), 0);
   }
 
   /** L'événement en cours (ou le dernier organisé). */
@@ -791,12 +811,184 @@ export class Game {
 
   /** Embauche (ou prolonge) le barman pour 8 h, jusqu'à 24 h d'avance. */
   hireBarman(): CommandResult {
-    const from = Math.max(this.time, this.barmanUntil);
-    if (from + BARMAN.duration - this.time > BARMAN.maxAhead) return { ok: false, reason: 'Contrat déjà assez long' };
-    if (this.money < this.barmanCost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= this.barmanCost;
-    this.barmanUntil = from + BARMAN.duration;
-    this.refillTaps();
+    return this.hire('barman');
+  }
+
+  // ------------------------------------------------------------------ personnel
+
+  /** Postes de personnel : 1 au début, jusqu'à 3 selon le niveau de la brasserie. */
+  get staffSlots(): number {
+    return STAFF_SLOTS[this.breweryLevel - 1] ?? STAFF_SLOTS[0];
+  }
+
+  /** Fin du contrat d'un employé (s de jeu). */
+  staffEnd(id: StaffId): number {
+    return id === 'barman' ? this.barmanUntil : this.staffUntil[id];
+  }
+
+  staffOn(id: StaffId): boolean {
+    return this.time < this.staffEnd(id);
+  }
+
+  /** Postes occupés. */
+  get staffBusy(): number {
+    return (['barman', 'courier', 'apprentice'] as const).filter((id) => this.staffOn(id)).length;
+  }
+
+  staffCost(id: StaffId): number {
+    if (id === 'barman') return this.barmanCost;
+    const table = id === 'courier' ? COURIER_COST : APPRENTICE_COST;
+    return table[this.breweryLevel - 1] ?? table[0];
+  }
+
+  /** Embauche (ou prolonge) un employé pour 8 h, jusqu'à 24 h d'avance ; il faut un poste libre pour un nouveau. */
+  hire(id: StaffId): CommandResult {
+    const on = this.staffOn(id);
+    if (!on && this.staffBusy >= this.staffSlots) return { ok: false, reason: `Plus de poste libre (${this.staffSlots}) : la brasserie en ouvre d'autres en grandissant` };
+    const from = Math.max(this.time, this.staffEnd(id));
+    if (from + STAFF_CONTRACT.duration - this.time > STAFF_CONTRACT.maxAhead) return { ok: false, reason: 'Contrat déjà assez long' };
+    const cost = this.staffCost(id);
+    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= cost;
+    if (id === 'barman') {
+      this.barmanUntil = from + BARMAN.duration;
+      this.refillTaps();
+    } else this.staffUntil[id] = from + STAFF_CONTRACT.duration;
+    return { ok: true };
+  }
+
+  /** Le livreur envoie les commandes remplissables ; l'apprenti reprogramme le dernier brassin quand la file est vide. */
+  private tickStaff(dt: number): void {
+    if (this.staffOn('courier') && (this.courierClock += dt) >= COURIER_ROUND_S) {
+      this.courierClock = 0;
+      for (const o of this.readyOrders) {
+        const r = this.fulfill(o.id, this.autoPick(o));
+        if (r.ok) this.events.emit({ type: 'autoSent', client: o.client, amount: r.amount! });
+      }
+    }
+    if (this.staffOn('apprentice') && (this.apprenticeClock += dt) >= APPRENTICE_CHECK_S) {
+      this.apprenticeClock = 0;
+      const last = this.lastPlan;
+      if (!this.plan.length && !this.queued && last && this.beer(last.beerId) && this.planBrew(last.beerId, last.format, 1).ok) {
+        this.events.emit({ type: 'apprenticePlanned', beerId: last.beerId });
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ boosts
+
+  /** Boost en cours sur un canal. */
+  boostOf(channel: BoostChannel): { id: BoostId; until: number } | null {
+    const b = this.boosts[channel];
+    return b && b.until > this.time ? b : null;
+  }
+
+  /** Multiplicateur d'un canal (1 sans boost). */
+  boostMult(channel: BoostChannel): number {
+    const b = this.boostOf(channel);
+    return b ? boostById(b.id)?.mult ?? 1 : 1;
+  }
+
+  /** Cadence d'une machine : le boost de brasserie, et la levure express pour la fermentation et la garde. */
+  stageMult(id: StationId): number {
+    return this.boostMult('brew') * (YEAST_STAGES.includes(id) ? this.boostMult('yeast') : 1);
+  }
+
+  /** Prix des verres : happy hour, juke-box. */
+  get barPriceMult(): number {
+    const b = this.boostOf('bar');
+    return (b ? boostById(b.id)?.priceMult ?? 1 : 1) * this.furnitureMult('price');
+  }
+
+  /** Ce que vaut une bouteille au plus bas (prix du grossiste de la meilleure bière). */
+  private get unitValue(): number {
+    return Math.max(wholesalePrice({ quality: 0.5 }), ...this.beers.filter((b) => b.tasting.quality >= DRINKABLE_MIN).map((b) => wholesalePrice(b.tasting)));
+  }
+
+  /** Prix d'un boost : une part de ce qu'il rapporte avec la production et le bar actuels, jamais sous un plancher. */
+  boostCost(id: BoostId): number {
+    const def = boostById(id);
+    if (!def) return Infinity;
+    if (id === 'ad') return this.adCost;
+    const min = BOOST_MIN_COST[this.breweryLevel - 1] ?? BOOST_MIN_COST[0];
+    const perMin = this.productionRate(); // bouteilles / min
+    let value = 0;
+    if (def.channel === 'brew') value = perMin * def.minutes * (def.mult - 1) * this.unitValue;
+    else if (def.channel === 'yeast') value = perMin * def.minutes * (def.mult - 1) * this.unitValue * 0.4;
+    else if (def.channel === 'bar') {
+      const best = [...this.beers].sort((a, c) => c.pop - a.pop)[0];
+      const glass = glassPrice(this.barLevel, best?.tasting ?? { quality: 0.5 } as Tasting, 0);
+      const rate = this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * this.furnitureMult('clients');
+      value = rate * def.minutes * glass * Math.max(0.3, def.mult * (def.priceMult ?? 1) - 1);
+    } else if (def.channel === 'wholesale') value = perMin * def.minutes * this.unitValue * (def.mult - 1) * 0.5;
+    else if (id === 'prospect') value = this.adCost * 0.6;
+    return nicePrice(Math.max(min, BOOST_PRICE_SHARE * value));
+  }
+
+  /** Achète un boost ; le même boost se prolonge (24 h d'avance au plus), un autre du même canal attend la fin. */
+  buyBoost(id: BoostId): CommandResult {
+    const def = boostById(id);
+    if (!def) return { ok: false, reason: 'Boost introuvable' };
+    if (id === 'ad') return this.advertise();
+    const cost = this.boostCost(id);
+    if (id === 'prospect') {
+      if (this.orders.length >= this.boardSlots) return { ok: false, reason: 'Le tableau des commandes est plein' };
+      if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+      this.money -= cost;
+      this.orderTimer = 0;
+      this.tickOrders(0);
+      return { ok: true };
+    }
+    const ch = def.channel!;
+    const cur = this.boostOf(ch);
+    if (cur && cur.id !== id) return { ok: false, reason: `« ${boostById(cur.id)?.name} » est déjà en cours` };
+    const from = cur ? cur.until : this.time;
+    if (from + def.minutes * 60 - this.time > BOOST_MAX_AHEAD) return { ok: false, reason: 'Déjà prolongé au maximum (24 h)' };
+    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= cost;
+    this.boosts[ch] = { id, until: from + def.minutes * 60 };
+    return { ok: true };
+  }
+
+  // ------------------------------------------------------------------ mobilier et étiquettes
+
+  hasFurniture(id: FurnitureId): boolean {
+    return this.furniture.includes(id);
+  }
+
+  /** Le prochain meuble en vente : chacun débloque le suivant. */
+  get nextFurniture() {
+    return FURNITURE.find((f) => !this.hasFurniture(f.id));
+  }
+
+  /** Produit des effets du mobilier sur les clients, le prix des verres ou la popularité. */
+  furnitureMult(k: 'clients' | 'price' | 'pop'): number {
+    return FURNITURE.reduce((m, f) => m * (this.hasFurniture(f.id) ? f[k] ?? 1 : 1), 1);
+  }
+
+  buyFurniture(id: FurnitureId): CommandResult {
+    const f = FURNITURE.find((x) => x.id === id);
+    if (!f) return { ok: false, reason: 'Meuble introuvable' };
+    if (this.hasFurniture(id)) return { ok: false, reason: 'Déjà installé' };
+    if (this.nextFurniture?.id !== id) return { ok: false, reason: `Il faut d'abord : ${this.nextFurniture?.name}` };
+    if (this.money < f.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= f.cost;
+    this.furniture.push(id);
+    return { ok: true };
+  }
+
+  /** Une forme, un logo ou un motif est-il disponible dans l'éditeur ? (ceux du départ le sont toujours) */
+  isUnlocked(kind: UnlockKind, value: string): boolean {
+    return !isLockable(kind, value) || this.unlocked.includes(`${kind}:${value}`);
+  }
+
+  buyUnlock(id: string): CommandResult {
+    const x = unlockById(id);
+    if (!x) return { ok: false, reason: 'Introuvable' };
+    if (this.unlocked.includes(id)) return { ok: false, reason: 'Déjà débloqué' };
+    if (this.money < x.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= x.cost;
+    this.unlocked.push(id);
     return { ok: true };
   }
 
@@ -996,7 +1188,7 @@ export class Game {
     n = Math.min(Math.floor(n), beer.stock);
     if (n <= 0) return { ok: false, reason: 'Rien à vendre' };
     if (beer.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable' };
-    const amount = n * wholesalePrice(beer.tasting);
+    const amount = n * wholesalePrice(beer.tasting) * this.boostMult('wholesale');
     beer.stock -= n;
     beer.sold += n;
     beer.revenue += amount;
@@ -1042,6 +1234,7 @@ export class Game {
     }
     this.sellBar(dt);
     this.tickOrders(dt);
+    this.tickStaff(dt);
     if (this.autoWholesale && (this.wholesaleClock += dt) >= 1) {
       this.wholesaleClock = 0;
       this.sellSurplus();
@@ -1056,11 +1249,12 @@ export class Game {
   private advance(b: Batch, dt: number): void {
     if (!b.waiting) {
       // Essai : la ligne remplit une seule bouteille, puis attend que le joueur la goûte et décide.
+      const fast = dt * this.stageMult(STATION_ORDER[b.stage]!);
       if (this.awaitingTaste(b)) {
-        b.elapsed = Math.min(b.elapsed + dt, b.duration / Math.max(1, b.bottles ?? 1));
+        b.elapsed = Math.min(b.elapsed + fast, b.duration / Math.max(1, b.bottles ?? 1));
         return;
       }
-      b.elapsed += dt;
+      b.elapsed += fast;
       if (b.elapsed < b.duration) return;
       b.waiting = true;
     }
@@ -1162,11 +1356,11 @@ export class Game {
       let tap = flowing[0]!;
       for (const t of flowing) if ((pick -= weight(t)) <= 0) { tap = t; break; }
       const beer = this.beer(tap.beerId)!;
-      const price = glassPrice(this.barLevel, beer.tasting, this.trendsOf(beer).length) * (this.partying ? this.barEvent.priceMult : 1);
+      const price = glassPrice(this.barLevel, beer.tasting, this.trendsOf(beer).length) * (this.partying ? this.barEvent.priceMult : 1) * this.barPriceMult;
       tap.glasses--;
       beer.sold++;
       beer.revenue += price;
-      beer.pop = gainPop(beer.pop, this.popTarget(beer), this.partying ? this.barEvent.popMult : 1, POP_PER_GLASS);
+      beer.pop = gainPop(beer.pop, this.popTarget(beer), (this.partying ? this.barEvent.popMult : 1) * this.furnitureMult('pop'), POP_PER_GLASS);
       this.totalSold++;
       this.totalRevenue += price;
       this.barSold++;
@@ -1273,7 +1467,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1335,6 +1529,11 @@ export class Game {
     // la fête demande désormais une boule à facettes : qui en a déjà organisé une la garde
     if (g.partyReadyAt > 0 && !g.owned.includes('disco')) g.owned.push('disco');
     g.adUntil ??= 0;
+    g.boosts ??= {};
+    g.staffUntil ??= { courier: 0, apprentice: 0 };
+    g.furniture ??= [];
+    g.unlocked ??= [];
+    g.lastPlan ??= null;
     g.queued ??= false;
     g.trial ??= null;
     return g;
