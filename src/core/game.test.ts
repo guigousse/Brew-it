@@ -441,7 +441,7 @@ describe('jeu', () => {
   it('prévision : le temps restant de la file, brassin par brassin, sans toucher à la partie', () => {
     const g = withBeer(1e5);
     runUntil(g, () => g.batches.length === 0);
-    expect(g.forecast()).toEqual({ ends: [], total: 0, done: true });
+    expect(g.forecast()).toEqual({ ends: [], total: 0, done: true, blocked: null });
     const id = g.beers[0]!.id;
     g.planBrew(id, 'bottle', 3);
     const before = JSON.stringify(g.toJSON());
@@ -456,6 +456,19 @@ describe('jeu', () => {
     expect(Math.abs(g.time - t0 - f.total)).toBeLessThan(f.total * 0.1 + 5);
     // avec 2 brassins de plus en fin de file, c'est plus long
     expect(g.forecast({ beerId: id, format: 'bottle', count: 2 }).ends).toHaveLength(2);
+  });
+
+  it('prévision : une file de fûts qui remplit le stockage est annoncée bloquée, sans tourner 24 h', () => {
+    const g = withBeer(1e5);
+    runUntil(g, () => g.batches.length === 0);
+    g.planBrew(g.beers[0]!.id, 'keg', 40); // 40 fûts : le stockage du début n'en tient qu'une dizaine
+    const t = performance.now();
+    const f = g.forecast();
+    expect(f.done).toBe(false);
+    expect(f.blocked).toBe('storage');
+    expect(f.ends.length).toBeGreaterThan(0);
+    expect(f.ends.length).toBeLessThan(40);
+    expect(performance.now() - t).toBeLessThan(2000);
   });
 
   it('production hors-ligne : les gains attendent la récolte, la sauvegarde les garde', async () => {

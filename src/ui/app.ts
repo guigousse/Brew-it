@@ -52,6 +52,22 @@ function roomTitle(up: HTMLButtonElement, plaque: HTMLElement): HTMLElement {
   return el;
 }
 
+/** Ce qu'on affiche à la place d'un temps quand la file ne se videra pas. */
+const BLOCKED_TEXT: Record<'storage' | 'money' | 'slow', string> = { storage: '⏸ stockage plein', money: '⏸ fonds insuffisants', slow: 'plus de 24 h' };
+
+/** Explication sous la production restante quand la file va se bloquer. */
+function blockedHint(res: { ends: number[]; blocked: 'storage' | 'money' | 'slow' | null }, format?: Format): string {
+  const n = res.ends.length;
+  const after = `La file se bloque après ${n} brassin${n > 1 ? 's' : ''}`;
+  if (res.blocked === 'storage') {
+    return format === 'keg'
+      ? `${after} : le stockage sera plein de fûts. Ils ne partent qu'au bar, par les commandes de fûts ou pendant un événement : programme moins de fûts, ou agrandis le stockage.`
+      : `${after} : le stockage sera plein. Livre des commandes, vends au grossiste ou agrandis le stockage.`;
+  }
+  if (res.blocked === 'money') return `${after} : il n'y aura plus de quoi payer les ingrédients.`;
+  return 'La file entière prendra plus de 24 h.';
+}
+
 /** Icône de chaque événement du bar. */
 const EVENT_ICON: Record<BarEventId, IconId> = { party: 'disco', darts: 'darts', foot: 'ball' };
 const ITEM_ICON: Record<ShopItemId, IconId> = { disco: 'disco', darts: 'darts', tv: 'tv' };
@@ -678,7 +694,9 @@ export class App {
     const el = h('span', `eta ${cls}`);
     const end = fc.res.ends[i];
     if (end == null) {
-      el.textContent = 'plus de 24 h';
+      // ce brassin ne sortira pas : la file se bloque avant (ou ça prend plus de 24 h)
+      el.textContent = BLOCKED_TEXT[fc.res.blocked ?? 'slow'];
+      el.classList.add('blocked');
       return el;
     }
     el.dataset.eta = String(fc.at + end);
@@ -740,10 +758,11 @@ export class App {
     // temps de production restant : les brassins sur la ligne, puis toute la file
     const fc = this.forecast(g);
     const inLine = g.batches.filter((b) => b.beerId != null).length;
-    if (fc && fc.res.ends.length + (fc.res.done ? 0 : 1) > 0) {
+    if (fc && (fc.res.ends.length || !fc.res.done)) {
       const eta = h('div', 'eta-total');
-      eta.append(h('span', '', '⏱ Production restante'), this.etaEl(fc, fc.res.ends.length - 1, 'big'));
+      eta.append(h('span', '', '⏱ Production restante'), this.etaEl(fc, fc.res.done ? fc.res.ends.length - 1 : -1, 'big'));
       body.append(eta);
+      if (!fc.res.done) body.append(h('p', 'note bad', blockedHint(fc.res, g.plan[0]?.format)));
     }
     if (!g.plan.length) body.append(h('p', 'hint', inLine ? 'Aucun autre brassin programmé.' : 'Aucun brassin programmé : la brasserie est à l\'arrêt.'));
     const list = h('div', 'plan-list');
@@ -785,7 +804,8 @@ export class App {
       const done = inLine + g.plan.slice(0, i + 1).reduce((n, x) => n + x.count, 0) - 1;
       if (fc) {
         const w = h('span', 'plan-eta');
-        w.append(h('span', '', 'prêt dans '), this.etaEl(fc, done));
+        if (fc.res.ends[done] != null) w.append(h('span', '', 'prêt dans '));
+        w.append(this.etaEl(fc, done));
         foot.append(w);
       }
       card.append(foot);
@@ -865,8 +885,9 @@ export class App {
     const fc = this.forecast(g, { beerId: beer.id, format: f, count: n });
     if (fc) {
       const r = h('div', 'live-row');
-      r.append(h('span', '', 'Prêts dans'), this.etaEl(fc, fc.res.ends.length - 1));
+      r.append(h('span', '', fc.res.done ? 'Prêts dans' : 'Prêts'), this.etaEl(fc, fc.res.done ? fc.res.ends.length - 1 : -1));
       sum.append(r);
+      if (!fc.res.done) sum.append(h('p', 'note bad', blockedHint(fc.res, f)));
     }
     sum.append(h('p', 'hint', 'Payés au lancement de chaque brassin. Un brassin attend l\'argent et la place dont il a besoin.'));
     body.append(sum);
@@ -1382,7 +1403,7 @@ export class App {
       const r = g.fulfill(o.id, pick);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       this.picks.delete(o.id);
-      this.toast(`+${moneyInt(r.amount!)}`, 'good');
+      this.gainToast(r.amount!);
       this.onSent?.();
       this.sheetKey = '';
       this.refreshComputer();
@@ -1453,7 +1474,7 @@ export class App {
         this.btn('btn small', label, () => {
           const r = g.sellWholesale(b.id, n);
           if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`+${moneyInt(r.amount!)}`, 'good');
+          this.gainToast(r.amount!);
           this.refreshComputer();
         });
       if (b.stock > CRATE) el.append(sell(CRATE, '1 caisse'));
@@ -1940,7 +1961,7 @@ export class App {
     if (g.partying) line('Fête', `🎉 ${clock(g.partyUntil - g.time)}`);
     if (g.advertising) line('Campagne de pub', `📣 ${clock(g.adUntil - g.time)}`);
     const fc = this.forecast(g);
-    if (fc) line('File de brassins', `${g.planned} · fin dans ${fc.res.done ? clock(fc.at + fc.res.total - g.time) : 'plus de 24 h'}`);
+    if (fc) line('File de brassins', `${g.planned} · ${fc.res.done ? `fin dans ${clock(fc.at + fc.res.total - g.time)}` : BLOCKED_TEXT[fc.res.blocked ?? 'slow']}`, fc.res.done ? '' : 'bad');
     else line('File de brassins', 'vide');
     line('Commandes', g.orders.length ? `${g.orders.length} en attente${g.readyOrders.length ? ` · ${g.readyOrders.length} prête${g.readyOrders.length > 1 ? 's' : ''}` : ''}` : 'aucune');
     page.append(live);
@@ -2085,5 +2106,28 @@ export class App {
     const t = h('div', `toast ${kind}`, text);
     this.toasts.append(t);
     setTimeout(() => t.remove(), 3000);
+  }
+
+  /** Argent gagné : une seule notification, dont le montant grimpe à chaque nouvelle vente rapprochée. */
+  private gain: { el: HTMLElement; amount: number; timer: number } | null = null;
+  gainToast(amount: number): void {
+    const gn = this.gain;
+    if (gn && gn.el.isConnected) {
+      gn.amount += amount;
+      clearTimeout(gn.timer);
+      gn.el.textContent = `+${moneyInt(gn.amount)}`;
+      gn.el.classList.remove('bump');
+      void gn.el.offsetWidth; // relance la petite animation
+      gn.el.classList.add('bump');
+    } else {
+      const el = h('div', 'toast good', `+${moneyInt(amount)}`);
+      this.toasts.append(el);
+      this.gain = { el, amount, timer: 0 };
+    }
+    const g = this.gain!;
+    g.timer = window.setTimeout(() => {
+      g.el.remove();
+      if (this.gain === g) this.gain = null;
+    }, 3000);
   }
 }

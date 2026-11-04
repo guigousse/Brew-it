@@ -10,6 +10,17 @@ import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upg
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
+/** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
+export interface Forecast {
+  ends: number[];
+  total: number;
+  done: boolean;
+  /** storage : le stockage reste plein ; money : plus de quoi payer les ingrédients ; slow : plus de 24 h. */
+  blocked: 'storage' | 'money' | 'slow' | null;
+}
+/** Sans aucun brassin terminé pendant ce temps, la prévision considère la file bloquée. */
+const STALL_S = 2 * 3600;
+
 /** Repos du quartier entre deux événements au bar. */
 const PARTY_COOLDOWN = PARTY.cooldown;
 
@@ -436,7 +447,7 @@ export class Game {
    * `ends[i]` : dans combien de secondes le i-ème brassin sera fini (ceux sur la ligne d'abord, puis la file dans l'ordre).
    * `extra` : des brassins à ajouter en fin de file (pour savoir quand ils seraient prêts).
    */
-  forecast(extra?: PlannedBrew, maxSeconds = 24 * 3600): { ends: number[]; total: number; done: boolean } {
+  forecast(extra?: PlannedBrew, maxSeconds = 24 * 3600): Forecast {
     const sim = Game.fromJSON(JSON.parse(JSON.stringify(this.toJSON())));
     // un essai attend la dégustation du joueur : on ne le compte pas
     sim.trial = null;
@@ -446,13 +457,27 @@ export class Game {
     const target = sim.batches.length + sim.planned;
     const ends: number[] = [];
     const start = sim.time;
+    let lastDone = start;
     sim.events.on((e) => {
-      if (e.type === 'batchDone' || e.type === 'batchRuined') ends.push(sim.time - start);
+      if (e.type === 'batchDone' || e.type === 'batchRuined') {
+        ends.push(sim.time - start);
+        lastDone = sim.time;
+      }
     });
-    // pas de 1 s (2 s pour une longue file) : précis à quelques secondes près, et rapide
+    // pas de 1 s (2 s pour une longue file) : précis à quelques secondes près, et rapide.
+    // Plus rien ne sort depuis 2 h : la file est bloquée (stockage plein de fûts, plus d'argent…), on s'arrête là.
     const dt = target > 100 ? 2 : 1;
-    while (ends.length < target && sim.time - start < maxSeconds) sim.step(dt);
-    return { ends, total: ends[ends.length - 1] ?? 0, done: ends.length >= target };
+    while (ends.length < target && sim.time - start < maxSeconds && sim.time - lastDone < STALL_S) sim.step(dt);
+    const done = ends.length >= target;
+    let blocked: Forecast['blocked'] = null;
+    if (!done) {
+      const head = sim.plan[0];
+      const beer = head && sim.beer(head.beerId);
+      if (head && !sim.roomFor(head.format)) blocked = 'storage';
+      else if (head && beer && sim.money < sim.brewCost(beer.recipe, sim.batchLiters, head.format) && !sim.broke) blocked = 'money';
+      else blocked = 'slow';
+    }
+    return { ends, total: ends[ends.length - 1] ?? 0, done, blocked };
   }
 
   /** Brassins programmés au total. */
