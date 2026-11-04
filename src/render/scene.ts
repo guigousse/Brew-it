@@ -7,7 +7,7 @@ import { STATION_ORDER, type StationId } from '../core/stations';
 import { PAL } from './painter';
 import { clearSpriteCache, SPRITES, stationCanvas, type Pt, type Rect } from './sprites';
 import { drawMiniLabel } from './labelArt';
-import { from, type Bounds } from './space';
+import { dim, ellipseShadow, floor, floorLight, from, mix, rgb, seam, shade, silhouette, wallLight, type Bounds, type RGB } from './space';
 
 export const SCENE_W = 160;
 export const SCENE_H = 300;
@@ -22,6 +22,9 @@ const SLOTS: Record<Exclude<StationId, 'bottling'>, { cx: number; floor: number 
   conditioning: { cx: 118, floor: 206 },
 };
 const FLOORS = [64, 134, 206];
+/** Point de fuite de l'atelier : au milieu, à hauteur des yeux (entre le 2e et le 3e étage). */
+const VX = 80;
+const EYE = 150;
 
 /**
  * Cadencement d'une bouteille selon sa phase f (bouteilles remplies − son rang) :
@@ -127,6 +130,17 @@ export class Scene {
     } catch {
       return true;
     }
+  }
+
+  /** Ombre tramée d'un appareil, portée sur le mur derrière lui. */
+  private wallShadow(id: StationId, lv: number): HTMLCanvasElement {
+    const key = `w${id}${lv}`;
+    let c = this.shaded.get(key);
+    if (!c) {
+      c = silhouette(stationCanvas(id, lv), 0.5);
+      this.shaded.set(key, c);
+    }
+    return c;
   }
 
   private shadedSprite(id: StationId, lv: number): HTMLCanvasElement {
@@ -284,6 +298,15 @@ export class Scene {
       px(30, 5, 100, 1, '#5ef0ff'); px(30, 34, 100, 1, '#5ef0ff');
       for (const y of [98, 168]) { px(L, y, WW, 1, '#5ef0ff'); px(L, y + 1, WW, 1, '#1c8ca8'); }
     }
+    // ---------------------------------------------------------------- ombrage des murs, étage par étage
+    // (plus sombre sous chaque passerelle et dans les coins, halo autour des lampes et des fenêtres)
+    const storeyLights: [number, number, number, number][][] = [
+      level === 1 ? [[80, 18, 30, 0.25]] : level === 5 ? [[80, 20, 60, 0.12]] : [[80, 24, 60, 0.18]],
+      [[80, 80, 46, level === 1 ? 0.35 : 0.22]],
+      [[80, 150, 46, level === 1 ? 0.35 : 0.22]],
+    ];
+    const ceilings = [T, ...FLOORS.slice(0, 2).map((f) => f + 5)];
+    FLOORS.forEach((f, i) => wallLight(g, this.b, ceilings[i]!, f, storeyLights[i]!, level === 3 || level === 5 ? 0.78 : 0.68));
     // ---------------------------------------------------------------- passerelles
     for (const f of FLOORS) {
       if (level === 1) {
@@ -300,6 +323,17 @@ export class Scene {
       px(L, f + 5, WW, 1, '#1c1828');
       g.fillStyle = 'rgba(0,0,0,0.25)';
       g.fillRect(L, f + 6, WW, 3);
+      // la passerelle a de l'épaisseur : on voit son dessus sous les yeux, son dessous au-dessus
+      const deck = DECK[level - 1]!;
+      if (f > EYE) {
+        floor(g, this.b, f - 4, VX, EYE, 10, (u, v, du, dv) => (seam(u, du) ? deck[2] : seam(v * 2, dv * 2) ? mix(deck[0], deck[2], 0.4) : deck[0]), f);
+        shade(g, this.b, { x: L, y: f - 4, w: WW, h: 4 }, (_, y) => 0.75 + (y - f + 4) * 0.08);
+      } else {
+        floor(g, this.b, f + 6, VX, EYE, 10, (u, v, du, dv) => (seam(u, du) ? deck[2] : seam(v * 3, dv * 3) ? deck[2] : deck[1]), f + 11);
+        shade(g, this.b, { x: L, y: f + 6, w: WW, h: 5 }, (_, y) => 0.55 + (y - f - 6) * 0.06);
+        px(L, f + 11, WW, 1, '#1c1828');
+        shade(g, this.b, { x: L, y: f + 12, w: WW, h: 4 }, (_, y) => 0.7 + (y - f - 12) * 0.075);
+      }
     }
     // ---------------------------------------------------------------- éclairage
     for (const [lx, ly] of [[80, 68], [80, 138]] as const) {
@@ -318,29 +352,11 @@ export class Scene {
         cone(lx, ly + 10, 21, 50, 0.06);
       }
     }
-    // ---------------------------------------------------------------- sol de la salle d'embouteillage
-    if (level === 1) {
-      px(L, top, WW, B - top, '#6a4422');
-      for (let y = top; y < B; y += 6) { px(L, y, WW, 1, '#4a2e14'); for (let x = from((y * 7) % 30, 30, L); x < R; x += 30) px(x, y, 1, 6, '#4a2e14'); }
-    } else if (level === 3) {
-      for (let y = top; y < B; y += 8) for (let x = from(0, 8, L); x < R; x += 8) px(x, y, 8, 8, ((((x + y) / 8) % 2) + 2) % 2 ? '#a8582c' : '#c87a44');
-    } else if (level === 4) {
-      px(L, top, WW, B - top, '#6a6e74');
-      for (let i = 0; i < Math.round((60 * WW) / W); i++) px(L + ((i * 53) % WW), top + ((i * 29) % (B - top)), 1, 1, '#585c62');
-      px(L, top + 10, WW, 2, '#f2c14e');
-    } else if (level === 5) {
-      px(L, top, WW, B - top, '#1c2230');
-      for (let y = top; y < B; y += 10) px(L, y, WW, 1, '#2a3244');
-      px(L, top + 12, WW, 1, '#5ef0ff');
-    } else {
-      px(L, top, WW, B - top, '#3a2c2c');
-      for (let y = top; y < B; y += 8) px(L, y, WW, 1, '#2a1e20');
-      for (let x = from(-60, 14, L - 160); x < R + 160; x += 14) {
-        g.fillStyle = '#2a1e20';
-        for (let y = top; y < B; y++) g.fillRect(Math.round(x + ((x - W / 2) * (y - top)) / 160), y, 1, 1);
-      }
-    }
+    // ---------------------------------------------------------------- sol de la salle d'embouteillage, en perspective
+    paintWorkshopFloor(g, this.b, top, level);
+    floorLight(g, this.b, top, [[80, top + 24, 70, 0.2]], 0.5);
     px(L, top, WW, 2, level === 5 ? '#5ef0ff' : '#5c4848');
+    shade(g, this.b, { x: L, y: top + 2, w: WW, h: 4 }, (_, y) => 0.6 + (y - top - 2) * 0.1);
     // tapis roulant (châssis, la bande est animée)
     px(L, LINE.belt, WW, 6, level === 1 ? '#5a3a1c' : '#2c283a');
     px(L, LINE.belt, WW, 1, level === 1 ? '#a87a48' : '#8c88a0');
@@ -349,6 +365,8 @@ export class Scene {
       px(x, LINE.belt + 8, 3, B - LINE.belt - 8, '#3e3a50');
       px(x, LINE.belt + 8, 1, B - LINE.belt - 8, '#6c6884');
     }
+    // l'ombre de la ligne d'embouteillage sur le sol, derrière le tapis
+    shade(g, this.b, { x: L, y: LINE.belt - 6, w: WW, h: 6 }, (_, y) => 0.6 + (LINE.belt - y) * 0.065);
     this.bgs.set(level, c);
     return c;
   }
@@ -447,9 +465,11 @@ export class Scene {
     const batch = game.batchAt(id);
     const active = !!batch && !batch.waiting;
     const progress = batch ? Math.min(1, batch.elapsed / Math.max(0.01, batch.duration)) : 0;
-    // ombre portée sur la passerelle
-    g.fillStyle = 'rgba(0,0,0,0.3)';
-    g.fillRect(r.x + 3, SLOTS[id as Exclude<StationId, 'bottling'>].floor, r.w - 4, 2);
+    // ombres : la silhouette de l'appareil sur le mur (la lumière vient d'en haut à gauche), et son pied sur la passerelle
+    const fl = SLOTS[id as Exclude<StationId, 'bottling'>].floor;
+    g.drawImage(this.wallShadow(id, lv), r.x + 4, r.y - 2);
+    const sh = ellipseShadow(Math.max(4, Math.round(r.w / 2)), 3, 0.8);
+    g.drawImage(sh, Math.round(r.x + r.w / 2 - sh.width / 2) + 1, fl - 4);
     if (def.flame && active) this.flames(r.x + def.flame.x, r.y + def.flame.y, def.flame.w, t);
     // cuves en parallèle : rangée de cuves en retrait, derrière la principale
     const tanks = game.tankCount(id);
@@ -781,5 +801,53 @@ export class Scene {
       g.fillStyle = '#c8945a'; g.fillRect(cx + 1, cy + 1, 11, 8);
       g.fillStyle = '#d8b078'; g.fillRect(cx + 6, cy + 1, 1, 8);
     }
+  }
+}
+
+/** Passerelles : dessus, dessous, joints. */
+const DECK = [
+  ['#8a6034', '#4a2e14', '#3a2410'], ['#5a566c', '#2c283a', '#1c1828'], ['#3a6a48', '#1c3c26', '#142a1c'],
+  ['#5a566c', '#2c283a', '#1c1828'], ['#ffffff', '#b8c6d6', '#8a9ab0'],
+].map((p) => p.map(rgb) as [RGB, RGB, RGB]);
+
+/** Le sol de la salle d'embouteillage, qui fuit vers le point de fuite de l'atelier. */
+function paintWorkshopFloor(g: CanvasRenderingContext2D, b: Bounds, top: number, level: number): void {
+  const mod = (a: number) => a - Math.floor(a);
+  if (level === 1) {
+    // vieux plancher : lames dans la profondeur, raboutées en quinconce
+    const woods = ['#6a4422', '#62401f', '#724826'].map(rgb);
+    const joint = rgb('#4a2e14');
+    floor(g, b, top, VX, EYE, 20, (u, v, du, dv) => {
+      const bi = Math.floor(u * 2);
+      if (seam(u * 2, du * 2)) return joint;
+      const ve = v + ((bi * 37) % 7) * 0.6;
+      if (seam(ve / 3, dv / 3)) return joint;
+      return woods[((bi * 7 + Math.floor(ve / 3)) % 3 + 3) % 3]!;
+    });
+  } else if (level === 2) {
+    // garage : dalles de béton sombre
+    const base = rgb('#3a2c2c');
+    const joint = rgb('#2a1e20');
+    floor(g, b, top, VX, EYE, 26, (u, v, du, dv) => (seam(u, du) || seam(v, dv) ? joint : mod(u * 7 + v * 3) < 0.04 ? dim(base, 0.9) : base));
+  } else if (level === 3) {
+    // tomettes en damier
+    const a = rgb('#a8582c');
+    const c = rgb('#c87a44');
+    floor(g, b, top, VX, EYE, 14, (u, v) => ((Math.floor(u) + Math.floor(v)) & 1 ? a : c));
+  } else if (level === 4) {
+    // béton d'usine, allée jaune qui fuit vers le fond
+    const base = rgb('#6a6e74');
+    const speck = rgb('#585c62');
+    const lane = rgb('#f2c14e');
+    floor(g, b, top, VX, EYE, 30, (u, v, du) => {
+      if (Math.abs(Math.abs(u) - 1.5) < 0.06 + du / 2) return lane;
+      return mod(Math.sin(Math.floor(u * 30) * 12.9898 + Math.floor(v * 30) * 78.233) * 43758.5) < 0.12 ? speck : base;
+    });
+  } else {
+    // laboratoire : dalles sombres quadrillées, ligne lumineuse
+    const base = rgb('#1c2230');
+    const joint = rgb('#2a3244');
+    const neon = rgb('#5ef0ff');
+    floor(g, b, top, VX, EYE, 22, (u, v, du, dv) => (Math.abs(u) < 0.03 + du / 2 ? neon : seam(u, du) || seam(v, dv) ? joint : base));
   }
 }

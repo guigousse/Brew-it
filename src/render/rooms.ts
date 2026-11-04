@@ -11,7 +11,8 @@ import { STORAGE } from '../core/warehouse';
 import { drawMiniLabel } from './labelArt';
 import { PAL } from './painter';
 import type { Rect } from './sprites';
-import { boxShadow, dropShadow, floor, floorLight, from, mix, rgb, seam, shade, dim, trap, wallLight, type Bounds } from './space';
+import { boxShadow, dropShadow, ellipseShadow, floor, floorLight, from, mix, rgb, seam, shade, dim, trap, wallLight, type Bounds } from './space';
+import { BAR } from '../core/market';
 
 export const ROOM_W = 160;
 export const ROOM_H = 300;
@@ -522,6 +523,54 @@ const KEG_FLOOR = 290;
  * Coin du bar, en haut à droite, où s'installe l'objet de l'événement en cours (télé, cible, boule à facettes).
  * Le décor de chaque niveau laisse cette place libre.
  */
+/** Point de fuite du bar : au milieu, à hauteur des yeux d'un client debout. */
+const VX = 80;
+const EYE_BAR = 98;
+
+/** Sol de la salle, en perspective : vieux plancher, damier, tomettes, béton ciré, dalles sombres. */
+function paintBarFloor(g: CanvasRenderingContext2D, b: Bounds, top: number, bottom: number, lv: number): void {
+  const mod = (a: number) => a - Math.floor(a);
+  if (lv === 1) {
+    const woods = ['#5a4a3a', '#544436', '#60503e'].map(rgb);
+    const joint = rgb('#3a2e24');
+    const dust = rgb('#6e5e4c');
+    floor(g, b, top, VX, EYE_BAR, 22, (u, v, du, dv) => {
+      const bi = Math.floor(u * 2);
+      if (seam(u * 2, du * 2)) return joint;
+      const ve = v + hash(bi, 3) * 5;
+      if (seam(ve / 5, dv / 5)) return joint;
+      return hash(Math.floor(u * 20), Math.floor(v * 10)) < 0.05 ? dust : woods[Math.floor(hash(bi, Math.floor(ve / 5)) * 3)]!;
+    }, bottom);
+  } else if (lv === 2) {
+    const a = rgb('#e8e4dc');
+    const c = rgb('#3e3a50');
+    floor(g, b, top, VX, EYE_BAR, 14, (u, v) => ((Math.floor(u) + Math.floor(v)) & 1 ? a : c), bottom);
+  } else if (lv === 3) {
+    const base = rgb('#6a2a22');
+    const insert = rgb('#8a3a2a');
+    const joint = rgb('#4a1c16');
+    floor(g, b, top, VX, EYE_BAR, 16, (u, v, du, dv) => {
+      if (seam(u, du) || seam(v, dv)) return joint;
+      const fu = mod(u) - 0.5;
+      const fv = mod(v) - 0.5;
+      return Math.abs(fu) + Math.abs(fv) < 0.22 ? insert : base;
+    }, bottom);
+  } else if (lv === 4) {
+    const base = rgb('#5a5e64');
+    const speck = rgb('#4a4e54');
+    const shine = rgb('#6e737a');
+    floor(g, b, top, VX, EYE_BAR, 40, (u, v, du, dv) => {
+      if (seam(u, du) || seam(v / 1.5, dv / 1.5)) return speck;
+      const n = hash(Math.floor(u * 40), Math.floor(v * 40));
+      return n < 0.12 ? speck : n > 0.95 ? shine : base;
+    }, bottom);
+  } else {
+    const base = rgb('#1c2230');
+    const joint = rgb('#2a3244');
+    floor(g, b, top, VX, EYE_BAR, 18, (u, v, du, dv) => (seam(u, du) || seam(v, dv) ? joint : base), bottom);
+  }
+}
+
 export const EVENT_SLOT: Rect = { x: 118, y: 0, w: 38, h: 44 };
 
 interface Seat { x: number; y: number; kind: 'stool' | 'table' }
@@ -803,21 +852,36 @@ export class BarRoom extends Room {
       px(60, 30, 40, lv === 2 ? 24 : 20, lv === 5 ? '#0c1420' : '#2a3030');
       px(59, 29, 42, 1, '#8a5a2c');
     }
-    // comptoir
+    // ombrage du mur : coins, plafond, pied ; halo des lampes
+    const barLamps: [number, number, number, number][] = lv === 1 ? [[80, 18, 50, 0.3]] : lv === 2 ? [[36, 20, 34, 0.25], [100, 20, 34, 0.25]] : lv === 3 ? [[24, 12, 26, 0.2], [64, 12, 26, 0.2], [104, 12, 26, 0.2]] : lv === 4 ? [[14, 28, 30, 0.2], [110, 28, 30, 0.2], [66, 12, 40, 0.15]] : [[80, 14, 70, 0.1]];
+    wallLight(g, this.b, T, COUNTER.front, barLamps, lv === 5 ? 0.84 : 0.66);
+    // comptoir : le dessus (sous les yeux, on le voit d'en haut), la façade, son ombre au sol
     const { top, front, x0, x1 } = COUNTER;
+    const kk = 6 / (top - EYE_BAR + 6);
+    trap(g, top - 6, top, x0 - 2 + (VX - x0) * kk, x1 + 2 - (x1 - VX) * kk, x0 - 2, x1 + 2, lv === 1 ? '#7a6c5c' : lv === 5 ? '#f4f8fc' : lv === 4 ? '#dce4ec' : '#b07a40');
+    shade(g, this.b, { x: x0 - 2, y: top - 6, w: x1 - x0 + 4, h: 6 }, (_, y) => 0.85 + ((y - top + 6) / 6) * 0.2);
     const wood = lv === 1 ? ['#8a7a68', '#6a5a4a', '#4a3e32'] : lv === 5 ? ['#ffffff', '#dce6f0', '#8a9ab0'] : lv === 4 ? ['#c4d0dc', '#98a6b6', '#465264'] : ['#c88a4a', '#8a5a2c', '#5a3a1c'];
     px(x0 - 2, top, x1 - x0 + 4, 4, wood[0]!); px(x0 - 2, top + 3, x1 - x0 + 4, 1, wood[2]!);
     px(x0, top + 4, x1 - x0, front - top - 4, wood[1]!);
     for (let x = x0 + 4; x < x1; x += lv === 4 ? 6 : 12) px(x, top + 6, 1, front - top - 8, wood[2]!);
     if (lv === 3) px(x0, front - 4, x1 - x0, 2, '#e8b030');
-    if (lv === 1) for (let i = 0; i < 10; i++) px(x0 + Math.floor(hash(i, 9) * (x1 - x0)), top + 1, 3, 1, '#a89e8e');
+    if (lv === 1) for (let i = 0; i < 10; i++) px(x0 + Math.floor(hash(i, 9) * (x1 - x0)), top - 4 + Math.floor(hash(i, 10) * 5), 3, 1, '#a89e8e');
+    shade(g, this.b, { x: x0, y: top + 4, w: x1 - x0, h: front - top - 4 }, (_, y) => 0.7 + ((y - top - 4) / (front - top - 4)) * 0.25 - (y < top + 7 ? 0.2 : 0));
     // sol de la salle
     const f = front;
     const fh = CELLAR_Y - f;
+    paintBarFloor(g, this.b, f, CELLAR_Y, lv);
+    floorLight(g, this.b, f, barLamps.map(([x, , r, k]) => [x, f + 26, r * 1.3, k * 0.6] as const), 0.55);
+    // l'ombre du comptoir, et celle des tabourets et des tables
+    shade(g, this.b, { x: x0 - 6, y: f, w: x1 - x0 + 12, h: 6 }, (x, y) => {
+      const side = x < x0 ? (x0 - x) / 6 : x > x1 ? (x - x1) / 6 : 0;
+      return Math.min(1, 0.5 + 0.5 * Math.max(side, (y - f) / 6));
+    });
+    for (const st of seatsFor(lv, BAR[lv - 1]!.seats)) {
+      if (st.kind === 'stool') dropShadow(g, this.b, st.x + 1, st.y + 10, 6, 2, 0.5);
+    }
+    for (let i = 0; i < Math.ceil(Math.max(0, BAR[lv - 1]!.seats - (lv === 1 ? 2 : 6)) / 2); i++) dropShadow(g, this.b, 28 + (i % 3) * 52 + 1, 192, 10, 2, 0.5);
     if (lv === 1) {
-      px(L, f, WW, fh, '#5a4a3a');
-      for (let y = f; y < CELLAR_Y; y += 6) { px(L, y, WW, 1, '#3a2e24'); for (let x = from((y * 7) % 30, 30, L); x < R; x += 30) px(x, y, 1, 6, '#3a2e24'); }
-      for (let i = 0; i < Math.round((25 * WW) / W); i++) px(L + Math.floor(hash(i, 5) * WW), f + Math.floor(hash(i, 6) * fh), 2, 1, '#6e5e4c');
       // vieux tonneau, caisse de bouteilles vides, balai oublié
       const bx = 116, by = 166;
       px(bx, by, 18, 24, '#6a4422'); px(bx + 2, by, 14, 24, '#7a5228'); px(bx + 5, by, 5, 24, '#8a5a2c');
@@ -827,19 +891,7 @@ export class BarRoom extends Room {
       for (let i = 0; i < 4; i++) { px(19 + i * 5, 171, 3, 8, '#4a5a4a'); px(20 + i * 5, 168, 1, 3, '#4a5a4a'); }
       for (let i = 0; i < 16; i++) px(152 - Math.floor(i * 0.5), 140 + i * 3, 1, 3, '#8a5a2c');
       px(141, 186, 8, 6, '#c8a860');
-    } else if (lv === 2) {
-      for (let j = 0; f + j * 8 < CELLAR_Y; j++) for (let x = from(0, 8, L); x < R; x += 8) px(x, f + j * 8, 8, 8, m(x / 8 + j, 2) ? '#e8e4dc' : '#3e3a50');
-    } else if (lv === 3) {
-      px(L, f, WW, fh, '#6a2a22');
-      for (let y = f + 4; y < CELLAR_Y; y += 12) for (let x = from((y % 24) ? 0 : 6, 12, L); x < R; x += 12) px(x, y, 4, 4, '#8a3a2a');
-    } else if (lv === 4) {
-      px(L, f, WW, fh, '#5a5e64');
-      for (let i = 0; i < Math.round((40 * WW) / W); i++) px(L + Math.floor(hash(i, 7) * WW), f + Math.floor(hash(i, 8) * fh), 1, 1, '#4a4e54');
-    } else {
-      px(L, f, WW, fh, '#1c2230');
-      for (let y = f; y < CELLAR_Y; y += 10) px(L, y, WW, 1, '#2a3244');
     }
-    px(L, f, WW, 2, '#00000060');
     // ---------------------------------------------------------------- la cave
     const c = CELLAR_Y;
     // dalle du plancher
@@ -859,10 +911,15 @@ export class BarRoom extends Room {
       px(L, cw, WW, B - cw, '#141a26');
       for (let y = cw + 10; y < B; y += 20) px(L, y, WW, 1, '#1c8ca8');
     }
-    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(L, cw, WW, 6); // ombre sous le plancher
+    wallLight(g, this.b, cw, KEG_FLOOR, lv <= 2 ? [[80, cw + 8, 40, 0.18]] : [[80, cw, 90, 0.08]], 0.55);
     // sol de la cave
-    px(L, KEG_FLOOR, WW, B - KEG_FLOOR, lv === 5 ? '#0c1018' : '#1e1814');
-    px(L, KEG_FLOOR, WW, 1, lv === 5 ? '#5ef0ff' : '#4a3e32');
+    {
+      const c0 = rgb(lv === 5 ? '#0c1018' : '#2a221c');
+      const c1 = rgb(lv === 5 ? '#1c8ca8' : '#1a1410');
+      floor(g, this.b, KEG_FLOOR, VX, EYE_BAR, 16, (u, v, du, dv) => (seam(u, du) || seam(v, dv) ? c1 : c0));
+      floorLight(g, this.b, KEG_FLOOR, [], 0.6);
+      px(L, KEG_FLOOR, WW, 1, lv === 5 ? '#5ef0ff' : '#4a3e32');
+    }
     if (lv <= 2) {
       // soupirail
       px(66, cw + 4, 28, 8, '#1b1424'); px(67, cw + 5, 26, 6, '#2a3a5a');
@@ -895,6 +952,11 @@ export class BarRoom extends Room {
         px(cx, r.y + Math.floor(r.h / 2) - 3, 1, 7, '#f2c14e');
         continue;
       }
+      // son ombre sur le mur de la cave et au sol
+      g.fillStyle = 'rgba(16,10,24,0.35)';
+      g.fillRect(r.x + 3, r.y + 2, r.w, r.h - 2);
+      const ks = ellipseShadow(Math.round(r.w / 2) + 2, 2, 0.8);
+      g.drawImage(ks, r.x - 1, r.y + r.h - 2);
       // fût inox : corps, cerclages, jauge
       const steel = lv === 1 ? ['#c8c0b0', '#a89e8e', '#7a7062', '#5a5246'] : ['#e8eef4', '#c4d0dc', '#98a6b6', '#6c7a8c'];
       px(r.x, r.y, r.w, r.h, steel[3]!);

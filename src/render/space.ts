@@ -96,7 +96,7 @@ export function floor(
   const s = (300 - vy) / tile;
   for (let j = 0; j < img.height; j++) {
     const y = y0 + j - b.oy + 0.5;
-    const t = y - vy;
+    const t = Math.abs(y - vy); // au-dessus des yeux : un plafond, vu d'en dessous
     const du = s / t;
     const v = (FOCAL * s) / t;
     const dv = v / t;
@@ -212,4 +212,39 @@ export function skew(g: CanvasRenderingContext2D, x0: number, x1: number, top0: 
     const bb = Math.round(bot0 + (bot1 - bot0) * k);
     if (bb > t) g.fillRect(x0 + i * dir - (dir < 0 ? 1 : 0), t, 1, bb - t);
   }
+}
+
+const INK = 'rgba(16,10,24,0.6)';
+
+/** Ombre tramée en ellipse, prête à poser sous un objet qui bouge (fût, appareil) : rx × ry, densité k au centre. */
+const ellipses = new Map<string, HTMLCanvasElement>();
+export function ellipseShadow(rx: number, ry: number, k = 0.7): HTMLCanvasElement {
+  const key = `${rx}|${ry}|${k}`;
+  let c = ellipses.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = rx * 2;
+  c.height = ry * 2;
+  const g = c.getContext('2d')!;
+  g.fillStyle = INK;
+  for (let y = 0; y < ry * 2; y++) for (let x = 0; x < rx * 2; x++) {
+    const e = ((x + 0.5 - rx) / rx) ** 2 + ((y + 0.5 - ry) / ry) ** 2;
+    if (e < 1 && bayer(x, y) < k * (1 - e) ** 0.5) g.fillRect(x, y, 1, 1);
+  }
+  ellipses.set(key, c);
+  return c;
+}
+
+/** Silhouette tramée d'un sprite : son ombre portée sur le mur derrière lui. */
+export function silhouette(src: HTMLCanvasElement, k = 0.5): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d')!;
+  const d = src.getContext('2d')!.getImageData(0, 0, src.width, src.height).data;
+  g.fillStyle = INK;
+  for (let y = 0; y < src.height; y++) for (let x = 0; x < src.width; x++) {
+    if (d[(y * src.width + x) * 4 + 3]! > 0 && bayer(x, y) < k) g.fillRect(x, y, 1, 1);
+  }
+  return c;
 }
