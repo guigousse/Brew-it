@@ -20,6 +20,7 @@ src/
 │   ├── scene.ts          l'atelier : la brasserie verticale (canvas 160 × 300 agrandi au pixel près)
 │   ├── rooms.ts          le stockage et le bar (salle en haut, cave à fûts en bas), 5 décors chacun
 │   ├── bottleArt.ts      bouteilles de l'étagère, caisses
+│   ├── shopRoom.ts       le magasin : étagères, objet en vente, comptoir du marchand
 │   ├── icons.ts          icônes en pixel art (actions, enveloppe, objets du magasin)
 │   └── extend.ts         décor prolongé autour d'une pièce (remplit l'écran, quel que soit son format)
 ├── ui/                   interface DOM : header, barre de navigation en bas (pièces, tableau de bord, magasin), boutons d'action carrés et objets du décor à toucher, glissement, panneaux,

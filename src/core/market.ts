@@ -78,7 +78,7 @@ export const PARTY_COST = [100, 1000, 10000, 80000, 600000] as const;
  * On le réembauche régulièrement ; on peut prolonger d'avance, jusqu'à 24 h. Prix selon le niveau du bar.
  */
 export const BARMAN = { duration: 8 * 3600, maxAhead: 24 * 3600 } as const;
-export const BARMAN_COST = [40, 300, 2500, 20000, 150000] as const;
+export const BARMAN_COST = [30, 150, 700, 2500, 5000] as const;
 
 /**
  * Objets à acheter au magasin pour débloquer les événements du bar, l'un après l'autre (chacun débloque le suivant).

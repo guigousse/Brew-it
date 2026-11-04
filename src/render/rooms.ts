@@ -41,7 +41,7 @@ const hash = (a: number, b = 0) => {
 };
 
 /** Pièce commune : canvas, décors en cache par niveau, récupération après une purge mémoire d'iOS. */
-abstract class Room {
+export abstract class Room {
   readonly canvas = document.createElement('canvas');
   protected g: CanvasRenderingContext2D;
   protected bgs = new Map<number, HTMLCanvasElement>();

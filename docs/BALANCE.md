@@ -176,3 +176,7 @@ Aujourd'hui, le moulin lance un brassin dès qu'il est libre. Les brassins s'acc
 - Les objets du magasin s'achètent dans l'ordre : cible (300 €), télé (5 000 €), boule à facettes (60 000 €), au rythme des agrandissements du bar (400 €, 6 000 €, 120 000 €). La fête devient l'événement le plus fort (45 min, ×60 clients, ×1,5 le prix de référence).
 - Barman en renfort : 8 h à rebrancher les fûts, de 40 € à 150 000 € selon le bar. Le joueur simulé l'embauche avant de partir quand il a des fûts et dix fois son prix ; il lance le meilleur événement débloqué.
 - Le joueur simulé finit en J34 (J32 avant) : au début, il n'a plus que le tournoi de fléchettes, plus faible que l'ancienne fête bon marché.
+
+### Prix du barman
+
+Mesure sur l'état réel d'une partie juste après chaque agrandissement du bar, 8 h de bar avec et sans barman. Avec 6 fûts prévus par tireuse, il rapporte 446 € (bistrot), 1 913 € (pub), 7 146 € (taproom), 14 126 € (bar du futur) ; avec les fûts que le joueur simulé avait réellement, presque rien. Les premiers prix (jusqu'à 150 000 €) ne remboursaient jamais le barman passé le bistrot. Nouvelle grille, pour environ 2,5 fois son prix quand on prépare des fûts : 30, 150, 700, 2 500, 5 000 €. Le joueur simulé finit toujours en J34.

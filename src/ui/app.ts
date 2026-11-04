@@ -11,6 +11,7 @@ import { drawLabel } from '../render/labelArt';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
 import { BarRoom, drawKeg, StorageRoom } from '../render/rooms';
 import { extendBackdrop } from '../render/extend';
+import { SHOP_SPOTS, ShopRoom } from '../render/shopRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
@@ -99,7 +100,7 @@ const ROOMS: readonly { id: RoomId; name: string }[] = [
 ];
 /** Ce que montre l'écran : une des pièces, ou une page (tableau de bord, magasin). */
 export type View = RoomId | 'dashboard' | 'shop';
-type PageId = Exclude<View, RoomId>;
+type PageId = 'dashboard';
 /** Onglets de la barre de navigation, de gauche à droite. */
 const TABS: readonly { id: View; name: string; icon: string }[] = [
   { id: 'dashboard', name: 'Tableau de bord', icon: '📊' },
@@ -173,7 +174,11 @@ export class App {
   private barmanBtn = fab('barman', 'Barman en renfort');
   /** Bouton d'amélioration (flèche vers le haut) à gauche du nom de chaque pièce. */
   private ups: Record<RoomId, HTMLButtonElement> = { workshop: upBtn('Améliorer la brasserie'), storage: upBtn('Agrandir le stockage'), bar: upBtn('Agrandir le bar') };
-  private shopKey = '';
+  readonly shopRoom = new ShopRoom();
+  private shopWrap = h('div', 'scene-wrap');
+  /** Étiquettes posées sur le décor (prix de l'objet en vente, « bientôt »…), en coordonnées de la pièce. */
+  private roomTags: { el: HTMLElement; x: number; y: number }[] = [];
+  private saleTag = h('div', 'shop-tag');
   private computerHit?: HTMLButtonElement;
   // --- les pièces
   readonly storageRoom = new StorageRoom();
@@ -182,7 +187,7 @@ export class App {
   private view: View = 'workshop';
   private navTabs = new Map<View, { btn: HTMLButtonElement; badge: HTMLElement }>();
   /** Pages hors des pièces : le tableau de bord et le magasin. */
-  private pages: Record<PageId, HTMLElement> = { dashboard: h('section', 'room page'), shop: h('section', 'room page') };
+  private pages: Record<PageId, HTMLElement> = { dashboard: h('section', 'room page') };
   private dashAt = -1;
   /** Minute survolée dans le graphique des ventes (index dans les 60 dernières). */
   private dashPick: number | null = null;
@@ -293,12 +298,38 @@ export class App {
     this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
     this.ups.bar.onclick = () => this.open({ kind: 'barUp' });
     this.barWrap.append(roomTitle(this.ups.bar, this.barPlaque));
+    // magasin : les étagères et leurs objets
+    this.shopWrap.append(this.shopRoom.canvas);
+    const SOON = ['Décorations', 'Mobilier', 'Enseignes', 'Ambiance'];
+    for (const hit of this.shopRoom.hits()) {
+      const el = h('button', 'station-hit');
+      if (hit.id === 'sale') {
+        el.setAttribute('aria-label', 'Objet en vente');
+        el.onclick = () => this.openShopItem();
+      } else if (hit.id === 'mystery') {
+        el.setAttribute('aria-label', 'Objet suivant');
+        el.onclick = () => this.toast(this.game().nextItem ? 'Une surprise : elle se débloque avec l\'objet en vente' : 'Rien de plus pour l\'instant', 'info');
+      } else {
+        const name = SOON[Number(hit.id.slice(4))]!;
+        el.setAttribute('aria-label', `${name} : bientôt`);
+        el.onclick = () => this.toast(`${name} : bientôt en rayon`, 'info');
+        const tag = h('div', 'shop-tag soon', `Bientôt · ${name}`);
+        this.roomTags.push({ el: tag, x: hit.rect.x + hit.rect.w / 2, y: hit.rect.y + hit.rect.h + 6 });
+        this.shopWrap.append(tag);
+      }
+      this.shopWrap.append(el);
+      this.roomHits.push({ el, rect: hit.rect });
+    }
+    const sale = SHOP_SPOTS.sale;
+    this.roomTags.push({ el: this.saleTag, x: sale.x + sale.w / 2, y: sale.y + sale.h + 6 });
+    this.saleTag.onclick = () => this.openShopItem();
+    this.shopWrap.append(this.saleTag);
     // Le défilé des écrans suit l'ordre des onglets : tableau de bord, les trois pièces, magasin.
-    const wraps: Record<RoomId, HTMLElement> = { workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap };
-    const srcs = { workshop: this.scene, storage: this.storageRoom, bar: this.barRoom };
+    const wraps: Record<RoomId | 'shop', HTMLElement> = { workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap, shop: this.shopWrap };
+    const srcs = { workshop: this.scene, storage: this.storageRoom, bar: this.barRoom, shop: this.shopRoom };
     for (const t of TABS) {
-      if (!isRoom(t.id)) {
-        this.track.append(this.pages[t.id]);
+      if (t.id === 'dashboard') {
+        this.track.append(this.pages.dashboard);
         continue;
       }
       const pane = h('div', 'room');
@@ -358,8 +389,9 @@ export class App {
     }
     for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px`, left: `${ox * this.scale}px`, top: `${oy * this.scale}px` });
     this.syncBackdrops();
-    for (const c of [this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas]) Object.assign(c.style, { width: `${w}px`, height: `${hh}px` });
+    for (const c of [this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas, this.shopRoom.canvas]) Object.assign(c.style, { width: `${w}px`, height: `${hh}px` });
     const s = this.scale;
+    for (const { el, x, y } of this.roomTags) Object.assign(el.style, { left: `${x * s}px`, top: `${y * s}px` });
     for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
     this.syncKegHits(true);
     this.placeTrack();
@@ -404,6 +436,7 @@ export class App {
     const all = !!this.swipe?.on || performance.now() < this.roomsDrawUntil;
     if (all || this.view === 'storage') this.storageRoom.draw(g, t);
     if (all || this.view === 'bar') this.barRoom.draw(g, t);
+    if (all || this.view === 'shop') this.shopRoom.draw(g, t);
     if (!all && this.view !== 'workshop') return;
     this.scene.draw(g, t);
     // étiquettes des appareils
@@ -1866,7 +1899,12 @@ export class App {
 
   private renderPage(): void {
     // le tableau de bord vit quand il est affiché, et juste à côté (pour qu'il soit à jour quand on y glisse)
-    if (this.view === 'shop' || this.view === 'bar') this.shopPage(this.game());
+    // étiquette de l'objet en vente
+    const g0 = this.game();
+    const item = g0.nextItem;
+    const tag = item ? `${item.name} · ${moneyShort(item.cost)}` : 'Tout est vendu';
+    if (this.saleTag.textContent !== tag) this.saleTag.textContent = tag;
+    this.saleTag.classList.toggle('afford', !!item && g0.money >= item.cost);
     if (this.view === 'dashboard' || this.view === 'workshop') {
       // en direct, mais une fois par seconde suffit
       const now = Math.floor(performance.now() / 1000);
@@ -2056,57 +2094,29 @@ export class App {
     }
   }
 
-  /** Le magasin : des objets pour le bar (ils débloquent des événements), et bientôt des décorations. */
-  private shopPage(g: Game): void {
-    const key = JSON.stringify([g.owned, g.money >= (g.nextItem?.cost ?? 0)]);
-    if (key === this.shopKey) return;
-    this.shopKey = key;
-    const page = this.pages.shop;
-    const scroll = page.scrollTop;
-    page.replaceChildren(h('div', 'page-title', 'Magasin'));
-    page.append(h('div', 'section-title', 'Pour le bar'));
-    const items = h('div', 'shop-grid');
-    // un seul objet en vente : le suivant de la série (cible, télé, boule à facettes) ; ceux qu'on a ne s'affichent plus
+  /** L'objet en vente au magasin : ce qu'il débloque, son prix, l'acheter. */
+  openShopItem(): void {
+    const g = this.game();
     const item = g.nextItem;
-    if (!item) page.append(h('p', 'note', 'Ton bar est entièrement équipé : tous les événements sont débloqués.'));
-    if (item) {
-      const c = h('div', 'card shop-item');
-      c.append(iconCanvas(ITEM_ICON[item.id], 3), h('div', 'beer-name', item.name), h('div', 'hint', item.text));
-      {
-        const b = this.btn('btn primary small', `Acheter · ${moneyInt(item.cost)}`, () => {
-          const r = g.buyItem(item.id);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`${item.name} : nouvel événement au bar !`, 'good');
-          this.barRoom.invalidate();
-          this.syncKegHits(true);
-          this.shopKey = '';
-          this.shopPage(g);
-        });
-        b.disabled = g.money < item.cost;
-        c.append(b);
-      }
-      items.append(c);
-      // l'objet suivant reste une surprise
-      if (SHOP_ITEMS.indexOf(item) < SHOP_ITEMS.length - 1) {
-        const next = h('div', 'card shop-item locked');
-        next.append(h('div', 'shop-icon', '❓'), h('div', 'beer-name', 'Objet suivant'), h('div', 'hint', 'Se débloque avec cet achat'));
-        items.append(next);
-      }
-    }
-    page.append(items, h('div', 'section-title', 'Bientôt'));
-    const grid = h('div', 'shop-grid');
-    for (const [icon, name, desc] of [
-      ['🪴', 'Décorations', 'Plantes, cadres, guirlandes pour le bar'],
-      ['🪑', 'Mobilier', 'Tables, tabourets et banquettes'],
-      ['🪧', 'Enseignes', 'Une façade à l\'image de ta marque'],
-      ['💡', 'Ambiance', 'Éclairages et musique'],
-    ] as const) {
-      const c = h('div', 'card shop-item locked');
-      c.append(h('div', 'shop-icon', icon), h('div', 'beer-name', name), h('div', 'hint', desc), h('span', 'kind-tag', 'Bientôt'));
-      grid.append(c);
-    }
-    page.append(grid);
-    page.scrollTop = scroll;
+    if (!item) return this.toast('Ton bar est entièrement équipé', 'info');
+    const card = this.modalCard(item.name);
+    const head = h('div', 'event-head');
+    const ev = BAR_EVENTS.find((e) => e.needs === item.id);
+    const title = h('div', 'event-title');
+    title.append(h('span', 'hint', item.text), ...(ev ? [h('span', 'stats-line', `${ev.name} : ${ev.text}`)] : []));
+    head.append(iconCanvas(ITEM_ICON[item.id], 3), title);
+    card.append(head);
+    const buy = this.btn('btn primary big', `Acheter · ${moneyInt(item.cost)}`, () => {
+      const r = g.buyItem(item.id);
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      this.toast(`${item.name} : nouvel événement au bar !`, 'good');
+      this.onSent?.();
+      this.closeModal();
+    });
+    buy.disabled = g.money < item.cost;
+    card.append(buy);
+    if (g.money < item.cost) card.append(h('p', 'note bad', `Il te manque ${moneyInt(item.cost - g.money)}.`));
+    card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
   // ------------------------------------------------------------------ Gaston
