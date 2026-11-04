@@ -1,0 +1,213 @@
+/**
+ * Petites icônes en pixel art (16 × 16 px natifs, l'enveloppe un peu plus large), dessinées à partir de grilles :
+ * boutons d'action, enveloppe des commandes, objets du magasin. Un caractère = un pixel ('.' = transparent).
+ */
+const PAL: Record<string, string> = {
+  k: '#1b1424', // encre
+  w: '#f6ecd6', // blanc cassé
+  W: '#bcaecb', // gris clair
+  y: '#f2c14e', // or
+  Y: '#a8742a', // or sombre
+  c: '#d8843a', // cuivre
+  C: '#8a4a1c', // cuivre sombre
+  h: '#f8c890', // reflet cuivre
+  b: '#7a4a24', // verre brun
+  B: '#4a2a14', // verre brun sombre
+  g: '#7ee081', // vert
+  G: '#2c8a4a', // vert sombre
+  r: '#e8553a', // rouge
+  R: '#8a2a1c', // rouge sombre
+  s: '#c4d0dc', // acier
+  S: '#6c7a8c', // acier sombre
+  l: '#8cd0ff', // bleu clair
+  L: '#3f88d4', // bleu
+  p: '#d45c8e', // rose
+  e: '#e8dcc0', // papier
+  E: '#b8a888', // papier ombré
+};
+
+const GRIDS = {
+  // cuve de brassage en cuivre, vapeur au-dessus
+  brew: [
+    '....w...w...w...',
+    '.....w...w...w..',
+    '....w...w...w...',
+    '................',
+    '.kkkkkkkkkkkkkk.',
+    '.kssssssssssssk.',
+    '..kchhcccccccCk.',
+    '..kchcccccccCCk.',
+    '..kchcccccccCCkk',
+    '..kchcccccccCCSk',
+    '..kccccccccCCCkk',
+    '..kccccccccCCCk.',
+    '...kcccccccCCk..',
+    '....kkkkkkkkk...',
+    '....kS.....Sk...',
+    '....kk.....kk...',
+  ],
+  // bouteille étiquetée : la gamme
+  range: [
+    '......kkkk......',
+    '......kyyk......',
+    '......kbBk......',
+    '......kbBk......',
+    '......kbBk......',
+    '.....kbbbBk.....',
+    '....kbbbbbBk....',
+    '....kbbbbbBk....',
+    '....keeeeeEk....',
+    '....kerrreEk....',
+    '....keeeeeEk....',
+    '....kbbbbbBk....',
+    '....kbbbbbBk....',
+    '....kbbbbbBk....',
+    '....kkkkkkkk....',
+    '................',
+  ],
+  // étoile et confettis : les événements du bar
+  events: [
+    '.p......k.....l.',
+    '.......kyk......',
+    '..l....kyk...p..',
+    '......kyyyk.....',
+    '.kkkkkkyyyykkkkk',
+    '.kyyyyyyyyyyyyk.',
+    '..kyyyyyyyyyyk..',
+    '...kyyyyyyyyk...',
+    '....kyyyyyyk..g.',
+    '....kyyyyyyk....',
+    '...kyyykkyyyk...',
+    '...kyyk..kyyk...',
+    '..kyk......kyk..',
+    '..kk..g.....kk..',
+    '.......p.....l..',
+    '................',
+  ],
+  // flèche vers le haut : améliorer
+  up: [
+    '.......kk.......',
+    '......kggk......',
+    '.....kgggGk.....',
+    '....kggggGGk....',
+    '...kgggggGGGk...',
+    '..kggggggGGGGk..',
+    '.kkkkkggGGkkkkk.',
+    '.....kggGGk.....',
+    '.....kggGGk.....',
+    '.....kggGGk.....',
+    '.....kggGGk.....',
+    '.....kggGGk.....',
+    '.....kkkkkk.....',
+    '................',
+    '................',
+    '................',
+  ],
+  // enveloppe des commandes (20 × 14)
+  envelope: [
+    'kkkkkkkkkkkkkkkkkkkk',
+    'kEeeeeeeeeeeeeeeeeEk',
+    'keEeeeeeeeeeeeeeeEek',
+    'keeEeeeeeeeeeeeeEeek',
+    'keeeEeeeeeeeeeeEeeek',
+    'keeeeEeeeeeeeeEeeeek',
+    'keeeeeEEerreEEeeeeek',
+    'keeeeeeerRRreeeeeeek',
+    'keeeeeeeerreeeeeeeek',
+    'keeeeeeeeeeeeeeeeeek',
+    'keeeeeeeeeeeeeeeeeek',
+    'kEEEEEEEEEEEEEEEEEEk',
+    'kkkkkkkkkkkkkkkkkkkk',
+  ],
+  // télévision à antennes
+  tv: [
+    '...k.......k....',
+    '....k.....k.....',
+    '.....k...k......',
+    '......k.k.......',
+    'kkkkkkkkkkkkkkkk',
+    'kSSSSSSSSSSSSSSk',
+    'kSkkkkkkkkkkkSSk',
+    'kSkLLLLLLLLLkSsk',
+    'kSkLlLLLLLLLkSSk',
+    'kSkLLLLLLLLLkSsk',
+    'kSkLLLLLLLLLkSSk',
+    'kSkkkkkkkkkkkSSk',
+    'kSSSSSSSSSSSSSSk',
+    'kkkkkkkkkkkkkkkk',
+    '...kS......Sk...',
+    '...kk......kk...',
+  ],
+  // cible de fléchettes
+  darts: [
+    '.....kkkkkk.....',
+    '...kkRrRrRrkk...',
+    '..kRrkkkkkkrRk..',
+    '.kRrkwGwGwGkrRk.',
+    '.krkwGkkkkGwkrk.',
+    'kRrkGkrRrRkGkrRk',
+    'krkwGkRkkrkwGkrk',
+    'kRkGwkrkyRkGwkRk',
+    'krkwGkRkkrkwGkrk',
+    'kRrkGkrRrRkGkrRk',
+    '.krkwGkkkkGwkrk.',
+    '.kRrkwGwGwGkrRk.',
+    '..kRrkkkkkkrRk..',
+    '...kkRrRrRrkk...',
+    '.....kkkkkk.....',
+    '................',
+  ],
+  // ballon (soirée foot)
+  ball: [
+    '.....kkkkkk.....',
+    '...kkwwwwwwkk...',
+    '..kwwwkkkkwwwk..',
+    '.kwwwkkkkkkwwwk.',
+    '.kwwwwkkkkwwwwk.',
+    'kkwwwwwwwwwwwwkk',
+    'kkkwwwwwwwwwwkkk',
+    'kkkwwwwkkwwwwkkk',
+    'kkwwwwkkkkwwwwkk',
+    'kwwwwwkkkkwwwwWk',
+    '.kwwwwwkkwwwwWk.',
+    '.kwkkwwwwwwkkWk.',
+    '..kkkkwwwwkkkk..',
+    '...kkkwwwwkkk...',
+    '.....kkkkkk.....',
+    '................',
+  ],
+} as const;
+
+export type IconId = keyof typeof GRIDS;
+
+/** Dessine l'icône dans un contexte, coin haut-gauche en (x, y), à l'échelle s (1 = pixel natif). */
+export function paintIcon(g: CanvasRenderingContext2D, id: IconId, x: number, y: number, s = 1): void {
+  const rows = GRIDS[id];
+  for (let j = 0; j < rows.length; j++) {
+    const row = rows[j]!;
+    for (let i = 0; i < row.length; i++) {
+      const col = PAL[row[i]!];
+      if (!col) continue;
+      g.fillStyle = col;
+      g.fillRect(x + i * s, y + j * s, s, s);
+    }
+  }
+}
+
+export function iconSize(id: IconId): { w: number; h: number } {
+  const rows = GRIDS[id];
+  return { w: rows[0]!.length, h: rows.length };
+}
+
+/** Une icône prête à poser dans la page : canvas natif, agrandi au pixel près par le CSS. */
+export function iconCanvas(id: IconId, zoom = 2, cls = 'pix-icon'): HTMLCanvasElement {
+  const { w, h } = iconSize(id);
+  const c = document.createElement('canvas');
+  c.className = cls;
+  c.width = w;
+  c.height = h;
+  c.style.width = `${w * zoom}px`;
+  c.style.height = `${h * zoom}px`;
+  paintIcon(c.getContext('2d')!, id, 0, 0);
+  return c;
+}

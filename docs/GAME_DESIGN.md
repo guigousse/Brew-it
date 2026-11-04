@@ -5,10 +5,16 @@ La brasserie compte **trois pièces**, chacune en plein écran et en **portrait*
 
 **Atelier ↔ Stockage ↔ Bar** : le trajet de la bière, de la cuve au verre.
 
-La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Stockage · Bar · Magasin**. Les actions de la pièce affichée sont des **boutons ronds flottants**, en bas à droite de la pièce : l'action principale en gros (Brasser à l'atelier, Commandes au stockage, Les fûts au bar), les autres en plus petit au-dessus (Gamme ; Stock ; Agrandir et Fête). Chacun porte son nom dessous et une pastille d'info (brassins programmés, commandes en attente, verres restants, durée de la fête…). Il devient doré et pulse quand il y a quelque chose à faire. Ils s'effacent quand un panneau est ouvert, et sur le tableau de bord et le magasin.
+La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Stockage · Bar · Magasin**. On agit surtout **en touchant le décor** :
+- **Atelier** : les machines (réglages, amélioration). En bas à droite, deux petits boutons carrés à icône en pixel art : la bouteille pour **Ma gamme**, la cuve de cuivre pour **Brasser** (sa pastille donne le nombre de brassins programmés ; il est doré et pulse quand rien n'est programmé alors qu'on pourrait brasser).
+- **Stockage** : les rayonnages ouvrent le **stock**, l'ordinateur ouvre les **commandes**. Une **enveloppe** reste au centre de l'écran avec le nombre de commandes en attente ; elle scintille quand on peut en livrer, et la toucher ouvre aussi les commandes.
+- **Bar** : les **fûts** de la cave (ou le comptoir) ouvrent le menu des fûts ; la télé et la cible, une fois achetées, ouvrent les événements. Un petit bouton carré à l'étoile ouvre les **événements** (sa pastille donne le temps restant de celui en cours).
+- **Améliorer** : dans chaque pièce, un petit bouton carré à **flèche verte** se trouve à gauche du nom de la pièce. Il ouvre la fiche de la brasserie (atelier), l'agrandissement du stockage ou celui du bar. Il pulse quand on a de quoi payer une amélioration.
+
+Les boutons s'effacent quand un panneau est ouvert, et sur le tableau de bord et le magasin.
 
 - **Tableau de bord** : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
-- **Magasin** : on y achètera plus tard des décorations, du mobilier, des enseignes et d'autres objets. Pour l'instant, les rayons sont annoncés « Bientôt ».
+- **Magasin** : la cible de fléchettes et la télévision, qui débloquent des événements au bar. Les décorations, le mobilier, les enseignes et l'ambiance sont annoncés « Bientôt ».
 
 **Brasser** ouvre la file des brassins programmés : des groupes « bière × format × nombre » qui partent dans l'ordre, chacun dès que le moulin est libre et qu'il y a l'argent et la place nécessaires. Le groupe en tête dit ce qui le retient. On peut changer le nombre d'un groupe, le monter ou le descendre dans la file, ou le retirer. « + Programmer des brassins » ouvre un assistant en trois étapes : 1. la bière de la gamme (ou un nouvel essai avec les réglages des machines), 2. le format (bouteilles pour le stock et les commandes, fûts pour le bar), 3. le nombre de brassins. Cette dernière étape montre une caisse ou un fût par brassin, la production, le coût, la place au stockage, et dans combien de temps ces brassins seraient prêts. En haut de la file, **« Production restante »** donne le temps jusqu'à la fin du dernier brassin (ceux déjà sur la ligne, puis toute la file), et chaque groupe affiche « prêt dans … ». Ces temps sont calculés en rejouant la brasserie sur une copie, ventes comprises : ils tiennent compte des cuves, des appareils et de l'attente d'argent ou de place. Il n'y a **plus de brassage continu** : quand la file est vide, la brasserie s'arrête.
 
@@ -153,7 +159,15 @@ L'écran du bar est coupé en deux :
 
 Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au sommet, et bien plus au début. Le bar rapporte peu (environ 1 % du chiffre d'affaires) : c'est là que la marque se fait connaître.
 
-**Organiser une fête** (bouton « Fête ») : pendant 30 min, **50 fois plus de clients**. Le personnel de la fête rebranche tout seul les fûts vides avec ceux du stockage : il faut donc **prévoir des fûts d'avance**, car ils se vident très vite. Une fête coûte 100 € au comptoir poussiéreux, puis 1 000 €, 10 000 €, 80 000 € et 600 000 € selon le niveau du bar. Il faut ensuite attendre 6 h avant la suivante. Pendant la fête, des projecteurs de couleur balaient la salle et des confettis tombent.
+**Événements** (bouton à l'étoile, ou la télé et la cible du bar). Un seul à la fois, puis 6 h de repos avant le suivant. Pendant un événement, le personnel rebranche tout seul les fûts vides avec ceux du stockage : il faut donc **prévoir des fûts d'avance**. Le prix est un multiple de celui d'une fête, qui coûte 100 € au comptoir poussiéreux, puis 1 000 €, 10 000 €, 80 000 € et 600 000 € selon le niveau du bar.
+
+| Événement | Durée | Effet | Prix | À débloquer |
+|---|---|---|---|---|
+| Fête | 30 min | 50 fois plus de clients | ×1 | — |
+| Tournoi de fléchettes | 1 h | 15 fois plus de clients, la gamme se fait 3 fois plus vite connaître | ×0,6 | **Cible de fléchettes** (600 €, magasin) |
+| Soirée foot | 1 h 30 | 20 fois plus de clients, verres 20 % plus chers | ×1,5 | **Télévision** (2 500 €, magasin) |
+
+Les objets achetés s'accrochent au mur du bar. Pendant une fête, des projecteurs balaient la salle et des confettis tombent. Pendant la soirée foot, la télé diffuse le match, et pendant le tournoi, les fléchettes se plantent dans la cible.
 
 ## Popularité et tendances
 **Popularité d'une bière (0 à 5 ★).** Chaque verre servi au bar (+0,4 % de l'écart à la cible) et chaque bouteille livrée sur commande (vingt fois moins) rapprochent sa popularité d'une **cible**. Cette cible dépend fortement de la qualité : ((qualité − 0,3) / 0,7) puissance 1,6, +10 % par tendance suivie.
@@ -180,7 +194,7 @@ L'onglet **Tendances** de l'ordinateur montre la popularité de la marque, les t
 **Campagne de pub** (onglet Tendances de l'ordinateur) : toute la gamme gagne 10 % de popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. Une seule campagne à la fois. Prix selon le niveau de la brasserie : 150 €, 2 500 €, 30 000 €, 250 000 €, puis 2 M€.
 
 ## Commandes
-L'ordinateur du stockage (sur le bureau, ou le bouton « Commandes ») a trois onglets : **Commandes**, **Tendances** et **Grossiste**.
+L'ordinateur du stockage (sur le bureau, ou l'enveloppe au centre de l'écran) a trois onglets : **Commandes**, **Tendances** et **Grossiste**.
 
 **Le tableau des commandes.** Il compte un nombre limité de places : 2 au début, 6 au plus, une de plus par amélioration de l'ordinateur. Une nouvelle commande arrive toutes les 30 à 60 minutes de jeu, un peu plus souvent quand la marque est connue, tant qu'il reste une place. Une commande reste valable 8 à 12 h (2 h pour une urgente). Refuser une commande libère sa place, sans pénalité.
 

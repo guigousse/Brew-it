@@ -10,6 +10,7 @@ import { crateList, drawCrate } from './bottleArt';
 import { drawMiniLabel } from './labelArt';
 import { PAL } from './painter';
 import type { Rect } from './sprites';
+import { paintIcon } from './icons';
 
 export const ROOM_W = 160;
 export const ROOM_H = 300;
@@ -455,6 +456,11 @@ const COUNTER = { top: 112, front: 134, x0: 8, x1: 152 };
 const BAR_HIT: Rect = { x: 0, y: 24, w: ROOM_W, h: CELLAR_Y - 24 };
 /** Sol de la cave, où reposent les fûts. */
 const KEG_FLOOR = 290;
+/** Objets achetés au magasin, accrochés au mur du bar (16 × 16 px). */
+export const BAR_ITEMS: Record<'tv' | 'darts', Rect> = {
+  tv: { x: 126, y: 22, w: 16, h: 16 },
+  darts: { x: 12, y: 74, w: 16, h: 16 },
+};
 
 interface Seat { x: number; y: number; kind: 'stool' | 'table' }
 
@@ -498,13 +504,60 @@ export class BarRoom extends Room {
     return Math.round(start + (taps === 1 ? span / 2 : (span * i) / (taps - 1)));
   }
 
-  hits(taps: number): { id: string; rect: Rect }[] {
+  hits(taps: number, owned: readonly string[] = []): { id: string; rect: Rect }[] {
     const out = [{ id: 'counter', rect: BAR_HIT }];
     for (let i = 0; i < taps; i++) {
       const r = this.kegRect(i, taps);
       out.push({ id: `keg${i}`, rect: { x: r.x - 3, y: CELLAR_Y + 18, w: r.w + 6, h: KEG_FLOOR - CELLAR_Y - 14 } });
     }
+    for (const id of ['tv', 'darts'] as const) {
+      const r = BAR_ITEMS[id];
+      if (owned.includes(id)) out.push({ id, rect: { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 } });
+    }
     return out;
+  }
+
+  /** La télé et la cible, si on les a achetées ; elles s'animent pendant leur événement. */
+  private drawItems(game: Game, t: number): void {
+    const g = this.g;
+    const ev = game.partying ? game.eventId : null;
+    if (game.owns('darts')) {
+      const r = BAR_ITEMS.darts;
+      paintIcon(g, 'darts', r.x, r.y);
+      // tournoi : les fléchettes se plantent l'une après l'autre
+      if (ev === 'darts') {
+        for (let i = 0; i < 3; i++) {
+          const k = (t * 0.8 + i / 3) % 1;
+          const a = hash(Math.floor(t * 0.8 + i / 3), i) * Math.PI * 2;
+          const x = Math.round(r.x + 8 + Math.cos(a) * 4 * k);
+          const y = Math.round(r.y + 7 + Math.sin(a) * 4 * k);
+          g.fillStyle = '#1b1424';
+          g.fillRect(x, y, 1, 1);
+          g.fillStyle = '#f2c14e';
+          g.fillRect(x + 1, y - 1, 2, 1);
+        }
+      }
+    }
+    if (game.owns('tv')) {
+      const r = BAR_ITEMS.tv;
+      paintIcon(g, 'tv', r.x, r.y);
+      // écran : 9 × 4 px ; un match pendant la soirée foot, sinon de la neige qui scintille à peine
+      const sx = r.x + 3;
+      const sy = r.y + 7;
+      if (ev === 'foot') {
+        g.fillStyle = '#2c8a4a';
+        g.fillRect(sx, sy, 9, 4);
+        g.fillStyle = '#7ee081';
+        g.fillRect(sx + 4, sy, 1, 4);
+        const bx = sx + Math.round(4 + Math.sin(t * 2.3) * 4);
+        const by = sy + Math.round(1.5 + Math.sin(t * 3.1) * 1.5);
+        g.fillStyle = '#ffffff';
+        g.fillRect(bx, by, 1, 1);
+      } else if (Math.floor(t * 2) % 7 === 0) {
+        g.fillStyle = 'rgba(255,255,255,0.25)';
+        g.fillRect(sx, sy + (Math.floor(t * 8) % 4), 9, 1);
+      }
+    }
   }
 
   protected levelOf(game: Game): number {
@@ -517,6 +570,7 @@ export class BarRoom extends Room {
     const lv = game.barLevel;
     g.drawImage(this.background(lv, t), 0, 0);
     this.drawBoard(game, lv);
+    this.drawItems(game, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
     this.drawTaps(labels, game.taps.length, lv);
     this.drawBartender(game, lv, t);

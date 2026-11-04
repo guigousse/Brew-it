@@ -319,6 +319,22 @@ describe('jeu', () => {
     expect(g.startParty().ok).toBe(true);
   });
 
+  it('événements du bar : la soirée foot et le tournoi de fléchettes se débloquent au magasin', () => {
+    const g = withBeer(1e5);
+    expect(g.startEvent('foot').ok).toBe(false); // pas de télé
+    expect(g.buyItem('tv').ok).toBe(true);
+    expect(g.buyItem('tv').ok).toBe(false); // déjà achetée
+    const money = g.money;
+    expect(g.startEvent('foot').ok).toBe(true);
+    expect(money - g.money).toBe(g.eventCost('foot'));
+    expect(g.partying).toBe(true);
+    expect(g.barEvent.id).toBe('foot');
+    expect(g.startEvent('party').ok).toBe(false); // un seul à la fois, puis le repos
+    const back = Game.fromJSON(JSON.parse(JSON.stringify(g)));
+    expect(back.owns('tv')).toBe(true);
+    expect(back.eventId).toBe('foot');
+  });
+
   it('une campagne de pub rend la gamme plus populaire', () => {
     const g = withBeer(1e6);
     const beer = g.beers[0]!;

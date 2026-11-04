@@ -1,13 +1,17 @@
 import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Levels, type Recipe, type Tasting } from './brewing/model';
 import { EventBus } from './events';
 import type { Label } from './label';
-import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY, PARTY_COST, variety } from './market';
+import { PARTY } from './market';
+import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, barEventById, SHOP_ITEMS, variety, type BarEventId, type ShopItemId } from './market';
 import { CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, WHOLESALE_KEEP, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
+
+/** Repos du quartier entre deux événements au bar. */
+const PARTY_COOLDOWN = PARTY.cooldown;
 
 export const TICK_RATE = 20;
 export const TICK_DT = 1 / TICK_RATE;
@@ -161,6 +165,10 @@ export class Game {
   /** Fin de la fête en cours, et instant où l'on pourra en organiser une autre (s de jeu). */
   partyUntil = 0;
   partyReadyAt = 0;
+  /** Événement en cours au bar (ou le dernier). */
+  eventId: BarEventId = 'party';
+  /** Objets achetés au magasin (télé, cible…). */
+  owned: ShopItemId[] = [];
   /** Fin de la campagne de pub en cours. */
   adUntil = 0;
   barSold = 0;
@@ -629,7 +637,32 @@ export class Game {
   /** Clients par minute : 1 toutes les 10 minutes au début, plus avec la popularité, le niveau du bar et la variété. */
   get barRate(): number {
     const beers = new Set(this.flowing.map((t) => t.beerId)).size;
-    return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers)) * (this.partying ? PARTY.mult : 1);
+    return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers)) * (this.partying ? this.barEvent.mult : 1);
+  }
+
+  /** L'événement en cours (ou le dernier organisé). */
+  get barEvent() {
+    return barEventById(this.eventId) ?? barEventById('party')!;
+  }
+
+  /** Prix d'un événement : un multiple du prix d'une fête, selon le niveau du bar. */
+  eventCost(id: BarEventId): number {
+    return Math.round(this.partyCost * (barEventById(id)?.cost ?? 1));
+  }
+
+  owns(item: ShopItemId): boolean {
+    return this.owned.includes(item);
+  }
+
+  /** Achète un objet au magasin. */
+  buyItem(id: ShopItemId): CommandResult {
+    const item = SHOP_ITEMS.find((x) => x.id === id);
+    if (!item) return { ok: false, reason: 'Objet introuvable' };
+    if (this.owns(id)) return { ok: false, reason: 'Déjà acheté' };
+    if (this.money < item.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= item.cost;
+    this.owned.push(id);
+    return { ok: true };
   }
 
   /** Une fête bat son plein. */
@@ -643,12 +676,22 @@ export class Game {
 
   /** Organise une fête au bar : 50 fois plus de clients pendant 30 min ; les fûts vides sont rebranchés tout seuls. */
   startParty(): CommandResult {
-    if (this.partying) return { ok: false, reason: 'La fête bat déjà son plein' };
-    if (this.time < this.partyReadyAt) return { ok: false, reason: 'Le quartier se remet de la dernière fête' };
-    if (this.money < this.partyCost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= this.partyCost;
-    this.partyUntil = this.time + PARTY.duration;
-    this.partyReadyAt = this.time + PARTY.cooldown;
+    return this.startEvent('party');
+  }
+
+  /** Lance un événement au bar (il faut l'objet nécessaire, de l'argent, et que le quartier soit remis du précédent). */
+  startEvent(id: BarEventId): CommandResult {
+    const ev = barEventById(id);
+    if (!ev) return { ok: false, reason: 'Événement introuvable' };
+    if (ev.needs && !this.owns(ev.needs)) return { ok: false, reason: `Il faut d'abord acheter : ${SHOP_ITEMS.find((x) => x.id === ev.needs)?.name}` };
+    if (this.partying) return { ok: false, reason: 'Un événement bat déjà son plein' };
+    if (this.time < this.partyReadyAt) return { ok: false, reason: 'Le quartier se remet du dernier événement' };
+    const cost = this.eventCost(id);
+    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= cost;
+    this.eventId = id;
+    this.partyUntil = this.time + ev.duration;
+    this.partyReadyAt = this.time + PARTY_COOLDOWN;
     this.refillTaps();
     return { ok: true };
   }
@@ -991,11 +1034,11 @@ export class Game {
       let tap = flowing[0]!;
       for (const t of flowing) if ((pick -= weight(t)) <= 0) { tap = t; break; }
       const beer = this.beer(tap.beerId)!;
-      const price = glassPrice(this.barLevel, beer.tasting, this.trendsOf(beer).length);
+      const price = glassPrice(this.barLevel, beer.tasting, this.trendsOf(beer).length) * (this.partying ? this.barEvent.priceMult : 1);
       tap.glasses--;
       beer.sold++;
       beer.revenue += price;
-      beer.pop = gainPop(beer.pop, this.popTarget(beer), 1, POP_PER_GLASS);
+      beer.pop = gainPop(beer.pop, this.popTarget(beer), this.partying ? this.barEvent.popMult : 1, POP_PER_GLASS);
       this.totalSold++;
       this.totalRevenue += price;
       this.barSold++;
@@ -1102,7 +1145,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1158,6 +1201,8 @@ export class Game {
     g.tanks ??= {};
     g.partyUntil ??= 0;
     g.partyReadyAt ??= 0;
+    g.eventId ??= 'party';
+    g.owned ??= [];
     g.adUntil ??= 0;
     g.queued ??= false;
     g.trial ??= null;
