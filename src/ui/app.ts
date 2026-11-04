@@ -102,12 +102,12 @@ const ROOMS: readonly { id: RoomId; name: string }[] = [
 export type View = RoomId | 'dashboard' | 'shop';
 type PageId = 'dashboard';
 /** Onglets de la barre de navigation, de gauche à droite. */
-const TABS: readonly { id: View; name: string; icon: string }[] = [
-  { id: 'dashboard', name: 'Tableau de bord', icon: '📊' },
-  { id: 'workshop', name: 'Atelier', icon: '⚗️' },
-  { id: 'storage', name: 'Stockage', icon: '📦' },
-  { id: 'bar', name: 'Bar', icon: '🍺' },
-  { id: 'shop', name: 'Magasin', icon: '🛒' },
+const TABS: readonly { id: View; name: string; icon: IconId }[] = [
+  { id: 'dashboard', name: 'Tableau de bord', icon: 'chart' },
+  { id: 'workshop', name: 'Atelier', icon: 'flask' },
+  { id: 'storage', name: 'Stockage', icon: 'crate' },
+  { id: 'bar', name: 'Bar', icon: 'mug' },
+  { id: 'shop', name: 'Magasin', icon: 'cart' },
 ];
 const isRoom = (v: View): v is RoomId => ROOMS.some((r) => r.id === v);
 
@@ -248,7 +248,7 @@ export class App {
       const btn = h('button', 'nav-tab');
       btn.setAttribute('aria-label', t.name);
       const badge = h('span', 'room-badge hidden');
-      btn.append(h('span', 'nav-icon', t.icon), h('span', 'nav-name', t.name), badge);
+      btn.append(iconCanvas(t.icon, 2, 'nav-icon'), h('span', 'nav-name', t.name), badge);
       btn.onclick = () => this.goView(t.id);
       this.tabbar.append(btn);
       this.navTabs.set(t.id, { btn, badge });
