@@ -525,7 +525,9 @@ const KEG_FLOOR = 290;
  */
 /** Point de fuite du bar : au milieu, à hauteur des yeux d'un client debout. */
 const VX = 80;
-const EYE_BAR = 98;
+/** Le mur rejoint le sol derrière le comptoir ; les yeux sont à la même hauteur au-dessus du sol que dans les autres pièces. */
+const BAR_FLOOR = 118;
+const EYE_BAR = BAR_FLOOR - 84;
 
 /** Sol de la salle, en perspective : vieux plancher, damier, tomettes, béton ciré, dalles sombres. */
 function paintBarFloor(g: CanvasRenderingContext2D, b: Bounds, top: number, bottom: number, lv: number): void {
@@ -534,7 +536,7 @@ function paintBarFloor(g: CanvasRenderingContext2D, b: Bounds, top: number, bott
     const woods = ['#5a4a3a', '#544436', '#60503e'].map(rgb);
     const joint = rgb('#3a2e24');
     const dust = rgb('#6e5e4c');
-    floor(g, b, top, VX, EYE_BAR, 22, (u, v, du, dv) => {
+    floor(g, b, top, VX, EYE_BAR, 34, (u, v, du, dv) => {
       const bi = Math.floor(u * 2);
       if (seam(u * 2, du * 2)) return joint;
       const ve = v + hash(bi, 3) * 5;
@@ -544,12 +546,12 @@ function paintBarFloor(g: CanvasRenderingContext2D, b: Bounds, top: number, bott
   } else if (lv === 2) {
     const a = rgb('#e8e4dc');
     const c = rgb('#3e3a50');
-    floor(g, b, top, VX, EYE_BAR, 14, (u, v) => ((Math.floor(u) + Math.floor(v)) & 1 ? a : c), bottom);
+    floor(g, b, top, VX, EYE_BAR, 26, (u, v) => ((Math.floor(u) + Math.floor(v)) & 1 ? a : c), bottom);
   } else if (lv === 3) {
     const base = rgb('#6a2a22');
     const insert = rgb('#8a3a2a');
     const joint = rgb('#4a1c16');
-    floor(g, b, top, VX, EYE_BAR, 16, (u, v, du, dv) => {
+    floor(g, b, top, VX, EYE_BAR, 28, (u, v, du, dv) => {
       if (seam(u, du) || seam(v, dv)) return joint;
       const fu = mod(u) - 0.5;
       const fv = mod(v) - 0.5;
@@ -559,7 +561,7 @@ function paintBarFloor(g: CanvasRenderingContext2D, b: Bounds, top: number, bott
     const base = rgb('#5a5e64');
     const speck = rgb('#4a4e54');
     const shine = rgb('#6e737a');
-    floor(g, b, top, VX, EYE_BAR, 40, (u, v, du, dv) => {
+    floor(g, b, top, VX, EYE_BAR, 60, (u, v, du, dv) => {
       if (seam(u, du) || seam(v / 1.5, dv / 1.5)) return speck;
       const n = hash(Math.floor(u * 40), Math.floor(v * 40));
       return n < 0.12 ? speck : n > 0.95 ? shine : base;
@@ -567,7 +569,7 @@ function paintBarFloor(g: CanvasRenderingContext2D, b: Bounds, top: number, bott
   } else {
     const base = rgb('#1c2230');
     const joint = rgb('#2a3244');
-    floor(g, b, top, VX, EYE_BAR, 18, (u, v, du, dv) => (seam(u, du) || seam(v, dv) ? joint : base), bottom);
+    floor(g, b, top, VX, EYE_BAR, 30, (u, v, du, dv) => (seam(u, du) || seam(v, dv) ? joint : base), bottom);
   }
 }
 
@@ -795,10 +797,10 @@ export class BarRoom extends Room {
     const WW = R - L;
     const m = (a: number, n: number) => ((a % n) + n) % n;
     const back = COUNTER.top;
-    wall(g, px, lv <= 2 ? 'plank' : lv === 3 ? 'green' : lv === 4 ? 'brick' : 'future', COUNTER.front, this.b);
+    wall(g, px, lv <= 2 ? 'plank' : lv === 3 ? 'green' : lv === 4 ? 'brick' : 'future', BAR_FLOOR, this.b);
     if (lv === 1) {
       // bois grisé par la poussière, fissure, toiles d'araignée, une seule ampoule
-      g.fillStyle = 'rgba(90,80,70,0.45)'; g.fillRect(L, T, WW, COUNTER.front - T);
+      g.fillStyle = 'rgba(90,80,70,0.45)'; g.fillRect(L, T, WW, BAR_FLOOR - T);
       px(104, 26, 1, 10, '#3a2c20'); px(105, 35, 1, 8, '#3a2c20');
       g.strokeStyle = 'rgba(255,255,255,0.22)';
       for (const [x0, dir] of [[L, 1], [R - 1, -1]] as const) {
@@ -820,7 +822,7 @@ export class BarRoom extends Room {
         g.fillStyle = 'rgba(255,220,140,0.07)'; g.beginPath(); g.moveTo(lx - 4, 18); g.lineTo(lx + 5, 18); g.lineTo(lx + 24, back); g.lineTo(lx - 23, back); g.fill();
       }
     } else if (lv === 3) {
-      px(L, 76, WW, COUNTER.front - 76, '#4a2c14');
+      px(L, 76, WW, BAR_FLOOR - 76, '#4a2c14');
       for (let x = from(0, 20, L); x < R; x += 20) { px(x + 2, 80, 16, 26, '#5a3a1c'); px(x + 2, 80, 16, 1, '#744620'); }
       for (const lx of [24, 64, 104]) { px(lx, 0, 1, 8, '#8a5c14'); px(lx - 4, 8, 9, 3, '#e8b030'); px(lx - 3, 11, 7, 1, '#fff4b0'); }
     } else if (lv === 4) {
@@ -855,7 +857,13 @@ export class BarRoom extends Room {
     }
     // ombrage du mur : coins, plafond, pied ; halo des lampes
     const barLamps: [number, number, number, number][] = lv === 1 ? [[80, 18, 50, 0.3]] : lv === 2 ? [[36, 20, 34, 0.25], [100, 20, 34, 0.25]] : lv === 3 ? [[24, 12, 26, 0.2], [64, 12, 26, 0.2], [104, 12, 26, 0.2]] : lv === 4 ? [[14, 28, 30, 0.2], [110, 28, 30, 0.2], [66, 12, 40, 0.15]] : [[80, 14, 70, 0.1]];
-    wallLight(g, this.b, T, COUNTER.front, barLamps, lv === 5 ? 0.84 : 0.66);
+    wallLight(g, this.b, T, BAR_FLOOR, barLamps, lv === 5 ? 0.84 : 0.66);
+    // ---- le sol de la salle, en perspective : il passe sous le comptoir, qui y est posé
+    const f = COUNTER.front;
+    paintBarFloor(g, this.b, BAR_FLOOR, CELLAR_Y, lv);
+    floorLight(g, this.b, BAR_FLOOR, barLamps.map(([x, , r, k]) => [x, f + 20, r * 1.3, k * 0.6] as const), 0.55);
+    px(L, BAR_FLOOR - 3, WW, 3, lv === 5 ? '#dce6f0' : '#2a1a10'); // plinthe
+    px(L, BAR_FLOOR - 3, WW, 1, lv === 5 ? '#ffffff' : '#5a3a1c');
     // comptoir : le dessus (sous les yeux, on le voit d'en haut), la façade, son ombre au sol
     const { top, front, x0, x1 } = COUNTER;
     const kk = 6 / (top - EYE_BAR + 6);
@@ -868,11 +876,6 @@ export class BarRoom extends Room {
     if (lv === 3) px(x0, front - 4, x1 - x0, 2, '#e8b030');
     if (lv === 1) for (let i = 0; i < 10; i++) px(x0 + Math.floor(hash(i, 9) * (x1 - x0)), top - 4 + Math.floor(hash(i, 10) * 5), 3, 1, '#a89e8e');
     shade(g, this.b, { x: x0, y: top + 4, w: x1 - x0, h: front - top - 4 }, (_, y) => 0.7 + ((y - top - 4) / (front - top - 4)) * 0.25 - (y < top + 7 ? 0.2 : 0));
-    // sol de la salle
-    const f = front;
-    const fh = CELLAR_Y - f;
-    paintBarFloor(g, this.b, f, CELLAR_Y, lv);
-    floorLight(g, this.b, f, barLamps.map(([x, , r, k]) => [x, f + 26, r * 1.3, k * 0.6] as const), 0.55);
     // l'ombre du comptoir, et celle des tabourets et des tables
     shade(g, this.b, { x: x0 - 6, y: f, w: x1 - x0 + 12, h: 6 }, (x, y) => {
       const side = x < x0 ? (x0 - x) / 6 : x > x1 ? (x - x1) / 6 : 0;
@@ -917,7 +920,7 @@ export class BarRoom extends Room {
     {
       const c0 = rgb(lv === 5 ? '#0c1018' : '#2a221c');
       const c1 = rgb(lv === 5 ? '#1c8ca8' : '#1a1410');
-      floor(g, this.b, KEG_FLOOR, VX, EYE_BAR, 16, (u, v, du, dv) => (seam(u, du) || seam(v, dv) ? c1 : c0));
+      floor(g, this.b, KEG_FLOOR, VX, EYE_BAR, 30, (u, v, du, dv) => (seam(u, du) || seam(v, dv) ? c1 : c0));
       floorLight(g, this.b, KEG_FLOOR, [], 0.6);
       px(L, KEG_FLOOR, WW, 1, lv === 5 ? '#5ef0ff' : '#4a3e32');
     }

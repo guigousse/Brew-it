@@ -8,7 +8,7 @@ import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
-import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, BOOST_MIN_COST, BOOST_PRICE_SHARE, boostById, COURIER_COST, COURIER_ROUND_S, FURNITURE, nicePrice, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
+import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, BOOST_MIN_COST, BOOST_PRICE_SHARE, boostById, COURIER_COST, COURIER_ROUND_S, FURNITURE, nicePrice, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -774,20 +774,51 @@ export class Game {
     return this.owned.includes(item);
   }
 
-  /** Le prochain objet en vente au magasin : chacun débloque le suivant. */
+  /** Le prochain objet d'événement pas encore acheté. */
   get nextItem() {
     return SHOP_ITEMS.find((x) => !this.owns(x.id));
   }
 
-  /** Achète un objet au magasin (dans l'ordre : chacun débloque le suivant). */
+  /** Achète un objet d'événement (il fait partie de la décoration : voir buyDecor). */
   buyItem(id: ShopItemId): CommandResult {
+    return this.buyDecor(id);
+  }
+
+  // ------------------------------------------------------------------ décoration du bar
+
+  ownsDecor(id: DecorId): boolean {
+    return this.owns(id as ShopItemId) || this.hasFurniture(id as FurnitureId);
+  }
+
+  /** Une pièce de décoration : un meuble, ou un objet qui débloque un événement. */
+  decorDef(id: DecorId): { id: DecorId; name: string; text: string; cost: number; event: boolean } {
     const item = SHOP_ITEMS.find((x) => x.id === id);
-    if (!item) return { ok: false, reason: 'Objet introuvable' };
-    if (this.owns(id)) return { ok: false, reason: 'Déjà acheté' };
-    if (this.nextItem?.id !== id) return { ok: false, reason: `Il faut d'abord : ${this.nextItem?.name}` };
-    if (this.money < item.cost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= item.cost;
-    this.owned.push(id);
+    if (item) return { ...item, event: true };
+    const f = FURNITURE.find((x) => x.id === id)!;
+    return { id: f.id, name: f.name, text: f.text, cost: f.cost, event: false };
+  }
+
+  /** La prochaine pièce de décoration en vente (meubles et objets d'événement alternent ; chacune débloque la suivante). */
+  get nextDecor() {
+    const id = DECOR_ORDER.find((x) => !this.ownsDecor(x));
+    return id ? this.decorDef(id) : undefined;
+  }
+
+  /** Celle d'après (la caisse mystère du magasin). */
+  get afterDecor() {
+    const left = DECOR_ORDER.filter((x) => !this.ownsDecor(x));
+    return left[1] ? this.decorDef(left[1]) : undefined;
+  }
+
+  buyDecor(id: DecorId): CommandResult {
+    if (!DECOR_ORDER.includes(id)) return { ok: false, reason: 'Objet introuvable' };
+    if (this.ownsDecor(id)) return { ok: false, reason: 'Déjà acheté' };
+    const next = this.nextDecor;
+    if (next?.id !== id) return { ok: false, reason: `Il faut d'abord : ${next?.name}` };
+    if (this.money < next.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= next.cost;
+    if (next.event) this.owned.push(id as ShopItemId);
+    else this.furniture.push(id as FurnitureId);
     return { ok: true };
   }
 
@@ -956,25 +987,13 @@ export class Game {
     return this.furniture.includes(id);
   }
 
-  /** Le prochain meuble en vente : chacun débloque le suivant. */
-  get nextFurniture() {
-    return FURNITURE.find((f) => !this.hasFurniture(f.id));
-  }
-
   /** Produit des effets du mobilier sur les clients, le prix des verres ou la popularité. */
   furnitureMult(k: 'clients' | 'price' | 'pop'): number {
     return FURNITURE.reduce((m, f) => m * (this.hasFurniture(f.id) ? f[k] ?? 1 : 1), 1);
   }
 
   buyFurniture(id: FurnitureId): CommandResult {
-    const f = FURNITURE.find((x) => x.id === id);
-    if (!f) return { ok: false, reason: 'Meuble introuvable' };
-    if (this.hasFurniture(id)) return { ok: false, reason: 'Déjà installé' };
-    if (this.nextFurniture?.id !== id) return { ok: false, reason: `Il faut d'abord : ${this.nextFurniture?.name}` };
-    if (this.money < f.cost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= f.cost;
-    this.furniture.push(id);
-    return { ok: true };
+    return this.buyDecor(id);
   }
 
   /** Une forme, un logo ou un motif est-il disponible dans l'éditeur ? (ceux du départ le sont toujours) */

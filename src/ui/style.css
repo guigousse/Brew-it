@@ -509,6 +509,7 @@ button:disabled { cursor: default; opacity: .5; }
 .shop-tag.section { cursor: pointer; }
 .shop-tag.on { background: var(--good); color: var(--ink); }
 .catalog .shop-row { display: grid; gap: 6px; }
+.catalog .event-title .kind-tag { justify-self: start; }
 .catalog .shop-row .hint { margin: 0; }
 .unlock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
 .unlock { display: grid; justify-items: center; gap: 4px; padding: 8px 4px; background: var(--panel-2); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 var(--border-hi); }

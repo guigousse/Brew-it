@@ -109,10 +109,17 @@ export const FURNITURE: readonly FurnitureDef[] = [
   { id: 'plants', name: 'Plantes vertes', text: 'Au bout du comptoir. Ta gamme se fait connaître 20 % plus vite au bar.', cost: 400, pop: 1.2 },
   { id: 'posters', name: 'Affiches encadrées', text: 'Au mur. 5 % de clients en plus.', cost: 2500, clients: 1.05 },
   { id: 'neon', name: 'Enseigne lumineuse', text: 'Elle attire les passants : 15 % de clients en plus.', cost: 12000, clients: 1.15 },
-  { id: 'benches', name: 'Banquettes', text: 'Deux places de plus, et 10 % de clients en plus.', cost: 50000, clients: 1.1, seats: 2 },
+  { id: 'benches', name: 'Banquettes', text: 'Deux places de plus, et 10 % de clients en plus.', cost: 90000, clients: 1.1, seats: 2 },
   { id: 'jukebox', name: 'Juke-box', text: 'Les clients s\'attardent : les verres se vendent 10 % plus cher.', cost: 200000, price: 1.1 },
 ];
 export const furnitureById = (id: string) => FURNITURE.find((f) => f.id === id);
+
+/**
+ * La décoration du bar, au magasin : un seul rayon, où les meubles alternent avec les objets qui débloquent
+ * un événement (cible, télé, boule à facettes). Chaque achat débloque le suivant.
+ */
+export const DECOR_ORDER = ['plants', 'darts', 'posters', 'tv', 'neon', 'disco', 'benches', 'jukebox'] as const;
+export type DecorId = (typeof DECOR_ORDER)[number];
 
 // ------------------------------------------------------------------ étiquettes
 

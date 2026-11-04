@@ -324,11 +324,11 @@ describe('jeu', () => {
     const beer = g.beers[0]!;
     beer.pop = 0.5;
     beer.kegs = [20, 20, 20, 20, 20];
-    const normal = g.barRate;
     expect(g.startParty().ok).toBe(false); // il faut d'abord la boule à facettes
-    expect(g.buyItem('disco').ok).toBe(false); // les objets s'achètent dans l'ordre
+    expect(g.buyItem('disco').ok).toBe(false); // la décoration s'achète dans l'ordre
     g.money = 1e6;
-    for (const id of ['darts', 'tv', 'disco'] as const) expect(g.buyItem(id).ok).toBe(true);
+    for (const id of ['plants', 'darts', 'posters', 'tv', 'neon', 'disco'] as const) expect(g.buyDecor(id).ok).toBe(true);
+    const normal = g.barRate;
     expect(g.startParty().ok).toBe(true);
     expect(g.taps[0]!.glasses).toBe(20); // un fût est branché d'office
     expect(g.barRate).toBeCloseTo(normal * PARTY.mult);
@@ -343,10 +343,13 @@ describe('jeu', () => {
   it('événements du bar : la soirée foot et le tournoi de fléchettes se débloquent au magasin', () => {
     const g = withBeer(1e5);
     expect(g.startEvent('foot').ok).toBe(false); // pas de télé
-    expect(g.buyItem('tv').ok).toBe(false); // la cible d'abord
-    expect(g.nextItem?.id).toBe('darts');
+    expect(g.buyItem('tv').ok).toBe(false); // les plantes et la cible d'abord
+    expect(g.nextDecor?.id).toBe('plants');
+    expect(g.buyDecor('plants').ok).toBe(true);
+    expect(g.nextDecor?.id).toBe('darts'); // meubles et objets d'événement alternent
     expect(g.buyItem('darts').ok).toBe(true);
     expect(g.buyItem('darts').ok).toBe(false); // déjà achetée
+    expect(g.buyDecor('posters').ok).toBe(true);
     expect(g.buyItem('tv').ok).toBe(true);
     expect(g.nextItem?.id).toBe('disco');
     const money = g.money;
@@ -686,7 +689,8 @@ describe('mobilier et étiquettes', () => {
     const g = withBeer(1e7);
     expect(g.buyFurniture('neon').ok).toBe(false);
     const rate = g.barRate;
-    for (const id of ['plants', 'posters', 'neon', 'benches', 'jukebox'] as const) expect(g.buyFurniture(id).ok).toBe(true);
+    for (const id of ['plants', 'darts', 'posters', 'tv', 'neon', 'disco', 'benches', 'jukebox'] as const) expect(g.buyDecor(id).ok).toBe(true);
+    expect(g.nextDecor).toBeUndefined();
     expect(g.barRate).toBeCloseTo(rate * 1.05 * 1.15 * 1.1);
     expect(g.barSeats).toBe(g.bar.seats + 2);
     expect(g.barPriceMult).toBeCloseTo(1.1);

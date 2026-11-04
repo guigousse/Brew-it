@@ -3,7 +3,7 @@
  * une caisse mystère pour le suivant, des objets « bientôt » sous des draps, et le comptoir du marchand avec sa caisse.
  */
 import type { Game } from '../core/game';
-import type { ShopItemId } from '../core/market';
+import type { DecorId } from '../core/shop';
 import { paintIcon, type IconId } from './icons';
 import { Room } from './rooms';
 import { boxShadow, floor, floorLight, from, rgb, shade, trap, wallLight } from './space';
@@ -21,20 +21,22 @@ const FLOOR = 226;
 /** Hauteur des yeux (point de fuite du sol), au milieu. */
 const EYE = 140;
 /**
- * L'objet en vente (icône ×2), la caisse mystère ; puis les rayons : boosts, mobilier, étiquettes,
- * et un dernier objet encore sous son drap.
+ * Quatre rayons. En haut, la décoration du bar : la pièce en vente (icône ×2) et la caisse mystère de la suivante
+ * (meubles et objets d'événement alternent). Dessous : les boosts et les étiquettes, puis un objet encore sous son drap.
  */
 export const SHOP_SPOTS = {
   sale: { x: 30, y: SHELVES[0]! - 34, w: 36, h: 34 } as Rect,
   mystery: { x: 98, y: SHELVES[0]! - 20, w: 26, h: 20 } as Rect,
   boosts: { x: 18, y: SHELVES[1]! - 36, w: 50, h: 36 } as Rect,
-  furniture: { x: 92, y: SHELVES[1]! - 36, w: 50, h: 36 } as Rect,
-  labels: { x: 18, y: SHELVES[2]! - 36, w: 50, h: 36 } as Rect,
-  soon: { x: 92, y: SHELVES[2]! - 24, w: 50, h: 24 } as Rect,
+  labels: { x: 92, y: SHELVES[1]! - 36, w: 50, h: 36 } as Rect,
+  soon: { x: 55, y: SHELVES[2]! - 24, w: 50, h: 24 } as Rect,
 };
 /** Rayons du magasin et l'icône qui les représente sur l'étagère. */
-export const SHOP_SECTIONS = { boosts: 'bolt', furniture: 'jukebox', labels: 'labels' } as const satisfies Record<string, IconId>;
-const ITEM_ICON: Record<ShopItemId, IconId> = { darts: 'darts', tv: 'tv', disco: 'disco' };
+export const SHOP_SECTIONS = { boosts: 'bolt', labels: 'labels' } as const satisfies Record<string, IconId>;
+/** Icône de chaque pièce de décoration (meubles et objets d'événement). */
+export const DECOR_ICON: Record<DecorId, IconId> = {
+  plants: 'plant', darts: 'darts', posters: 'poster', tv: 'tv', neon: 'neon', disco: 'disco', benches: 'bench', jukebox: 'jukebox',
+};
 
 export class ShopRoom extends Room {
   protected levelOf(): number {
@@ -44,7 +46,7 @@ export class ShopRoom extends Room {
   hits(): { id: string; rect: Rect }[] {
     return [
       { id: 'sale', rect: SHOP_SPOTS.sale }, { id: 'mystery', rect: SHOP_SPOTS.mystery },
-      { id: 'boosts', rect: SHOP_SPOTS.boosts }, { id: 'furniture', rect: SHOP_SPOTS.furniture }, { id: 'labels', rect: SHOP_SPOTS.labels },
+      { id: 'boosts', rect: SHOP_SPOTS.boosts }, { id: 'labels', rect: SHOP_SPOTS.labels },
       { id: 'soon', rect: SHOP_SPOTS.soon },
     ];
   }
@@ -107,12 +109,12 @@ export class ShopRoom extends Room {
     g.imageSmoothingEnabled = false;
     this.begin(1, t);
     const px = painter(g);
-    // l'objet en vente, sur la plus haute étagère, qui brille un peu quand on peut se l'offrir
-    const item = game.nextItem;
+    // la pièce de décoration en vente, sur la plus haute étagère, qui brille un peu quand on peut se l'offrir
+    const item = game.nextDecor;
     const s = SHOP_SPOTS.sale;
     if (item) {
       const bob = Math.round(Math.sin(t * 2) * 1);
-      paintIcon(g, ITEM_ICON[item.id], s.x + 2, s.y + bob, 2);
+      paintIcon(g, DECOR_ICON[item.id], s.x + 2, s.y + bob, 2);
       if (game.money >= item.cost && Math.floor(t * 3) % 3 === 0) {
         px(s.x + 30, s.y + 2, 1, 3, '#ffffff'); px(s.x + 29, s.y + 3, 3, 1, '#ffffff');
         px(s.x + 2, s.y + 22, 1, 3, '#fff4b0'); px(s.x + 1, s.y + 23, 3, 1, '#fff4b0');
@@ -124,7 +126,7 @@ export class ShopRoom extends Room {
     }
     // caisse mystère : le prochain objet de la série
     const m = SHOP_SPOTS.mystery;
-    if (item && item.id !== 'disco') {
+    if (game.afterDecor) {
       px(m.x, m.y, m.w, m.h, '#1b1424'); px(m.x + 1, m.y + 1, m.w - 2, m.h - 2, '#b8803e'); px(m.x + 1, m.y + 1, m.w - 2, 2, '#d8a868');
       px(m.x + 1, m.y + 9, m.w - 2, 1, '#8a5a28');
       // point d'interrogation
@@ -132,7 +134,7 @@ export class ShopRoom extends Room {
       q.forEach((row, j) => [...row].forEach((c, i) => c === 'k' && px(m.x + 10 + i, m.y + 5 + j, 1, 1, '#1b1424')));
     }
     // les rayons : chaque icône sur son socle, avec son ombre ; celle des boosts crépite quand un boost tourne
-    for (const key of ['boosts', 'furniture', 'labels'] as const) {
+    for (const key of ['boosts', 'labels'] as const) {
       const r = SHOP_SPOTS[key];
       const cx = r.x + r.w / 2;
       const base = r.y + r.h;

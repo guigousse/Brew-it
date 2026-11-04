@@ -81,8 +81,8 @@ export const BARMAN = { duration: 8 * 3600, maxAhead: 24 * 3600 } as const;
 export const BARMAN_COST = [30, 150, 700, 2500, 5000] as const;
 
 /**
- * Objets à acheter au magasin pour débloquer les événements du bar, l'un après l'autre (chacun débloque le suivant).
- * Leur prix suit les agrandissements du bar : la cible vers le bistrot, la télé vers le pub, la boule à facettes vers la taproom.
+ * Objets à acheter au magasin pour débloquer les événements du bar. Ils font partie de la décoration :
+ * ils alternent avec les meubles, l'un après l'autre (voir DECOR_ORDER dans shop.ts).
  */
 export type ShopItemId = 'disco' | 'darts' | 'tv';
 export interface ShopItem {
@@ -92,7 +92,7 @@ export interface ShopItem {
   cost: number;
 }
 export const SHOP_ITEMS: readonly ShopItem[] = [
-  { id: 'darts', name: 'Cible de fléchettes', text: 'Débloque le tournoi de fléchettes', cost: 300 },
+  { id: 'darts', name: 'Cible de fléchettes', text: 'Débloque le tournoi de fléchettes', cost: 800 },
   { id: 'tv', name: 'Télévision', text: 'Débloque la soirée foot', cost: 5000 },
   { id: 'disco', name: 'Boule à facettes', text: 'Débloque la fête : projecteurs et confettis', cost: 60000 },
 ];

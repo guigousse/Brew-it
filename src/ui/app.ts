@@ -11,10 +11,10 @@ import { drawLabel } from '../render/labelArt';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, labelSpot, type ShelfBottleKind } from '../render/bottleArt';
 import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
-import { SHOP_SPOTS, ShopRoom } from '../render/shopRoom';
+import { DECOR_ICON, SHOP_SPOTS, ShopRoom } from '../render/shopRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
-import { BOOST_GROUPS, BOOSTS, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type UnlockKind } from '../core/shop';
+import { BOOST_GROUPS, BOOSTS, DECOR_ORDER, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type UnlockKind } from '../core/shop';
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
@@ -72,7 +72,6 @@ function blockedHint(res: { ends: number[]; blocked: 'storage' | 'money' | 'slow
 
 /** Icône de chaque événement du bar. */
 const EVENT_ICON: Record<BarEventId, IconId> = { party: 'disco', darts: 'darts', foot: 'ball' };
-const ITEM_ICON: Record<ShopItemId, IconId> = { disco: 'disco', darts: 'darts', tv: 'tv' };
 
 function setFab(b: HTMLButtonElement, badge: string, state: '' | 'ready' | 'alert', aria: string): void {
   const el = b.querySelector<HTMLElement>('.fab-badge')!;
@@ -348,17 +347,16 @@ export class App {
     this.shopWrap.append(this.shopRoom.canvas);
     const SECTION: Record<string, { label: string; run: () => void }> = {
       boosts: { label: 'Boosts', run: () => this.openBoosts() },
-      furniture: { label: 'Mobilier du bar', run: () => this.openFurniture() },
       labels: { label: 'Étiquettes et bouteilles', run: () => this.openLabelShop() },
     };
     for (const hit of this.shopRoom.hits()) {
       const el = h('button', 'station-hit');
       if (hit.id === 'sale') {
-        el.setAttribute('aria-label', 'Objet en vente');
-        el.onclick = () => this.openShopItem();
+        el.setAttribute('aria-label', 'Décoration du bar');
+        el.onclick = () => this.openFurniture();
       } else if (hit.id === 'mystery') {
-        el.setAttribute('aria-label', 'Objet suivant');
-        el.onclick = () => this.toast(this.game().nextItem ? 'Une surprise : elle se débloque avec l\'objet en vente' : 'Rien de plus pour l\'instant', 'info');
+        el.setAttribute('aria-label', 'Décoration suivante');
+        el.onclick = () => this.toast(this.game().afterDecor ? 'Une surprise : elle se débloque avec la décoration en vente' : 'Rien de plus pour l\'instant', 'info');
       } else if (hit.id === 'soon') {
         el.setAttribute('aria-label', 'Bientôt');
         el.onclick = () => this.toast('Nouveautés bientôt en rayon', 'info');
@@ -369,7 +367,7 @@ export class App {
         const sec = SECTION[hit.id]!;
         el.setAttribute('aria-label', sec.label);
         el.onclick = sec.run;
-        const tag = h('button', 'shop-tag section', hit.id === 'boosts' ? 'Boosts' : hit.id === 'furniture' ? 'Mobilier' : 'Étiquettes');
+        const tag = h('button', 'shop-tag section', hit.id === 'boosts' ? 'Boosts' : 'Étiquettes');
         tag.onclick = sec.run;
         this.sectionTags.set(hit.id, tag);
         this.roomTags.push({ el: tag, x: hit.rect.x + hit.rect.w / 2, y: hit.rect.y + hit.rect.h + 6 });
@@ -380,7 +378,7 @@ export class App {
     }
     const sale = SHOP_SPOTS.sale;
     this.roomTags.push({ el: this.saleTag, x: sale.x + sale.w / 2, y: sale.y + sale.h + 6 });
-    this.saleTag.onclick = () => this.openShopItem();
+    this.saleTag.onclick = () => this.openFurniture();
     this.shopWrap.append(this.saleTag);
     // Le défilé des écrans suit l'ordre des onglets : bureau, atelier, stockage, bar, magasin.
     const wraps: Record<View, HTMLElement> = { office: this.officeWrap, workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap, shop: this.shopWrap };
@@ -1429,8 +1427,8 @@ export class App {
       const item = ev.needs ? SHOP_ITEMS.find((x) => x.id === ev.needs) : undefined;
       if (item && !g.owns(item.id)) {
         el.classList.add('locked');
-        const next = g.nextItem;
-        el.append(this.btn('btn small', next?.id === item.id ? `🔒 Achète « ${item.name} » au magasin` : `🔒 Après « ${next?.name} »`, () => {
+        const next = g.nextDecor;
+        el.append(this.btn('btn small', next?.id === item.id ? `🔒 Achète « ${item.name} » au magasin` : `🔒 Au magasin, après « ${next?.name} »`, () => {
           this.closeModal();
           this.goView('shop');
         }));
@@ -2204,19 +2202,17 @@ export class App {
   /** Étiquette de l'objet en vente au magasin. */
   private renderPage(): void {
     const g0 = this.game();
-    const item = g0.nextItem;
-    const tag = item ? `${item.name} · ${moneyShort(item.cost)}` : 'Tout est vendu';
+    const item = g0.nextDecor;
+    const tag = item ? `${item.name} · ${moneyShort(item.cost)}` : 'Décoration ✓';
     if (this.saleTag.textContent !== tag) this.saleTag.textContent = tag;
     this.saleTag.classList.toggle('afford', !!item && g0.money >= item.cost);
     const live = (['brew', 'yeast', 'bar', 'wholesale'] as BoostChannel[]).map((c) => g0.boostOf(c)).filter((b) => !!b);
     const soonest = live.length ? Math.min(...live.map((b) => b!.until)) - g0.time : g0.advertising ? g0.adUntil - g0.time : 0;
     const texts: Record<string, string> = {
       boosts: soonest > 0 ? `⚡ Boosts · ${clock(soonest)}` : 'Boosts',
-      furniture: g0.nextFurniture ? `Mobilier · ${moneyShort(g0.nextFurniture.cost)}` : 'Mobilier ✓',
       labels: 'Étiquettes',
     };
     for (const [id, el] of this.sectionTags) if (el.textContent !== texts[id]) el.textContent = texts[id]!;
-    this.sectionTags.get('furniture')?.classList.toggle('afford', !!g0.nextFurniture && g0.money >= g0.nextFurniture.cost);
     this.sectionTags.get('boosts')?.classList.toggle('on', soonest > 0);
   }
 
@@ -2433,30 +2429,38 @@ export class App {
     card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
-  /** Le mobilier du bar : un meuble après l'autre ; chacun s'installe dans le bar, à tous ses niveaux. */
+  /**
+   * La décoration du bar : les meubles alternent avec les objets qui débloquent un événement ;
+   * chaque pièce débloque la suivante, et s'installe dans le bar à tous ses niveaux.
+   */
   openFurniture(): void {
     const g = this.game();
-    const card = this.modalCard('Mobilier du bar');
+    const card = this.modalCard('Décoration du bar');
     card.classList.add('catalog');
-    card.append(h('p', 'hint', 'Chaque meuble s\'installe au bar et garde sa place quand tu l\'agrandis.'));
-    const next = g.nextFurniture;
-    for (const f of FURNITURE) {
-      const owned = g.hasFurniture(f.id);
-      const row = h('div', `card shop-row${owned ? ' banner' : ''}`);
-      const head = h('div', 'beer-head');
-      head.append(h('span', 'beer-name', f.name), h('span', 'order-time', owned ? '✓ installé' : next?.id === f.id ? '' : '🔒'));
-      row.append(head, h('p', 'hint', f.text));
-      if (!owned && next?.id === f.id) {
-        const b = this.btn('btn primary', `Installer · ${moneyShort(f.cost)}`, () => {
-          const r = g.buyFurniture(f.id);
+    card.append(h('p', 'hint', 'Meubles et objets d\'événement, l\'un après l\'autre. Tout garde sa place quand tu agrandis le bar.'));
+    const next = g.nextDecor;
+    for (const id of DECOR_ORDER) {
+      const d = g.decorDef(id);
+      const owned = g.ownsDecor(id);
+      const ev = d.event ? BAR_EVENTS.find((e) => e.needs === id) : undefined;
+      const row = h('div', `card shop-row${owned ? ' banner' : ''}${!owned && next?.id !== id ? ' locked' : ''}`);
+      const head = h('div', 'event-head');
+      const title = h('div', 'event-title');
+      const name = h('span', 'beer-name', d.name);
+      title.append(name, h('span', `kind-tag ${d.event ? 'kind-prestige' : 'kind-style'}`, d.event ? 'Événement' : 'Mobilier'));
+      head.append(iconCanvas(DECOR_ICON[id], 2), title, h('span', 'order-time', owned ? '✓' : next?.id === id ? '' : '🔒'));
+      row.append(head, h('p', 'hint', ev ? `${d.text} : ${ev.text}` : d.text));
+      if (!owned && next?.id === id) {
+        const b = this.btn('btn primary', `${d.event ? 'Acheter' : 'Installer'} · ${moneyShort(d.cost)}`, () => {
+          const r = g.buyDecor(id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`${f.name} : au bar !`, 'good');
+          this.toast(d.event ? `${d.name} : nouvel événement au bar !` : `${d.name} : au bar !`, 'good');
           this.onSent?.();
           this.openFurniture();
         });
-        this.costGate(b, f.cost);
+        this.costGate(b, d.cost);
         row.append(b);
-      } else if (!owned) row.append(h('p', 'note', `Après « ${next?.name} » · ${moneyShort(f.cost)}`));
+      } else if (!owned) row.append(h('p', 'note', `Après « ${next?.name} » · ${moneyShort(d.cost)}`));
       card.append(row);
     }
     card.append(this.btn('btn', 'Voir le bar', () => {
@@ -2514,31 +2518,6 @@ export class App {
       grid.append(cell);
     }
     card.append(grid, h('p', 'hint', 'Ce que tu débloques apparaît dans l\'éditeur d\'étiquettes (Ma gamme → Étiquette).'), this.btn('btn', 'Fermer', () => this.closeModal()));
-  }
-
-  /** L'objet en vente au magasin : ce qu'il débloque, son prix, l'acheter. */
-  openShopItem(): void {
-    const g = this.game();
-    const item = g.nextItem;
-    if (!item) return this.toast('Ton bar est entièrement équipé', 'info');
-    const card = this.modalCard(item.name);
-    const head = h('div', 'event-head');
-    const ev = BAR_EVENTS.find((e) => e.needs === item.id);
-    const title = h('div', 'event-title');
-    title.append(h('span', 'hint', item.text), ...(ev ? [h('span', 'stats-line', `${ev.name} : ${ev.text}`)] : []));
-    head.append(iconCanvas(ITEM_ICON[item.id], 3), title);
-    card.append(head);
-    const buy = this.btn('btn primary big', `Acheter · ${moneyInt(item.cost)}`, () => {
-      const r = g.buyItem(item.id);
-      if (!r.ok) return this.toast(r.reason!, 'bad');
-      this.toast(`${item.name} : nouvel événement au bar !`, 'good');
-      this.onSent?.();
-      this.closeModal();
-    });
-    this.costGate(buy, item.cost);
-    card.append(buy);
-    if (g.money < item.cost) card.append(h('p', 'note bad', `Il te manque ${moneyInt(item.cost - g.money)}.`));
-    card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
   // ------------------------------------------------------------------ Gaston
