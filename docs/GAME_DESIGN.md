@@ -1,17 +1,18 @@
 # Brew It : simulation de brassage
 
 ## Concept
-La brasserie compte **trois pièces**, chacune en plein écran et en **portrait**. Chaque pièce tient entière à l'écran, sans défilement. La place qui reste (sur les côtés, ou en haut et en bas selon le format de l'écran) est remplie par le décor de la pièce, prolongé : murs, passerelles et sols continuent jusqu'aux bords, légèrement assombris. On passe de l'un à l'autre en **glissant le doigt**, du tableau de bord au magasin, ou par la **barre de navigation en bas de l'écran** :
+La brasserie compte **quatre pièces** (le bureau, l'atelier, le stockage et le bar), chacune en plein écran et en **portrait**. Chaque pièce tient entière à l'écran, sans défilement. La place qui reste (sur les côtés, ou en haut et en bas selon le format de l'écran) est remplie par le décor de la pièce, prolongé : murs, passerelles et sols continuent jusqu'aux bords, légèrement assombris. On passe de l'un à l'autre en **glissant le doigt**, du bureau au magasin, ou par la **barre de navigation en bas de l'écran** :
 
-**Atelier ↔ Stockage ↔ Bar** : le trajet de la bière, de la cuve au verre.
+**Bureau ↔ Atelier ↔ Stockage ↔ Bar** : on gère la brasserie depuis le bureau, puis on suit le trajet de la bière, de la cuve au verre.
 
-La barre de navigation compte cinq onglets : **Tableau de bord · Atelier · Stockage · Bar · Magasin**. On agit surtout **en touchant le décor** :
+La barre de navigation compte cinq onglets : **Bureau · Atelier · Stockage · Bar · Magasin**. On agit surtout **en touchant le décor** :
+- **Bureau** : une grande **fenêtre donne sur l'atelier**, où l'on voit les machines tourner en direct (la toucher mène à l'atelier). Le **panneau de liège** porte une feuille par commande en attente, cochée en vert quand on peut la livrer ; le toucher ouvre les commandes. L'horloge donne l'heure du jeu. Le **présentoir** expose la gamme actuelle (une petite bouteille par bière, une silhouette par place libre) et ouvre **Ma gamme**. Sur le bureau, l'**ordinateur** : son écran affiche toujours une **enveloppe** avec le nombre de commandes en attente, dorée et scintillante quand on peut en livrer. Le décor du bureau suit le niveau de l'ordinateur (5 décors).
 - **Atelier** : les machines (réglages, amélioration). En bas à droite, deux petits boutons carrés à icône en pixel art : la bouteille pour **Ma gamme**, la cuve de cuivre pour **Brasser** (sa pastille donne le nombre de brassins programmés ; il est doré et pulse quand rien n'est programmé alors qu'on pourrait brasser).
-- **Stockage** : les rayonnages ouvrent le **stock**, l'ordinateur ouvre les **commandes**. L'écran de l'ordinateur affiche toujours une **enveloppe** avec le nombre de commandes en attente. Elle devient dorée et scintille quand on peut en livrer.
+- **Stockage** : les rayonnages ouvrent le **stock**. Au premier plan, un diable de caisses vides, et la palette des commandes prêtes à partir.
 - **Bar** : les **fûts** de la cave (ou le comptoir) ouvrent le menu des fûts. Un petit bouton carré à l'étoile ouvre les **événements** (sa pastille donne le temps restant de celui en cours). Pendant un événement, son objet apparaît en haut à droite du bar, et le toucher ouvre aussi les événements.
-- **Améliorer** : dans chaque pièce, un petit bouton carré à **flèche verte** se trouve à gauche du nom de la pièce. Il ouvre la fiche de la brasserie (atelier), l'agrandissement du stockage ou celui du bar. Il pulse quand on a de quoi payer une amélioration.
+- **Améliorer** : dans chaque pièce, un petit bouton carré à **flèche verte** se trouve à gauche du nom de la pièce. Il ouvre l'amélioration de l'ordinateur (bureau), la fiche de la brasserie (atelier), l'agrandissement du stockage ou celui du bar. Il pulse quand on a de quoi payer une amélioration.
 
-Les boutons s'effacent quand un panneau est ouvert, et sur le tableau de bord et le magasin.
+Les boutons s'effacent quand un panneau est ouvert, et au magasin.
 
 **Confort et accessibilité**
 - Les notifications s'affichent en bas à gauche, au-dessus de la navigation (ou du panneau ouvert), deux au plus à la fois : elles ne cachent plus Gaston ni les titres. Les ventes rapprochées se cumulent dans une seule.
@@ -22,7 +23,9 @@ Les boutons s'effacent quand un panneau est ouvert, et sur le tableau de bord et
 - Le tutoriel désigne les boutons par leur place (« la cuve de cuivre, en bas à droite ») et fait briller celui dont il parle.
 - La vitesse du « mode test » n'apparaît que pendant le développement.
 
-- **Tableau de bord** : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
+- **L'ordinateur du bureau** : un écran de **taille fixe**, quel que soit le téléphone. Le fond d'écran (l'atelier) est **flouté** ; par-dessus, le **menu** de « Brew OS » : une icône par application (**Tableau de bord, Messages, Commandes, Tendances, Grossiste**), avec leur pastille (messages non lus, commandes en attente, dorée quand une commande peut partir). La dernière nouvelle s'affiche sous les icônes. Chaque application s'ouvre dans une fenêtre, avec « ‹ » pour revenir au menu ; le bouton ⏻ éteint l'ordinateur.
+- **Messages** : la boîte de réception de la brasserie, la plus récente en haut (60 au plus) : commandes reçues et expirées, tendances, nouveaux clients, brassins terminés ou ratés, niveaux de la brasserie, bilan d'une absence. Les non-lus sont encadrés ; ouvrir la boîte les marque comme lus. Elle n'est pas sauvegardée : elle repart d'un mot de Gaston à chaque lancement.
+- **Tableau de bord** (application de l'ordinateur) : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
 - **Magasin** : une pièce en pixel art avec des étagères. La cible de fléchettes, puis la télévision, puis la boule à facettes y sont en vente l'une après l'autre ; elles débloquent les événements du bar. Les décorations, le mobilier, les enseignes et l'ambiance sont annoncés « Bientôt ».
 
 **Brasser** ouvre la file des brassins programmés : des groupes « bière × format × nombre » qui partent dans l'ordre. Comme chez un vrai brasseur, un brassin ne part que s'il pourra aller jusqu'au bout **sans attendre devant aucun appareil** : le jeu prévoit son trajet (cuves de fermentation et de garde comprises) et le lance juste à temps pour qu'il arrive quand la place se libère. Aucun appareil ne reste donc bloqué par un brassin fini, et la cadence est celle de l'appareil le plus lent. Il faut aussi l'argent et la place nécessaires. Le groupe en tête dit ce qui le retient. On peut changer le nombre d'un groupe, le monter ou le descendre dans la file, ou le retirer. « + Programmer des brassins » ouvre un assistant en trois étapes : 1. la bière de la gamme (ou un nouvel essai avec les réglages des machines), 2. le format (bouteilles pour le stock et les commandes, fûts pour le bar), 3. le nombre de brassins. Cette dernière étape montre une caisse ou un fût par brassin, la production, le coût, la place au stockage, et dans combien de temps ces brassins seraient prêts. En haut de la file, **« Production restante »** donne le temps jusqu'à la fin du dernier brassin (ceux déjà sur la ligne, puis toute la file), et chaque groupe affiche « prêt dans … ». Ces temps sont calculés en rejouant la brasserie sur une copie, ventes comprises : ils tiennent compte des cuves, des appareils et de l'attente d'argent ou de place. Si la file va se bloquer (stockage plein, souvent de fûts que seul le bar écoule, ou plus d'argent), la production restante l'indique (« ⏸ stockage plein ») et explique après combien de brassins ; les groupes qui ne sortiront pas affichent la même chose au lieu d'un temps. Il n'y a **plus de brassage continu** : quand la file est vide, la brasserie s'arrête. On ne peut pas programmer plus que la file n'en accepte, ni plus que le stockage ne peut recevoir : les fûts (qui ne partent qu'au bar, aux commandes ou pendant un événement) doivent tenir dans la place libre, en comptant ceux déjà sur la ligne et dans la file ; les bouteilles aussi, sauf si le grossiste écoule le surplus automatiquement. L'assistant affiche ce maximum et sa raison. Chaque groupe de la file n'indique que son format (Bouteilles ou Fûts) ; le groupe en tête ne signale que ce qui le bloque (argent, stockage).
@@ -56,7 +59,7 @@ En bas, au **premier plan**, la ligne d'embouteillage déroule le parcours de ch
 4. **Nommer et étiqueter** : garder une bière ouvre l'**éditeur d'étiquette**, avec le nom, la forme (rectangle, ovale, écusson, banderole), la couleur de fond, le motif (rayures, pois, losanges, vagues, damier, soleil) et sa couleur, l'emblème (houblon, épi, tonneau, étoile, couronne, ancre, montagne), la police et la couleur du texte. Un aperçu en direct montre l'étiquette et une bouteille. Ensuite, **chaque bouteille est étiquetée en fin de ligne avant d'être mise en carton**.
 5. **Gamme** : une bière de la gamme se rebrasse en la programmant dans la file. Un essai lancé par le joueur passe toujours en priorité, et s'il trouve le moulin occupé, il attend son tour. L'étiquette reste modifiable.
 6. **Vendre**, de deux façons :
-   - des **commandes** arrivent sur l'ordinateur du stockage, envoyées par une clientèle variée. On les remplit et on les envoie : elles sont payées aussitôt, et bien mieux que le reste ;
+   - des **commandes** arrivent sur l'ordinateur du bureau, envoyées par une clientèle variée. On les remplit et on les envoie : elles sont payées aussitôt, et bien mieux que le reste ;
    - le **grossiste** reprend automatiquement le surplus, à petit prix ;
    - le **bar** sert des verres tirés des **fûts** branchés dans sa cave, même appli fermée. Il fait surtout connaître la marque.
    Chaque brassin se fait **en bouteilles ou en fûts**, et on peut **programmer les prochains brassins**.
@@ -205,12 +208,12 @@ L'objet d'un événement n'apparaît que pendant cet événement, toujours au m�
 
 **Tendances.** Trois tendances sont actives à la fois. Chacune dure de 8 à 16 h de jeu, puis une autre la remplace. Elles portent sur un style (IPA, lager, saison, blonde, pale ale, bières d'abbaye, fruitée) ou un caractère (léger < 5 %, fort ≥ 7 %, amer, doux, aromatique, limpide, ambré). Une bière dans la tendance vise une popularité plus haute, attire plus de clients au bar et s'y vend 15 % plus cher par tendance suivie.
 
-L'onglet **Tendances** de l'ordinateur montre la popularité de la marque, les tendances du moment (avec les bières de la gamme qui les suivent) et la popularité de chaque bière. Les commandes « style recherché » reprennent souvent une tendance du moment. La fiche d'une bière de la gamme affiche aussi ses étoiles et ses tendances.
+L'application **Tendances** de l'ordinateur montre la popularité de la marque, les tendances du moment (avec les bières de la gamme qui les suivent) et la popularité de chaque bière. Les commandes « style recherché » reprennent souvent une tendance du moment. La fiche d'une bière de la gamme affiche aussi ses étoiles et ses tendances.
 
-**Campagne de pub** (onglet Tendances de l'ordinateur) : toute la gamme gagne 10 % de popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. Une seule campagne à la fois. Prix selon le niveau de la brasserie : 150 €, 2 500 €, 30 000 €, 250 000 €, puis 2 M€.
+**Campagne de pub** (application Tendances de l'ordinateur) : toute la gamme gagne 10 % de popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. Une seule campagne à la fois. Prix selon le niveau de la brasserie : 150 €, 2 500 €, 30 000 €, 250 000 €, puis 2 M€.
 
 ## Commandes
-L'ordinateur du stockage (sur le bureau, ou l'enveloppe au centre de l'écran) a trois onglets : **Commandes**, **Tendances** et **Grossiste**.
+L'ordinateur du bureau rassemble les applications **Commandes**, **Tendances** et **Grossiste** (avec le Tableau de bord et les Messages).
 
 **Le tableau des commandes.** Il compte un nombre limité de places : 2 au début, 6 au plus, une de plus par amélioration de l'ordinateur. Une nouvelle commande arrive toutes les 30 à 60 minutes de jeu, un peu plus souvent quand la marque est connue, tant qu'il reste une place. Une commande reste valable 8 à 12 h (2 h pour une urgente). Refuser une commande libère sa place, sans pénalité.
 
@@ -245,7 +248,7 @@ L'ordinateur du stockage (sur le bureau, ou l'enveloppe au centre de l'écran) a
 - **On envoie en un geste.** Les bières qui conviennent sont choisies d'office (les plus en stock) ; « Changer » permet d'en choisir d'autres.
 - **Une commande livrée fait connaître les bières envoyées**, une commande de prestige beaucoup.
 
-**L'ordinateur**
+**L'ordinateur** (amélioré depuis la flèche verte du bureau, ou au pied du tableau des commandes ; chaque niveau change aussi le décor du bureau : lambris, briques, salon vert anglais, open space, bureau futuriste)
 
 | Niveau | Places au tableau | Prix |
 |---|---|---|
@@ -256,13 +259,13 @@ L'ordinateur du stockage (sur le bureau, ou l'enveloppe au centre de l'écran) a
 | Intelligence logistique | 6 | 3 M€ |
 
 ## Le grossiste
-Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 1,60 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'onglet Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
+Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 1,60 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'application Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
 
 ## Gamme : l'étagère
 La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 8 000 €, 50 000 €, 200 000 €, 600 000 €, 3 M€ puis 8 M€.
 
 ## Stockage
-Le stockage est une pièce à part entière. Ses rayonnages se remplissent de caisses aux couleurs des étiquettes ; dans les grands stockages, chaque case affichée est une palette de plusieurs caisses. Le bureau porte l'ordinateur des commandes.
+Le stockage est une pièce à part entière. Ses rayonnages se remplissent de caisses aux couleurs des étiquettes ; dans les grands stockages, chaque case affichée est une palette de plusieurs caisses. L'ordinateur des commandes est au bureau.
 
 Les bouteilles embouteillées rejoignent le stockage en caisses de 12. Quand il est plein, l'embouteillage s'arrête jusqu'à ce que des ventes libèrent de la place. Un brassin programmé attend d'avoir la place pour lui, mais repart toujours quand tout est vide, même s'il est plus gros que le stockage. Le stock accumulé pendant l'absence sert à honorer les commandes au retour : un grand stockage permet d'en remplir davantage.
 

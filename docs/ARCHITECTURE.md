@@ -20,16 +20,17 @@ src/
 │   ├── scene.ts          l'atelier : la brasserie verticale (canvas 160 × 300 agrandi au pixel près)
 │   ├── rooms.ts          le stockage et le bar (salle en haut, cave à fûts en bas), 5 décors chacun
 │   ├── bottleArt.ts      bouteilles de l'étagère, caisses
+│   ├── officeRoom.ts     le bureau : fenêtre sur l'atelier (en direct), panneau des commandes, présentoir de la gamme, ordinateur ; 5 décors
 │   ├── shopRoom.ts       le magasin : étagères, objet en vente, comptoir du marchand
 │   ├── icons.ts          icônes en pixel art (actions, enveloppe, objets du magasin)
 │   └── extend.ts         décor prolongé autour d'une pièce (remplit l'écran, quel que soit son format)
-├── ui/                   interface DOM : header, barre de navigation en bas (pièces, tableau de bord, magasin), boutons d'action carrés et objets du décor à toucher, glissement, panneaux,
-│                         ordinateur des commandes, dégustation, Gaston
+├── ui/                   interface DOM : header, barre de navigation en bas (pièces, magasin), boutons d'action carrés et objets du décor à toucher, glissement, panneaux,
+│                         ordinateur du bureau (menu d'applications, tableau de bord, messages…), dégustation, Gaston
 ├── platform/             Capacitor : stockage fichier, cycle de vie, haptique
 └── main.ts               boucle à pas fixe (20 ticks/s), sauvegarde auto, production hors-ligne
 ```
 
 - **Simulation :** à pas fixe, déterministe (PRNG sérialisé). Chaque lot porte une copie de sa recette. La température réelle de chaque étape est tirée à l'entrée dans la machine, selon la précision de son niveau.
-- **Pièces :** les trois canvas (atelier, stockage, bar) sont posés côte à côte sur une piste qui glisse au doigt. Seule la pièce affichée est redessinée, et ses voisines pendant un glissement. Un glissement « avale » le clic qui suit, pour ne pas ouvrir la machine sous le doigt.
+- **Pièces :** les canvas (bureau, atelier, stockage, bar, magasin) sont posés côte à côte sur une piste qui glisse au doigt. Seule la pièce affichée est redessinée, et ses voisines pendant un glissement ; au bureau, l'atelier l'est aussi, car on le voit par la fenêtre. Un glissement « avale » le clic qui suit, pour ne pas ouvrir la machine sous le doigt.
 - **Rendu :** un canvas de 160 px de large, agrandi au pixel près (`image-rendering: pixelated`). Les sprites sont peints une seule fois puis mis en cache, et les effets sont redessinés à chaque image.
 - **iOS :** chaque push sur la branche lance `.github/workflows/testflight.yml`, qui compile, signe et envoie le build sur TestFlight (voir `docs/TESTFLIGHT.md`).

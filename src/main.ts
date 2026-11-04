@@ -36,21 +36,39 @@ async function boot() {
     unsubscribe();
     game = g;
     loop = new FixedStepLoop(() => game);
+    app.resetMessages();
     unsubscribe = game.events.on((e) => {
       if (muted) return; // rattrapage hors-ligne : pas de rafale de notifications
+      const beerName = (id: number | null) => (id == null ? 'Essai' : game.beers.find((b) => b.id === id)?.name ?? 'Essai');
       if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
-      if (e.type === 'trend') app.toast(`Tendance : ${TRENDS.find((t) => t.id === e.id)?.short}`, 'info');
-      if (e.type === 'batchRuined') app.toast(`Lot de « ${game.beers.find((b) => b.id === e.beerId)?.name} » raté`, 'bad');
+      if (e.type === 'trend') {
+        const tr = TRENDS.find((t) => t.id === e.id);
+        app.toast(`Tendance : ${tr?.short}`, 'info');
+        app.log(`Nouvelle tendance : ${tr?.text ?? tr?.short}`, 'info', 'trend');
+      }
+      if (e.type === 'batchRuined') {
+        app.toast(`Lot de « ${beerName(e.beerId)} » raté`, 'bad');
+        app.log(`Lot de « ${beerName(e.beerId)} » raté : il part à l'égout`, 'bad', 'brew');
+      }
+      if (e.type === 'batchDone' && e.beerId != null) {
+        app.log(`Brassin de « ${beerName(e.beerId)} » terminé : ${e.kegs ? `${e.kegs} fût${e.kegs > 1 ? 's' : ''}` : `${e.bottles} bouteilles`}`, 'good', 'crate');
+      }
       if (e.type === 'breweryLevel') {
         app.scene.flash();
         app.openBrewery(true);
         tapFeedback(true);
+        app.log(`La brasserie passe au niveau ${e.level} !`, 'good', 'up');
       }
-      if (e.type === 'clientAvailable') app.toast(`Nouveaux clients : ${clientTypeById(e.id)?.label}`, 'good');
+      if (e.type === 'clientAvailable') {
+        app.toast(`Nouveaux clients : ${clientTypeById(e.id)?.label}`, 'good');
+        app.log(`Nouveaux clients : ${clientTypeById(e.id)?.label}`, 'good', 'bubble');
+      }
       if (e.type === 'order') {
         app.toast(`📨 ${e.client}`, 'good');
+        app.log(`Nouvelle commande : ${e.client}`, 'good', 'envelope');
         tapFeedback(false);
       }
+      if (e.type === 'orderExpired') app.log(`Commande expirée : ${e.client}`, 'bad', 'clipboard');
     });
     app.update();
     void saves.save(game);

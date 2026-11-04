@@ -304,14 +304,54 @@ button:disabled { cursor: default; opacity: .5; }
 .tap-state { font-family: var(--font-title); font-size: 13px; color: var(--accent); width: 16px; text-align: center; }
 .tap-line.on .tap-state { color: var(--good); }
 
-/* --- Ordinateur des commandes (vieux moniteur) --------------------------------------- */
-.modal-card.computer { background: #16202a; box-shadow: inset 0 0 0 3px #b8ac8c, inset 0 0 0 5px var(--ink), 0 6px 0 #0008; padding: 14px; }
-.computer .card { background: #1e2c38; box-shadow: inset 2px 2px 0 #3a5068; }
+/* --- Ordinateur du bureau : un écran de taille fixe, fond d'écran flouté, menu d'applications --------------- */
+.pc {
+  --bezel: #c8c0a8; --bezel-hi: #ece4cc; --bezel-lo: #8a826a; --os: #7cff9c;
+  width: min(400px, 100%); height: min(700px, 100%); display: flex; flex-direction: column; padding: 12px 12px 0;
+  background: var(--bezel); border: 3px solid var(--ink); box-shadow: inset 3px 3px 0 var(--bezel-hi), inset -3px -3px 0 var(--bezel-lo), 0 6px 0 #0008;
+}
+.pc.pc-lv3, .pc.pc-lv4 { --bezel: #2c283a; --bezel-hi: #545068; --bezel-lo: #1b1424; --os: #f2c14e; }
+.pc.pc-lv5 { --bezel: #dce6f0; --bezel-hi: #ffffff; --bezel-lo: #8a9ab0; --os: #5ef0ff; }
+.pc-screen { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #0c1420; border: 3px solid var(--ink); box-shadow: 0 0 0 2px var(--bezel-lo); }
+.pc-wall { position: absolute; left: -24px; top: -24px; width: calc(100% + 48px); height: calc(100% + 48px); object-fit: cover; filter: blur(7px) brightness(.62) saturate(1.25); }
+.pc-ui { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.pc-ui::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(#ffffff06 0 1px, transparent 1px 3px); }
+.pc-bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: #0c1420b0; border-bottom: 2px solid var(--ink); font-family: var(--font-title); font-size: 12px; color: var(--os); }
+.pc-home { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: 14px 12px; }
+.pc-apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 6px; }
+.pc-app { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 0; background: none; border: 0; min-height: 44px; }
+.pc-app-icon { display: grid; place-items: center; width: 68px; height: 68px; background: #16202acc; border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #3a5068, inset -2px -2px 0 #0c1420, 0 3px 0 #0008; }
+.pc-app-icon canvas { image-rendering: pixelated; }
+.pc-app:active .pc-app-icon { transform: translateY(2px); box-shadow: inset 2px 2px 0 #0c1420; }
+.pc-app-name { font-size: 17px; line-height: 1; text-align: center; color: var(--text); text-shadow: 2px 2px 0 var(--ink); }
+.pc-app .pc-badge { position: absolute; top: -4px; left: calc(50% + 24px); }
+.pc-notif { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; text-align: left; background: #16202ad8; border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #3a5068; }
+.pc-notif.unread { box-shadow: inset 0 0 0 2px var(--os); }
+.pc-notif-icon { flex-shrink: 0; image-rendering: pixelated; width: 16px; height: auto; }
+.pc-notif-text { flex: 1; min-width: 0; font-size: 16px; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-window { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 8px; background: #16202af2; border: 2px solid var(--ink); box-shadow: inset 0 0 0 2px #3a5068, 0 4px 0 #0008; }
+.pc-win-head { display: flex; align-items: center; gap: 6px; padding: 2px; background: var(--os); color: var(--ink); border-bottom: 2px solid var(--ink); }
+.pc-win-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-family: var(--font-title); font-size: 13px; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+.pc-win-icon { image-rendering: pixelated; width: 16px; height: auto; flex-shrink: 0; }
+.pc-back, .pc-x { min-width: 40px; min-height: 36px; padding: 0; font-size: 22px; line-height: 1; color: var(--ink); background: #ffffff40; border: 2px solid var(--ink); }
+.pc-back { font-size: 28px; }
+.pc-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+.pc-body > * { flex-shrink: 0; min-width: 0; }
+.pc-chin { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 2px; }
+.pc-led { width: 8px; height: 8px; background: var(--good); border: 1px solid var(--ink); box-shadow: 0 0 6px var(--good); }
+.pc-brand { flex: 1; font-family: var(--font-title); font-size: 11px; text-transform: uppercase; color: var(--bezel-lo); text-shadow: 1px 1px 0 var(--bezel-hi); }
+.pc-lv3 .pc-brand, .pc-lv4 .pc-brand { color: var(--dim); text-shadow: none; }
+.pc-power { min-width: 44px; min-height: 34px; padding: 0; font-size: 18px; color: var(--ink); background: var(--bezel-hi); border: 2px solid var(--ink); box-shadow: inset -2px -2px 0 var(--bezel-lo); }
+.pc-msg { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; background: #1e2c38; box-shadow: inset 2px 2px 0 #3a5068; border: 2px solid var(--ink); }
+.pc-msg.unread { box-shadow: inset 0 0 0 2px var(--os); }
+.pc-msg.bad { background: #3a2226; }
+.pc-msg-icon { flex-shrink: 0; image-rendering: pixelated; width: 24px; height: auto; }
+.pc-msg-body { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.pc-msg-text { line-height: 1.05; }
+.pc-msg-time { font-size: 15px; color: var(--dim); }
+.computer .card, .computer .kpi { background: #1e2c38; box-shadow: inset 2px 2px 0 #3a5068; }
 .computer .card.banner { box-shadow: inset 0 0 0 2px var(--good); }
-.computer .sheet-head { gap: 8px; }
-.pc-tabs { flex: 1; display: flex; gap: 6px; }
-.pc-tab { flex: 1; white-space: nowrap; padding: 4px 4px; font-family: var(--font-title); font-size: 12px; text-transform: uppercase; color: #7cff9c; background: #0c1a10; border: 2px solid var(--ink); }
-.pc-tab.active { color: var(--ink); background: #7cff9c; }
+.room-title .act.up.hidden { display: none; }
 .order-time { color: var(--dim); white-space: nowrap; }
 .beer-chip { display: flex; align-items: center; gap: 6px; }
 .beer-chip .label-thumb { width: 28px; }
@@ -341,10 +381,7 @@ button:disabled { cursor: default; opacity: .5; }
 .defects.tips { color: var(--dim); }
 
 
-/* --- Pages : tableau de bord et magasin ------------------------------------------------ */
-.room.page { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; place-items: initial; align-items: stretch; gap: 10px; padding: 10px max(12px, calc(50vw - 280px)) 16px; }
-.page > * { flex-shrink: 0; }
-.page-title { font-family: var(--font-title); font-size: 16px; color: var(--accent); text-shadow: 2px 2px 0 var(--ink); }
+/* --- Tableau de bord (application de l'ordinateur) ------------------------------------ */
 .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .kpi { display: grid; gap: 1px; padding: 6px 8px; background: var(--panel-2); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 var(--border-hi); }
 .kpi-value { font-size: 26px; line-height: 1; color: var(--text); white-space: nowrap; }
@@ -502,9 +539,9 @@ button:disabled { cursor: default; opacity: .5; }
 
 /* --- Accessibilité (lot 1) --------------------------------------------------------------- */
 /* Zones à toucher d'au moins 44 × 44 px, sans changer l'aspect des petits boutons */
-.btn.small, .chip, .pc-tab, .wiz-step, .knob-btn, .swatch, .act.up, .plan-close, .map-btn, .icon-btn.small, .mentor-body .btn, .toast-action, .tap-line { position: relative; }
+.btn.small, .chip, .pc-x, .wiz-step, .knob-btn, .swatch, .act.up, .plan-close, .map-btn, .icon-btn.small, .mentor-body .btn, .toast-action, .tap-line { position: relative; }
 .room-title .map-btn { position: relative; }
-.btn.small::after, .chip::after, .pc-tab::after, .wiz-step::after, .knob-btn::after, .swatch::after, .act.up::after, .plan-close::after,
+.btn.small::after, .chip::after, .pc-x::after, .wiz-step::after, .knob-btn::after, .swatch::after, .act.up::after, .plan-close::after,
 .map-btn::after, .icon-btn.small::after, .mentor-body .btn::after, .toast-action::after {
   content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
 }

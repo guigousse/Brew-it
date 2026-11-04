@@ -1,6 +1,6 @@
 /**
  * Les deux autres pièces de la brasserie, au même format que l'atelier (canvas 160 × 300 agrandi au pixel près) :
- * - le stockage : des rayonnages où s'empilent les caisses, et le bureau avec l'ordinateur des commandes ;
+ * - le stockage : des rayonnages où s'empilent les caisses, un diable et la palette des commandes prêtes ;
  * - le bar : le comptoir, ses tireuses aux couleurs des bières à la carte, et des clients qui vont et viennent.
  * Chaque pièce a 5 décors, selon son niveau.
  */
@@ -16,15 +16,15 @@ export const ROOM_H = 300;
 /** Ligne du sol (comme la salle d'embouteillage de l'atelier). */
 const FLOOR = 210;
 
-type Px = (x: number, y: number, w: number, h: number, c: string) => void;
-const painter = (g: CanvasRenderingContext2D): Px => (x, y, w, h, c) => {
+export type Px = (x: number, y: number, w: number, h: number, c: string) => void;
+export const painter = (g: CanvasRenderingContext2D): Px => (x, y, w, h, c) => {
   g.fillStyle = c;
   g.fillRect(x, y, w, h);
 };
 
 /** Chiffres de 3 × 5 px (écran de l'ordinateur). */
 const DIGITS = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
-function drawDigits(g: CanvasRenderingContext2D, text: string, x: number, y: number, col: string): void {
+export function drawDigits(g: CanvasRenderingContext2D, text: string, x: number, y: number, col: string): void {
   g.fillStyle = col;
   for (let k = 0; k < text.length; k++) {
     const d = DIGITS[Number(text[k])]!;
@@ -33,7 +33,7 @@ function drawDigits(g: CanvasRenderingContext2D, text: string, x: number, y: num
 }
 
 /** Hachage déterministe 0..1 (décor, clients). */
-const hash = (a: number, b = 0) => {
+export const hash = (a: number, b = 0) => {
   let x = Math.imul(a * 374761393 + b * 668265263, 1274126177);
   x ^= x >>> 13;
   x = Math.imul(x, 1103515245);
@@ -101,8 +101,8 @@ export abstract class Room {
   }
 }
 
-/** Murs et sols communs aux deux pièces, du plus modeste au plus futuriste. */
-function wall(g: CanvasRenderingContext2D, px: Px, style: 'brick' | 'stone' | 'cold' | 'metal' | 'future' | 'plank' | 'green', bottom: number): void {
+/** Murs et sols communs aux pièces, du plus modeste au plus futuriste. */
+export function wall(g: CanvasRenderingContext2D, px: Px, style: 'brick' | 'stone' | 'cold' | 'metal' | 'future' | 'plank' | 'green', bottom: number): void {
   const W = ROOM_W;
   if (style === 'brick') {
     px(0, 0, W, bottom, '#7a3a2c');
@@ -150,23 +150,15 @@ function wall(g: CanvasRenderingContext2D, px: Px, style: 'brick' | 'stone' | 'c
 
 /** Zone des rayonnages (coordonnées de la pièce). */
 const RACKS: Rect = { x: 6, y: 30, w: 148, h: 174 };
-/** Bureau et ordinateur, au premier plan à gauche. */
-const DESK: Rect = { x: 4, y: 224, w: 74, h: 70 };
+/** Le diable et ses caisses vides, au premier plan à gauche. */
+const TROLLEY = { x: 14, y: 226 };
 
 export class StorageRoom extends Room {
   private crates?: { key: string; c: HTMLCanvasElement };
 
   /** Objets cliquables de la pièce. */
-  hits(): { id: 'racks' | 'computer'; rect: Rect }[] {
-    return [
-      { id: 'racks', rect: RACKS },
-      { id: 'computer', rect: DESK },
-    ];
-  }
-
-  /** Position de la pastille des commandes (au-dessus de l'écran). */
-  get badgePoint() {
-    return { x: DESK.x + 30, y: DESK.y - 2 };
+  hits(): { id: 'racks'; rect: Rect }[] {
+    return [{ id: 'racks', rect: RACKS }];
   }
 
   override invalidate(): void {
@@ -184,7 +176,6 @@ export class StorageRoom extends Room {
     const lv = game.storageLevel;
     g.drawImage(this.background(lv, t), 0, 0);
     g.drawImage(this.crateLayer(game), 0, 0);
-    this.drawComputer(game, lv, t);
     this.drawPallet(game, lv);
     // lumière qui vacille dans le coin du garage et la cave
     if (lv <= 2) {
@@ -201,7 +192,6 @@ export class StorageRoom extends Room {
       }
     }
     if (this.selected === 'racks') this.outline(RACKS, t);
-    if (this.selected === 'computer') this.outline(DESK, t);
   }
 
   /** Les caisses, redessinées seulement quand le stock change. */
@@ -344,83 +334,22 @@ export class StorageRoom extends Room {
       px(0, top + 4, W, 1, '#5ef0ff');
     }
     px(0, top, W, 2, '#00000040');
-    // bureau
-    const d = DESK;
-    const deskTop = d.y + 26;
-    if (lv <= 2) {
-      // établi en bois
-      px(d.x, deskTop, d.w, 5, '#8a5a2c'); px(d.x, deskTop, d.w, 1, '#c88a4a'); px(d.x, deskTop + 4, d.w, 1, '#4c2c14');
-      for (const lx of [d.x + 3, d.x + d.w - 7]) { px(lx, deskTop + 5, 4, d.h - 31, '#744620'); px(lx, deskTop + 5, 1, d.h - 31, '#a06830'); }
-      px(d.x + 3, deskTop + 24, d.w - 6, 3, '#744620');
-    } else {
-      const s = lv === 5 ? ['#ffffff', '#dce6f0', '#8a9ab0'] : ['#c4d0dc', '#98a6b6', '#465264'];
-      px(d.x, deskTop, d.w, 4, s[1]!); px(d.x, deskTop, d.w, 1, s[0]!); px(d.x, deskTop + 3, d.w, 1, s[2]!);
-      px(d.x + d.w - 26, deskTop + 4, 24, d.h - 30, s[1]!); px(d.x + d.w - 26, deskTop + 4, 1, d.h - 30, s[0]!);
-      for (let k = 0; k < 3; k++) px(d.x + d.w - 22, deskTop + 10 + k * 12, 16, 1, s[2]!);
-      px(d.x + 4, deskTop + 4, 3, d.h - 30, s[2]!);
+    // le diable, et des caisses vides empilées contre lui
+    const tx = TROLLEY.x;
+    const ty = TROLLEY.y;
+    const metal = lv === 5 ? ['#ffffff', '#b8c6d6', '#8a9ab0'] : lv >= 3 ? ['#e8eef4', '#98a6b6', '#5a6a82'] : ['#e85a3a', '#a8483a', '#6e2a22'];
+    px(tx, ty, 3, 62, metal[1]!); px(tx, ty, 1, 62, metal[0]!); px(tx + 30, ty, 3, 62, metal[1]!); px(tx + 30, ty, 1, 62, metal[0]!);
+    px(tx - 4, ty - 4, 8, 3, '#2c283a'); px(tx + 28, ty - 4, 8, 3, '#2c283a'); // poignées
+    for (const k of [14, 34]) px(tx + 2, ty + k, 30, 2, metal[2]!);
+    px(tx - 2, ty + 60, 38, 4, metal[2]!); px(tx - 2, ty + 60, 38, 1, metal[0]!); // bavette
+    for (const wx of [tx - 4, tx + 30]) { px(wx, ty + 62, 8, 8, '#1b1424'); px(wx + 2, ty + 64, 4, 4, '#545068'); px(wx + 3, ty + 65, 2, 2, '#98a6b6'); }
+    const crate = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : ['#a06830', '#d09050', '#5a3418'];
+    for (let k = 0; k < 3; k++) {
+      const cy = ty + 36 - k * 17;
+      px(tx + 4, cy, 25, 16, crate[0]!); px(tx + 4, cy, 25, 1, crate[1]!); px(tx + 4, cy + 15, 25, 1, crate[2]!);
+      px(tx + 7, cy + 3, 19, 6, '#00000040');
+      px(tx + 12, cy + 10, 9, 3, crate[2]!);
     }
-    // chaise
-    const cx = d.x + 18;
-    px(cx, deskTop + 10, 18, 3, lv === 5 ? '#f4f8fc' : '#3e3a50');
-    px(cx + 8, deskTop + 13, 2, 16, '#2c283a');
-    px(cx + 2, deskTop + 29, 14, 2, '#2c283a');
-  }
-
-  /** L'ordinateur des commandes : son écran clignote quand des commandes attendent. */
-  private drawComputer(game: Game, lv: number, t: number): void {
-    const g = this.g;
-    const px = painter(g);
-    const d = DESK;
-    const deskTop = d.y + 26;
-    const n = game.orders.length;
-    const ready = game.readyOrders.length;
-    const blink = Math.floor(t * 2) % 2 === 0;
-    let sx: number, sy: number, sw: number, sh: number;
-    if (lv <= 2) {
-      // vieux moniteur cathodique beige
-      px(d.x + 10, deskTop - 22, 34, 22, '#b8ac8c'); px(d.x + 10, deskTop - 22, 34, 1, '#e0d6b8'); px(d.x + 43, deskTop - 22, 1, 22, '#8a7e62');
-      px(d.x + 18, deskTop - 2, 18, 2, '#8a7e62');
-      [sx, sy, sw, sh] = [d.x + 13, deskTop - 19, 28, 15];
-      px(d.x + 8, deskTop - 1, 38, 1, '#5a5040');
-      // clavier
-      px(d.x + 46, deskTop - 3, 22, 3, '#b8ac8c'); for (let i = 0; i < 9; i++) px(d.x + 47 + i * 2, deskTop - 2, 1, 1, '#6a604c');
-    } else if (lv <= 4) {
-      // écran plat sur pied
-      px(d.x + 8, deskTop - 26, 40, 24, '#2c283a'); px(d.x + 8, deskTop - 26, 40, 1, '#545068');
-      px(d.x + 26, deskTop - 2, 4, 2, '#2c283a'); px(d.x + 21, deskTop - 1, 14, 1, '#3e3a50');
-      [sx, sy, sw, sh] = [d.x + 10, deskTop - 24, 36, 19];
-      px(d.x + 50, deskTop - 2, 20, 2, '#3e3a50'); for (let i = 0; i < 9; i++) px(d.x + 51 + i * 2, deskTop - 2, 1, 1, '#8c88a0');
-    } else {
-      // terminal holographique
-      px(d.x + 20, deskTop - 3, 20, 3, '#dce6f0'); px(d.x + 22, deskTop - 3, 16, 1, '#5ef0ff');
-      [sx, sy, sw, sh] = [d.x + 8, deskTop - 32, 44, 26];
-      g.fillStyle = 'rgba(94,240,255,0.10)';
-      g.beginPath(); g.moveTo(d.x + 22, deskTop - 3); g.lineTo(sx, sy + sh); g.lineTo(sx + sw, sy + sh); g.lineTo(d.x + 38, deskTop - 3); g.fill();
-    }
-    const holo = lv === 5;
-    const ink = holo ? 'rgba(12,30,48,0.55)' : lv <= 2 ? '#0c1a10' : '#0c1420';
-    const fg = holo ? '#5ef0ff' : lv <= 2 ? '#7cff9c' : '#f2c14e';
-    px(sx, sy, sw, sh, ink);
-    if (!holo) for (let y = sy; y < sy + sh; y += 2) px(sx, y, sw, 1, '#ffffff08'); // lignes de balayage
-    // au centre de l'écran : une enveloppe et le nombre de commandes ; elle scintille quand on peut en livrer
-    const digits = String(Math.min(n, 99));
-    const ew = 14;
-    const eh = 9;
-    const dw = digits.length * 4 - 1;
-    const total = ew + 2 + dw;
-    const ex = sx + Math.floor((sw - total) / 2);
-    const ey = sy + Math.floor((sh - eh) / 2);
-    const shine = ready > 0 ? 0.5 + 0.5 * Math.sin(t * 6) : 0;
-    const env = ready > 0 ? (shine > 0.5 ? '#ffffff' : '#f2c14e') : n > 0 ? fg : fg + '70';
-    if (ready > 0) {
-      g.fillStyle = `rgba(242,193,78,${0.15 + 0.25 * shine})`;
-      g.fillRect(ex - 2, ey - 2, ew + 4, eh + 4);
-    }
-    px(ex, ey, ew, eh, env);
-    g.fillStyle = ink;
-    for (let i = 0; i < 7; i++) { g.fillRect(ex + i, ey + i, 1, 1); g.fillRect(ex + 13 - i, ey + i, 1, 1); }
-    if (ready > 0 && shine > 0.7) { px(ex - 2, ey - 2, 1, 1, '#ffffff'); px(ex + ew + 1, ey + eh, 1, 1, '#ffffff'); }
-    drawDigits(g, digits, ex + ew + 2, ey + 2, ready > 0 ? env : n > 0 ? fg : fg + '70');
   }
 
   /** Une palette au premier plan : les caisses prêtes à partir quand une commande peut être remplie. */

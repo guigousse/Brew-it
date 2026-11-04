@@ -1,7 +1,7 @@
 # Brew It 🍺
 
-Simulation de brassage en pixel art, en portrait, en trois pièces qu'on fait défiler au doigt : l'atelier (du moulin à l'embouteillage), le stockage et le bar.
-On règle chaque machine pour créer ses bières, on goûte, on construit sa gamme, on la sert au bar et on remplit les commandes des clients depuis l'ordinateur du stockage ;
+Simulation de brassage en pixel art, en portrait, en quatre pièces qu'on fait défiler au doigt : le bureau (fenêtre sur l'atelier, présentoir de la gamme, ordinateur), l'atelier (du moulin à l'embouteillage), le stockage et le bar.
+On règle chaque machine pour créer ses bières, on goûte, on construit sa gamme, on la sert au bar et on remplit les commandes des clients depuis l'ordinateur du bureau ;
 chaque machine, le stockage et le bar s'améliorent sur 5 niveaux.
 
 **Plateforme prioritaire : iOS (App Store).** Android viendra ensuite avec le même code.

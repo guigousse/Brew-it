@@ -10,6 +10,7 @@ import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, LABEL_SPOT, type ShelfBottleKind } from '../render/bottleArt';
 import { BarRoom, drawKeg, StorageRoom } from '../render/rooms';
+import { OfficeRoom } from '../render/officeRoom';
 import { extendBackdrop } from '../render/extend';
 import { SHOP_SPOTS, ShopRoom } from '../render/shopRoom';
 import { iconCanvas, type IconId } from '../render/icons';
@@ -91,19 +92,19 @@ function img(canvas: HTMLCanvasElement, cls = 'pix'): HTMLImageElement {
   return i;
 }
 
-/** Les trois pièces, dans l'ordre du trajet de la bière : on glisse de l'une à l'autre. */
-export type RoomId = 'workshop' | 'storage' | 'bar';
+/** Les pièces : le bureau, puis le trajet de la bière ; on glisse de l'une à l'autre. */
+export type RoomId = 'office' | 'workshop' | 'storage' | 'bar';
 const ROOMS: readonly { id: RoomId; name: string }[] = [
+  { id: 'office', name: 'Bureau' },
   { id: 'workshop', name: 'Atelier' },
   { id: 'storage', name: 'Stockage' },
   { id: 'bar', name: 'Bar' },
 ];
-/** Ce que montre l'écran : une des pièces, ou une page (tableau de bord, magasin). */
-export type View = RoomId | 'dashboard' | 'shop';
-type PageId = 'dashboard';
+/** Ce que montre l'écran : une des pièces, ou le magasin. */
+export type View = RoomId | 'shop';
 /** Onglets de la barre de navigation, de gauche à droite. */
 const TABS: readonly { id: View; name: string; icon: IconId }[] = [
-  { id: 'dashboard', name: 'Tableau de bord', icon: 'chart' },
+  { id: 'office', name: 'Bureau', icon: 'office' },
   { id: 'workshop', name: 'Atelier', icon: 'flask' },
   { id: 'storage', name: 'Stockage', icon: 'crate' },
   { id: 'bar', name: 'Bar', icon: 'mug' },
@@ -118,7 +119,18 @@ const SOURCE: Record<SaleSource, { name: string; color: string }> = {
   wholesale: { name: 'Grossiste', color: '#d45c8e' },
 };
 
-type PcTab = 'orders' | 'trends' | 'wholesale';
+/** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
+export type PcApp = 'dashboard' | 'messages' | 'orders' | 'trends' | 'wholesale';
+const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
+  { id: 'dashboard', name: 'Tableau de bord', icon: 'chart' },
+  { id: 'messages', name: 'Messages', icon: 'bubble' },
+  { id: 'orders', name: 'Commandes', icon: 'clipboard' },
+  { id: 'trends', name: 'Tendances', icon: 'trend' },
+  { id: 'wholesale', name: 'Grossiste', icon: 'truck' },
+];
+/** Un message reçu au bureau (commandes, tendances, brassins…), daté en temps de jeu. */
+interface Message { at: number; text: string; kind: 'good' | 'bad' | 'info'; icon: IconId; read: boolean }
+const MAX_MESSAGES = 60;
 type SheetState = { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'storage' | 'storageUp' | 'bar' | 'barUp' };
 
 const starText = (p: number) => {
@@ -133,6 +145,18 @@ export const clock = (s: number) => {
   const mm = Math.floor((t % 3600) / 60);
   const ss = String(t % 60).padStart(2, '0');
   return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+};
+
+/** Heure du jeu, à l'horloge du bureau : une partie commence à 8 h du matin. */
+const gameClock = (t: number) => {
+  const d = (t + 8 * 3600) % 86400;
+  return `${String(Math.floor(d / 3600)).padStart(2, '0')}:${String(Math.floor((d % 3600) / 60)).padStart(2, '0')}`;
+};
+
+/** Ancienneté d'un message, en temps de jeu. */
+const ago = (s: number) => {
+  const m = Math.floor(Math.max(0, s) / 60);
+  return m < 1 ? 'à l\'instant' : m < 60 ? `il y a ${m} min` : m < 24 * 60 ? `il y a ${Math.floor(m / 60)} h` : `il y a ${Math.floor(m / 1440)} j`;
 };
 
 const duration = (s: number) => {
@@ -173,7 +197,7 @@ export class App {
   private eventsBtn = fab('events', 'Événements');
   private barmanBtn = fab('barman', 'Barman en renfort');
   /** Bouton d'amélioration (flèche vers le haut) à gauche du nom de chaque pièce. */
-  private ups: Record<RoomId, HTMLButtonElement> = { workshop: upBtn('Améliorer la brasserie'), storage: upBtn('Agrandir le stockage'), bar: upBtn('Agrandir le bar') };
+  private ups: Record<RoomId, HTMLButtonElement> = { office: upBtn('Améliorer l\'ordinateur'), workshop: upBtn('Améliorer la brasserie'), storage: upBtn('Agrandir le stockage'), bar: upBtn('Agrandir le bar') };
   readonly shopRoom = new ShopRoom();
   private shopWrap = h('div', 'scene-wrap');
   /** Étiquettes posées sur le décor (prix de l'objet en vente, « bientôt »…), en coordonnées de la pièce. */
@@ -181,13 +205,15 @@ export class App {
   private saleTag = h('div', 'shop-tag');
   private computerHit?: HTMLButtonElement;
   // --- les pièces
+  readonly officeRoom = new OfficeRoom();
+  private officeWrap = h('div', 'scene-wrap');
+  private officePlaque = h('button', 'map-btn plaque');
   readonly storageRoom = new StorageRoom();
   readonly barRoom = new BarRoom();
   private room: RoomId = 'workshop';
   private view: View = 'workshop';
   private navTabs = new Map<View, { btn: HTMLButtonElement; badge: HTMLElement }>();
-  /** Pages hors des pièces : le tableau de bord et le magasin. */
-  private pages: Record<PageId, HTMLElement> = { dashboard: h('section', 'room page') };
+  /** Dernière seconde où le tableau de bord de l'ordinateur a été redessiné. */
   private dashAt = -1;
   /** Minute survolée dans le graphique des ventes (index dans les 60 dernières). */
   private dashPick: number | null = null;
@@ -209,8 +235,10 @@ export class App {
   private swipe: { id: number; x: number; y: number; dx: number; on: boolean; t: number } | null = null;
   private swallowClick = false;
   private roomsDrawUntil = 0;
-  /** Fenêtre de l'ordinateur ouverte, onglet affiché, bières choisies pour chaque commande. */
-  private computer: { tab: PcTab; key: string } | null = null;
+  /** Ordinateur allumé : l'application ouverte (null : le menu), et l'écran où elle s'affiche. */
+  private computer: { app: PcApp | null; key: string; ui: HTMLElement } | null = null;
+  /** Boîte de réception du bureau, la plus récente en premier. */
+  private messages: Message[] = [];
   /** Zones tactiles des fûts de la cave (leur nombre suit celui des tireuses). */
   private kegHits: HTMLButtonElement[] = [];
   /** Commandes dont on modifie le choix des bières. */
@@ -274,13 +302,31 @@ export class App {
     this.ups.workshop.onclick = () => this.openBrewery();
     this.sceneWrap.append(roomTitle(this.ups.workshop, this.plaque), this.tasteBtn);
 
-    // stockage : rayonnages et ordinateur
+    // bureau : la fenêtre sur l'atelier, le panneau des commandes, le présentoir de la gamme et l'ordinateur
+    this.officeWrap.append(this.officeRoom.canvas);
+    const OFFICE_HITS = {
+      window: { label: 'Fenêtre : aller à l\'atelier', run: () => this.goView('workshop') },
+      board: { label: 'Panneau des commandes', run: () => this.openComputer('orders') },
+      display: { label: 'Présentoir : ma gamme', run: () => this.open({ kind: 'range' }) },
+      computer: { label: 'Ordinateur', run: () => this.openComputer() },
+    };
+    for (const hit of this.officeRoom.hits()) {
+      const el = h('button', 'station-hit');
+      el.setAttribute('aria-label', OFFICE_HITS[hit.id].label);
+      el.onclick = OFFICE_HITS[hit.id].run;
+      if (hit.id === 'computer') this.computerHit = el;
+      this.officeWrap.append(el);
+      this.roomHits.push({ el, rect: hit.rect });
+    }
+    this.officePlaque.onclick = () => this.openComputerUp();
+    this.ups.office.onclick = () => this.openComputerUp();
+    this.officeWrap.append(roomTitle(this.ups.office, this.officePlaque));
+    // stockage : les rayonnages
     this.storageWrap.append(this.storageRoom.canvas);
     for (const hit of this.storageRoom.hits()) {
       const el = h('button', 'station-hit');
-      el.setAttribute('aria-label', hit.id === 'computer' ? 'Ordinateur des commandes' : 'Rayonnages');
-      el.onclick = () => (hit.id === 'computer' ? this.openComputer() : this.open({ kind: 'storage' }));
-      if (hit.id === 'computer') this.computerHit = el;
+      el.setAttribute('aria-label', 'Rayonnages');
+      el.onclick = () => this.open({ kind: 'storage' });
       this.storageWrap.append(el);
       this.roomHits.push({ el, rect: hit.rect });
     }
@@ -324,14 +370,10 @@ export class App {
     this.roomTags.push({ el: this.saleTag, x: sale.x + sale.w / 2, y: sale.y + sale.h + 6 });
     this.saleTag.onclick = () => this.openShopItem();
     this.shopWrap.append(this.saleTag);
-    // Le défilé des écrans suit l'ordre des onglets : tableau de bord, les trois pièces, magasin.
-    const wraps: Record<RoomId | 'shop', HTMLElement> = { workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap, shop: this.shopWrap };
-    const srcs = { workshop: this.scene, storage: this.storageRoom, bar: this.barRoom, shop: this.shopRoom };
+    // Le défilé des écrans suit l'ordre des onglets : bureau, atelier, stockage, bar, magasin.
+    const wraps: Record<View, HTMLElement> = { office: this.officeWrap, workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap, shop: this.shopWrap };
+    const srcs = { office: this.officeRoom, workshop: this.scene, storage: this.storageRoom, bar: this.barRoom, shop: this.shopRoom };
     for (const t of TABS) {
-      if (t.id === 'dashboard') {
-        this.track.append(this.pages.dashboard);
-        continue;
-      }
       const pane = h('div', 'room');
       const view = h('div', 'room-view');
       const ext = h('canvas', 'room-ext');
@@ -398,7 +440,7 @@ export class App {
     }
     for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px`, left: `${ox * this.scale}px`, top: `${oy * this.scale}px` });
     this.syncBackdrops();
-    for (const c of [this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas, this.shopRoom.canvas]) Object.assign(c.style, { width: `${w}px`, height: `${hh}px` });
+    for (const c of [this.officeRoom.canvas, this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas, this.shopRoom.canvas]) Object.assign(c.style, { width: `${w}px`, height: `${hh}px` });
     const s = this.scale;
     for (const { el, x, y } of this.roomTags) Object.assign(el.style, { left: `${x * s}px`, top: `${y * s}px` });
     for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
@@ -446,8 +488,10 @@ export class App {
     if (all || this.view === 'storage') this.storageRoom.draw(g, t);
     if (all || this.view === 'bar') this.barRoom.draw(g, t);
     if (all || this.view === 'shop') this.shopRoom.draw(g, t);
-    if (!all && this.view !== 'workshop') return;
+    // l'atelier se voit aussi par la fenêtre du bureau
+    if (!all && this.view !== 'workshop' && this.view !== 'office') return;
     this.scene.draw(g, t);
+    if (all || this.view === 'office') this.officeRoom.draw(g, t, this.scene.canvas);
     // étiquettes des appareils
     for (const id of STATION_ORDER) {
       const o = this.overlays.get(id)!;
@@ -519,11 +563,15 @@ export class App {
     // améliorations possibles : la flèche brille
     const stationUp = STATION_ORDER.some((id) => g.level(id) < MAX_LEVEL && g.money >= g.upgradeCost(id));
     const nextStore = STORAGE[g.storageLevel];
+    const nextPc = COMPUTERS[g.computerLevel];
+    this.ups.office.classList.toggle('alert', !!nextPc && g.money >= nextPc.cost);
+    this.ups.office.classList.toggle('hidden', !nextPc);
     this.ups.workshop.classList.toggle('alert', stationUp);
     this.ups.storage.classList.toggle('alert', !!nextStore && g.money >= nextStore.cost);
     this.ups.bar.classList.toggle('alert', !!nextBar && g.money >= nextBar.cost);
     // l'ordinateur (l'enveloppe est dessinée sur son écran) : son nom dit les commandes en attente
-    this.computerHit?.setAttribute('aria-label', `Ordinateur : ${g.orders.length} commande${g.orders.length > 1 ? 's' : ''}${ready ? `, ${ready} à livrer` : ''}`);
+    const unread = this.unread;
+    this.computerHit?.setAttribute('aria-label', `Ordinateur : ${g.orders.length} commande${g.orders.length > 1 ? 's' : ''}${ready ? `, ${ready} à livrer` : ''}${unread ? `, ${unread} message${unread > 1 ? 's' : ''}` : ''}`);
     this.fabs.classList.toggle('hidden', !isRoom(this.view) || !!this.openSheet);
     // les notifications se posent au-dessus du panneau ouvert
     const sheetTop = this.openSheet ? this.sheet.getBoundingClientRect().top : 0;
@@ -531,11 +579,13 @@ export class App {
     // le tutoriel montre le bouton dont il parle
     this.brewBtn.classList.toggle('tuto', g.tips === 2);
     this.storagePlaque.textContent = `▣ ${STORAGE[g.storageLevel - 1]!.name}`;
+    this.officePlaque.textContent = `▣ ${COMPUTERS[g.computerLevel - 1]!.name}`;
     this.barPlaque.textContent = `★ ${g.barLevel} · ${g.bar.name}`;
     // pastilles des onglets de pièces
     const badges: Record<RoomId, string> = {
+      office: g.orders.length ? String(g.orders.length) : unread ? '✉' : '',
       workshop: trial ? '🍺' : '',
-      storage: g.orders.length ? String(g.orders.length) : g.storageFull ? '!' : '',
+      storage: g.storageFull ? '!' : '',
       bar: g.partying ? '🎉' : emptyTap && kegsReady ? '!' : '', // un fût à changer, et de quoi le remplacer
     };
     for (const [id, tab] of this.navTabs) {
@@ -543,7 +593,7 @@ export class App {
       tab.btn.classList.toggle('active', id === this.view);
       tab.badge.textContent = badge;
       tab.badge.classList.toggle('hidden', !badge);
-      tab.badge.classList.toggle('hot', id === 'storage' ? ready > 0 || g.storageFull : !!badge);
+      tab.badge.classList.toggle('hot', id === 'office' ? ready > 0 : !!badge);
     }
     this.renderPage();
     this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen || this.view !== 'workshop');
@@ -1402,51 +1452,203 @@ export class App {
     card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
-  // ------------------------------------------------------------------ ordinateur des commandes
+  // ------------------------------------------------------------------ ordinateur du bureau
 
-  /** L'ordinateur du stockage : le tableau des commandes, les tendances et le grossiste. */
-  openComputer(tab: PcTab = 'orders'): void {
-    if (this.view !== 'storage') this.goRoom('storage');
+  /**
+   * L'ordinateur du bureau : un écran de taille fixe, le fond d'écran flouté, et par-dessus le menu des applications
+   * (tableau de bord, messages, commandes, tendances, grossiste) ; chaque application s'ouvre dans une fenêtre.
+   */
+  openComputer(app: PcApp | null = null): void {
+    if (this.view !== 'office') this.goView('office');
     this.close();
-    const card = this.modalCard('');
-    card.classList.add('computer');
-    this.computer = { tab, key: '' };
-    this.renderComputer(card);
+    this.modal.replaceChildren();
+    this.modal.classList.remove('hidden');
+    const g = this.game();
+    const pc = h('div', `pc computer pc-lv${Math.min(5, g.computerLevel)}`);
+    pc.setAttribute('role', 'dialog');
+    pc.setAttribute('aria-label', 'Ordinateur');
+    const screen = h('div', 'pc-screen');
+    // fond d'écran : l'atelier, flouté
+    const wall = h('canvas', 'pc-wall');
+    wall.width = SCENE_W;
+    wall.height = SCENE_H;
+    wall.getContext('2d')!.drawImage(this.scene.canvas, 0, 0);
+    const ui = h('div', 'pc-ui');
+    screen.append(wall, ui);
+    const chin = h('div', 'pc-chin');
+    const led = h('span', 'pc-led');
+    chin.append(led, h('span', 'pc-brand', COMPUTERS[g.computerLevel - 1]!.name), this.btn('pc-power', '⏻', () => this.closeModal()));
+    chin.lastElementChild!.setAttribute('aria-label', 'Éteindre l\'ordinateur');
+    pc.append(screen, chin);
+    this.modal.append(pc);
+    this.computer = { app, key: '', ui };
+    this.renderComputer();
+  }
+
+  private get unread(): number {
+    return this.messages.filter((m) => !m.read).length;
+  }
+
+  /** Une nouvelle dans la boîte de réception du bureau. */
+  log(text: string, kind: Message['kind'] = 'info', icon: IconId = 'bubble'): void {
+    this.messages.unshift({ at: this.game().time, text, kind, icon, read: false });
+    this.messages.length = Math.min(this.messages.length, MAX_MESSAGES);
+    if (this.computer) this.refreshComputer();
+  }
+
+  /** Nouvelle partie : la boîte de réception repart de zéro, avec un mot de Gaston. */
+  resetMessages(): void {
+    this.messages = [];
+    this.log('Gaston : bienvenue au bureau ! Les commandes, les tendances et les nouvelles de la brasserie arrivent ici.', 'info', 'bubble');
   }
 
   private computerKey(g: Game): string {
-    return JSON.stringify([this.computer?.tab, g.computerLevel, g.advertising, g.money >= g.adCost, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.orders.map((o) => o.id), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10)]), [...this.picks]]);
+    const app = this.computer?.app;
+    return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
+      app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.advertising, g.money >= g.adCost, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10)]), [...this.picks]] : 0]);
   }
 
-  /** Reconstruit la fenêtre quand une commande arrive, expire, ou que le stock change. */
+  /** Reconstruit l'écran quand une commande arrive, expire, ou que le stock change ; le tableau de bord vit en direct. */
   private refreshComputer(): void {
     if (!this.computer || !this.modalOpen) return;
-    const card = this.modal.querySelector<HTMLElement>('.modal-card.computer');
-    if (!card) return;
-    if (this.computerKey(this.game()) !== this.computer.key) this.renderComputer(card);
-    else card.querySelectorAll<HTMLElement>('[data-expires]').forEach((el) => (el.textContent = `⏳ ${duration(Number(el.dataset.expires) - this.game().time)}`));
+    const g = this.game();
+    const st = this.computer;
+    if (this.computerKey(g) !== st.key) return this.renderComputer();
+    const clock = st.ui.querySelector('.pc-clock');
+    if (clock) clock.textContent = gameClock(g.time);
+    if (st.app === 'dashboard') {
+      const now = Math.floor(performance.now() / 1000);
+      const body = st.ui.querySelector<HTMLElement>('.pc-body');
+      if (body && now !== this.dashAt) {
+        this.dashAt = now;
+        this.dashboardPage(g, body);
+      }
+    }
+    st.ui.querySelectorAll<HTMLElement>('[data-expires]').forEach((el) => (el.textContent = `⏳ ${duration(Number(el.dataset.expires) - g.time)}`));
   }
 
-  private renderComputer(card: HTMLElement): void {
+  private renderComputer(): void {
     const g = this.game();
     const st = this.computer!;
+    const ui = st.ui;
+    const oldBody = ui.querySelector('.pc-body');
+    const scroll = oldBody && oldBody.getAttribute('data-app') === st.app ? oldBody.scrollTop : 0;
     st.key = this.computerKey(g);
-    const scroll = card.scrollTop;
-    card.replaceChildren();
-    const head = h('div', 'sheet-head');
-    const tabs = h('div', 'pc-tabs');
-    for (const [id, name] of [['orders', 'Commandes'], ['trends', 'Tendances'], ['wholesale', 'Grossiste']] as const) {
-      tabs.append(this.btn(`pc-tab${st.tab === id ? ' active' : ''}`, name, () => {
-        st.tab = id;
-        this.renderComputer(card);
-      }));
+    ui.replaceChildren();
+    // barre du haut : le système, l'heure du jeu
+    const bar = h('div', 'pc-bar');
+    bar.append(h('span', 'pc-os', 'BREW OS'), h('span', 'pc-clock', gameClock(g.time)));
+    ui.append(bar);
+    if (!st.app) {
+      ui.append(this.pcHome(g));
+      return;
     }
-    head.append(tabs, this.btn('icon-btn small', '✕', () => this.closeModal()));
-    card.append(head);
-    if (st.tab === 'orders') this.ordersTab(g, card);
-    else if (st.tab === 'trends') this.trendsTab(g, card);
-    else this.wholesaleTab(g, card);
-    card.scrollTop = scroll;
+    const def = PC_APPS.find((a) => a.id === st.app)!;
+    const win = h('div', 'pc-window');
+    const head = h('div', 'pc-win-head');
+    const back = this.btn('pc-back', '‹', () => {
+      st.app = null;
+      this.renderComputer();
+    });
+    back.setAttribute('aria-label', 'Retour au menu');
+    const title = h('span', 'pc-win-title');
+    title.append(iconCanvas(def.icon, 1, 'pc-win-icon'), h('span', '', def.name));
+    const x = this.btn('pc-x', '✕', () => this.closeModal());
+    x.setAttribute('aria-label', 'Éteindre l\'ordinateur');
+    head.append(back, title, x);
+    const body = h('div', 'pc-body');
+    body.setAttribute('data-app', st.app);
+    win.append(head, body);
+    ui.append(win);
+    if (st.app === 'dashboard') {
+      this.dashAt = Math.floor(performance.now() / 1000);
+      this.dashPick = null;
+      this.dashboardPage(g, body);
+    } else if (st.app === 'messages') this.messagesTab(g, body);
+    else if (st.app === 'orders') this.ordersTab(g, body);
+    else if (st.app === 'trends') this.trendsTab(g, body);
+    else this.wholesaleTab(g, body);
+    body.scrollTop = scroll;
+  }
+
+  /** Le menu : une icône par application, avec ce qui attend dedans. */
+  private pcHome(g: Game): HTMLElement {
+    const home = h('div', 'pc-home');
+    const ready = g.readyOrders.length;
+    const badge: Record<PcApp, { text: string; hot: boolean }> = {
+      dashboard: { text: '', hot: false },
+      messages: { text: this.unread ? String(this.unread) : '', hot: false },
+      orders: { text: g.orders.length ? String(g.orders.length) : '', hot: ready > 0 },
+      trends: { text: '', hot: false },
+      wholesale: { text: '', hot: false },
+    };
+    const grid = h('div', 'pc-apps');
+    for (const a of PC_APPS) {
+      const b = h('button', 'pc-app');
+      const icon = h('span', 'pc-app-icon');
+      icon.append(iconCanvas(a.icon, 3));
+      b.append(icon, h('span', 'pc-app-name', a.name));
+      const bd = badge[a.id];
+      if (bd.text) b.append(h('span', `room-badge pc-badge${bd.hot ? ' hot' : ''}`, bd.text));
+      b.setAttribute('aria-label', `${a.name}${bd.text ? ` (${bd.text})` : ''}`);
+      b.onclick = () => {
+        this.computer!.app = a.id;
+        this.renderComputer();
+      };
+      grid.append(b);
+    }
+    home.append(grid);
+    // la dernière nouvelle, en bas de l'écran
+    const last = this.messages[0];
+    if (last) {
+      const n = h('button', `pc-notif${last.read ? '' : ' unread'}`);
+      n.append(iconCanvas(last.icon, 1, 'pc-notif-icon'), h('span', 'pc-notif-text', last.text));
+      n.onclick = () => {
+        this.computer!.app = 'messages';
+        this.renderComputer();
+      };
+      home.append(n);
+    }
+    return home;
+  }
+
+  /** La boîte de réception : tout ce qui s'est passé à la brasserie ; l'ouvrir marque tout comme lu. */
+  private messagesTab(g: Game, card: HTMLElement): void {
+    if (!this.messages.length) card.append(h('p', 'hint', 'Aucun message.'));
+    for (const m of this.messages) {
+      const el = h('div', `pc-msg ${m.kind}${m.read ? '' : ' unread'}`);
+      el.append(iconCanvas(m.icon, 2, 'pc-msg-icon'));
+      const txt = h('div', 'pc-msg-body');
+      txt.append(h('span', 'pc-msg-text', m.text), h('span', 'pc-msg-time', ago(g.time - m.at)));
+      el.append(txt);
+      card.append(el);
+    }
+    for (const m of this.messages) m.read = true;
+    if (this.computer) this.computer.key = this.computerKey(g);
+  }
+
+  /** Améliorer l'ordinateur : une place de plus au tableau des commandes, et un bureau plus beau. */
+  openComputerUp(): void {
+    const g = this.game();
+    const cur = COMPUTERS[g.computerLevel - 1]!;
+    const next = COMPUTERS[g.computerLevel];
+    const card = this.modalCard('Améliorer l\'ordinateur');
+    card.append(h('div', 'stats-line strong', `${cur.name} · ${cur.slots} places de commandes`));
+    if (!next) {
+      card.append(h('p', 'hint', 'Ton ordinateur est au sommet.'), this.btn('btn', 'Fermer', () => this.closeModal()));
+      return;
+    }
+    card.append(h('p', 'hint', `Suivant : ${next.name}, ${next.slots} places au tableau des commandes, et un nouveau décor pour le bureau.`));
+    const buy = this.btn('btn primary big', `Installer · ${moneyInt(next.cost)}`, () => {
+      const r = g.upgradeComputer();
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      this.toast(`${next.name} installé`, 'good');
+      this.closeModal();
+    });
+    this.costGate(buy, next.cost);
+    card.append(buy);
+    if (g.money < next.cost) card.append(h('p', 'note bad', `Il te manque ${moneyInt(next.cost - g.money)}.`));
+    card.append(this.btn('btn', 'Annuler', () => this.closeModal()));
   }
 
   private ordersTab(g: Game, card: HTMLElement): void {
@@ -1617,10 +1819,7 @@ export class App {
     this.close();
     this.storageRoom.selected = null;
     this.barRoom.selected = null;
-    if (v === 'dashboard') {
-      this.dashAt = -1;
-      this.dashPick = null;
-    }
+    this.officeRoom.selected = null;
     this.roomsDrawUntil = performance.now() + 600;
     this.placeTrack();
     this.setBottom();
@@ -1872,6 +2071,7 @@ export class App {
     const hrs = Math.floor(o.seconds / 3600);
     const min = Math.floor((o.seconds % 3600) / 60);
     this.toast(`+${moneyInt(o.earned)} · ${hrs ? `${hrs} h ` : ''}${min} min d'absence, ${o.sold} vendues`, 'good');
+    this.log(`Pendant ton absence (${hrs ? `${hrs} h ` : ''}${min} min) : ${o.sold} bières vendues, +${moneyInt(o.earned)}`, 'good', 'chart');
     this.onSent?.();
   }
 
@@ -1956,29 +2156,19 @@ export class App {
 
   // ------------------------------------------------------------------ pages
 
+  /** Étiquette de l'objet en vente au magasin. */
   private renderPage(): void {
-    // le tableau de bord vit quand il est affiché, et juste à côté (pour qu'il soit à jour quand on y glisse)
-    // étiquette de l'objet en vente
     const g0 = this.game();
     const item = g0.nextItem;
     const tag = item ? `${item.name} · ${moneyShort(item.cost)}` : 'Tout est vendu';
     if (this.saleTag.textContent !== tag) this.saleTag.textContent = tag;
     this.saleTag.classList.toggle('afford', !!item && g0.money >= item.cost);
-    if (this.view === 'dashboard' || this.view === 'workshop') {
-      // en direct, mais une fois par seconde suffit
-      const now = Math.floor(performance.now() / 1000);
-      if (now === this.dashAt) return;
-      this.dashAt = now;
-      this.dashboardPage(this.game());
-    }
   }
 
-  /** Tableau de bord : un aperçu en direct des ventes et de la brasserie. */
-  private dashboardPage(g: Game): void {
-    const page = this.pages.dashboard;
+  /** Tableau de bord (application de l'ordinateur) : un aperçu en direct des ventes et de la brasserie. */
+  private dashboardPage(g: Game, page: HTMLElement): void {
     const scroll = page.scrollTop;
     page.replaceChildren();
-    page.append(h('div', 'page-title', 'Tableau de bord'));
     // chiffres clés
     const kpis = h('div', 'kpis');
     const kpi = (label: string, value: string, sub?: string) => {
@@ -2187,7 +2377,7 @@ export class App {
       1: { text: 'Touche une machine pour la régler.' },
       2: { text: 'Touche la cuve de cuivre, en bas à droite, pour lancer ton premier brassin.' },
       3: { text: 'Je t\'aide pour celui-ci : ça ira vite. On goûte à la première bouteille !' },
-      4: { text: 'Glisse l\'écran : au stockage, touche l\'ordinateur pour les commandes ; au bar, touche les fûts pour les brancher. Bonne brasse !', action: 'Compris' },
+      4: { text: 'Glisse l\'écran : au bureau, touche l\'ordinateur pour les commandes et les nouvelles ; au bar, touche les fûts pour les brancher. Bonne brasse !', action: 'Compris' },
     };
     const tip = this.modalOpen || this.openSheet?.kind === 'brew' || !isRoom(this.view) ? undefined : tips[g.tips];
     this.mentor.classList.toggle('hidden', !tip);
