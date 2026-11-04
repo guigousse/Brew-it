@@ -425,7 +425,7 @@ export class App {
     const can = g.canBrew();
     const trial = g.tastable;
     // pastilles des boutons d'action : l'essentiel en un coup d'œil ; « ready » = il y a quelque chose à faire
-    setFab(this.brewBtn, g.planned ? String(g.planned) : g.autoBrew ? '⟳' : '', can.ok && !g.autoBrew && !g.planned ? 'ready' : '',
+    setFab(this.brewBtn, g.planned ? String(g.planned) : '', can.ok && !g.planned ? 'ready' : '',
       g.planned ? `Brasser : ${g.planned} programmé${g.planned > 1 ? 's' : ''}` : 'Brasser');
     setFab(this.rangeBtn, trial ? '!' : '', trial ? 'alert' : '', `Ma gamme : ${g.beers.length}/${g.rangeSlots}`);
     setFab(this.stockBtn, g.storageFull ? '!' : '', g.bottlingBlocked ? 'alert' : '', g.storageFull ? 'Stock : plein' : `Stock : ${Math.round((g.stored / g.storageCap) * 100)} %`);
@@ -500,7 +500,7 @@ export class App {
     this.fabs.classList.toggle('hidden', !!s || !isRoom(this.view));
     if (!s) return;
     const key = JSON.stringify([
-      s, g.level(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer, g.autoBrew,
+      s, g.level(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer,
       g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.planCap, this.wiz, g.selectedBeer, g.beers.map((b) => b.kegs.length), this.planStatus(g)] : 0,
       s.kind === 'storage' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
     ]);
@@ -526,6 +526,7 @@ export class App {
   private refreshLive(): void {
     const g = this.game();
     this.sheet.querySelectorAll<HTMLButtonElement>('[data-cost]').forEach((b) => (b.disabled = g.money < Number(b.dataset.cost)));
+    this.sheet.querySelectorAll<HTMLElement>('[data-eta]').forEach((el) => (el.textContent = clock(Number(el.dataset.eta) - g.time)));
   }
 
   private frameSheet(title: string, icon?: HTMLCanvasElement): HTMLElement {
@@ -639,6 +640,33 @@ export class App {
     if (w.step === 'count' && beer) this.countStep(g, body, beer, w.format);
   }
 
+  /** Prévisions de production en cache (avec ou sans brassins en plus) : refaites quand la file change, ou toutes les 10 s. */
+  private fcCache = new Map<string, { key: string; at: number; real: number; res: ReturnType<Game['forecast']> }>();
+
+  private forecast(g: Game, extra?: { beerId: number; format: Format; count: number }): { at: number; res: ReturnType<Game['forecast']> } | null {
+    if (!g.planned && !g.batches.some((b) => b.beerId != null) && !extra) return null;
+    const slot = extra ? 'extra' : 'file';
+    const key = JSON.stringify([g.plan, g.batches.length, extra ?? null]);
+    const c = this.fcCache.get(slot);
+    if (c && c.key === key && performance.now() - c.real < 10000) return c;
+    const fresh = { key, at: g.time, real: performance.now(), res: g.forecast(extra) };
+    this.fcCache.set(slot, fresh);
+    return fresh;
+  }
+
+  /** Compte à rebours jusqu'à la fin du brassin n° i de la prévision (mis à jour en direct). */
+  private etaEl(fc: { at: number; res: ReturnType<Game['forecast']> }, i: number, cls = ''): HTMLElement {
+    const el = h('span', `eta ${cls}`);
+    const end = fc.res.ends[i];
+    if (end == null) {
+      el.textContent = 'plus de 24 h';
+      return el;
+    }
+    el.dataset.eta = String(fc.at + end);
+    el.textContent = clock(fc.at + end - this.game().time);
+    return el;
+  }
+
   private refreshSheet(): void {
     this.sheetKey = '';
     this.renderSheet();
@@ -690,7 +718,15 @@ export class App {
     fill.style.width = `${Math.min(100, (g.planned / g.planCap) * 100)}%`;
     bar.append(fill);
     body.append(head, bar);
-    if (!g.plan.length) body.append(h('p', 'hint', g.autoBrew ? 'File vide : le brassage continu relance la bière la moins en stock.' : 'Aucun brassin programmé.'));
+    // temps de production restant : les brassins sur la ligne, puis toute la file
+    const fc = this.forecast(g);
+    const inLine = g.batches.filter((b) => b.beerId != null).length;
+    if (fc && fc.res.ends.length + (fc.res.done ? 0 : 1) > 0) {
+      const eta = h('div', 'eta-total');
+      eta.append(h('span', '', '⏱ Production restante'), this.etaEl(fc, fc.res.ends.length - 1, 'big'));
+      body.append(eta);
+    }
+    if (!g.plan.length) body.append(h('p', 'hint', inLine ? 'Aucun autre brassin programmé.' : 'Aucun brassin programmé : la brasserie est à l\'arrêt.'));
     const list = h('div', 'plan-list');
     g.plan.forEach((p, i) => {
       const b = g.beer(p.beerId);
@@ -723,21 +759,20 @@ export class App {
         this.refreshSheet();
       }), up, down);
       card.append(top, ctl);
-      if (i === 0) card.append(h('p', this.planStatus(g).startsWith('⏸') ? 'note bad' : 'note', this.planStatus(g)));
+      const foot = h('div', 'plan-foot');
+      if (i === 0) foot.append(h('span', this.planStatus(g).startsWith('⏸') ? 'note bad' : 'note', this.planStatus(g)));
+      else foot.append(h('span'));
+      // fin du dernier brassin de ce groupe
+      const done = inLine + g.plan.slice(0, i + 1).reduce((n, x) => n + x.count, 0) - 1;
+      if (fc) {
+        const w = h('span', 'plan-eta');
+        w.append(h('span', '', 'prêt dans '), this.etaEl(fc, done));
+        foot.append(w);
+      }
+      card.append(foot);
       list.append(card);
     });
     body.append(list);
-    const auto = h('label', 'toggle');
-    const box = h('input');
-    box.type = 'checkbox';
-    box.checked = g.autoBrew;
-    box.onchange = () => {
-      g.autoBrew = box.checked;
-      this.refreshSheet();
-    };
-    auto.append(box, h('span', '', 'Brassage continu quand la file est vide'));
-    body.append(auto);
-    if (g.autoBrew && !g.plan.length && !g.roomForBatch) body.append(h('p', 'note bad', '⏸ Stockage plein'));
   }
 
   /** Étape 1 : quelle bière ? */
@@ -807,6 +842,13 @@ export class App {
     line('Production', this.batchOutput(g, f, n));
     line('Ingrédients', `${moneyInt(unit * n)} (${moneyInt(unit)} / brassin)`);
     line('Place libre au stockage', fits >= n ? `${n} / ${n} brassins` : `${fits} / ${n} brassins`, fits >= n ? '' : 'bad');
+    // quand ces brassins seraient prêts, après ceux déjà programmés
+    const fc = this.forecast(g, { beerId: beer.id, format: f, count: n });
+    if (fc) {
+      const r = h('div', 'live-row');
+      r.append(h('span', '', 'Prêts dans'), this.etaEl(fc, fc.res.ends.length - 1));
+      sum.append(r);
+    }
     sum.append(h('p', 'hint', 'Payés au lancement de chaque brassin. Un brassin attend l\'argent et la place dont il a besoin.'));
     body.append(sum);
     const go = this.btn('btn primary big', room ? `Programmer ${n} brassin${n > 1 ? 's' : ''}` : 'File pleine', () => {
@@ -1842,6 +1884,9 @@ export class App {
     line('Bar', `${taps}/${g.taps.length} tireuses · ${g.glassesLeft} verres`);
     if (g.partying) line('Fête', `🎉 ${clock(g.partyUntil - g.time)}`);
     if (g.advertising) line('Campagne de pub', `📣 ${clock(g.adUntil - g.time)}`);
+    const fc = this.forecast(g);
+    if (fc) line('File de brassins', `${g.planned} · fin dans ${fc.res.done ? clock(fc.at + fc.res.total - g.time) : 'plus de 24 h'}`);
+    else line('File de brassins', 'vide');
     line('Commandes', g.orders.length ? `${g.orders.length} en attente${g.readyOrders.length ? ` · ${g.readyOrders.length} prête${g.readyOrders.length > 1 ? 's' : ''}` : ''}` : 'aucune');
     page.append(live);
 

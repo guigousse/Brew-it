@@ -134,13 +134,11 @@ export class Game {
   recipe: Recipe = { ...GASTON_RECIPE };
   /** Bière de la gamme dont les réglages sont chargés (null = réglages modifiés : on brasse un essai). */
   selectedBeer: number | null = null;
-  /** Brassage continu : dès que le moulin est libre, on relance la bière de la gamme la moins en stock. */
-  autoBrew = false;
-  /** Essai demandé alors que le moulin était occupé : il passe avant le brassage continu. */
+  /** Essai demandé alors que le moulin était occupé : il passe avant les brassins programmés. */
   queued = false;
   /** Format choisi pour le prochain brassin lancé à la main. */
   format: Format = 'bottle';
-  /** Brassins programmés : ils passent avant le brassage continu. */
+  /** Brassins programmés : ils partent dans l'ordre, dès que le moulin est libre. */
   plan: PlannedBrew[] = [];
   batches: Batch[] = [];
   /** Essai embouteillé qui attend d'être goûté, mis de côté pour ne pas bloquer la ligne. */
@@ -290,7 +288,7 @@ export class Game {
 
   /**
    * Le stockage pourra accueillir un brassin de plus, en comptant ceux déjà sur la ligne
-   * (le brassage continu attend sinon, pour ne pas acheter d'ingrédients pour rien).
+   * (un brassin programmé attend sinon, pour ne pas acheter d'ingrédients pour rien).
    */
   get roomForBatch(): boolean {
     return this.roomFor('bottle');
@@ -350,8 +348,8 @@ export class Game {
     return this.batches.reduce((s, b) => s + (b.beerId === beerId && b.format === 'keg' ? (b.kegs ?? Math.floor(b.liters / kegLiters(b.liters))) - (b.delivered ?? 0) : 0), 0);
   }
 
-  /** Prochaine bière du brassage continu : celle de la gamme qui a le moins de bouteilles (en stock + en route). */
-  nextAutoBeer(): Beer | undefined {
+  /** La bière de la gamme qui a le moins de bouteilles (en stock + en route). */
+  lowestStockBeer(): Beer | undefined {
     let best: Beer | undefined;
     let low = Infinity;
     for (const b of this.beers) {
@@ -374,7 +372,7 @@ export class Game {
     return { ok: true };
   }
 
-  /** Moulin occupé : le brassin partira dès qu'il se libère, avant le brassage continu. */
+  /** Moulin occupé : le brassin partira dès qu'il se libère, avant les brassins programmés. */
   queueBrew(): CommandResult {
     if (!this.batchAt('mill')) return this.brew();
     if (this.money < this.brewCost(this.recipe, this.batchLiters, this.brewFormat)) return { ok: false, reason: 'Pas assez d\'argent pour les ingrédients' };
@@ -422,6 +420,31 @@ export class Game {
         this.plan.splice(i, 1);
       }
     }
+  }
+
+  /**
+   * Prévision de la production : on rejoue la brasserie sur une copie (ventes comprises, qui libèrent le stockage)
+   * jusqu'à ce que les brassins sur la ligne et ceux de la file soient tous embouteillés.
+   * `ends[i]` : dans combien de secondes le i-ème brassin sera fini (ceux sur la ligne d'abord, puis la file dans l'ordre).
+   * `extra` : des brassins à ajouter en fin de file (pour savoir quand ils seraient prêts).
+   */
+  forecast(extra?: PlannedBrew, maxSeconds = 24 * 3600): { ends: number[]; total: number; done: boolean } {
+    const sim = Game.fromJSON(JSON.parse(JSON.stringify(this.toJSON())));
+    // un essai attend la dégustation du joueur : on ne le compte pas
+    sim.trial = null;
+    sim.queued = false;
+    sim.batches = sim.batches.filter((b) => b.beerId != null);
+    if (extra && extra.count > 0) sim.plan.push({ ...extra });
+    const target = sim.batches.length + sim.planned;
+    const ends: number[] = [];
+    const start = sim.time;
+    sim.events.on((e) => {
+      if (e.type === 'batchDone' || e.type === 'batchRuined') ends.push(sim.time - start);
+    });
+    // pas de 1 s (2 s pour une longue file) : précis à quelques secondes près, et rapide
+    const dt = target > 100 ? 2 : 1;
+    while (ends.length < target && sim.time - start < maxSeconds) sim.step(dt);
+    return { ends, total: ends[ends.length - 1] ?? 0, done: ends.length >= target };
   }
 
   /** Brassins programmés au total. */
@@ -553,11 +576,10 @@ export class Game {
     this.plan = this.plan.filter((p) => p.beerId !== id);
     for (const t of this.taps) if (t.beerId === id) Object.assign(t, { beerId: null, glasses: 0, capacity: 0 });
     if (this.selectedBeer === id) this.selectedBeer = null;
-    if (!this.beers.length) this.autoBrew = false;
   }
 
   /** Cadence maximale de la ligne (bouteilles/min) : un brassin par passage dans l'appareil le plus lent. */
-  productionRate(r: Recipe = this.nextAutoBeer()?.recipe ?? this.recipe): number {
+  productionRate(r: Recipe = this.lowestStockBeer()?.recipe ?? this.recipe): number {
     const liters = this.batchLiters;
     const slowest = Math.max(...STATION_ORDER.map((id) => stationDuration(id, r, this.level(id), liters) / this.tankCount(id)));
     return (Math.floor(liters / BOTTLE_L) / slowest) * 60;
@@ -845,9 +867,6 @@ export class Game {
           if (--next.count <= 0) this.plan.shift();
           this.launch(planned.recipe, planned.id, next.format);
         }
-      } else if (this.autoBrew && this.roomForBatch) {
-        const beer = this.nextAutoBeer();
-        if (beer && (this.money >= this.brewCost(beer.recipe) || this.broke)) this.launch(beer.recipe, beer.id);
       }
     }
     this.sellBar(dt);
@@ -1081,7 +1100,7 @@ export class Game {
   toJSON() {
     return {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
-      selectedBeer: this.selectedBeer, autoBrew: this.autoBrew, batches: this.batches, trial: this.trial, beers: this.beers,
+      selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, adUntil: this.adUntil, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
@@ -1131,6 +1150,7 @@ export class Game {
     g.wholesaleSold ??= 0;
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
+    delete (g as unknown as { autoBrew?: unknown }).autoBrew; // le brassage continu a disparu : tout passe par la file
     g.ordersRevenue ??= 0;
     g.wholesaleRevenue ??= 0;
     g.salesHistory ??= [];
@@ -1147,10 +1167,11 @@ export class Game {
 
 /** Brassins programmés au plus. */
 /**
- * Brassins programmables d'avance, par niveau de la brasserie : de quoi remplir le stockage
- * plusieurs fois (une nuit d'absence), sans faire une liste interminable.
+ * Brassins programmables d'avance, par niveau de la brasserie. Sans brassage continu, la file est ce qui fait
+ * tourner la brasserie pendant l'absence : de 2 à 4 h de production selon le matériel (le simulateur
+ * d'équilibrage finit le jeu vers le 31e jour, comme avec l'ancien brassage continu).
  */
-export const PLAN_CAP: readonly number[] = [10, 25, 50, 100, 200];
+export const PLAN_CAP: readonly number[] = [50, 80, 150, 250, 400];
 /** Étapes lentes où l'on peut ajouter des cuves en parallèle, et leur nombre maximal. */
 export const TANK_STAGES: readonly StationId[] = ['fermenter', 'conditioning'];
 export const MAX_TANKS = 4;

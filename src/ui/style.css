@@ -392,7 +392,7 @@ button:disabled { cursor: default; opacity: .5; }
 .keg-big { width: 96px; height: 96px; image-rendering: pixelated; margin-bottom: 10px; }
 .batch-visual { display: flex; align-items: center; gap: 12px; padding: 8px; background: #3a2c2c; border: 2px solid var(--ink); }
 .batch-side { display: grid; justify-items: center; flex-shrink: 0; }
-.batch-side .beer-visual { height: 120px; }
+.batch-side .beer-visual { height: 148px; }
 .batch-side .keg-big { width: 72px; height: 72px; }
 .batch-grid { flex: 1; display: grid; justify-items: start; gap: 4px; min-width: 0; }
 .batch-canvas { image-rendering: pixelated; max-width: 100%; }
@@ -450,3 +450,11 @@ button:disabled { cursor: default; opacity: .5; }
 .fab-badge.hidden { display: none; }
 .fabs .fab + .fab { margin-top: 8px; } /* place pour le nom sous le bouton */
 @media (prefers-reduced-motion: reduce) { .fab.ready, .fab.alert { animation: none; } }
+
+/* --- Temps de production restant ---------------------------------------------------------- */
+.eta { color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.eta.big { font-size: 24px; }
+.eta-total { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 8px; background: var(--ink); border: 2px solid #5c4a6e; }
+.plan-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.plan-foot .note { flex: 1; min-width: 0; }
+.plan-eta { color: var(--dim); white-space: nowrap; }

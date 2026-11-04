@@ -62,8 +62,14 @@ function tendBar() {
 }
 const brandByDay: number[] = [];
 
+/** Le joueur garde toujours un brassin en file : la bière la moins en stock, en bouteilles. */
+let autoPlan = false;
 function play(seconds: number, during?: () => void) {
   for (let s = 0; s < seconds; s += DT) {
+    if (autoPlan && g.planned === 0 && g.roomForBatch) {
+      const b = g.lowestStockBeer();
+      if (b) g.planBrew(b.id, 'bottle');
+    }
     g.step(DT);
     clock += DT;
     during?.();
@@ -73,7 +79,7 @@ function play(seconds: number, during?: () => void) {
 /** Crée une bière : réglages, essai, attente de la première bouteille, on garde. */
 function newBeer(): boolean {
   const recipe = BOT_RECIPES[g.beers.length % BOT_RECIPES.length]!;
-  g.autoBrew = false;
+  autoPlan = false;
   g.recipe = { ...recipe };
   g.selectedBeer = null;
   let guard = 0;
@@ -131,7 +137,7 @@ function session(minutes: number) {
   while (g.beers.length < g.rangeSlots && newBeer()) buy(`Nouvelle bière (${g.beers.length})`, 0);
   if (g.beers.length) {
     g.loadBeer(g.beers[0]!.id);
-    g.autoBrew = true;
+    autoPlan = true;
   }
   play(minutes * 60, () => {
     if (clock % 10 < DT) deliver();
@@ -141,6 +147,8 @@ function session(minutes: number) {
   deliver();
   wholesale();
   shop();
+  // avant de partir, on remplit la file de brassins (en bouteilles, la gamme à tour de rôle)
+  for (let i = 0; g.beers.length && g.planRoom > 0 && i < 500; i++) g.planBrew(g.beers[i % g.beers.length]!.id, 'bottle');
 }
 
 const done = () => STATION_ORDER.every((id) => g.level(id) >= MAX_LEVEL) && g.storageLevel >= STORAGE.length && g.nextSlotCost == null && g.barLevel >= BAR.length && g.computerLevel >= COMPUTERS.length && g.tankCost('fermenter') == null && g.tankCost('conditioning') == null;
@@ -196,7 +204,7 @@ console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.roun
 console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', g.wholesaleSold, 'btl');
 console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots);
 if (process.env.DEBUG) {
-  console.log('autoBrew', g.autoBrew, 'queued', g.queued, 'room', g.roomForBatch, 'stored', g.stored, '/', g.storageCap, 'liters', g.batchLiters);
+  console.log('autoPlan', autoPlan, 'queued', g.queued, 'room', g.roomForBatch, 'stored', g.stored, '/', g.storageCap, 'liters', g.batchLiters);
   console.log('batches', g.batches.map((b) => `${b.stage}:${b.beerId}:${b.waiting}:${b.bottles}:${b.delivered}`));
   console.log('beers', g.beers.map((b) => `${b.name} q${b.tasting.quality.toFixed(2)} stock ${b.stock}`));
   console.log('orders', g.orders.map((o) => `${o.client}:${o.qty}`));

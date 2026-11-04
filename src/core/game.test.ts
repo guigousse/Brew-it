@@ -72,9 +72,9 @@ describe('jeu', () => {
     expect(g.batchAt('bottling')).toBeUndefined();
   });
 
-  it('moulin occupé : le brassin attend son tour, avant le brassage continu', () => {
+  it('moulin occupé : le brassin attend son tour, avant les brassins programmés', () => {
     const g = withBeer(1e4);
-    g.autoBrew = true;
+    g.planBrew(g.beers[0]!.id, 'bottle', 2);
     g.step();
     expect(g.batchAt('mill')!.beerId).toBe(g.beers[0]!.id);
     g.setParam('hopsAroma', 80);
@@ -105,10 +105,9 @@ describe('jeu', () => {
     expect(g.stored).toBe(stock + kegSpace(20)); // environ une caisse
   });
 
-  it('les brassins programmés passent avant le brassage continu, dans l\'ordre', () => {
+  it('les brassins programmés partent dans l\'ordre', () => {
     const g = withBeer(1e4);
     runUntil(g, () => g.batches.length === 0);
-    g.autoBrew = true;
     g.planBrew(g.beers[0]!.id, 'keg');
     g.planBrew(g.beers[0]!.id, 'bottle');
     g.step();
@@ -120,20 +119,20 @@ describe('jeu', () => {
     const g = withBeer(1e5);
     runUntil(g, () => g.batches.length === 0);
     const id = g.beers[0]!.id;
-    expect(g.planCap).toBe(10);
+    expect(g.planCap).toBe(50);
     expect(g.planBrew(id, 'bottle', 3).ok).toBe(true);
     expect(g.planBrew(id, 'bottle', 2).ok).toBe(true); // s'ajoute au même groupe
     expect(g.planBrew(id, 'keg', 4).ok).toBe(true);
     expect(g.plan).toEqual([{ beerId: id, format: 'bottle', count: 5 }, { beerId: id, format: 'keg', count: 4 }]);
     expect(g.planned).toBe(9);
-    expect(g.planBrew(id, 'keg', 2).ok).toBe(false); // 11 > 10
+    expect(g.planBrew(id, 'keg', 42).ok).toBe(false); // 51 > 50
     g.setPlanCount(1, 99);
-    expect(g.plan[1]!.count).toBe(5); // plafonné à la place restante
+    expect(g.plan[1]!.count).toBe(45); // plafonné à la place restante
     g.movePlan(1, -1);
     expect(g.plan[0]!.format).toBe('keg');
     g.step();
     expect(g.batchAt('mill')!.format).toBe('keg');
-    expect(g.plan[0]!.count).toBe(4);
+    expect(g.plan[0]!.count).toBe(44);
     g.setPlanCount(0, 0);
     expect(g.plan).toEqual([{ beerId: id, format: 'bottle', count: 5 }]);
   });
@@ -406,7 +405,7 @@ describe('jeu', () => {
     g.addTank('conditioning');
     const solo = new Game().productionRate(g.recipe);
     expect(g.productionRate(g.recipe)).toBeGreaterThan(solo * 1.5);
-    g.autoBrew = true;
+    g.planBrew(g.beers[0]!.id, 'bottle', 3);
     runUntil(g, () => g.batchesAt('fermenter').length === 2, 3000);
     expect(g.batchesAt('fermenter').length).toBe(2);
     for (let i = 0; i < 5; i++) g.addTank('fermenter');
@@ -421,16 +420,24 @@ describe('jeu', () => {
     expect(g.money).toBe(0);
   });
 
-  it('brassage continu : toute la gamme tourne, la bière la moins en stock d\'abord', () => {
-    const g = withBeer(1e4);
-    g.buySlot();
-    g.beers.push({ ...g.beers[0]!, id: 999, name: 'Deux', stock: 0, sold: 0 });
-    g.beers[0]!.stock = 50;
-    g.autoBrew = true;
-    g.step();
-    expect(g.batchAt('mill')!.beerId).toBe(999);
-    run(g, 1500);
-    expect(g.batchesDone).toBeGreaterThanOrEqual(3);
+  it('prévision : le temps restant de la file, brassin par brassin, sans toucher à la partie', () => {
+    const g = withBeer(1e5);
+    runUntil(g, () => g.batches.length === 0);
+    expect(g.forecast()).toEqual({ ends: [], total: 0, done: true });
+    const id = g.beers[0]!.id;
+    g.planBrew(id, 'bottle', 3);
+    const before = JSON.stringify(g.toJSON());
+    const f = g.forecast();
+    expect(JSON.stringify(g.toJSON())).toBe(before); // la partie n'a pas bougé
+    expect(f.done).toBe(true);
+    expect(f.ends).toHaveLength(3);
+    expect(f.ends[0]!).toBeLessThan(f.ends[2]!);
+    // en jouant pour de vrai, la file est finie à peu près à l'heure annoncée
+    const t0 = g.time;
+    runUntil(g, () => g.planned === 0 && g.batches.length === 0, 20000);
+    expect(Math.abs(g.time - t0 - f.total)).toBeLessThan(f.total * 0.1 + 5);
+    // avec 2 brassins de plus en fin de file, c'est plus long
+    expect(g.forecast({ beerId: id, format: 'bottle', count: 2 }).ends).toHaveLength(2);
   });
 
   it('production hors-ligne : les gains attendent la récolte, la sauvegarde les garde', async () => {

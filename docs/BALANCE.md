@@ -143,3 +143,9 @@ Après chaque réglage, relancer `npm run balance` et vérifier :
 4. **Le palier du niveau 5.** Le volume de 600 L n'arrive qu'avec les 7 machines au niveau 5. C'est le passage le plus lent (J13 à J19). On pourrait donner à chaque machine de niveau 5 un bonus immédiat (vitesse, qualité).
 5. **Une rejouabilité après la fin** (nouvelle brasserie, prestige) pour les joueurs qui finissent en un mois.
 6. **Valider avec de vrais joueurs sur TestFlight** : le joueur simulé achète toujours au mieux, alors qu'un vrai joueur hésite et se trompe de recette. On peut s'attendre à 20 à 30 % de temps en plus.
+
+## Fin du brassage continu
+
+- Le **brassage continu** disparaît : tout passe par la file de brassins programmés. C'est elle qui fait tourner la brasserie pendant l'absence.
+- Avec les premières tailles de file (10 à 200 brassins), la production des absences s'effondrait : au niveau 1, 10 brassins ne tiennent qu'environ 40 min (≈ 17 brassins/h). Le joueur simulé ne finissait plus en 45 jours.
+- Le joueur simulé remplit désormais la file avant chaque absence. Essais : 150–600 → J28, 100–600 → J29, **50–400 → J31**, 30–300 → J38. On garde **50, 80, 150, 250, 400**, au plus près de l'ancien rythme (J33).
