@@ -10,9 +10,14 @@
 #   IOS_BUNDLE_ID      (facultatif) remplace le Bundle ID par défaut com.guigousse.brewit
 name: TestFlight
 
-# Envoi à la demande seulement (Actions → TestFlight → Run workflow) : un build macOS consomme vite le quota d'Actions.
+# Envoi à la demande seulement : un build macOS consomme vite le quota d'Actions.
+# - à la main : Actions → TestFlight → Run workflow ;
+# - ou en modifiant .github/testflight-request (une ligne par demande), poussé sur la branche.
 on:
   workflow_dispatch:
+  push:
+    branches: [main, claude/project-foundation]
+    paths: ['.github/testflight-request']
 
 concurrency:
   group: testflight
