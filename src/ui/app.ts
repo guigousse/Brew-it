@@ -18,7 +18,8 @@ import { BOOST_GROUPS, BOOSTS, DECOR_ORDER, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
-import { toggleRadio } from '../audio/radio';
+import { nextSong, radio, setPlaying, setVolume } from '../audio/radio';
+import { assetCanvas } from '../render/decor';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const el = document.createElement(tag);
@@ -320,7 +321,7 @@ export class App {
       board: { label: 'Panneau des commandes', run: () => this.openComputer('orders') },
       display: { label: 'Présentoir : ma gamme', run: () => this.open({ kind: 'range' }) },
       computer: { label: 'Ordinateur', run: () => this.openComputer() },
-      radio: { label: 'Radio : allumer ou éteindre la musique', run: () => this.toast(toggleRadio() ? '♪ Radio allumée' : 'Radio éteinte', 'info') },
+      radio: { label: 'Radio', run: () => this.openRadio() },
     };
     for (const hit of this.officeRoom.hits()) {
       const el = h('button', 'station-hit');
@@ -2172,6 +2173,55 @@ export class App {
       if (next.length) card.append(h('p', 'hint', `Débloque : ${next.map((d) => d.label).join(', ')}`));
     } else card.append(h('p', 'note', 'Niveau maximal'));
     card.append(this.btn('btn primary', 'Fermer', () => this.closeModal()));
+  }
+
+  /** La radio du bureau, en grand au milieu de l'écran : lecture / pause, morceau suivant, volume. */
+  private openRadio(): void {
+    const g = this.game();
+    const card = this.modalCard('Radio');
+    card.classList.add('radio-card');
+    const lv = Math.max(1, Math.min(5, g.computerLevel));
+    const art = h('canvas', 'radio-art');
+    const station = h('div', 'radio-station', 'BREW FM · 88.4');
+    const title = h('div', 'radio-title');
+    const play = this.btn('btn primary', '', () => {
+      setPlaying(!radio.on);
+      sync();
+    });
+    const next = this.btn('btn', '⏭ Suivant', () => {
+      nextSong();
+      sync();
+    });
+    const controls = h('div', 'radio-controls');
+    controls.append(play, next);
+    const vol = h('label', 'radio-volume');
+    const range = h('input');
+    range.type = 'range';
+    range.min = '0';
+    range.max = '100';
+    range.value = String(Math.round(radio.volume * 100));
+    range.oninput = () => setVolume(Number(range.value) / 100);
+    vol.append(h('span', '', '🔈'), range, h('span', '', '🔊'));
+    card.append(art, station, title, controls, vol, this.btn('btn', 'Fermer', () => this.closeModal()));
+    const sync = () => {
+      play.textContent = radio.on ? '⏸ Pause' : '▶ Lecture';
+      title.textContent = radio.on ? `♪ ${radio.title}` : 'En pause';
+    };
+    sync();
+    // la radio s'anime tant que la fenêtre est ouverte
+    const frame = (now: number) => {
+      if (!art.isConnected) return;
+      const c = assetCanvas('radio', lv, now / 1000, g);
+      if (c) {
+        if (art.width !== c.width) { art.width = c.width; art.height = c.height; }
+        const ctx = art.getContext('2d')!;
+        ctx.clearRect(0, 0, art.width, art.height);
+        ctx.drawImage(c, 0, 0);
+      }
+      if (radio.on && title.textContent !== `♪ ${radio.title}`) sync();
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
   }
 
   private openOptions(): void {

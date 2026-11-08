@@ -395,12 +395,16 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'chair', name: 'Chaise de bureau', room: 'office', w: 32, h: 40,
+    id: 'chair', name: 'Chaise de bureau', room: 'office', w: 44, h: 54,
     draw(g, c) {
-      const px = P(g);
+      // dessinée à l'échelle du bureau (×1,35), chaque mesure arrondie au pixel
+      const q = (v: number) => Math.round(v * 1.35);
+      const p0 = P(g);
+      const px = (x: number, y: number, w: number, h: number, col: string) => p0(q(x), q(y), Math.max(1, q(x + w) - q(x)), Math.max(1, q(y + h) - q(y)), col);
       const lv = c.lv;
       const cx = 3;
-      floorShadow(g, cx + 13, 38, 15, 3);
+      const box = (x: number, y: number, w: number, h: number) => ({ x: q(x), y: q(y), w: q(x + w) - q(x), h: q(y + h) - q(y) });
+      floorShadow(g, q(cx + 13), q(38), q(15), 4);
       if (lv === 1) {
         // chaise de bois à barreaux
         const [wd, hi, lo] = ['#8a5a2c', '#b07a40', '#4a2c14'];
@@ -409,7 +413,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
         for (const bx of [8, 12, 16]) px(cx + bx, 4, 2, 16, wd);
         px(cx + 1, 20, 24, 3, wd); px(cx + 1, 20, 24, 1, hi);
         px(cx + 1, 29, 24, 2, lo);
-        shade(g, c.b, { x: cx, y: 0, w: 26, h: 38 }, (x) => 1.08 - ((x - cx) / 26) * 0.22);
+        shade(g, c.b, box(cx, 0, 26, 38), (x) => 1.08 - ((x - q(cx)) / q(26)) * 0.22);
         return;
       }
       if (lv === 5) {
@@ -418,11 +422,11 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
         px(cx + 2, 33, 23, 2, '#8a9ab0');
         for (const wx of [cx + 1, cx + 12, cx + 23]) px(wx, 35, 3, 2, '#2c283a');
         px(cx - 2, 14, 3, 9, '#dce6f0'); px(cx + 25, 14, 3, 9, '#dce6f0'); // accoudoirs
-        px(cx, -1, 26, 25, '#b8c6d6');
-        px(cx + 1, 0, 24, 23, '#f4f8fc');
-        for (let y = 3; y < 20; y += 2) for (let x = 4; x < 22; x += 2) px(cx + x + (y % 4 ? 1 : 0), y, 1, 1, '#c4d0dc');
-        px(cx + 1, 0, 24, 1, '#5ef0ff'); px(cx + 3, 22, 20, 1, '#5ef0ff');
-        shade(g, c.b, { x: cx, y: -1, w: 26, h: 25 }, (x, y) => 1.04 - ((x - cx) / 26) * 0.16 - ((y + 1) / 25) * 0.1);
+        px(cx, 0, 26, 24, '#b8c6d6');
+        px(cx + 1, 1, 24, 22, '#f4f8fc');
+        for (let y = 4; y < 21; y += 2) for (let x = 4; x < 22; x += 2) p0(q(cx + x + (y % 4 ? 1 : 0)), q(y), 1, 1, '#c4d0dc');
+        px(cx + 1, 1, 24, 1, '#5ef0ff'); px(cx + 3, 22, 20, 1, '#5ef0ff');
+        shade(g, c.b, box(cx, 0, 26, 24), (x, y) => 1.04 - ((x - q(cx)) / q(26)) * 0.16 - (y / q(24)) * 0.1);
         return;
       }
       const backc = lv >= 3 ? '#2c283a' : '#3e3a50';
@@ -434,8 +438,8 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       px(cx, 0, 26, 22, backc);
       px(cx + 2, 2, 22, 18, cushion);
       px(cx + 2, 2, 22, 1, '#ffffff30');
-      if (lv === 3) for (const k of [7, 13, 19]) for (const j of [6, 12]) px(cx + k, j, 1, 1, '#2a1414'); // capitons
-      shade(g, c.b, { x: cx, y: 0, w: 26, h: 22 }, (x, y) => 1.08 - ((x - cx) / 26) * 0.2 - (y / 22) * 0.12);
+      if (lv === 3) for (const k of [7, 13, 19]) for (const j of [6, 12]) p0(q(cx + k), q(j), 1, 1, '#2a1414'); // capitons
+      shade(g, c.b, box(cx, 0, 26, 22), (x, y) => 1.08 - ((x - q(cx)) / q(26)) * 0.2 - (y / q(22)) * 0.12);
     },
   },
   {

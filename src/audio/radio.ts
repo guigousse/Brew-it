@@ -3,13 +3,16 @@
  * Chaque « morceau » tire une tonalité, un tempo, une grille d'accords et une mélodie en phrases A A B A ;
  * basse, accords en contretemps, mélodie et une batterie légère. Un nouveau morceau toutes les 32 mesures.
  *
- * Toucher la radio l'allume ou l'éteint ; le choix est gardé sur l'appareil. Allumée, elle reprend au premier
- * toucher après le lancement (iOS n'autorise le son qu'après un geste), et se tait quand l'appli passe en arrière-plan.
+ * Toucher la radio ouvre son interface : lecture / pause, morceau suivant, volume. Le choix est gardé sur l'appareil.
+ * Allumée, elle reprend au premier toucher après le lancement (iOS n'autorise le son qu'après un geste), et se tait
+ * quand l'appli passe en arrière-plan.
  */
 
 const KEY = 'brewit:radio';
+const VOL_KEY = 'brewit:radio-volume';
 
-export const radio = { on: false };
+/** on : la musique joue ; volume de 0 à 1 ; title : le morceau en cours. */
+export const radio = { on: false, volume: 0.7, title: '' };
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -32,6 +35,7 @@ function rng(seed: number) {
 }
 
 interface Song {
+  title: string;
   bpm: number;
   root: number;
   /** Accords : degrés de la gamme majeure (0 = I). */
@@ -83,7 +87,10 @@ function newSong(seed: number): Song {
   };
   const a = phrase();
   const b = phrase();
-  return { bpm: 88 + Math.floor(r() * 24), root, chords, phrases: [a, a, b, a], swing: 0.12 + r() * 0.08 };
+  const A = ['Blonde', 'Houblon', 'Mousse', 'Levure', 'Malt', 'Comptoir', 'Fût', 'Brasseur', 'Ambrée', 'Bulles'];
+  const B = ['swing', 'du soir', 'en fusion', 'à la cave', 'du dimanche', 'blues', 'express', 'au clair de lune', 'pétillant', 'du bistrot'];
+  const title = `${A[Math.floor(r() * A.length)]} ${B[Math.floor(r() * B.length)]}`;
+  return { title, bpm: 88 + Math.floor(r() * 24), root, chords, phrases: [a, a, b, a], swing: 0.12 + r() * 0.08 };
 }
 
 function setup(): void {
@@ -183,19 +190,24 @@ function tick(): void {
     if (step >= 16 * 32) {
       step = 0;
       song = newSong(Math.floor(Math.random() * 1e9));
+      radio.title = song.title;
     }
   }
 }
+
+/** Gain général pour le volume choisi (courbe douce : l'oreille entend en logarithme). */
+const level = () => 0.7 * radio.volume ** 2;
 
 function start(): void {
   setup();
   if (!ctx || !master) return;
   void ctx.resume();
   song ??= newSong(Math.floor(Math.random() * 1e9));
+  radio.title = song.title;
   nextTime = ctx.currentTime + 0.05;
   master.gain.cancelScheduledValues(ctx.currentTime);
   master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
-  master.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.6);
+  master.gain.linearRampToValueAtTime(level(), ctx.currentTime + 0.6);
   if (timer == null) timer = window.setInterval(tick, 25);
 }
 
@@ -211,21 +223,49 @@ function stop(): void {
   }
 }
 
-/** Allume ou éteint la radio (à appeler depuis un toucher). */
-export function toggleRadio(): boolean {
-  radio.on = !radio.on;
-  try { localStorage.setItem(KEY, radio.on ? '1' : '0'); } catch { /* stockage indisponible */ }
-  if (radio.on) {
-    song = newSong(Math.floor(Math.random() * 1e9)); // un nouveau morceau à chaque allumage
-    step = 0;
-    start();
-  } else stop();
-  return radio.on;
+function remember(): void {
+  try {
+    localStorage.setItem(KEY, radio.on ? '1' : '0');
+    localStorage.setItem(VOL_KEY, String(radio.volume));
+  } catch { /* stockage indisponible */ }
+}
+
+/** Lecture ou pause (à appeler depuis un toucher). */
+export function setPlaying(on: boolean): void {
+  radio.on = on;
+  remember();
+  if (on) start();
+  else stop();
+}
+
+/** Morceau suivant (et la lecture reprend). */
+export function nextSong(): void {
+  song = newSong(Math.floor(Math.random() * 1e9));
+  radio.title = song.title;
+  step = 0;
+  if (ctx) nextTime = ctx.currentTime + 0.05;
+  setPlaying(true);
+}
+
+/** Volume, de 0 à 1. */
+export function setVolume(v: number): void {
+  radio.volume = Math.max(0, Math.min(1, v));
+  remember();
+  if (ctx && master && radio.on) {
+    master.gain.cancelScheduledValues(ctx.currentTime);
+    master.gain.setTargetAtTime(level(), ctx.currentTime, 0.05);
+  }
 }
 
 /** Au lancement : reprend le choix gardé ; le son démarre au premier toucher. Se tait en arrière-plan. */
 export function initRadio(): void {
-  try { radio.on = localStorage.getItem(KEY) === '1'; } catch { radio.on = false; }
+  try {
+    radio.on = localStorage.getItem(KEY) === '1';
+    const v = Number(localStorage.getItem(VOL_KEY));
+    if (localStorage.getItem(VOL_KEY) != null && Number.isFinite(v)) radio.volume = Math.max(0, Math.min(1, v));
+  } catch { radio.on = false; }
+  song = newSong(Math.floor(Math.random() * 1e9));
+  radio.title = song.title;
   const kick = () => {
     window.removeEventListener('pointerdown', kick);
     if (!radio.on) return;

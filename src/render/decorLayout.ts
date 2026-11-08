@@ -43,7 +43,7 @@ const BAR_FURNITURE: Spec[] = [
   ['neonSign', 18, 118], ['jukebox', 145, 112],
 ];
 /** Le bureau : ce qui est commun à tous les niveaux, puis les objets posés sur le plateau, qui changent avec l'ordinateur. */
-const OFFICE: Spec[] = [['clock', 72, 126], ['radio', 126, 101], ['deskLamp', 0, 207], ['wasteBin', 98, 280], ['chair', 35, 258], ['bigPlant', 118, 240]];
+const OFFICE: Spec[] = [['clock', 72, 126], ['radio', 126, 101], ['deskLamp', 0, 207], ['wasteBin', 98, 280], ['chair', 28, 245], ['bigPlant', 118, 240]];
 const OFFICE_DESK: Spec[][] = [
   [['rotaryPhone', 105, 218]],
   [['orderPile', 107, 220]],

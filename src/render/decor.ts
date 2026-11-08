@@ -79,6 +79,12 @@ function render(a: DecorAsset, lv: number, t: number, game: Game | null, preview
   return c;
 }
 
+/** Le canvas d'un asset, à sa taille d'origine (marges comprises) : pour l'afficher ailleurs que dans une pièce. */
+export function assetCanvas(id: string, lv: number, t: number, game: Game | null): HTMLCanvasElement | null {
+  const a = byId.get(id);
+  return a ? render(a, lv, t, game, false) : null;
+}
+
 /** Oublie les assets en cache (après une purge mémoire d'iOS). */
 export function clearDecorCache(): void {
   cache.clear();
