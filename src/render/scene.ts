@@ -112,7 +112,11 @@ export class Scene {
 
   onStage(stage: number, t: number): void {
     this.flows.set(stage, t);
+    // le liquide qui arrive dans une rangée de cuves la traverse aussi
+    const id = STATION_ORDER[stage];
+    if (id) this.seriesFlow.set(id, t);
   }
+  private seriesFlow = new Map<StationId, number>();
 
   /** Rectangle occupé par un appareil (coordonnées de la scène). L'embouteillage = la remplisseuse au premier plan. */
   rect(id: StationId, level: number): Rect {
@@ -127,7 +131,26 @@ export class Scene {
     if (id === 'bottling') return { x: LINE.fillX - 14, y: LINE.top + 4 };
     const r = this.rect(id, level);
     const p = SPRITES[id][level - 1]![which];
+    const row = this.rows[id];
+    // une rangée de cuves en série : on entre par la cuve du fond (à droite), on sort par celle de devant (à gauche)
+    if (row && row.n > 1) {
+      if (which === 'outlet') return { x: r.x - row.gap * (row.n - 1) + p.x, y: r.y + p.y };
+      return { x: this.tankPort(r, p.x, row, 0), y: r.y + p.y };
+    }
     return { x: r.x + p.x, y: r.y + p.y };
+  }
+
+  /** Cuves en parallèle de chaque étape : leur nombre et leur écart (mis à jour à chaque image). */
+  private rows: Partial<Record<StationId, { n: number; gap: number }>> = {};
+
+  /**
+   * Abscisse du piquage du haut de la cuve j d'une rangée (0 = celle du fond, à droite) : son entrée habituelle
+   * pour la cuve de devant, sinon le milieu de la bande que la cuve suivante laisse voir.
+   */
+  private tankPort(r: Rect, inletX: number, row: { n: number; gap: number }, j: number): number {
+    const x = r.x - row.gap * j;
+    if (j === row.n - 1) return x + inletX;
+    return Math.round(x + r.w - row.gap / 2);
   }
 
   /** Position (scène) du bouton « Goûter » : au-dessus du bec de remplissage. */
@@ -215,6 +238,7 @@ export class Scene {
       const cw = SPRITES.conditioning[game.level('conditioning') - 1]!.w;
       const cx = Math.round(SLOTS.conditioning.cx - cw / 2);
       this.gardeShift = Math.max(0, Math.min(150 - cw - cx, 80 - (cx - (m - 1) * tankGap(cw, m))));
+      this.rows = { fermenter: { n, gap: tankGap(fw, n) }, conditioning: { n: m, gap: tankGap(cw, m) } };
     }
     const decor = { room: this.key, lv, t, game, preview: !!this.preview, top: this.b.T };
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -392,7 +416,7 @@ export class Scene {
     }
   }
 
-  private pipe(path: Pt[], grain: boolean): void {
+  private pipe(path: Pt[], grain: boolean, valve = true): void {
     const g = this.g;
     const s = grain ? PAL.wd : PAL.st;
     for (let k = 0; k < path.length - 1; k++) {
@@ -420,6 +444,7 @@ export class Scene {
       g.fillStyle = s[1]!; g.fillRect(p.x - 1, p.y - 1, 3, 3);
     }
     // vanne au milieu
+    if (!valve) return;
     const m = path[Math.floor(path.length / 2)]!;
     g.fillStyle = PAL.rd[3]!; g.fillRect(m.x - 2, m.y - 5, 5, 1);
     g.fillStyle = PAL.rd[2]!; g.fillRect(m.x, m.y - 5, 1, 3);
@@ -572,6 +597,17 @@ export class Scene {
           g.fillStyle = Math.floor(t * 2 + k) % 2 ? '#7cff9c' : '#3e9028';
           g.fillRect(x + Math.floor(r.w / 2), r.y + 3, 2, 2);
         }
+      }
+      // les cuves sont reliées en série par le haut : un col de cygne d'une cuve à la suivante
+      const row = { n: tanks, gap };
+      const top = r.y + def.inlet.y;
+      const over = r.y - 5;
+      for (let j = 0; j < tanks - 1; j++) {
+        const a = this.tankPort(r, def.inlet.x, row, j);
+        const b = this.tankPort(r, def.inlet.x, row, j + 1);
+        this.pipe([{ x: a, y: top }, { x: a, y: over }, { x: b, y: over }, { x: b, y: top }], false, false);
+        const since = t - (this.seriesFlow.get(id) ?? -99);
+        if (since < 2.5) this.flow([{ x: a, y: top }, { x: a, y: over }, { x: b, y: over }, { x: b, y: top }], t, since, 2.5, false, LIQUID[id]);
       }
     }
     // appareil sélectionné : liseré clignotant
