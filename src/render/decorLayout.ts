@@ -42,7 +42,15 @@ const BAR_FURNITURE: Spec[] = [
   ['posterBottle', 86, 40], ['posterMug', 102, 40], ['smallPlant', 58, 89, { f: true }], ['smallPlant', 118, 95],
   ['neonSign', 18, 118], ['jukebox', 145, 112],
 ];
-const OFFICE: Spec[] = [['clock', 72, 126], ['bigPlant', 118, 240], ['deskLamp', 0, 207], ['mug', 104, 220], ['chair', 35, 258]];
+/** Le bureau : ce qui est commun à tous les niveaux, puis les objets posés sur le plateau, qui changent avec l'ordinateur. */
+const OFFICE: Spec[] = [['clock', 72, 126], ['radio', 126, 101], ['deskLamp', 0, 207], ['wasteBin', 98, 280], ['chair', 35, 258], ['bigPlant', 118, 240]];
+const OFFICE_DESK: Spec[][] = [
+  [['rotaryPhone', 105, 218]],
+  [['orderPile', 107, 220]],
+  [['deskPhone', 82, 220], ['binders', 100, 214], ['mug', 115, 221]],
+  [['smartphone', 110, 225], ['postits', 66, 199, { front: true }]],
+  [['smartSpeaker', 96, 218], ['mug', 112, 221]],
+];
 
 export const DECOR_DEFAULT: DecorLayout = {
   bar: {
@@ -76,7 +84,7 @@ export const DECOR_DEFAULT: DecorLayout = {
   shop: {
     1: list([['shopSign', 34, 8], ['shopPendant', 73, 34], ['lightRay', 56, 40, { s: 1.75 }], ['register', 103, 233]]),
   },
-  office: { 1: list(OFFICE), 2: list(OFFICE), 3: list(OFFICE), 4: list(OFFICE), 5: list(OFFICE) },
+  office: Object.fromEntries(OFFICE_DESK.map((desk, i) => [i + 1, list([...OFFICE, ...desk])])),
   workshop: {
     1: list([['moonWindow', 68, 6], ['jarShelf', 60, 92], ['jarShelf', 64, 164], ['cobweb', 8, 4], ['candle', 58, 53], ['candle', 58, 123]]),
     2: list([['garageWindow', 47, 3], ['garageWindow', 69, 3], ['workLamp', 59, 68], ['workLamp', 59, 138]]),

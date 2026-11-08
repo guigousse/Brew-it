@@ -18,6 +18,7 @@ import { BOOST_GROUPS, BOOSTS, DECOR_ORDER, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
+import { toggleRadio } from '../audio/radio';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const el = document.createElement(tag);
@@ -319,6 +320,7 @@ export class App {
       board: { label: 'Panneau des commandes', run: () => this.openComputer('orders') },
       display: { label: 'Présentoir : ma gamme', run: () => this.open({ kind: 'range' }) },
       computer: { label: 'Ordinateur', run: () => this.openComputer() },
+      radio: { label: 'Radio : allumer ou éteindre la musique', run: () => this.toast(toggleRadio() ? '♪ Radio allumée' : 'Radio éteinte', 'info') },
     };
     for (const hit of this.officeRoom.hits()) {
       const el = h('button', 'station-hit');

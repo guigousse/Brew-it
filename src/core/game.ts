@@ -215,6 +215,8 @@ export class Game {
   barRevenue = 0;
   /** Commandes en attente sur l'ordinateur. */
   orders: Order[] = [];
+  /** Instants (s de jeu) des commandes expirées dans les dernières 24 h : des boulettes dans la corbeille du bureau. */
+  expiredAt: number[] = [];
   /** Compte à rebours (s) avant la prochaine commande. */
   orderTimer = FIRST_ORDER_S;
   ordersDone = 0;
@@ -1564,7 +1566,11 @@ export class Game {
    */
   private tickOrders(dt: number): void {
     if (this.orders.some((o) => o.expires <= this.time)) {
-      for (const o of this.orders) if (o.expires <= this.time) this.events.emit({ type: 'orderExpired', client: o.client });
+      for (const o of this.orders) if (o.expires <= this.time) {
+        this.expiredAt.push(this.time);
+        this.events.emit({ type: 'orderExpired', client: o.client });
+      }
+      this.expiredAt = this.expiredAt.filter((x) => x > this.time - 86400).slice(-12);
       this.orders = this.orders.filter((o) => o.expires > this.time);
     }
     if (this.orders.length >= this.boardSlots) return;
@@ -1595,7 +1601,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1639,6 +1645,7 @@ export class Game {
     for (const p of g.plan) p.count ??= 1;
     g.format ??= 'bottle';
     g.orders ??= [];
+    g.expiredAt ??= [];
     g.orderTimer ??= FIRST_ORDER_S;
     // avant le quota du grossiste, les ventes se comptaient en bouteilles : on les convertit en litres
     const old = s as unknown as { wholesaleSold?: number };

@@ -10,6 +10,8 @@ import type { Game } from '../core/game';
 import type { Label } from '../core/label';
 import { MAX_RANGE } from '../core/warehouse';
 import { drawMiniLabel } from './labelArt';
+import { instBox } from './decor';
+import { decorLayout } from './decorLayout';
 import { drawDigits, hash, painter, Room, type Px } from './rooms';
 import { boxShadow, dim, dropShadow, floor, floorLight, from, mix, rgb, seam, shade, skew, trap, wallLight, type Bounds } from './space';
 import type { Rect } from './sprites';
@@ -33,7 +35,7 @@ const SHELF_Y = [SHOWCASE.y + Math.floor(SHOWCASE.h / 2) - 1, SHOWCASE.y + SHOWC
 const DESK: Rect = { x: 4, y: 190, w: 120, h: 106 };
 const DESK_TOP = 228;
 
-export type OfficeHit = 'window' | 'board' | 'display' | 'computer';
+export type OfficeHit = 'window' | 'board' | 'display' | 'computer' | 'radio';
 
 /** Ce que le bureau voit de l'atelier par sa fenêtre : son canvas, et où se trouve son plan dedans. */
 export interface WorkshopView { canvas: HTMLCanvasElement; b: Bounds }
@@ -46,6 +48,8 @@ export class OfficeRoom extends Room {
       { id: 'board', rect: BOARD },
       { id: 'display', rect: DISPLAY },
       { id: 'computer', rect: DESK },
+      // la radio, là où elle est posée (au-dessus des autres zones)
+      ...(decorLayout.office[1] ?? []).filter((i) => i.a === 'radio').map((i) => ({ id: 'radio' as const, rect: instBox(i)! })),
     ];
   }
 
@@ -175,60 +179,83 @@ export class OfficeRoom extends Room {
 
   // ---------------------------------------------------------------- ordinateur
 
-  /** L'ordinateur : son écran montre l'enveloppe et le nombre de commandes ; elle scintille quand on peut en livrer. */
+  /**
+   * L'ordinateur : son écran montre l'enveloppe et le nombre de commandes ; elle scintille quand on peut en livrer.
+   * L'écran éclaire le plateau et le mur de sa couleur, plus fort quand une commande est prête ; l'ordinateur
+   * fait son ombre sur le plateau.
+   */
   private drawComputer(game: Game, lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
     const d = DESK;
-    const top = DESK_TOP;
+    const top = DESK_TOP + 1; // les écrans sont posés un peu en avant sur le plateau
     const n = game.orders.length;
     const ready = game.readyOrders.length;
-    const mx = d.x + 18;
+    const q = (v: number) => Math.round(v * 1.2); // l'ordinateur à l'échelle du bureau agrandi
+    const mx = d.x + 16;
+    const holo = lv === 5;
+    const fg = holo ? '#5ef0ff' : lv <= 2 ? '#7cff9c' : '#f2c14e';
+    const shine = ready > 0 ? 0.5 + 0.5 * Math.sin(t * 6) : 0;
+    // lueur de l'écran sur le mur et le plateau
+    const glowRgb = holo ? '94,240,255' : lv <= 2 ? '124,255,156' : '242,193,78';
+    const glowK = (n > 0 ? 0.1 : 0.05) + (ready > 0 ? 0.08 + 0.08 * shine : 0);
+    const gcx = mx + q(lv === 4 ? 36 : 22);
+    const gcy = top - q(14);
+    const grad = g.createRadialGradient(gcx, gcy, 2, gcx, gcy, q(46));
+    grad.addColorStop(0, `rgba(${glowRgb},${glowK})`);
+    grad.addColorStop(1, `rgba(${glowRgb},0)`);
+    g.fillStyle = grad;
+    g.fillRect(gcx - q(46), gcy - q(46), q(92), q(46) + 10);
+    // ombre de l'ordinateur sur le plateau (la lumière vient d'en haut à gauche)
+    const shadow = (x: number, w: number) => { g.fillStyle = 'rgba(16,10,24,0.28)'; g.fillRect(x + 3, top - 2, w, 3); };
     let sx: number, sy: number, sw: number, sh: number;
     if (lv === 1) {
       // minitel beige : écran et clavier rabattable
-      px(mx, top - 26, 40, 26, '#b8ac8c'); px(mx, top - 26, 40, 1, '#e0d6b8'); px(mx + 39, top - 26, 1, 26, '#8a7e62');
-      px(mx + 2, top - 3, 36, 3, '#8a7e62');
-      [sx, sy, sw, sh] = [mx + 5, top - 23, 30, 17];
-      px(mx + 44, top - 4, 26, 4, '#b8ac8c'); for (let i = 0; i < 11; i++) px(mx + 45 + i * 2, top - 3, 1, 1, '#6a604c');
+      shadow(mx, q(40)); shadow(mx + q(44), q(26));
+      px(mx, top - q(26), q(40), q(26), '#b8ac8c'); px(mx, top - q(26), q(40), 1, '#e0d6b8'); px(mx + q(40) - 1, top - q(26), 1, q(26), '#8a7e62');
+      px(mx + 2, top - 3, q(40) - 4, 3, '#8a7e62');
+      [sx, sy, sw, sh] = [mx + q(5), top - q(23), q(30), q(17)];
+      px(mx + q(44), top - 5, q(26), 5, '#b8ac8c'); for (let i = 0; i < 13; i++) px(mx + q(45) + i * 2, top - 4, 1, 1, '#6a604c'); for (let i = 0; i < 13; i++) px(mx + q(45) + i * 2, top - 2, 1, 1, '#6a604c');
     } else if (lv === 2) {
       // PC d'occasion : moniteur cathodique et tour
-      px(mx, top - 28, 42, 26, '#c8c0a8'); px(mx, top - 28, 42, 1, '#ece4cc'); px(mx + 41, top - 28, 1, 26, '#8a826a');
-      px(mx + 14, top - 2, 14, 2, '#8a826a');
-      [sx, sy, sw, sh] = [mx + 4, top - 25, 34, 19];
-      px(mx + 46, top - 3, 26, 3, '#c8c0a8'); for (let i = 0; i < 12; i++) px(mx + 47 + i * 2, top - 2, 1, 1, '#6a604c');
-      px(d.x + d.w - 14, top + 6, 12, 30, '#c8c0a8'); px(d.x + d.w - 12, top + 10, 8, 2, '#6a604c'); px(d.x + d.w - 8, top + 30, 2, 2, '#7cff9c');
+      shadow(mx, q(42)); shadow(mx + q(46), q(26));
+      px(mx, top - q(28), q(42), q(26), '#c8c0a8'); px(mx, top - q(28), q(42), 1, '#ece4cc'); px(mx + q(42) - 1, top - q(28), 1, q(26), '#8a826a');
+      px(mx + q(14), top - q(2), q(14), q(2), '#8a826a');
+      [sx, sy, sw, sh] = [mx + q(4), top - q(25), q(34), q(19)];
+      px(mx + q(46), top - 4, q(26), 4, '#c8c0a8'); for (let i = 0; i < 15; i++) px(mx + q(47) + i * 2, top - 3, 1, 1, '#6a604c'); for (let i = 0; i < 15; i++) px(mx + q(47) + i * 2, top - 1, 1, 1, '#6a604c');
+      px(d.x + d.w - 16, top + 7, 13, 34, '#c8c0a8'); px(d.x + d.w - 14, top + 11, 9, 2, '#6a604c'); px(d.x + d.w - 10, top + 35, 2, 2, '#7cff9c');
     } else if (lv <= 4) {
       // écran plat sur pied (deux écrans pour le logiciel de gestion)
-      const ww = lv === 4 ? 44 : 46;
-      px(mx, top - 30, ww, 26, '#2c283a'); px(mx, top - 30, ww, 1, '#545068');
-      px(mx + ww / 2 - 2, top - 4, 4, 4, '#2c283a'); px(mx + ww / 2 - 7, top - 1, 14, 1, '#3e3a50');
-      [sx, sy, sw, sh] = [mx + 2, top - 28, ww - 4, 21];
+      const ww = q(lv === 4 ? 44 : 46);
+      shadow(mx, ww);
+      px(mx, top - q(30), ww, q(26), '#2c283a'); px(mx, top - q(30), ww, 1, '#545068');
+      px(mx + ww / 2 - 2, top - q(4), 4, q(4), '#2c283a'); px(mx + ww / 2 - 8, top - 1, 16, 1, '#3e3a50');
+      [sx, sy, sw, sh] = [mx + 2, top - q(28), ww - 4, q(21)];
       if (lv === 4) {
-        px(mx + ww + 3, top - 26, 26, 22, '#2c283a'); px(mx + ww + 5, top - 24, 22, 17, '#0c1420');
-        for (let k = 0; k < 5; k++) px(mx + ww + 7, top - 21 + k * 3, 6 + Math.round(hash(k, 9) * 12), 1, ['#4ea8f0', '#7ee081', '#f2c14e'][k % 3]!);
-        px(mx + ww + 15, top - 4, 2, 4, '#2c283a');
+        const ox = mx + ww + 3;
+        shadow(ox, q(26));
+        px(ox, top - q(26), q(26), q(22), '#2c283a'); px(ox + 2, top - q(26) + 2, q(26) - 4, q(22) - 5, '#0c1420');
+        for (let k = 0; k < 6; k++) px(ox + 4, top - q(26) + 5 + k * 3, 6 + Math.round(hash(k, 9) * 14), 1, ['#4ea8f0', '#7ee081', '#f2c14e'][k % 3]!);
+        px(ox + q(13), top - q(4), 2, q(4), '#2c283a');
       }
-      px(mx + 6, top - 2, 30, 2, '#3e3a50'); for (let i = 0; i < 14; i++) px(mx + 7 + i * 2, top - 2, 1, 1, '#8c88a0');
+      px(mx + q(6), top - 2, q(30), 2, '#3e3a50'); for (let i = 0; i < 17; i++) px(mx + q(6) + 1 + i * 2, top - 2, 1, 1, '#8c88a0');
     } else {
       // terminal holographique
-      px(mx + 12, top - 3, 26, 3, '#dce6f0'); px(mx + 14, top - 3, 22, 1, '#5ef0ff');
-      [sx, sy, sw, sh] = [mx - 2, top - 31, 54, 24];
+      px(mx + q(12), top - 3, q(26), 3, '#dce6f0'); px(mx + q(14), top - 3, q(22), 1, '#5ef0ff');
+      [sx, sy, sw, sh] = [mx - 2, top - q(30), q(54), q(23)];
       g.fillStyle = 'rgba(94,240,255,0.10)';
-      g.beginPath(); g.moveTo(mx + 14, top - 3); g.lineTo(sx, sy + sh); g.lineTo(sx + sw, sy + sh); g.lineTo(mx + 36, top - 3); g.fill();
+      g.beginPath(); g.moveTo(mx + q(14), top - 3); g.lineTo(sx, sy + sh); g.lineTo(sx + sw, sy + sh); g.lineTo(mx + q(36), top - 3); g.fill();
     }
-    const holo = lv === 5;
     const ink = holo ? 'rgba(12,30,48,0.55)' : lv <= 2 ? '#0c1a10' : '#0c1420';
-    const fg = holo ? '#5ef0ff' : lv <= 2 ? '#7cff9c' : '#f2c14e';
     px(sx, sy, sw, sh, ink);
     if (!holo) for (let y = sy; y < sy + sh; y += 2) px(sx, y, sw, 1, '#ffffff08'); // lignes de balayage
+    // l'enveloppe et le nombre de commandes (chiffres en double taille)
     const digits = String(Math.min(n, 99));
-    const ew = 14;
-    const eh = 9;
-    const total = ew + 2 + digits.length * 4 - 1;
+    const ew = 17;
+    const eh = 11;
+    const total = ew + 3 + digits.length * 8 - 2;
     const ex = sx + Math.floor((sw - total) / 2);
     const ey = sy + Math.floor((sh - eh) / 2);
-    const shine = ready > 0 ? 0.5 + 0.5 * Math.sin(t * 6) : 0;
     const env = ready > 0 ? (shine > 0.5 ? '#ffffff' : '#f2c14e') : n > 0 ? fg : fg + '70';
     if (ready > 0) {
       g.fillStyle = `rgba(242,193,78,${0.15 + 0.25 * shine})`;
@@ -236,9 +263,13 @@ export class OfficeRoom extends Room {
     }
     px(ex, ey, ew, eh, env);
     g.fillStyle = ink;
-    for (let i = 0; i < 7; i++) { g.fillRect(ex + i, ey + i, 1, 1); g.fillRect(ex + 13 - i, ey + i, 1, 1); }
+    for (let i = 0; i < 8; i++) { g.fillRect(ex + i, ey + Math.floor(i * 0.9), 1, 1); g.fillRect(ex + ew - 1 - i, ey + Math.floor(i * 0.9), 1, 1); }
     if (ready > 0 && shine > 0.7) { px(ex - 2, ey - 2, 1, 1, '#ffffff'); px(ex + ew + 1, ey + eh, 1, 1, '#ffffff'); }
-    drawDigits(g, digits, ex + ew + 2, ey + 2, ready > 0 ? env : n > 0 ? fg : fg + '70');
+    g.save();
+    g.translate(ex + ew + 3, ey);
+    g.scale(2, 2);
+    drawDigits(g, digits, 0, 0, ready > 0 ? env : n > 0 ? fg : fg + '70');
+    g.restore();
   }
 
   // ---------------------------------------------------------------- décor
@@ -338,6 +369,16 @@ export class OfficeRoom extends Room {
       const k = (y - front - 4) / (300 - front - 2);
       return inside ? 0.42 + 0.3 * k : 0.8 + 0.2 * Math.min(1, Math.abs(x < dk.x ? dk.x - x : x - dk.x - dk.w) / 4);
     });
+    if (lv >= 2 && lv <= 4) {
+      // les câbles de l'ordinateur pendent derrière le bureau jusqu'à la prise, au pied du mur
+      const cols = lv === 2 ? ['#6a604c', '#4a4038'] : ['#1b1424', '#2c283a'];
+      [62, 66, 70].forEach((cx0, k) => {
+        const col = cols[k % 2]!;
+        for (let y = front + 5; y < 288 - k * 2; y++) px(dk.x + cx0 + Math.round(Math.sin((y - front) / (9 + k * 3)) * 1.5), y, 1, 1, col);
+        px(dk.x + cx0, 288 - k * 2, dk.w - cx0 - 8, 1, col);
+      });
+      px(dk.x + dk.w - 9, 283, 4, 7, '#e8e4dc'); px(dk.x + dk.w - 8, 285, 2, 1, '#8a8070'); // la multiprise
+    }
     trap(g, back, front, bl, br, dk.x, dk.x + dk.w, top);
     px(Math.round(bl), back, Math.round(br - bl), 1, hi);
     shade(g, b, { x: dk.x, y: back, w: dk.w, h: front - back }, (_, y) => 0.88 + ((y - back) / (front - back)) * 0.2);

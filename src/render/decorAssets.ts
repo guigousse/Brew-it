@@ -5,6 +5,7 @@
 import type { DecorAsset, DecorCtx } from './decor';
 import { drawMiniLabel } from './labelArt';
 import { ellipseShadow, shade, trap } from './space';
+import { radio } from '../audio/radio';
 
 const P = (g: CanvasRenderingContext2D) => (x: number, y: number, w: number, h: number, c: string) => {
   g.fillStyle = c;
@@ -120,6 +121,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       const px = P(g);
       // origine : la lampe est en (6, 0) ; sa lumière tombe sur le plateau, en bas
       g.fillStyle = 'rgba(255,240,180,0.10)'; g.beginPath(); g.moveTo(7, 5); g.lineTo(15, 5); g.lineTo(22, 22); g.lineTo(0, 22); g.fill();
+      g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(8, 19, 14, 3); // son ombre sur le plateau
       px(5, 20, 12, 2, 'rgba(0,0,0,0.35)');
       px(6, 18, 10, 2, '#2c283a'); px(10, 4, 2, 14, '#2c283a'); px(6, 0, 10, 5, c.lv === 5 ? '#5ef0ff' : '#2c8a4a');
       px(6, 0, 10, 1, c.lv === 5 ? '#ffffff' : '#5ec07a'); px(7, 5, 8, 1, '#fff4b0');
@@ -398,18 +400,42 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       const px = P(g);
       const lv = c.lv;
       const cx = 3;
-      const seat = 0;
       floorShadow(g, cx + 13, 38, 15, 3);
-      const backc = lv === 5 ? '#f4f8fc' : lv >= 3 ? '#2c283a' : '#3e3a50';
-      const cushion = lv === 5 ? '#dce6f0' : lv >= 3 ? '#3a3650' : '#4a4660';
-      px(cx + 12, seat + 22, 3, 12, '#2c283a'); px(cx + 12, seat + 22, 1, 12, '#545068');
-      px(cx + 3, seat + 33, 21, 2, '#2c283a');
-      for (const wx of [cx + 2, cx + 12, cx + 22]) px(wx, seat + 35, 3, 2, '#1b1424');
-      px(cx - 1, seat, 28, 23, '#1b1424');
-      px(cx, seat, 26, 22, backc);
-      px(cx + 2, seat + 2, 22, 18, cushion);
-      px(cx + 2, seat + 2, 22, 1, '#ffffff30');
-      shade(g, c.b, { x: cx, y: seat, w: 26, h: 22 }, (x, y) => 1.08 - ((x - cx) / 26) * 0.2 - ((y - seat) / 22) * 0.12);
+      if (lv === 1) {
+        // chaise de bois à barreaux
+        const [wd, hi, lo] = ['#8a5a2c', '#b07a40', '#4a2c14'];
+        px(cx + 1, 0, 3, 38, wd); px(cx + 22, 0, 3, 38, wd); px(cx + 1, 0, 1, 38, hi);
+        px(cx, 0, 26, 4, wd); px(cx, 0, 26, 1, hi); px(cx, 3, 26, 1, lo);
+        for (const bx of [8, 12, 16]) px(cx + bx, 4, 2, 16, wd);
+        px(cx + 1, 20, 24, 3, wd); px(cx + 1, 20, 24, 1, hi);
+        px(cx + 1, 29, 24, 2, lo);
+        shade(g, c.b, { x: cx, y: 0, w: 26, h: 38 }, (x) => 1.08 - ((x - cx) / 26) * 0.22);
+        return;
+      }
+      if (lv === 5) {
+        // fauteuil ergonomique blanc, dossier en résille, liseré cyan
+        px(cx + 12, 24, 3, 10, '#8a9ab0');
+        px(cx + 2, 33, 23, 2, '#8a9ab0');
+        for (const wx of [cx + 1, cx + 12, cx + 23]) px(wx, 35, 3, 2, '#2c283a');
+        px(cx - 2, 14, 3, 9, '#dce6f0'); px(cx + 25, 14, 3, 9, '#dce6f0'); // accoudoirs
+        px(cx, -1, 26, 25, '#b8c6d6');
+        px(cx + 1, 0, 24, 23, '#f4f8fc');
+        for (let y = 3; y < 20; y += 2) for (let x = 4; x < 22; x += 2) px(cx + x + (y % 4 ? 1 : 0), y, 1, 1, '#c4d0dc');
+        px(cx + 1, 0, 24, 1, '#5ef0ff'); px(cx + 3, 22, 20, 1, '#5ef0ff');
+        shade(g, c.b, { x: cx, y: -1, w: 26, h: 25 }, (x, y) => 1.04 - ((x - cx) / 26) * 0.16 - ((y + 1) / 25) * 0.1);
+        return;
+      }
+      const backc = lv >= 3 ? '#2c283a' : '#3e3a50';
+      const cushion = lv === 4 ? '#2e4a6e' : lv === 3 ? '#4a2a2a' : '#4a4660';
+      px(cx + 12, 22, 3, 12, '#2c283a'); px(cx + 12, 22, 1, 12, '#545068');
+      px(cx + 3, 33, 21, 2, '#2c283a');
+      for (const wx of [cx + 2, cx + 12, cx + 22]) px(wx, 35, 3, 2, '#1b1424');
+      px(cx - 1, 0, 28, 23, '#1b1424');
+      px(cx, 0, 26, 22, backc);
+      px(cx + 2, 2, 22, 18, cushion);
+      px(cx + 2, 2, 22, 1, '#ffffff30');
+      if (lv === 3) for (const k of [7, 13, 19]) for (const j of [6, 12]) px(cx + k, j, 1, 1, '#2a1414'); // capitons
+      shade(g, c.b, { x: cx, y: 0, w: 26, h: 22 }, (x, y) => 1.08 - ((x - cx) / 26) * 0.2 - (y / 22) * 0.12);
     },
   },
   {
@@ -503,6 +529,138 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       px(1, 6, 24, 12, '#3e3a50'); px(1, 6, 24, 1, '#8c88a0'); px(5, 0, 16, 6, '#2c283a');
       px(0, 18, 26, 1, 'rgba(0,0,0,0.4)');
       px(7, 2, 12, 2, '#7ee081'); for (let i = 0; i < 4; i++) px(4 + i * 5, 10, 3, 2, '#c4d0dc');
+    },
+  },
+  // ------------------------------------------------------------------ bureau : objets sur le plateau, corbeille, radio
+  {
+    id: 'rotaryPhone', name: 'Téléphone à cadran', room: 'office', w: 18, h: 11,
+    draw(g) {
+      const px = P(g);
+      g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(3, 9, 16, 2);
+      px(1, 4, 16, 6, '#1b1424'); px(2, 4, 14, 1, '#3e3a50');
+      px(0, 1, 18, 3, '#1b1424'); px(1, 1, 16, 1, '#3e3a50'); px(0, 3, 3, 2, '#1b1424'); px(15, 3, 3, 2, '#1b1424'); // combiné
+      g.fillStyle = '#e8dcc0'; g.beginPath(); g.arc(9, 7, 2.5, 0, Math.PI * 2); g.fill();
+      px(9, 6, 1, 1, '#1b1424');
+    },
+  },
+  {
+    id: 'orderPile', name: 'Pile de bons de commande', room: 'office', w: 16, h: 9,
+    draw(g) {
+      const px = P(g);
+      g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(3, 7, 14, 2);
+      for (let k = 0; k < 4; k++) { const o = (k * 3) % 4 - 1; px(1 + o, 6 - k * 2, 14, 2, k % 2 ? '#f6ecd6' : '#e8dcc0'); px(1 + o, 6 - k * 2, 14, 1, '#ffffff'); }
+      px(4, 0, 8, 1, '#a8483a'); px(4, 1, 6, 1, '#8a8070'); // tampon et lignes
+    },
+  },
+  {
+    id: 'deskPhone', name: 'Téléphone fixe', room: 'office', w: 16, h: 9,
+    draw(g) {
+      const px = P(g);
+      g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(3, 7, 14, 2);
+      px(0, 3, 16, 6, '#2c283a'); px(0, 3, 16, 1, '#545068');
+      px(1, 0, 5, 8, '#3e3a50'); px(1, 0, 5, 1, '#6c6884'); // combiné
+      for (let r = 0; r < 2; r++) for (let k = 0; k < 3; k++) px(8 + k * 2, 4 + r * 2, 1, 1, '#c4d0dc');
+      px(14, 4, 1, 1, '#7ee081');
+    },
+  },
+  {
+    id: 'binders', name: 'Classeurs', room: 'office', w: 14, h: 15,
+    draw(g) {
+      const px = P(g);
+      g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(3, 13, 12, 2);
+      const cols = ['#a8483a', '#2e5a9a', '#2c8a4a'];
+      cols.forEach((col, k) => { px(k * 4, 1, 4, 13, col); px(k * 4, 1, 1, 13, '#ffffff30'); px(k * 4 + 1, 9, 2, 1, '#e8dcc0'); });
+      px(12, 3, 2, 11, '#f2c14e'); px(12, 3, 2, 1, '#fff4b0'); // le jaune, un peu penché
+    },
+  },
+  {
+    id: 'smartphone', name: 'Smartphone', room: 'office', w: 11, h: 4,
+    draw(g) {
+      const px = P(g);
+      g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(2, 2, 10, 2);
+      px(0, 0, 10, 3, '#1b1424'); px(1, 0, 8, 2, '#2e4a6e'); px(2, 0, 3, 1, '#5ef0ff');
+    },
+  },
+  {
+    id: 'postits', name: 'Post-it', room: 'office', w: 9, h: 8,
+    draw(g) {
+      const px = P(g);
+      px(0, 1, 5, 5, '#f2e070'); px(0, 1, 5, 1, '#fff4b0'); px(1, 3, 3, 1, '#8a7a40');
+      px(4, 3, 5, 5, '#ff9ad0'); px(4, 3, 5, 1, '#ffd0e8'); px(5, 5, 3, 1, '#8a4a6a');
+    },
+  },
+  {
+    id: 'smartSpeaker', name: 'Enceinte connectée', room: 'office', w: 8, h: 12, anim: true,
+    draw(g, c) {
+      const px = P(g);
+      g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(2, 10, 8, 2);
+      px(0, 1, 8, 10, '#dce6f0'); px(0, 1, 1, 10, '#ffffff'); px(7, 1, 1, 10, '#8a9ab0');
+      for (let y = 4; y < 10; y += 2) px(1, y, 6, 1, '#c4d0dc');
+      const k = 0.5 + 0.5 * Math.sin(c.t * 2);
+      g.fillStyle = `rgba(94,240,255,${0.5 + 0.5 * k})`; g.fillRect(1, 0, 6, 1);
+    },
+  },
+  {
+    id: 'wasteBin', name: 'Corbeille à papier', room: 'office', w: 14, h: 16, pad: 4, anim: true,
+    draw(g, c) {
+      const px = P(g);
+      const lv = c.lv;
+      const [body, hi, lo] = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : lv === 4 ? ['#5a6878', '#8a96a6', '#3a4250'] : lv === 1 ? ['#8a6a3c', '#b08a50', '#5a3a1c'] : ['#3e3a50', '#6c6884', '#2c283a'];
+      floorShadow(g, 7, 15, 8, 2);
+      // les boulettes des commandes expirées ces dernières 24 h, qui débordent
+      const game = c.game;
+      const n = c.preview ? 4 : game ? Math.min(7, game.expiredAt.filter((x) => x > game.time - 86400).length) : 0;
+      trap(g, 4, 15, 0, 14, 2, 12, body);
+      px(0, 4, 14, 1, hi);
+      for (let x = 3; x < 12; x += 3) px(x, 6, 1, 8, lo); // le treillis
+      // les boulettes dépassent du bord
+      const balls = [[3, 2], [8, 2], [11, 3], [5, 0], [9, -1], [2, 0], [6, -2]] as const;
+      for (let i = 0; i < n; i++) {
+        const [bx, by] = balls[i]!;
+        g.fillStyle = '#f6ecd6'; g.beginPath(); g.arc(bx + 0.5, by + 1.5, 2, 0, Math.PI * 2); g.fill();
+        px(bx, by + 1, 1, 1, '#c8bca4'); px(bx + 1, by + 2, 1, 1, '#c8bca4');
+      }
+      px(2, 14, 10, 1, lo);
+    },
+  },
+  {
+    id: 'radio', name: 'Radio', room: 'office', w: 26, h: 14, pad: 14, anim: true,
+    draw(g, c) {
+      const px = P(g);
+      const lv = c.lv;
+      const on = radio.on;
+      const t = c.t;
+      const [body, hi, lo, grille] =
+        lv === 1 ? ['#7a4a22', '#a8743c', '#3a2010', '#c8a870'] : lv === 2 ? ['#a8483a', '#d06a52', '#6e2a22', '#e8dcc0']
+        : lv === 3 ? ['#e8dcc0', '#fff4dc', '#a89e88', '#8a6a3c'] : lv === 4 ? ['#2c283a', '#545068', '#1b1424', '#6c6884'] : ['#f4f8fc', '#ffffff', '#8a9ab0', '#c4d0dc'];
+      g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(3, 12, 24, 2);
+      if (lv === 1) {
+        // poste de TSF au dessus arrondi
+        g.fillStyle = body; g.beginPath(); g.ellipse(13, 5, 13, 5, 0, Math.PI, 0); g.fill();
+        px(0, 5, 26, 9, body);
+      } else px(0, 2, 26, 12, body);
+      px(0, lv === 1 ? 5 : 2, 26, 1, hi);
+      px(25, 2, 1, 12, lo);
+      // la grille du haut-parleur, le cadran et le bouton
+      px(2, 6, 12, 6, grille);
+      for (let x = 3; x < 13; x += 2) px(x, 6, 1, 6, lo);
+      px(16, 6, 8, 3, on ? '#fff4b0' : '#3a3048');
+      if (on) { const k = Math.floor(t * 1.5) % 6; px(17 + k, 6, 1, 3, '#a8483a'); }
+      px(18, 10, 3, 3, lo); px(19, 11, 1, 1, hi);
+      if (lv >= 4) px(2, 3, 2, 2, on ? (lv === 5 ? '#5ef0ff' : '#7ee081') : lo); // voyant
+      if (lv !== 1) px(4, -2, 1, 4, lo); // antenne
+      // les notes s'envolent quand elle joue
+      if (on) {
+        const cols = ['#f2c14e', '#ff9ad0', '#5ef0ff'];
+        for (let i = 0; i < 3; i++) {
+          const k = (t * 0.45 + i / 3) % 1;
+          const x = Math.round(8 + i * 6 + Math.sin(t * 2 + i) * 3);
+          const y = Math.round(2 - k * 14);
+          g.globalAlpha = 1 - k;
+          px(x, y, 2, 2, cols[i]!); px(x + 1, y - 3, 1, 3, cols[i]!);
+          g.globalAlpha = 1;
+        }
+      }
     },
   },
 ];
