@@ -66,7 +66,7 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'grainKg', label: 'Malt', min: 1, max: 10, step: 0.5, unit: 'kg' },
       { key: 'crush', label: 'Finesse', min: 1, max: 10, step: 1, unit: '/10' },
     ],
-    perks: ['5 L · malt ± 30 %', '20 L · malt ± 14 %', '60 L · malt ± 6 %', '200 L · malt ± 2 %', '600 L · pesée parfaite'],
+    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 %', '600 L · précision 100 %'],
     baseCost: 60,
   },
   mash: {
@@ -76,7 +76,7 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'mashTemp', label: 'Température', min: 45, max: 85, step: 1, unit: '°C' },
       { key: 'mashTime', label: 'Durée', min: 10, max: 120, step: 5, unit: 'min' },
     ],
-    perks: ['5 L · ± 4,5 °C', '20 L · ± 2,5 °C', '60 L · ± 1 °C', '200 L · ± 0,3 °C', '600 L · précision moléculaire'],
+    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 %', '600 L · précision 100 %'],
     baseCost: 80,
   },
   boil: {
@@ -87,14 +87,14 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'hopsAroma', label: 'Houblon arôme', min: 0, max: 200, step: 5, unit: 'g' },
       { key: 'boilTime', label: 'Durée', min: 5, max: 120, step: 5, unit: 'min' },
     ],
-    perks: ['5 L · houblon ± 30 %', '20 L · houblon ± 14 %', '60 L · houblon ± 6 %', '200 L · houblon ± 2 %', '600 L · dosage exact'],
+    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 %', '600 L · précision 100 %'],
     baseCost: 80,
   },
   cooler: {
     id: 'cooler', step: 'Refroidissement', names: ['Réfrigérant en verre', 'Serpentin', 'Échangeur à plaques', 'Échangeur double étage', 'Cryo-échangeur'],
     description: 'Il faut refroidir le moût avant d\'ajouter la levure : au-dessus de 35 °C, elle meurt.',
     knobs: [{ key: 'pitchTemp', label: 'Température de sortie', min: 5, max: 60, step: 1, unit: '°C' }],
-    perks: ['5 L · infection 10 %', '20 L · infection 6 %', '60 L · infection 2 %', '200 L · sans infection', '600 L · précision moléculaire'],
+    perks: ['5 L · précision 40 % · infection 10 %', '20 L · précision 65 % · infection 6 %', '60 L · précision 85 % · infection 2 %', '200 L · précision 95 % · sans infection', '600 L · précision 100 %'],
     baseCost: 70,
   },
   fermenter: {
@@ -105,7 +105,7 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'fermentTemp', label: 'Température', min: 4, max: 36, step: 1, unit: '°C' },
       { key: 'fermentDays', label: 'Durée', min: 1, max: 30, step: 1, unit: 'j' },
     ],
-    perks: ['5 L · ± 4,5 °C', '20 L · ± 2,5 °C', '60 L · ± 1 °C', '200 L · ± 0,3 °C', '600 L · précision moléculaire'],
+    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 %', '600 L · précision 100 %'],
     baseCost: 100,
   },
   conditioning: {
@@ -115,14 +115,14 @@ export const STATIONS: Record<StationId, StationDef> = {
       { key: 'gardeTemp', label: 'Température', min: 0, max: 20, step: 1, unit: '°C' },
       { key: 'gardeDays', label: 'Durée', min: 0, max: 30, step: 1, unit: 'j' },
     ],
-    perks: ['5 L · ± 4,5 °C', '20 L · ± 2,5 °C', '60 L · ± 1 °C', '200 L · plus limpide', '600 L · limpidité parfaite'],
+    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 % · plus limpide', '600 L · précision 100 % · limpidité parfaite'],
     baseCost: 90,
   },
   bottling: {
     id: 'bottling', step: 'Embouteillage', names: ['Entonnoir et pipette', 'Canne d\'embouteillage', 'Tireuse 4 becs', 'Ligne automatique', 'Ligne robotisée'],
     description: 'On met en bouteille avec un peu de sucre : la levure le transforme en bulles.',
     knobs: [{ key: 'priming', label: 'Sucre', min: 0, max: 16, step: 0.5, unit: 'g/L' }],
-    perks: ['5 L · oxydation, sucre ± 30 %', '20 L · sucre ± 14 %', '60 L · sucre ± 6 %', '200 L · sans oxydation', '600 L · robots, dosage exact'],
+    perks: ['5 L · précision 40 % · oxydation', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 % · sans oxydation', '600 L · précision 100 %'],
     baseCost: 70,
   },
 };
