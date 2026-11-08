@@ -213,7 +213,7 @@ export class OfficeRoom extends Room {
     } else {
       // terminal holographique
       px(mx + 12, top - 3, 26, 3, '#dce6f0'); px(mx + 14, top - 3, 22, 1, '#5ef0ff');
-      [sx, sy, sw, sh] = [mx - 2, top - 36, 54, 28];
+      [sx, sy, sw, sh] = [mx - 2, top - 31, 54, 24];
       g.fillStyle = 'rgba(94,240,255,0.10)';
       g.beginPath(); g.moveTo(mx + 14, top - 3); g.lineTo(sx, sy + sh); g.lineTo(sx + sw, sy + sh); g.lineTo(mx + 36, top - 3); g.fill();
     }
