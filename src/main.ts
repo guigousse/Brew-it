@@ -15,7 +15,11 @@ async function boot() {
   try {
     const loaded = await saves.load();
     game = loaded?.game ?? new Game();
-    if (loaded) simulateOffline(game, loaded.elapsedSeconds);
+    if (loaded) {
+      // l'horloge réelle repart de la sauvegarde : le quota du grossiste se recharge si minuit est passé pendant l'absence
+      loaded.game.wall = Date.now() - loaded.elapsedSeconds * 1000;
+      simulateOffline(game, loaded.elapsedSeconds);
+    }
   } catch (err) {
     console.error('Sauvegarde illisible, nouvelle partie', err);
     game = new Game();
@@ -82,6 +86,7 @@ async function boot() {
   const frame = (now: number) => {
     const dt = (now - last) / 1000;
     last = now;
+    game.wall = Date.now();
     loop.advance(dt);
     app.frame(now / 1000);
     if ((uiTimer += dt) > 0.25) {
@@ -108,6 +113,7 @@ async function boot() {
       app.storageRoom.invalidate();
       app.barRoom.invalidate();
       muted = true;
+      game.wall = pausedAt;
       simulateOffline(game, (Date.now() - pausedAt) / 1000);
       muted = false;
       last = performance.now();

@@ -1,7 +1,7 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
-import { AD, BAR, BAR_EVENTS, BARMAN, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type BarEventId, type ShopItemId } from '../core/market';
+import { BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
+import { AD, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
@@ -27,6 +27,8 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 };
 const money = (v: number) => `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: v % 1 ? 2 : 0 })} €`;
 const moneyInt = (v: number) => `${Math.floor(v).toLocaleString('fr-FR')} €`;
+/** Un volume en litres : une décimale sous 10 L. */
+const liters = (v: number) => `${v < 10 ? (Math.round(v * 10) / 10).toLocaleString('fr-FR') : Math.round(v).toLocaleString('fr-FR')} L`;
 const moneyShort = (v: number) => (v >= 1e6 ? `${(v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} M€` : v >= 1e4 ? `${Math.round(v / 1000)} k€` : moneyInt(v));
 const fmtRate = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: v < 10 ? 1 : 0 });
 const VERDICT_CLASS: Record<string, string> = { Imbuvable: 'v-bad', Médiocre: 'v-meh', Correcte: 'v-ok', Bonne: 'v-good', Excellente: 'v-top' };
@@ -75,8 +77,8 @@ function blockedHint(res: { ends: number[]; blocked: 'storage' | 'money' | 'slow
   const after = `La file se bloque après ${n} brassin${n > 1 ? 's' : ''}`;
   if (res.blocked === 'storage') {
     return format === 'keg'
-      ? `${after} : le stockage sera plein de fûts. Ils ne partent qu'au bar, par les commandes de fûts ou pendant un événement : programme moins de fûts, ou agrandis le stockage.`
-      : `${after} : le stockage sera plein. Livre des commandes, vends au grossiste ou agrandis le stockage.`;
+      ? `${after} : le stockage sera plein de fûts. Sers-les au bar, livre des commandes de fûts ou vends-en au grossiste (dans la limite de son quota du jour) ; sinon programme moins de fûts, ou agrandis le stockage.`
+      : `${after} : le stockage sera plein. Livre des commandes, vends au grossiste (dans la limite de son quota du jour) ou agrandis le stockage.`;
   }
   if (res.blocked === 'money') return `${after} : il n'y aura plus de quoi payer les ingrédients.`;
   return 'La file entière prendra plus de 24 h.';
@@ -1033,7 +1035,7 @@ export class App {
     go.disabled = !room;
     body.append(go);
     if (!room) body.append(h('p', 'note bad', g.planRoom
-      ? `Plus de place au stockage (en comptant les brassins déjà programmés). ${f === 'keg' ? 'Sers des fûts au bar, livre des commandes de fûts' : 'Livre des commandes, vends au grossiste'}, ou agrandis le stockage.`
+      ? `Plus de place au stockage (en comptant les brassins déjà programmés). ${f === 'keg' ? 'Sers des fûts au bar, livre des commandes de fûts, vends-en au grossiste' : 'Livre des commandes, vends au grossiste'}, ou agrandis le stockage.`
       : `La file est pleine (${g.planCap} brassins). Elle s'allonge avec le niveau de la brasserie.`));
   }
 
@@ -1505,7 +1507,7 @@ export class App {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
-      app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.advertising, g.money >= g.adCost, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10)]), [...this.picks]] : 0]);
+      app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.advertising, g.money >= g.adCost, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
   }
 
   /** Reconstruit l'écran quand une commande arrive, expire, ou que le stock change ; le tableau de bord vit en direct. */
@@ -1809,33 +1811,55 @@ export class App {
     }
   }
 
-  /** Le grossiste : il reprend le surplus de bouteilles à tout moment, à petit prix. */
+  /** Le grossiste : il reprend bouteilles et fûts à tout moment, à petit prix, dans la limite d'un quota par bière (en litres, rechargé à minuit). */
   private wholesaleTab(g: Game, card: HTMLElement): void {
     const auto = h('label', 'toggle');
     const box = h('input');
     box.type = 'checkbox';
     box.checked = g.autoWholesale;
     box.onchange = () => (g.autoWholesale = box.checked);
-    auto.append(box, h('span', '', 'Vendre le surplus automatiquement'));
-    card.append(auto, h('p', 'hint', 'Au-delà de la moitié du stockage, à petit prix. Le reste attend les commandes.'));
-    const beers = g.beers.filter((b) => b.stock > 0 && b.tasting.quality >= DRINKABLE_MIN);
+    auto.append(box, h('span', '', 'Vendre automatiquement quand le stockage est plein'));
+    card.append(auto, h('p', 'hint', 'Bouteilles et fûts, à petit prix, dans la limite d\'un quota par bière qui se recharge à minuit. Plus une bière est populaire, plus il en reprend.'));
+    const beers = g.beers.filter((b) => (b.stock > 0 || b.kegs.length > 0) && b.tasting.quality >= DRINKABLE_MIN);
     if (!beers.length) card.append(h('p', 'hint', 'Rien en stock.'));
     for (const b of beers) {
-      const el = h('div', 'stock-line');
+      const box = h('div', 'ws-beer');
+      const head = h('div', 'stock-line');
       const thumb = h('canvas', 'label-thumb');
       drawLabel(thumb, b.label, b.name);
-      const unit = wholesalePrice(b.tasting);
-      el.append(thumb, h('span', 'stock-name', `${b.name} · ${b.stock}`));
-      const sell = (n: number, label: string) =>
-        this.btn('btn small', label, () => {
-          const r = g.sellWholesale(b.id, n);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.gainToast(r.amount!);
-          this.refreshComputer();
-        });
-      if (b.stock > CRATE) el.append(sell(CRATE, '1 caisse'));
-      el.append(sell(b.stock, `Tout · ${moneyInt(b.stock * unit)}`));
-      card.append(el);
+      const quota = g.wholesaleQuota(b);
+      const left = g.wholesaleLeft(b);
+      head.append(thumb, h('span', 'stock-name', b.name), h('span', `ws-quota${left <= 0 ? ' full' : ''}`, `${liters(quota - left)} / ${liters(quota)}`));
+      const bar = h('div', 'ws-bar');
+      const fill = h('div', 'ws-fill');
+      fill.style.width = `${Math.min(100, quota ? (100 * (quota - left)) / quota : 100)}%`;
+      bar.append(fill);
+      box.append(head, bar);
+      const perL = wholesalePrice(b.tasting) / BOTTLE_L;
+      const row = (format: Format, have: number, what: string, one: { n: number; label: string }) => {
+        if (have <= 0) return;
+        const can = g.wholesaleSellable(b, format);
+        const el = h('div', 'ws-row');
+        el.append(h('span', 'ws-have', what));
+        const sell = (n: number, label: string) => {
+          const btn = this.btn('btn small', label, () => {
+            const r = g.sellWholesale(b.id, n, format);
+            if (!r.ok) return this.toast(r.reason!, 'bad');
+            this.gainToast(r.amount!);
+            this.refreshComputer();
+          });
+          btn.disabled = can <= 0;
+          return btn;
+        };
+        if (can > one.n) el.append(sell(one.n, one.label));
+        const kegL = [...b.kegs].sort((x, y) => x - y).slice(0, can).reduce((s, k) => s + k * GLASS_L, 0);
+        const value = (format === 'bottle' ? can * BOTTLE_L : kegL) * perL;
+        el.append(sell(can, can > 0 ? `${can === have ? 'Tout' : can} · ${moneyInt(value)}` : 'Quota atteint'));
+        box.append(el);
+      };
+      row('bottle', b.stock, `${b.stock} btl`, { n: CRATE, label: '1 caisse' });
+      row('keg', b.kegs.length, `${b.kegs.length} fût${b.kegs.length > 1 ? 's' : ''}`, { n: 1, label: '1 fût' });
+      card.append(box);
     }
   }
 
@@ -2114,8 +2138,8 @@ export class App {
     this.harvest.classList.add('hidden');
     const hrs = Math.floor(o.seconds / 3600);
     const min = Math.floor((o.seconds % 3600) / 60);
-    this.toast(`+${moneyInt(o.earned)} · ${hrs ? `${hrs} h ` : ''}${min} min d'absence, ${o.sold} vendues`, 'good');
-    this.log(`Pendant ton absence (${hrs ? `${hrs} h ` : ''}${min} min) : ${o.sold} bières vendues, +${moneyInt(o.earned)}`, 'good', 'chart');
+    this.toast(`+${moneyInt(o.earned)} · ${hrs ? `${hrs} h ` : ''}${min} min d'absence, ${liters(o.liters ?? 0)} vendus`, 'good');
+    this.log(`Pendant ton absence (${hrs ? `${hrs} h ` : ''}${min} min) : ${liters(o.liters ?? 0)} de bière vendus, +${moneyInt(o.earned)}`, 'good', 'chart');
     this.onSent?.();
   }
 
@@ -2151,7 +2175,7 @@ export class App {
   private openOptions(): void {
     const g = this.game();
     const card = this.modalCard('Options');
-    card.append(h('div', 'stats-line', `${g.batchesDone} brassins · ${g.totalSold} bouteilles vendues · ${moneyInt(g.totalRevenue)}`));
+    card.append(h('div', 'stats-line', `${g.batchesDone} brassins · ${liters(g.totalLiters)} vendus · ${moneyInt(g.totalRevenue)}`));
     const fresh = this.btn('btn bad', 'Nouvelle partie', () => {
       if (fresh.dataset.confirm) {
         this.closeModal();
@@ -2233,7 +2257,7 @@ export class App {
     const hour = g.revenueLastHour;
     const last5 = minutes.slice(-5).reduce((s, m) => s + m.bar + m.orders + m.wholesale, 0);
     kpi('Dernière heure', moneyShort(hour), `${moneyInt(last5 / 5)}/min ces 5 min`);
-    kpi('Recettes totales', moneyShort(g.totalRevenue), `${g.totalSold.toLocaleString('fr-FR')} vendues`);
+    kpi('Recettes totales', moneyShort(g.totalRevenue), `${liters(g.totalLiters)} vendus`);
     kpi('Marque', starText(g.brand), `${fmtRate(g.barRate * 60)} clients/h au bar`);
     kpi('Brassins', String(g.batchesDone), `${g.batches.length} en cours`);
     page.append(kpis);
@@ -2342,7 +2366,7 @@ export class App {
         const el = h('div', 'stock-line');
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        el.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.sold} · ${moneyShort(b.revenue)}`), h('span', 'pop-stars', starText(b.pop)));
+        el.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${liters(b.liters)} · ${moneyShort(b.revenue)}`), h('span', 'pop-stars', starText(b.pop)));
         list.append(el);
       }
       top.append(list);

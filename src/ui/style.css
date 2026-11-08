@@ -569,3 +569,12 @@ button:disabled { cursor: default; opacity: .5; }
 /* notification avec action (Annuler) */
 .toast.with-action { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
 .toast-action { padding: 2px 8px; font: inherit; font-size: 16px; color: var(--ink); background: var(--accent); border: 2px solid var(--ink); }
+
+/* --- Grossiste : quota du jour par bière -------------------------------------------------- */
+.ws-beer { display: grid; gap: 4px; padding-bottom: 6px; }
+.ws-quota { color: var(--dim); white-space: nowrap; }
+.ws-quota.full { color: #ffb4a4; }
+.ws-bar { height: 6px; background: var(--ink); border: 2px solid #5c4a6e; }
+.ws-fill { height: 100%; background: var(--good); }
+.ws-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.ws-have { flex: 1; color: var(--dim); }

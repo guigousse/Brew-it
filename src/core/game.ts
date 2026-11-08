@@ -2,8 +2,8 @@ import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Level
 import { EventBus } from './events';
 import type { Label } from './label';
 import { PARTY } from './market';
-import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type BarEventId, type ShopItemId } from './market';
-import { CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, WHOLESALE_KEEP, wholesalePrice, type Order } from './orders';
+import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type BarEventId, type ShopItemId } from './market';
+import { CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
@@ -28,6 +28,14 @@ const PARTY_COOLDOWN = PARTY.cooldown;
 export const TICK_RATE = 20;
 export const TICK_DT = 1 / TICK_RATE;
 export const BOTTLE_L = 0.33;
+
+/** Quota du grossiste, par bière et par jour, en brassins : base + pop × popularité (0 à 1). */
+export const WHOLESALE_QUOTA = { base: 4, pop: 20 } as const;
+
+/** Numéro du jour, à l'heure locale, d'un instant (ms depuis 1970). */
+export function localDay(ms: number): number {
+  return Math.floor((ms - new Date(ms).getTimezoneOffset() * 60000) / 86400000);
+}
 export const STARTING_MONEY = 250;
 
 /** Prix des ingrédients (achetés automatiquement au lancement d'un brassin). */
@@ -69,6 +77,10 @@ export interface Beer {
   label: Label;
   /** Popularité de la bière (0 à 1) : monte quand elle se boit, s'érode sinon. */
   pop: number;
+  /** Litres vendus (bar, commandes et grossiste). */
+  liters: number;
+  /** Litres repris par le grossiste aujourd'hui (le quota se recharge à minuit). */
+  wsToday: number;
 }
 
 export interface Batch {
@@ -117,6 +129,8 @@ export interface OfflineReport {
   seconds: number;
   earned: number;
   sold: number;
+  /** Litres vendus pendant l'absence. */
+  liters: number;
   batches: number;
 }
 
@@ -206,12 +220,18 @@ export class Game {
   ordersDone = 0;
   /** Niveau de l'ordinateur des commandes (1 à COMPUTERS.length). */
   computerLevel = 1;
-  /** Bouteilles reprises par le grossiste. */
-  wholesaleSold = 0;
-  /** Le grossiste reprend automatiquement le surplus (au-delà de la moitié du stockage). */
+  /** Litres repris par le grossiste. */
+  wholesaleLiters = 0;
+  /** Le grossiste reprend automatiquement de quoi débloquer la production quand le stockage est plein (dans la limite du quota). */
   autoWholesale = true;
   private wholesaleClock = 0;
+  /** Heure réelle (ms depuis 1970) : le quota du grossiste se recharge à minuit, heure locale. */
+  wall = 0;
+  /** Jour (local) du dernier rechargement du quota. */
+  quotaDay = 0;
   totalSold = 0;
+  /** Litres vendus au total (bar, commandes et grossiste). */
+  totalLiters = 0;
   totalRevenue = 0;
   /** Recettes cumulées des commandes et du grossiste (celles du bar : barRevenue). */
   ordersRevenue = 0;
@@ -499,23 +519,21 @@ export class Game {
 
   /**
    * Combien de brassins de ce format on peut encore programmer (ou porter, pour le groupe `index`) :
-   * il faut une place dans la file, et que le stockage puisse les accueillir. Les fûts n'en partent qu'au bar,
-   * aux commandes ou pendant un événement : ils doivent tenir dans la place libre, en comptant ceux déjà sur la ligne
-   * et dans la file. Les bouteilles aussi, sauf si le grossiste écoule le surplus tout seul (elles ne bloquent alors jamais).
+   * il faut une place dans la file, et que le stockage puisse les accueillir, en comptant ce qui est déjà sur la ligne
+   * et dans la file. Si le grossiste vend tout seul quand le stockage est plein, ce qu'il peut encore reprendre
+   * aujourd'hui (le quota restant de chaque bière) compte comme de la place en plus.
    */
   planLimit(format: Format, index = -1): number {
     const own = this.plan[index];
     const room = this.planRoom + (own ? own.count : 0);
-    const limited = (f: Format) => f === 'keg' || !this.autoWholesale;
-    if (!limited(format)) return room;
-    const pending = this.batches.reduce((s, b) => s + (limited(b.format) ? this.pendingSpace(b) : 0), 0);
-    const queued = this.plan.reduce((s, p, i) => s + (i !== index && limited(p.format) ? p.count * this.batchSpace(p.format) : 0), 0);
-    const bottles = this.autoWholesale ? 0 : this.beers.reduce((s, b) => s + b.stock, 0);
-    const kegs = this.stored - this.beers.reduce((s, b) => s + b.stock, 0);
-    const used = kegs + bottles + pending + queued;
+    const pending = this.batches.reduce((s, b) => s + this.pendingSpace(b), 0);
+    const queued = this.plan.reduce((s, p, i) => s + (i !== index ? p.count * this.batchSpace(p.format) : 0), 0);
+    const used = this.stored + pending + queued;
     const unit = this.batchSpace(format);
+    const extra = this.autoWholesale ? this.beers.reduce((s, b) => s + (b.tasting.quality >= DRINKABLE_MIN ? Math.floor(this.wholesaleLeft(b) / BOTTLE_L) : 0), 0) : 0;
+    const cap = this.storageCap + extra;
     // un brassin plus gros que tout le stockage peut partir quand tout est vide (il se rangera au fil des ventes)
-    const fits = used === 0 && unit > this.storageCap ? 1 : Math.floor(Math.max(0, this.storageCap - used) / Math.max(1, unit));
+    const fits = used === 0 && unit > this.storageCap ? 1 : Math.floor(Math.max(0, cap - used) / Math.max(1, unit));
     return Math.max(0, Math.min(room, fits));
   }
 
@@ -664,7 +682,7 @@ export class Game {
     if (this.beers.length >= this.rangeSlots) return { ok: false, reason: 'Ta gamme est pleine : achète une nouvelle place ou retire une bière' };
     const beer: Beer = {
       id: this.nextId++, name: name.trim() || `Bière n°${this.beers.length + 1}`, recipe: b.recipe, tasting: b.tasting,
-      stock: 0, kegs: [], sold: 0, revenue: 0, label: { ...label }, pop: 0,
+      stock: 0, kegs: [], sold: 0, revenue: 0, label: { ...label }, pop: 0, liters: 0, wsToday: 0,
     };
     this.beers.push(beer);
     b.beerId = beer.id;
@@ -1167,17 +1185,22 @@ export class Game {
     const q = this.quote(o, beerIds);
     if (!q.ok) return { ok: false, reason: o.mix ? `Il faut ${o.mix} bières différentes` : `Il manque ${o.qty - q.filled} ${o.kind === 'keg' ? 'fûts' : 'bouteilles'}` };
     const units = q.take.reduce((s, t) => s + t.n, 0);
+    let liters = 0;
     for (const { beer, n } of q.take) {
+      let l = n * BOTTLE_L;
       if (o.kind === 'keg') {
         beer.kegs.sort((a, b) => a - b);
-        beer.kegs.splice(0, n);
+        l = beer.kegs.splice(0, n).reduce((s, g) => s + g * GLASS_L, 0);
       } else beer.stock -= n;
+      beer.liters += l;
+      liters += l;
       beer.sold += n;
       beer.revenue += (n / units) * o.reward;
       // une commande fait connaître la bière (une commande de prestige, beaucoup)
       beer.pop = gainPop(beer.pop, this.popTarget(beer), o.kind === 'prestige' ? 60 : o.kind === 'keg' ? n * 40 : n, POP_PER_BOTTLE);
     }
     this.totalSold += units;
+    this.totalLiters += liters;
     this.totalRevenue += o.reward;
     this.ordersRevenue += o.reward;
     this.recordSale('orders', o.reward);
@@ -1200,25 +1223,70 @@ export class Game {
     return this.orders.filter((o) => this.quote(o, this.autoPick(o)).ok);
   }
 
-  /** Le grossiste reprend des bouteilles à tout moment, à petit prix. */
-  sellWholesale(beerId: number, n: number): CommandResult & { amount?: number } {
+  /** Quota du grossiste pour une bière, en litres par jour : il grandit avec sa popularité (et avec le matériel). */
+  wholesaleQuota(beer: Beer): number {
+    return Math.round(this.batchLiters * (WHOLESALE_QUOTA.base + WHOLESALE_QUOTA.pop * beer.pop));
+  }
+
+  /** Litres que le grossiste reprend encore aujourd'hui pour cette bière. */
+  wholesaleLeft(beer: Beer): number {
+    return Math.max(0, this.wholesaleQuota(beer) - beer.wsToday);
+  }
+
+  /** Bouteilles ou fûts que le grossiste peut reprendre maintenant (stock et quota du jour). */
+  wholesaleSellable(beer: Beer, format: Format): number {
+    if (beer.tasting.quality < DRINKABLE_MIN) return 0;
+    let left = this.wholesaleLeft(beer) + 1e-9;
+    if (format === 'bottle') return Math.min(beer.stock, Math.floor(left / BOTTLE_L));
+    let n = 0;
+    for (const g of [...beer.kegs].sort((a, b) => a - b)) {
+      if (g * GLASS_L > left) break;
+      left -= g * GLASS_L;
+      n++;
+    }
+    return n;
+  }
+
+  /**
+   * Le grossiste reprend bouteilles et fûts à tout moment, à petit prix (le même au litre), dans la limite
+   * d'un quota quotidien par bière, en litres, rechargé à minuit.
+   */
+  sellWholesale(beerId: number, n: number, format: Format = 'bottle'): CommandResult & { amount?: number; sold?: number } {
     const beer = this.beer(beerId);
     if (!beer) return { ok: false, reason: 'Bière introuvable' };
-    n = Math.min(Math.floor(n), beer.stock);
-    if (n <= 0) return { ok: false, reason: 'Rien à vendre' };
     if (beer.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable' };
-    const amount = n * wholesalePrice(beer.tasting) * this.boostMult('wholesale');
-    beer.stock -= n;
+    const have = format === 'bottle' ? beer.stock : beer.kegs.length;
+    if (Math.floor(n) <= 0 || have <= 0) return { ok: false, reason: 'Rien à vendre' };
+    n = Math.min(Math.floor(n), this.wholesaleSellable(beer, format));
+    if (n <= 0) return { ok: false, reason: 'Quota du grossiste atteint pour aujourd\'hui' };
+    let liters = n * BOTTLE_L;
+    if (format === 'bottle') beer.stock -= n;
+    else {
+      beer.kegs.sort((a, b) => a - b);
+      liters = beer.kegs.splice(0, n).reduce((s, g) => s + g * GLASS_L, 0);
+    }
+    const amount = (liters / BOTTLE_L) * wholesalePrice(beer.tasting) * this.boostMult('wholesale');
+    beer.wsToday += liters;
     beer.sold += n;
+    beer.liters += liters;
     beer.revenue += amount;
     this.totalSold += n;
+    this.totalLiters += liters;
     this.totalRevenue += amount;
-    this.wholesaleSold += n;
+    this.wholesaleLiters += liters;
     this.wholesaleRevenue += amount;
     this.recordSale('wholesale', amount);
     this.money += amount;
     this.events.emit({ type: 'sale', amount });
-    return { ok: true, amount };
+    return { ok: true, amount, sold: n };
+  }
+
+  /** Recharge les quotas du grossiste au premier passage après minuit. */
+  private refillQuota(): void {
+    const day = localDay(this.wall);
+    if (day === this.quotaDay) return;
+    this.quotaDay = day;
+    for (const b of this.beers) b.wsToday = 0;
   }
 
   collectOffline(): number {
@@ -1232,6 +1300,8 @@ export class Game {
 
   step(dt = TICK_DT): void {
     this.time += dt;
+    this.wall += dt * 1000;
+    this.refillQuota();
     // De l'aval vers l'amont : un appareil se libère avant que le lot précédent n'y entre.
     const sorted = [...this.batches].sort((a, b) => b.stage - a.stage);
     for (const b of sorted) this.advance(b, dt);
@@ -1256,7 +1326,7 @@ export class Game {
     this.tickStaff(dt);
     if (this.autoWholesale && (this.wholesaleClock += dt) >= 1) {
       this.wholesaleClock = 0;
-      this.sellSurplus();
+      this.sellWhenFull();
     }
     this.tickTrends();
     // sans ventes, la popularité s'érode doucement
@@ -1378,6 +1448,8 @@ export class Game {
       const price = glassPrice(this.barLevel, beer.tasting, this.trendsOf(beer).length) * (this.partying ? this.barEvent.priceMult : 1) * this.barPriceMult;
       tap.glasses--;
       beer.sold++;
+      beer.liters += GLASS_L;
+      this.totalLiters += GLASS_L;
       beer.revenue += price;
       beer.pop = gainPop(beer.pop, this.popTarget(beer), (this.partying ? this.barEvent.popMult : 1) * this.furnitureMult('pop'), POP_PER_GLASS);
       this.totalSold++;
@@ -1436,16 +1508,53 @@ export class Game {
     }
   }
 
-  /** Vente automatique : le grossiste reprend ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. */
-  private sellSurplus(): void {
-    let over = this.stored - this.storageCap * WHOLESALE_KEEP;
-    while (over >= 1) {
-      let best: Beer | undefined;
-      for (const b of this.beers) if (b.stock > 0 && b.tasting.quality >= DRINKABLE_MIN && (!best || b.stock > best.stock)) best = b;
-      if (!best) return;
-      const n = Math.min(best.stock, Math.ceil(over));
-      this.sellWholesale(best.id, n);
-      over -= n;
+  /**
+   * Place qui manque pour que la production reparte : un lot fini attend de se ranger, ou le prochain brassin de la file
+   * attend de la place. 0 si le stockage n'est pas plein.
+   */
+  get storageShortfall(): number {
+    const free = this.storageCap - this.stored;
+    let need = 0;
+    for (const b of this.batches) {
+      if (b.stage !== STATION_ORDER.length - 1 || b.elapsed < b.duration) continue;
+      const left = this.pendingSpace(b);
+      if (left > 0) need = Math.max(need, Math.min(left, b.format === 'keg' ? kegSpace(b.kegGlasses ?? 20) : left) - free);
+    }
+    const head = this.plan[0];
+    if (head && !this.roomFor(head.format)) {
+      const pending = this.batches.reduce((s, b) => s + this.pendingSpace(b), 0);
+      need = Math.max(need, this.stored + pending + this.batchSpace(head.format) - this.storageCap);
+    }
+    return Math.max(0, need);
+  }
+
+  /**
+   * Vente automatique : seulement quand le stockage est plein (la production attend de la place), le grossiste reprend
+   * de quoi la débloquer, dans la limite des quotas. Les bouteilles d'abord (elles prennent plus de place par litre),
+   * puis les fûts ; la bière qui occupe le plus de place d'abord.
+   */
+  private sellWhenFull(): void {
+    let need = this.storageShortfall;
+    for (const format of ['bottle', 'keg'] as const) {
+      while (need > 0) {
+        let best: Beer | undefined;
+        let bestSpace = 0;
+        for (const b of this.beers) {
+          if (this.wholesaleSellable(b, format) <= 0) continue;
+          const space = format === 'bottle' ? b.stock : b.kegs.reduce((k, g) => k + kegSpace(g), 0);
+          if (space > bestSpace) { best = b; bestSpace = space; }
+        }
+        if (!best) break;
+        let n = 1;
+        if (format === 'bottle') n = Math.ceil(need);
+        else {
+          const sorted = [...best.kegs].sort((a, b) => a - b);
+          for (let freed = 0, i = 0; i < sorted.length && freed < need; i++) { freed += kegSpace(sorted[i]!); n = i + 1; }
+        }
+        const before = this.stored;
+        if (!this.sellWholesale(best.id, n, format).ok) break;
+        need -= before - this.stored;
+      }
     }
   }
 
@@ -1486,7 +1595,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleSold: this.wholesaleSold, autoWholesale: this.autoWholesale, totalSold: this.totalSold, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1531,7 +1640,17 @@ export class Game {
     g.format ??= 'bottle';
     g.orders ??= [];
     g.orderTimer ??= FIRST_ORDER_S;
-    g.wholesaleSold ??= 0;
+    // avant le quota du grossiste, les ventes se comptaient en bouteilles : on les convertit en litres
+    const old = s as unknown as { wholesaleSold?: number };
+    g.wholesaleLiters ??= (old.wholesaleSold ?? 0) * BOTTLE_L;
+    delete (g as unknown as { wholesaleSold?: unknown }).wholesaleSold;
+    g.totalLiters ??= g.totalSold * BOTTLE_L;
+    for (const b of g.beers) {
+      b.liters ??= b.sold * BOTTLE_L;
+      b.wsToday ??= 0;
+    }
+    g.wall ??= 0;
+    g.quotaDay ??= localDay(g.wall);
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
     delete (g as unknown as { autoBrew?: unknown }).autoBrew; // le brassage continu a disparu : tout passe par la file
@@ -1599,6 +1718,7 @@ export function simulateOffline(game: Game, seconds: number, max = MAX_OFFLINE_S
   if (target < 5) return null;
   const money = game.money;
   const sold = game.totalSold;
+  const liters = game.totalLiters;
   const done = game.batchesDone;
   const step = 0.5;
   for (let t = 0; t < target; t += step) game.step(step);
@@ -1609,6 +1729,7 @@ export function simulateOffline(game: Game, seconds: number, max = MAX_OFFLINE_S
     seconds: target + (prev?.seconds ?? 0),
     earned: Math.max(0, earned) + (prev?.earned ?? 0),
     sold: game.totalSold - sold + (prev?.sold ?? 0),
+    liters: game.totalLiters - liters + (prev?.liters ?? 0),
     batches: game.batchesDone - done + (prev?.batches ?? 0),
   };
   // Le coût des brassins automatiques lancés pendant l'absence est déjà déduit des gains.

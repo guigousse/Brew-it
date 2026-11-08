@@ -21,6 +21,7 @@ const DT = 0.25;
 
 const g = new Game();
 let clock = SESSIONS[0]! * 3600; // secondes depuis le jour 1 à minuit
+g.wall = clock * 1000 + new Date(0).getTimezoneOffset() * 60000; // minuit local = minuit du jour simulé (quota du grossiste)
 const log: { t: number; what: string; cost: number }[] = [];
 const fmt = (t: number) => `J${Math.floor(t / 86400) + 1} ${String(Math.floor((t % 86400) / 3600)).padStart(2, '0')}h${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}`;
 const buy = (what: string, cost: number) => log.push({ t: clock, what, cost });
@@ -211,7 +212,7 @@ console.log('\n=== Résumé');
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
 console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.round(b * 100)}`).join(' · '));
-console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', g.wholesaleSold, 'btl');
+console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', Math.round(g.wholesaleLiters), 'L,', Math.round(g.wholesaleRevenue), '€');
 console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots);
 if (process.env.DEBUG) {
   console.log('autoPlan', autoPlan, 'queued', g.queued, 'room', g.roomForBatch, 'stored', g.stored, '/', g.storageCap, 'liters', g.batchLiters);

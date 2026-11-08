@@ -135,6 +135,7 @@ describe('jeu', () => {
   it('la file de brassins : des groupes bière × format × nombre, limités selon le niveau de la brasserie', () => {
     const g = withBeer(1e5);
     runUntil(g, () => g.batches.length === 0);
+    g.storageLevel = 3; // assez de place pour toute la file
     const id = g.beers[0]!.id;
     expect(g.planCap).toBe(50);
     expect(g.planBrew(id, 'bottle', 3).ok).toBe(true);
@@ -282,20 +283,88 @@ describe('jeu', () => {
     }
   });
 
-  it('le grossiste reprend les bouteilles à tout moment, à petit prix ; il écoule seul le surplus', () => {
+  it('le grossiste reprend bouteilles et fûts, à petit prix, dans la limite d\'un quota par bière en litres', () => {
     const g = withBeer(0);
     g.autoWholesale = false;
     const beer = g.beers[0]!;
-    beer.stock = 50;
+    beer.pop = 0;
+    expect(g.wholesaleQuota(beer)).toBe(20); // lots de 5 L : 4 brassins par jour pour une bière inconnue
+    beer.stock = 100;
     const r = g.sellWholesale(beer.id, 30);
     expect(r.ok).toBe(true);
-    expect(beer.stock).toBe(20);
+    expect(beer.stock).toBe(70);
     expect(r.amount! / 30).toBeLessThanOrEqual(WHOLESALE_PRICE * 1.4); // une commande paie environ le double
     expect(g.money).toBeCloseTo(r.amount!);
-    g.autoWholesale = true;
-    beer.stock = 100; // plus de la moitié du stockage (120)
+    expect(beer.wsToday).toBeCloseTo(30 * 0.33);
+    // le reste du quota : 10,1 L, soit 30 bouteilles de plus
+    expect(g.sellWholesale(beer.id, 100).sold).toBe(30);
+    expect(g.sellWholesale(beer.id, 1)).toEqual({ ok: false, reason: 'Quota du grossiste atteint pour aujourd\'hui' });
+    // les fûts remplissent le même quota, au même prix au litre
+    beer.wsToday = 0;
+    beer.kegs = [20, 20, 20, 20, 20]; // fûts de 5 L
+    const k = g.sellWholesale(beer.id, 9, 'keg');
+    expect(k.sold).toBe(4); // 20 L
+    expect(beer.kegs).toHaveLength(1);
+    expect(k.amount!).toBeCloseTo((20 / 0.33) * (r.amount! / 30));
+    expect(g.wholesaleLiters).toBeCloseTo(60 * 0.33 + 20);
+    // une bière populaire : un quota plus grand
+    beer.pop = 0.5;
+    expect(g.wholesaleQuota(beer)).toBe(70);
+  });
+
+  it('le quota du grossiste se recharge à minuit, heure locale', () => {
+    const g = withBeer(0);
+    const beer = g.beers[0]!;
+    g.wall = new Date(2026, 10, 8, 23, 59, 0).getTime();
     g.step(1);
-    expect(beer.stock).toBe(60);
+    beer.wsToday = 15;
+    g.step(30);
+    expect(beer.wsToday).toBe(15); // toujours le même jour
+    g.step(40);
+    expect(beer.wsToday).toBe(0); // minuit est passé
+    const back = Game.fromJSON(JSON.parse(JSON.stringify(g)));
+    expect(back.wall).toBe(g.wall);
+    expect(back.quotaDay).toBe(g.quotaDay);
+  });
+
+  it('vente automatique : seulement quand le stockage plein bloque la production, et dans la limite du quota', () => {
+    const g = withBeer(1e5);
+    runUntil(g, () => g.batches.length === 0);
+    const beer = g.beers[0]!;
+    beer.pop = 0;
+    beer.stock = 100; // plus de la moitié du stockage (120) : on n'y touche pas
+    g.step(1);
+    expect(beer.stock).toBe(100);
+    // la file attend de la place : le grossiste reprend de quoi faire partir le brassin
+    beer.stock = 120;
+    g.plan = [{ beerId: beer.id, format: 'bottle', count: 1 }];
+    expect(g.storageShortfall).toBe(15);
+    g.step(1);
+    expect(beer.stock).toBe(105);
+    // quota épuisé : plus rien ne part, la file attend
+    beer.stock = 120;
+    beer.wsToday = g.wholesaleQuota(beer);
+    g.plan = [{ beerId: beer.id, format: 'bottle', count: 1 }];
+    g.step(1);
+    expect(beer.stock).toBe(120);
+    // les fûts aussi, quand il n'y a plus de bouteilles
+    beer.wsToday = 0;
+    beer.stock = 0;
+    beer.kegs = Array(10).fill(20); // 10 fûts de 5 L, 12 places chacun
+    g.plan = [{ beerId: beer.id, format: 'bottle', count: 1 }];
+    g.step(1);
+    expect(beer.kegs).toHaveLength(8); // 15 places : 2 fûts
+  });
+
+  it('le volume vendu se compte en litres : verres de 25 cl, bouteilles et fûts', () => {
+    const g = withBeer(0);
+    g.autoWholesale = false;
+    const beer = g.beers[0]!;
+    beer.stock = 10;
+    const before = g.totalLiters;
+    g.sellWholesale(beer.id, 10);
+    expect(g.totalLiters - before).toBeCloseTo(3.3);
+    expect(beer.liters).toBeCloseTo(3.3);
   });
 
   it('le tableau de bord garde les ventes minute par minute, par source, sur la dernière heure', () => {
@@ -501,7 +570,7 @@ describe('jeu', () => {
     expect(g.forecast({ beerId: id, format: 'bottle', count: 2 }).ends).toHaveLength(2);
   });
 
-  it('programmer : pas plus de fûts que le stockage n\'en peut recevoir ; les bouteilles, si le grossiste écoule le surplus', () => {
+  it('programmer : pas plus que le stockage n\'en peut recevoir, plus ce que le grossiste reprend encore aujourd\'hui', () => {
     const g = withBeer(1e5);
     runUntil(g, () => g.batches.length === 0);
     const id = g.beers[0]!.id;
@@ -513,9 +582,14 @@ describe('jeu', () => {
     expect(g.planLimit('keg')).toBe(0);
     g.setPlanCount(0, 999);
     expect(g.plan[0]!.count).toBe(kegs); // on ne peut pas dépasser la place en ajustant
-    expect(g.planLimit('bottle')).toBe(g.planRoom); // le grossiste écoule les bouteilles
+    g.plan = [];
+    const auto = g.planLimit('bottle');
+    expect(auto).toBeLessThan(g.planRoom);
     g.autoWholesale = false;
-    expect(g.planLimit('bottle')).toBeLessThan(g.planRoom);
+    expect(g.planLimit('bottle')).toBeLessThan(auto); // sans vente automatique, le quota restant ne compte pas
+    g.autoWholesale = true;
+    g.beers[0]!.wsToday = g.wholesaleQuota(g.beers[0]!);
+    expect(g.planLimit('bottle')).toBe(Math.floor((g.storageCap - g.stored) / 15)); // quota épuisé : la place libre seule
   });
 
     it('prévision : une file de fûts qui remplit le stockage est annoncée bloquée, sans tourner 24 h', () => {
