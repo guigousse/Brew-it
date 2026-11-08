@@ -208,29 +208,36 @@ export function wall(g: CanvasRenderingContext2D, px: Px, style: 'brick' | 'ston
 
 /** Zone des rayonnages (coordonnées de la pièce). */
 const RACKS: Rect = { x: 6, y: 30, w: 148, h: 174 };
-/** Le diable et ses caisses vides, au premier plan à gauche. */
-const TROLLEY = { x: 14, y: 226 };
+/** La palette des commandes, au premier plan au centre. */
+const PALLET = { x: 56, y: 284 };
 /** Point de fuite du stockage : au milieu, à hauteur des yeux. */
 const EYE_STORE = 128;
 const STORAGE_CRATES = STORAGE.map((s) => s.crates);
 
-/** La grille des rayonnages d'un niveau : la plus grande taille de caisse qui fait tout tenir. */
+/** Taille minimum d'une caisse à l'écran : en dessous, on ne lit plus l'étiquette. */
+const MIN_CELL = 13;
+
+/**
+ * La grille des rayonnages d'un niveau : la plus grande taille de caisse qui fait tout tenir, sans descendre
+ * sous MIN_CELL. Quand ça ne tient plus, chaque case représente plusieurs caisses (per).
+ */
 function rackGrid(lv: number) {
-  // Au-delà de 160 emplacements, chaque case est une palette de plusieurs caisses.
   const crateCap = STORAGE_CRATES[lv - 1]!;
-  const per = Math.max(1, Math.ceil(crateCap / 160));
-  const cap = Math.ceil(crateCap / per);
+  const fit = (cell: number) => {
+    const gap = Math.max(1, Math.round(cell / 6));
+    const cols = Math.floor((RACKS.w - 6) / cell);
+    return { gap, cols, maxRows: Math.floor((RACKS.h - 4) / (cell + gap)) };
+  };
   let cell = 34;
-  let cols = 1;
-  let rows = 1;
-  let gap = 1;
-  for (; cell > 3; cell--) {
-    gap = Math.max(1, Math.round(cell / 6));
-    cols = Math.floor((RACKS.w - 6) / cell);
-    rows = Math.ceil(cap / cols);
-    if (rows * (cell + gap) <= RACKS.h - 4) break;
+  for (; cell > MIN_CELL; cell--) {
+    const f = fit(cell);
+    if (Math.ceil(crateCap / f.cols) <= f.maxRows) break;
   }
-  cols = Math.min(cols, Math.ceil(cap / rows));
+  const { gap, cols: maxCols, maxRows } = fit(cell);
+  const per = Math.max(1, Math.ceil(crateCap / (maxCols * maxRows)));
+  const cap = Math.ceil(crateCap / per);
+  const rows = Math.ceil(cap / maxCols);
+  const cols = Math.min(maxCols, Math.ceil(cap / rows));
   const rowH = cell + gap;
   const gw = cols * cell;
   const ox = RACKS.x + Math.floor((RACKS.w - gw) / 2);
@@ -351,10 +358,14 @@ export class StorageRoom extends Room {
     if (this.selected === 'racks') this.outline(RACKS, t);
   }
 
-  /** Les caisses, redessinées seulement quand le stock change (les rayonnages sont dans le décor). */
+  /**
+   * Les caisses et les fûts, redessinés seulement quand le stock change (les rayonnages sont dans le décor).
+   * Les caisses se rangent depuis le bas à gauche, les fûts depuis le bas à droite : chacun son coin.
+   * Les cases libres du haut gardent les fournitures (malt, capsules, bouteilles vides).
+   */
   private crateLayer(game: Game, lv: number): HTMLCanvasElement {
-    const { per, cap, cell, cols, rows, rowH, gw, ox, base, top } = rackGrid(lv);
-    const key = `${lv}|${game.beers.map((b) => `${b.id}:${b.stock}:${b.kegs.length}:${b.label.bg}`).join(',')}`;
+    const { per, cap, cell, cols, rows, rowH, ox, base, top, gw } = rackGrid(lv);
+    const key = `${lv}|${game.storageCap}|${game.beers.map((b) => `${b.id}:${b.stock}:${b.kegs.length}:${b.label.bg}`).join(',')}`;
     if (this.crates?.key === key) return this.crates.c;
     const c = this.crates?.c ?? document.createElement('canvas');
     c.width = ROOM_W;
@@ -363,35 +374,81 @@ export class StorageRoom extends Room {
     g.clearRect(0, 0, ROOM_W, ROOM_H);
     g.imageSmoothingEnabled = false;
     const px = painter(g);
-    type Cell = { beer: (typeof game.beers)[number]; count: number; keg?: boolean };
-    const crates: Cell[] = per === 1 ? crateList(game.beers) : game.beers.flatMap((beer) => {
+    const cells = Math.min(cap, rows * cols);
+    type Cell = { beer: (typeof game.beers)[number]; count: number };
+    const kegs: Label[] = [];
+    for (const beer of game.beers) for (let k = 0; k < Math.ceil(beer.kegs.length / per); k++) kegs.push(beer.label);
+    kegs.splice(cells);
+    const crates: Cell[] = (per === 1 ? crateList(game.beers) : game.beers.flatMap((beer) => {
       const out: Cell[] = [];
-      for (let left = beer.stock; left > 0; left -= 12 * per) out.push({ beer, count: Math.max(1, Math.round((Math.min(left, 12 * per) / per))) });
+      for (let left = beer.stock; left > 0; left -= 12 * per) out.push({ beer, count: Math.max(1, Math.round(Math.min(left, 12 * per) / per)) });
       return out;
-    });
-    // les fûts pleins, chacun à la place d'une caisse
-    for (const beer of game.beers) for (let k = 0; k < Math.ceil(beer.kegs.length / per); k++) crates.push({ beer, count: 12, keg: true });
-    for (let i = 0; i < Math.min(cap, rows * cols); i++) {
-      const x = ox + (i % cols) * cell;
-      const y = base - (Math.floor(i / cols) + 1) * rowH;
-      const crate = crates[i];
-      if (!crate) continue;
-      // chaque caisse fait de l'ombre sur le mur, en haut à droite, et sur la planche
+    })).slice(0, cells - kegs.length);
+    // les fûts prennent les cases depuis le bas à droite, les caisses les autres depuis le bas à gauche
+    const at = (i: number) => ({ x: ox + (i % cols) * cell, y: base - (Math.floor(i / cols) + 1) * rowH });
+    const kegCells = kegs.map((_, k) => Math.floor(k / cols) * cols + (cols - 1 - (k % cols)));
+    const used = new Set<number>(kegCells);
+    const shadow = (x: number, y: number) => {
+      // chaque objet fait de l'ombre sur le mur, en haut à droite, et sur la planche
       g.fillStyle = 'rgba(10,6,16,0.28)';
       g.fillRect(x + 2, y + 1, cell - 1, cell - 2);
-      if (crate.keg) drawKeg(g, x, y, cell - 1, crate.beer.label);
-      else {
-        drawCrate(g, x, y, cell - 1 - (per > 1 ? 1 : 0), crate);
-        if (per > 1) px(x, y + cell - 2, cell - 1, 1, '#a06830'); // palette
+    };
+    let i = 0;
+    for (const crate of crates) {
+      while (used.has(i)) i++;
+      if (i >= cells) break;
+      used.add(i);
+      const { x, y } = at(i);
+      shadow(x, y);
+      drawCrate(g, x, y, cell - 1, crate, lv);
+      if (per > 1 && lv === 4) {
+        // palette filmée : plusieurs cartons par case
+        px(x, y + cell - 2, cell - 1, 1, '#a06830');
+        g.fillStyle = 'rgba(255,255,255,0.14)';
+        g.fillRect(x, y, cell - 1, cell - 2);
       }
     }
-    // plein : bande rouge en haut
-    if (game.storageFull) {
-      px(ox - 3, top - 6, gw + 6, 3, '#e8553a');
-      for (let x = ox - 3; x < ox + gw + 3; x += 6) px(x, top - 6, 3, 3, '#1b1424');
+    kegs.forEach((label, k) => {
+      const { x, y } = at(kegCells[k]!);
+      shadow(x, y);
+      drawKeg(g, x, y, cell - 1, label, lv);
+    });
+    // fournitures sur les deux planches du haut, là où il n'y a pas encore de stock
+    if (rows >= 3) {
+      for (let j = (rows - 2) * cols; j < cells; j++) {
+        if (used.has(j)) continue;
+        const { x, y } = at(j);
+        drawSupply(g, x, y, cell - 1, lv, Math.floor(hash(j, lv) * 4));
+      }
     }
+    this.drawGauge(g, game, lv, ox + gw - 30, top - 15);
     this.crates = { key, c };
     return c;
+  }
+
+  /** Jauge de remplissage accrochée au-dessus du rayonnage (ardoise au garage, écran ensuite) ; rouge quand c'est plein. */
+  private drawGauge(g: CanvasRenderingContext2D, game: Game, lv: number, x: number, y: number): void {
+    const px = painter(g);
+    const pct = Math.min(100, Math.floor((game.stored / Math.max(1, game.storageCap)) * 100));
+    const full = game.storageFull;
+    const W = 30;
+    const H = 12;
+    const [frame, face, ink] = lv === 1 ? ['#7a5228', '#2c3a30', '#e8e4dc'] : lv === 2 ? ['#3a2418', '#e8dcc0', '#3a2418'] : lv === 5 ? ['#c4d0dc', '#0c1420', '#5ef0ff'] : ['#2c283a', '#0c1420', '#7ee081'];
+    g.fillStyle = 'rgba(10,6,16,0.3)';
+    g.fillRect(x + 2, y + 2, W, H);
+    px(x, y, W, H, frame);
+    px(x + 1, y + 1, W - 2, H - 2, face);
+    const col = full ? '#e8553a' : ink;
+    // le pourcentage, puis la barre
+    const text = String(pct);
+    const tx = x + 3;
+    drawDigits(g, text, tx, y + 2, col);
+    const sx = tx + text.length * 4;
+    px(sx, y + 2, 1, 1, col); px(sx + 2, y + 3, 1, 1, col); px(sx + 1, y + 4, 1, 1, col); px(sx, y + 5, 1, 1, col); px(sx + 2, y + 6, 1, 1, col);
+    const bx = x + 18;
+    const bw = W - 21;
+    px(bx, y + 3, bw, 5, lv === 2 ? '#c4b090' : '#2a3244');
+    px(bx, y + 3 + 5 - Math.round((5 * pct) / 100), bw, Math.round((5 * pct) / 100), full ? '#e8553a' : pct >= 80 ? '#f2c14e' : '#7ee081');
   }
 
   protected paintBackground(g: CanvasRenderingContext2D, lv: number): void {
@@ -455,15 +512,18 @@ export class StorageRoom extends Room {
       for (let k = 0; k < cell - 1; k += 2) g.fillRect(x + k, y + cell - 2, 1, 1);
     }
     // ---- l'emplacement de la palette des commandes
-    dropShadow(g, b, 122, 293, 32, 4, 0.45);
+    dropShadow(g, b, PALLET.x + 26, PALLET.y + 9, 32, 4, 0.45);
   }
 
-  /** Une palette au premier plan : les caisses prêtes à partir quand une commande peut être remplie. */
+  /**
+   * La palette des commandes, au premier plan au centre : les caisses prêtes à partir quand une commande peut être
+   * remplie, filmées, avec le bon de livraison agrafé.
+   */
   private drawPallet(game: Game, lv: number): void {
     const g = this.g;
     const px = painter(g);
-    const x = 96;
-    const y = 284;
+    const x = PALLET.x;
+    const y = PALLET.y;
     px(x, y, 52, 4, lv === 5 ? '#b8c6d6' : '#a06830');
     px(x, y, 52, 1, lv === 5 ? '#ffffff' : '#e8b070');
     for (const k of [0, 23, 47]) px(x + k, y + 4, 5, 4, lv === 5 ? '#8a9ab0' : '#744620');
@@ -475,24 +535,98 @@ export class StorageRoom extends Room {
     for (let i = 0; i < n; i++) {
       const cx = x + 2 + (i % 4) * 12;
       const cy = y - 12 - Math.floor(i / 4) * 12;
-      drawCrate(g, cx, cy, 11, { beer, count: 12 });
+      drawCrate(g, cx, cy, 11, { beer, count: 12 }, lv);
     }
+    const h = 12 * Math.ceil(n / 4);
     // film étirable, autour des caisses posées
     g.fillStyle = 'rgba(255,255,255,0.12)';
-    g.fillRect(x + 1, y - 12 * Math.ceil(n / 4) - 1, 12 * Math.min(4, n) + 2, 12 * Math.ceil(n / 4) + 1);
+    g.fillRect(x + 1, y - h - 1, 12 * Math.min(4, n) + 2, h + 1);
+    // le bon de livraison : feuille blanche, lignes, et la couleur de la bière
+    const bx = x + 12 * Math.min(4, n) - 4;
+    const by = y - h + 2;
+    px(bx + 1, by + 1, 9, 11, 'rgba(10,6,16,0.35)');
+    px(bx, by, 9, 11, '#f4f0e6');
+    px(bx + 3, by - 1, 3, 2, '#98a6b6');
+    for (let k = 0; k < 3; k++) px(bx + 2, by + 3 + k * 2, k === 2 ? 3 : 5, 1, '#8a8a9a');
+    px(bx + 2, by + 9, 5, 1, beer.label.bg);
   }
 }
 
-/** Petit fût inox rangé au stockage, cerclé à la couleur de l'étiquette. */
-export function drawKeg(g: CanvasRenderingContext2D, x: number, y: number, s: number, label: Label): void {
+/** Fournitures rangées en haut des rayonnages : sacs de malt, carton de capsules, bouteilles vides, rouleau d'étiquettes. */
+function drawSupply(g: CanvasRenderingContext2D, x: number, y: number, s: number, lv: number, kind: number): void {
   const px = painter(g);
-  const w = Math.max(3, Math.round(s * 0.8));
+  if (lv === 5) {
+    // bac scellé, gris
+    px(x + 1, y + 2, s - 2, s - 2, '#8a9ab0'); px(x + 1, y + 2, s - 2, 1, '#c4d0dc'); px(x + 3, y + Math.floor(s / 2), s - 6, 1, '#6c7a8c');
+    return;
+  }
+  if (kind === 0) {
+    // sac de malt, ventru, ficelé
+    const t = y + Math.round(s * 0.3);
+    px(x + 2, t, s - 4, s - (t - y), '#6a5434');
+    px(x + 1, t + 2, s - 2, s - (t - y) - 3, '#6a5434');
+    px(x + 3, t + 1, s - 6, s - (t - y) - 2, '#c8b088');
+    px(x + 2, t + 3, s - 4, s - (t - y) - 5, '#c8b088');
+    px(x + 3, t + 1, s - 6, 1, '#e0cca4');
+    px(x + Math.floor(s / 2) - 2, t - 2, 4, 3, '#a88a5a'); px(x + Math.floor(s / 2) - 2, t, 4, 1, '#6a5434'); // le haut noué
+    if (s >= 12) px(x + 4, t + Math.floor((s - (t - y)) / 2), s - 8, 2, '#4e8a3a'); // bande imprimée
+  } else if (kind === 1) {
+    // carton de capsules
+    const h = Math.round(s * 0.6);
+    px(x + 1, y + s - h, s - 2, h, '#5a3a1c'); px(x + 2, y + s - h + 1, s - 4, h - 2, '#c8965a');
+    for (let k = 0; k < s - 5; k += 2) px(x + 3 + k, y + s - h + 2, 1, 1, '#f2c14e');
+  } else if (kind === 2) {
+    // bouteilles vides, debout
+    for (let k = 0; k < 3; k++) {
+      const bx = x + 1 + k * Math.floor((s - 2) / 3);
+      px(bx, y + Math.round(s * 0.45), 3, s - Math.round(s * 0.45), k === 1 ? '#5a3a18' : '#3a5a2a');
+      px(bx + 1, y + Math.round(s * 0.25), 1, Math.round(s * 0.2), k === 1 ? '#5a3a18' : '#3a5a2a');
+      px(bx, y + Math.round(s * 0.45), 1, s - Math.round(s * 0.45) - 1, '#ffffff30');
+    }
+  } else {
+    // rouleau d'étiquettes, couché
+    const cy = y + s - 5;
+    px(x + 1, cy, s - 2, 5, '#e8e4dc'); px(x + 1, cy, s - 2, 1, '#ffffff'); px(x + 1, cy + 2, 2, 1, '#8a8a9a'); px(x + s - 3, cy + 1, 1, 3, '#c4b090');
+  }
+}
+
+/**
+ * Un fût debout : tonneau cerclé au garage (style 1), fût inox ensuite, avec ses deux cerclages, son reflet,
+ * la tête de soutirage et une pastille à la couleur de la bière.
+ */
+export function drawKeg(g: CanvasRenderingContext2D, x: number, y: number, s: number, label: Label, style = 3): void {
+  const px = painter(g);
+  const w = Math.max(5, Math.round(s * 0.76));
   const ox = x + Math.floor((s - w) / 2);
-  px(ox, y, w, s, '#6c7a8c');
-  px(ox + 1, y, Math.max(1, w - 2), s, '#c4d0dc');
-  if (w >= 6) px(ox + 1, y, 1, s, '#ffffff');
-  px(ox, y + Math.floor(s / 2), w, Math.max(1, Math.round(s / 6)), label.bg);
-  if (s >= 8) { px(ox, y + 1, w, 1, '#98a6b6'); px(ox, y + s - 2, w, 1, '#98a6b6'); }
+  const r1 = y + Math.round(s * 0.24);
+  const r2 = y + s - 1 - Math.round(s * 0.24);
+  const cx = ox + Math.floor(w / 2);
+  if (style === 1) {
+    px(ox + 1, y, w - 2, s, '#3a2410');
+    px(ox, y + 1, w, s - 2, '#3a2410');
+    px(ox + 1, y + 1, w - 2, s - 2, '#9a6430');
+    for (let k = ox + 3; k < ox + w - 2; k += 3) px(k, y + 1, 1, s - 2, '#7a4a20'); // douelles
+    px(ox + 1, y + 1, 1, s - 2, '#c88a4a');
+    for (const ry of [y + 2, r1 + 1, r2 - 1, y + s - 3]) px(ox, ry, w, 1, '#3a3a40');
+    px(cx - 1, y + Math.floor(s / 2) - 1, 3, 3, '#2a1608');
+    px(cx, y + Math.floor(s / 2), 1, 1, label.bg);
+    return;
+  }
+  const lux = style >= 5;
+  px(ox, y + 1, w, s - 1, '#4a5668');
+  px(ox + 1, y + 1, w - 2, s - 2, lux ? '#d4dee8' : '#a8b6c6');
+  px(ox + w - 3, y + 1, 2, s - 2, lux ? '#a8b6c6' : '#7a8898'); // côté dans l'ombre
+  px(ox + 2, y + 1, Math.max(1, Math.round(w / 6)), s - 2, '#f4f8fc'); // reflet
+  // la jupe du haut, ajourée pour les poignées, et la tête de soutirage
+  px(ox, y, w, 1, '#6c7a8c');
+  if (s >= 12) { px(ox + 2, y + 2, 2, 1, '#2c283a'); px(ox + w - 4, y + 2, 2, 1, '#2c283a'); }
+  px(cx - 1, y, 3, 2, '#2c283a'); px(cx, y, 1, 1, '#c4d0dc');
+  // cerclages
+  for (const ry of [r1, r2]) { px(ox, ry, w, 1, '#6c7a8c'); px(ox, ry - 1, w, 1, '#ffffff80'); }
+  // pastille de la bière, entre les cerclages
+  const ph = Math.max(1, r2 - r1 - 3);
+  px(cx - 1, r1 + 2, Math.max(2, Math.round(w / 3)), ph, label.bg);
+  if (lux) px(ox, y + s - 1, w, 1, label.bg); // liseré lumineux
 }
 
 // =================================================================== bar

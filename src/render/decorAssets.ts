@@ -499,6 +499,85 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       for (let i = 0; i < 4; i++) { px(3 + i * 5, 3, 3, 8, '#4a5a4a'); px(4 + i * 5, 0, 1, 3, '#4a5a4a'); }
     },
   },
+  // ------------------------------------------------------------------ stockage : au sol
+  {
+    id: 'maltSacks', name: 'Sacs de malt', room: 'storage', w: 36, h: 28, pad: 3,
+    draw(g) {
+      const px = P(g);
+      floorShadow(g, 18, 27, 19, 3);
+      const sack = (x: number, y: number, w: number, h: number) => {
+        px(x + 1, y, w - 2, h, '#6a5434'); px(x, y + 2, w, h - 3, '#6a5434');
+        px(x + 2, y + 1, w - 4, h - 2, '#c8b088'); px(x + 1, y + 3, w - 2, h - 5, '#c8b088');
+        px(x + 2, y + 1, w - 4, 1, '#e0cca4');
+        px(x + 4, y + Math.floor(h / 2) - 1, w - 8, 3, '#4e8a3a'); px(x + 6, y + Math.floor(h / 2), w - 12, 1, '#e0cca4');
+        px(x + w - 3, y + 2, 1, h - 4, '#a88a5a');
+      };
+      sack(0, 15, 18, 13); sack(17, 15, 19, 13); sack(8, 3, 19, 13);
+    },
+  },
+  {
+    id: 'bucket', name: 'Seau', room: 'storage', w: 11, h: 11, pad: 2,
+    draw(g) {
+      const px = P(g);
+      floorShadow(g, 5, 11, 7, 2);
+      px(0, 2, 11, 2, '#5a6a82'); px(1, 4, 9, 7, '#8a9ab0'); px(2, 4, 2, 7, '#c4d0dc'); px(1, 10, 9, 1, '#5a6a82');
+      px(1, 0, 1, 2, '#3a4250'); px(9, 0, 1, 2, '#3a4250'); px(2, 0, 7, 1, '#3a4250');
+    },
+  },
+  {
+    id: 'coolBoxes', name: 'Caisses isothermes', room: 'storage', w: 34, h: 32, pad: 3,
+    draw(g) {
+      const px = P(g);
+      floorShadow(g, 17, 31, 18, 3);
+      const box = (x: number, y: number, w: number, h: number, c: string) => {
+        px(x, y, w, h, '#6c7a8c'); px(x + 1, y + 1, w - 2, h - 2, '#f4f8fc'); px(x + 1, y + 1, w - 2, 2, c);
+        px(x + w - 3, y + 3, 2, h - 4, '#c4d0dc'); px(x + 3, y + 6, w - 8, 1, '#c4d0dc');
+      };
+      box(0, 18, 17, 14, '#3f88d4'); box(17, 18, 17, 14, '#3f88d4'); box(6, 5, 20, 13, '#e8553a');
+    },
+  },
+  {
+    id: 'palletJack', name: 'Transpalette', room: 'storage', w: 44, h: 30, pad: 3,
+    draw(g) {
+      const px = P(g);
+      floorShadow(g, 24, 29, 22, 3);
+      // timon, incliné vers l'arrière
+      for (let k = 0; k < 18; k++) px(6 + Math.round(k / 3), 4 + k, 2, 1, '#2c283a');
+      px(2, 0, 10, 3, '#1b1424'); px(3, 1, 8, 1, '#545068');
+      // corps hydraulique et fourches
+      px(8, 20, 9, 7, '#e8742a'); px(8, 20, 9, 1, '#ffb070'); px(10, 22, 4, 4, '#a84a1a');
+      px(16, 23, 28, 3, '#e8742a'); px(16, 23, 28, 1, '#ffb070'); px(16, 26, 28, 1, '#a84a1a');
+      for (const wx of [9, 40]) { px(wx, 27, 4, 3, '#1b1424'); px(wx + 1, 28, 2, 1, '#545068'); }
+    },
+  },
+  {
+    id: 'extinguisher', name: 'Extincteur', room: 'storage', w: 9, h: 22, pad: 2,
+    draw(g) {
+      const px = P(g);
+      floorShadow(g, 4, 22, 6, 2);
+      px(1, 5, 7, 17, '#a82a1c'); px(2, 5, 5, 16, '#e8402a'); px(3, 6, 1, 14, '#ff9a8a');
+      px(2, 10, 5, 4, '#f4f0e6'); px(3, 11, 3, 1, '#a82a1c');
+      px(3, 2, 3, 3, '#2c283a'); px(0, 1, 6, 1, '#1b1424'); px(6, 2, 2, 6, '#1b1424');
+    },
+  },
+  {
+    id: 'deliveryBot', name: 'Robot de livraison', room: 'storage', w: 40, h: 34, pad: 3,
+    anim: true,
+    draw(g, c) {
+      const px = P(g);
+      floorShadow(g, 20, 33, 21, 3);
+      px(1, 24, 38, 7, '#8a9ab0'); px(1, 24, 38, 1, '#ffffff'); px(1, 30, 38, 1, '#5a6a82');
+      for (const wx of [4, 30]) { px(wx, 30, 6, 4, '#1b1424'); px(wx + 2, 31, 2, 2, '#545068'); }
+      // capteur à l'avant, qui balaie
+      const on = Math.sin(c.t * 3) > 0;
+      px(33, 26, 4, 2, on ? '#5ef0ff' : '#1c8ca8');
+      px(3, 27, 26, 1, '#5ef0ff');
+      // deux bacs blancs sur le plateau
+      for (const [bx, by] of [[3, 13], [17, 13], [9, 2]] as const) {
+        px(bx, by, 14, 11, '#8a9ab0'); px(bx + 1, by + 1, 12, 9, '#e8eef4'); px(bx + 1, by + 1, 12, 1, '#ffffff'); px(bx + 1, by + 8, 12, 1, '#5ef0ff');
+      }
+    },
+  },
   {
     id: 'trolley', name: 'Diable et caisses vides', room: 'storage', w: 44, h: 76, pad: 2,
     draw(g, c) {

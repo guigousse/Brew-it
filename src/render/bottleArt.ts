@@ -228,33 +228,91 @@ export function drawStorage(canvas: HTMLCanvasElement, beers: Beer[], capacity: 
   }
 }
 
-export function drawCrate(g: CanvasRenderingContext2D, x: number, y: number, s: number, crate: CrateSpec): void {
+/**
+ * Une caisse de bouteilles, de face, au style du stockage :
+ * 1 caisse en bois, 2 casier en bois (on voit les goulots), 3 casier en plastique, 4 carton scotché, 5 bac blanc à LED.
+ */
+export function drawCrate(g: CanvasRenderingContext2D, x: number, y: number, s: number, crate: CrateSpec, style = 1): void {
+  const px = (xx: number, yy: number, w: number, h: number, c: string) => {
+    g.fillStyle = c;
+    g.fillRect(xx, yy, w, h);
+  };
   const full = crate.count >= CRATE;
+  const bg = crate.beer.label.bg;
+  const label = (dy = 0) => {
+    if (s >= 10) drawMiniLabel(g, crate.beer.label, x + Math.floor((s - 7) / 2), y + Math.floor(s / 2) - 2 + dy, 7);
+    else px(x + 1, y + s - 2, s - 2, 1, bg);
+  };
+  // goulots et capsules qui dépassent d'un casier ouvert (moins nombreux dans un casier entamé)
+  const necks = (top: number, neck: string) => {
+    const slots = Math.max(1, Math.floor((s - 3) / 3));
+    const n = full ? slots : Math.max(1, Math.round(slots * (crate.count / CRATE)));
+    for (let k = 0; k < n; k++) {
+      const nx = x + 2 + k * 3;
+      px(nx, top + 1, 2, 2, neck);
+      px(nx, top, 2, 1, '#f2c14e');
+    }
+  };
+  if (style === 2) {
+    const k = Math.max(3, Math.round(s * 0.3));
+    px(x, y + 1, s, s - 1, '#2a1608');
+    px(x + 1, y + 2, s - 2, k - 1, '#1a0e06');
+    necks(y + 1, '#3a5a2a');
+    px(x + 1, y + k, s - 2, s - k - 1, '#9a6430');
+    px(x + 1, y + k, s - 2, 1, '#d09050');
+    if (s >= 9) px(x + Math.floor(s / 2) - 2, y + k + 1, 4, 1, '#2a1608'); // poignée
+    px(x + 1, y + s - 2, s - 2, 1, '#6a4220');
+    label(1);
+    return;
+  }
+  if (style === 3) {
+    const k = Math.max(3, Math.round(s * 0.28));
+    px(x, y + 1, s, s - 1, '#1c2a3a');
+    px(x + 1, y + 2, s - 2, k - 1, '#0e1620');
+    necks(y + 1, '#6a4a22');
+    px(x + 1, y + k, s - 2, s - k - 1, '#3e5c86');
+    px(x + 1, y + k, s - 2, 1, '#7aa0d0');
+    // ajours du plastique sur les côtés
+    for (let yy = y + k + 2; yy < y + s - 2; yy += 2) { px(x + 1, yy, 1, 1, '#24384e'); px(x + s - 2, yy, 1, 1, '#24384e'); }
+    label(1);
+    return;
+  }
+  if (style === 4) {
+    px(x, y, s, s, '#5a3a1c');
+    px(x + 1, y + 1, s - 2, s - 2, '#c8965a');
+    px(x + 1, y + 1, s - 2, 1, '#e0b47a');
+    px(x + 1, y + Math.max(2, Math.round(s * 0.22)), s - 2, 1, '#a07040'); // rabat
+    px(x + Math.floor(s / 2) - 1, y + 1, 2, Math.max(2, Math.round(s * 0.22)), full ? '#e8d4a8' : '#8a5a2c'); // scotch (ouvert : entamé)
+    px(x + s - 2, y + 1, 1, s - 2, '#a87a48');
+    label(1);
+    return;
+  }
+  if (style === 5) {
+    px(x, y, s, s, '#8a9ab0');
+    px(x + 1, y + 1, s - 2, s - 2, '#e8eef4');
+    px(x + 1, y + 1, s - 2, 1, '#ffffff');
+    px(x + s - 2, y + 1, 1, s - 2, '#c4d0dc');
+    // bande lumineuse à la couleur de la bière
+    px(x + 1, y + s - 3, s - 2, 1, bg);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(x + 1, y + s - 3, Math.max(1, Math.floor((s - 2) * (crate.count / CRATE))), 1);
+    if (s >= 10) drawMiniLabel(g, crate.beer.label, x + Math.floor((s - 7) / 2), y + 2, 7);
+    return;
+  }
   const lid = Math.max(1, Math.round(s / 5));
-  g.fillStyle = '#3a2410';
-  g.fillRect(x, y, s, s);
-  g.fillStyle = '#b8803e';
-  g.fillRect(x + 1, y + 1, s - 2, s - 2);
+  px(x, y, s, s, '#3a2410');
+  px(x + 1, y + 1, s - 2, s - 2, '#b8803e');
   if (s >= 8) {
-    g.fillStyle = '#d8a868';
-    g.fillRect(x + 1, y + 1, s - 2, 1);
-    g.fillStyle = '#8a5a28';
-    g.fillRect(x + 1, y + Math.floor(s / 2), s - 2, 1);
+    px(x + 1, y + 1, s - 2, 1, '#d8a868');
+    px(x + 1, y + Math.floor(s / 2), s - 2, 1, '#8a5a28');
   }
   if (!full) {
     // caisse entamée : ouverte, on voit les capsules
-    g.fillStyle = '#2a1608';
-    g.fillRect(x + 1, y + 1, s - 2, lid);
+    px(x + 1, y + 1, s - 2, lid, '#2a1608');
     if (s >= 6) {
-      g.fillStyle = '#f2c14e';
       const n = Math.max(1, Math.round(((s - 3) / 2) * (crate.count / CRATE)));
-      for (let k = 0; k < n; k++) g.fillRect(x + 2 + k * 2, y + 1, 1, 1);
+      for (let k = 0; k < n; k++) px(x + 2 + k * 2, y + 1, 1, 1, '#f2c14e');
     }
   }
-  if (s >= 10) drawMiniLabel(g, crate.beer.label, x + Math.floor((s - 7) / 2), y + Math.floor(s / 2) - 2, 7);
-  else {
-    // trop petit pour l'étiquette : une bande à la couleur de la bière
-    g.fillStyle = crate.beer.label.bg;
-    g.fillRect(x + 1, y + s - 2, s - 2, 1);
-  }
+  label();
 }
