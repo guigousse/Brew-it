@@ -499,6 +499,92 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       for (let i = 0; i < 4; i++) { px(3 + i * 5, 3, 3, 8, '#4a5a4a'); px(4 + i * 5, 0, 1, 3, '#4a5a4a'); }
     },
   },
+  {
+    id: 'barDoor', name: 'Porte d\'entrée', room: 'bar', w: 18, h: 38, pad: 3,
+    draw(g, c) {
+      const px = P(g);
+      const lv = c.lv;
+      wallShadow(g, 0, 0, 18, 38, 0.35);
+      const [frame, panel, hi] = lv === 5 ? ['#8a9ab0', '#0c1420', '#5ef0ff'] : lv === 4 ? ['#1b1424', '#2c3038', '#545068'] : lv === 3 ? ['#3a2410', '#6a3a1c', '#8a5a2c'] : ['#3a2418', '#7a5228', '#a8743c'];
+      px(0, 0, 18, 38, frame); px(2, 2, 14, 36, panel);
+      if (lv === 5) {
+        // porte coulissante vitrée : la ville la nuit derrière
+        px(3, 3, 12, 34, '#1c2a4a'); for (let k = 0; k < 5; k++) px(4 + k * 2, 18 + (k % 3) * 3, 1, 1, '#f2c14e');
+        px(8, 3, 1, 34, hi); px(2, 2, 14, 1, hi);
+      } else {
+        // vitre en haut (la rue, de nuit), panneaux en bas, poignée
+        px(4, 4, 10, 12, '#1c2a4a'); px(4, 4, 10, 1, '#3a4a6a'); px(5, 12, 3, 1, '#f2c14e');
+        px(4, 20, 10, 7, hi); px(4, 29, 10, 6, hi); px(5, 21, 8, 5, panel); px(5, 30, 8, 4, panel);
+        px(13, 19, 2, 3, '#c4b090');
+        if (lv >= 2) px(3, 0, 12, 2, '#f2c14e'); // imposte éclairée
+      }
+    },
+  },
+  // ------------------------------------------------------------------ bar : la cave
+  {
+    id: 'cellarStairs', name: 'Escalier de la cave', room: 'bar', w: 36, h: 52, pad: 2,
+    draw(g, c) {
+      const px = P(g);
+      const wood = c.lv === 1 ? ['#8a7a68', '#6a5a4a', '#3a3028'] : ['#a06830', '#7a4a20', '#3a2410'];
+      // les marches descendent de la salle (en haut à droite) vers le sol de la cave
+      for (let k = 0; k < 7; k++) {
+        const x = 30 - k * 5;
+        const y = k * 7 + 2;
+        px(x, y, 8, 2, wood[0]!); px(x, y + 2, 8, 5, wood[1]!); px(x, y + 2, 8, 1, wood[2]!);
+      }
+      for (let k = 0; k < 50; k++) px(Math.round(36 - k * 0.72), k, 2, 2, wood[2]!); // limon
+      // rampe
+      for (let k = 0; k < 44; k++) px(Math.round(38 - k * 0.72), k - 8, 1, 1, '#2c283a');
+      for (const k of [6, 22, 38]) px(Math.round(38 - k * 0.72), k - 8, 1, 10, '#2c283a');
+    },
+  },
+  {
+    id: 'co2Bottle', name: 'Bouteille de CO₂', room: 'bar', w: 10, h: 40, pad: 2,
+    draw(g, c) {
+      const px = P(g);
+      floorShadow(g, 5, 40, 6, 2);
+      const body = c.lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : ['#3a4250', '#5a6478', '#262b36'];
+      px(1, 8, 8, 32, body[2]!); px(2, 8, 6, 31, body[0]!); px(3, 9, 1, 29, body[1]!);
+      px(2, 6, 6, 2, body[0]!); px(3, 4, 4, 2, '#98a6b6');
+      px(2, 0, 6, 4, '#2c283a'); px(3, 1, 2, 2, '#e8553a'); // détendeur et son manomètre
+      px(2, 14, 6, 3, c.lv === 5 ? '#5ef0ff' : '#f2c14e');
+      px(8, 2, 2, 1, '#2c283a');
+    },
+  },
+  {
+    id: 'cellarCooler', name: 'Groupe froid de cave', room: 'bar', w: 28, h: 18, pad: 3,
+    anim: true,
+    draw(g, c) {
+      const px = P(g);
+      wallShadow(g, 0, 0, 28, 18, 0.4);
+      px(0, 0, 28, 18, '#5a6a82'); px(1, 1, 26, 16, '#98a6b6'); px(1, 1, 26, 1, '#c4d0dc');
+      // ventilateur qui tourne
+      px(4, 4, 11, 11, '#2c283a');
+      const a = c.t * 8;
+      for (let k = 0; k < 3; k++) {
+        const ang = a + (k * Math.PI * 2) / 3;
+        px(9 + Math.round(Math.cos(ang) * 3), 9 + Math.round(Math.sin(ang) * 3), 2, 2, '#8a9ab0');
+      }
+      px(9, 9, 2, 2, '#c4d0dc');
+      px(18, 4, 7, 4, '#0c1420');
+      g.fillStyle = '#5ef0ff'; g.fillRect(19, 5, 2, 2); g.fillRect(22, 5, 2, 2);
+      for (let y = 10; y < 16; y += 2) px(18, y, 7, 1, '#5a6a82');
+    },
+  },
+  {
+    id: 'kegRobot', name: 'Robot changeur de fûts', room: 'bar', w: 34, h: 40, pad: 2,
+    anim: true,
+    draw(g, c) {
+      const px = P(g);
+      // rail au plafond de la cave, chariot qui fait des allers-retours, bras et pince
+      px(0, 0, 34, 3, '#b8c6d6'); px(0, 0, 34, 1, '#ffffff'); px(0, 3, 34, 1, '#5ef0ff');
+      const x = 4 + Math.round((Math.sin(c.t * 0.6) * 0.5 + 0.5) * 18);
+      const reach = 14 + Math.round((Math.sin(c.t * 1.2) * 0.5 + 0.5) * 14);
+      px(x, 4, 10, 5, '#dce6f0'); px(x, 4, 10, 1, '#ffffff'); px(x + 4, 6, 2, 1, '#5ef0ff');
+      px(x + 4, 9, 2, reach, '#8a9ab0'); px(x + 4, 9, 1, reach, '#ffffff');
+      px(x + 1, 9 + reach, 8, 2, '#5a6a82'); px(x + 1, 11 + reach, 2, 4, '#5a6a82'); px(x + 7, 11 + reach, 2, 4, '#5a6a82');
+    },
+  },
   // ------------------------------------------------------------------ stockage : au sol
   {
     id: 'maltSacks', name: 'Sacs de malt', room: 'storage', w: 36, h: 28, pad: 3,
