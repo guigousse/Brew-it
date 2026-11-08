@@ -40,17 +40,29 @@ function fab(icon: IconId, label: string): HTMLButtonElement {
   return b;
 }
 
-function upBtn(label: string): HTMLButtonElement {
-  const b = h('button', 'act up');
-  b.append(iconCanvas('up', 1));
-  b.setAttribute('aria-label', label);
+/** Nom de la pièce en haut à gauche : un bouton qui ouvre son amélioration. Quand on peut se l'offrir,
+ *  il clignote et une flèche verte apparaît juste après le texte, dans le même cadre. */
+function roomPlaque(): HTMLButtonElement {
+  const b = h('button', 'map-btn plaque');
+  const arrow = iconCanvas('up', 1, 'pix-icon plaque-up');
+  arrow.setAttribute('aria-hidden', 'true');
+  b.append(h('span', 'plaque-text'), arrow);
   return b;
 }
 
-/** Nom de la pièce en haut à gauche, précédé de son bouton d'amélioration. */
-function roomTitle(up: HTMLButtonElement, plaque: HTMLElement): HTMLElement {
+/** Met à jour le texte d'une plaque et son état « amélioration possible ». */
+function setPlaque(b: HTMLButtonElement, text: string, canUp: boolean, upLabel: string): void {
+  const t = b.querySelector<HTMLElement>('.plaque-text')!;
+  if (t.textContent !== text) t.textContent = text;
+  b.classList.toggle('alert', canUp);
+  const aria = canUp ? `${text} : ${upLabel} possible` : text;
+  if (b.getAttribute('aria-label') !== aria) b.setAttribute('aria-label', aria);
+}
+
+/** Nom de la pièce en haut à gauche. */
+function roomTitle(plaque: HTMLElement): HTMLElement {
   const el = h('div', 'room-title');
-  el.append(up, plaque);
+  el.append(plaque);
   return el;
 }
 
@@ -185,7 +197,7 @@ export class App {
   private overlays = new Map<StationId, { btn: HTMLButtonElement; label: HTMLElement; bar: HTMLElement; text: HTMLElement }>();
   private tasteBtn = h('button', 'taste-btn hidden', '🍺 Goûter');
   /** Plaque du niveau de la brasserie, en haut à gauche de la scène. */
-  private plaque = h('button', 'map-btn plaque');
+  private plaque = roomPlaque();
   private announcedTaste = -1;
   /** Bas de l'écran : les actions de la pièce (sous-menu), puis la barre de navigation. */
   private dock = h('div', 'dock');
@@ -196,8 +208,6 @@ export class App {
   private rangeBtn = fab('range', 'Ma gamme');
   private eventsBtn = fab('events', 'Événements');
   private barmanBtn = fab('barman', 'Barman en renfort');
-  /** Bouton d'amélioration (flèche vers le haut) à gauche du nom de chaque pièce. */
-  private ups: Record<RoomId, HTMLButtonElement> = { office: upBtn('Améliorer l\'ordinateur'), workshop: upBtn('Améliorer la brasserie'), storage: upBtn('Agrandir le stockage'), bar: upBtn('Agrandir le bar') };
   readonly shopRoom = new ShopRoom();
   private shopWrap = h('div', 'scene-wrap');
   /** Étiquettes posées sur le décor (prix de l'objet en vente, « bientôt »…), en coordonnées de la pièce. */
@@ -209,7 +219,7 @@ export class App {
   // --- les pièces
   readonly officeRoom = new OfficeRoom();
   private officeWrap = h('div', 'scene-wrap');
-  private officePlaque = h('button', 'map-btn plaque');
+  private officePlaque = roomPlaque();
   readonly storageRoom = new StorageRoom();
   readonly barRoom = new BarRoom();
   private room: RoomId = 'workshop';
@@ -228,8 +238,8 @@ export class App {
   private storageWrap = h('div', 'scene-wrap');
   private barWrap = h('div', 'scene-wrap');
   private roomHits: { el: HTMLButtonElement; rect: { x: number; y: number; w: number; h: number } }[] = [];
-  private storagePlaque = h('button', 'map-btn plaque');
-  private barPlaque = h('button', 'map-btn plaque');
+  private storagePlaque = roomPlaque();
+  private barPlaque = roomPlaque();
   /** Glissement en cours : départ du doigt, décalage, et s'il faut avaler le « clic » qui suit. */
   private swipe: { id: number; x: number; y: number; dx: number; on: boolean; t: number } | null = null;
   private swallowClick = false;
@@ -298,8 +308,7 @@ export class App {
     }
     this.tasteBtn.onclick = () => this.openTasting();
     this.plaque.onclick = () => this.openBrewery();
-    this.ups.workshop.onclick = () => this.openBrewery();
-    this.sceneWrap.append(roomTitle(this.ups.workshop, this.plaque), this.tasteBtn);
+    this.sceneWrap.append(roomTitle(this.plaque), this.tasteBtn);
 
     // bureau : la fenêtre sur l'atelier, le panneau des commandes, le présentoir de la gamme et l'ordinateur
     this.officeWrap.append(this.officeRoom.canvas);
@@ -318,8 +327,7 @@ export class App {
       this.roomHits.push({ el, rect: hit.rect });
     }
     this.officePlaque.onclick = () => this.openComputerUp();
-    this.ups.office.onclick = () => this.openComputerUp();
-    this.officeWrap.append(roomTitle(this.ups.office, this.officePlaque));
+    this.officeWrap.append(roomTitle(this.officePlaque));
     // stockage : les rayonnages
     this.storageWrap.append(this.storageRoom.canvas);
     for (const hit of this.storageRoom.hits()) {
@@ -330,8 +338,7 @@ export class App {
       this.roomHits.push({ el, rect: hit.rect });
     }
     this.storagePlaque.onclick = () => this.open({ kind: 'storageUp' });
-    this.ups.storage.onclick = () => this.open({ kind: 'storageUp' });
-    this.storageWrap.append(roomTitle(this.ups.storage, this.storagePlaque));
+    this.storageWrap.append(roomTitle(this.storagePlaque));
     // bar : le comptoir
     this.barWrap.append(this.barRoom.canvas);
     const counter = this.barRoom.hits(1)[0]!;
@@ -341,8 +348,7 @@ export class App {
     this.barWrap.append(counterEl);
     this.roomHits.push({ el: counterEl, rect: counter.rect });
     this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
-    this.ups.bar.onclick = () => this.open({ kind: 'barUp' });
-    this.barWrap.append(roomTitle(this.ups.bar, this.barPlaque));
+    this.barWrap.append(roomTitle(this.barPlaque));
     // magasin : les étagères et leurs objets
     this.shopWrap.append(this.shopRoom.canvas);
     const SECTION: Record<string, { label: string; run: () => void }> = {
@@ -534,7 +540,6 @@ export class App {
         this.harvest.setAttribute('aria-label', `Récolter ${moneyInt(earned)} gagnés pendant ton absence`);
       }
     }
-    this.plaque.textContent = `★ ${g.breweryLevel} · ${g.breweryName}`;
     const can = g.canBrew();
     const trial = g.tastable;
     // pastilles des boutons d'action : l'essentiel en un coup d'œil ; « ready » = il y a quelque chose à faire
@@ -557,11 +562,6 @@ export class App {
     const stationUp = STATION_ORDER.some((id) => g.level(id) < MAX_LEVEL && g.money >= g.upgradeCost(id));
     const nextStore = STORAGE[g.storageLevel];
     const nextPc = COMPUTERS[g.computerLevel];
-    this.ups.office.classList.toggle('alert', !!nextPc && g.money >= nextPc.cost);
-    this.ups.office.classList.toggle('hidden', !nextPc);
-    this.ups.workshop.classList.toggle('alert', stationUp);
-    this.ups.storage.classList.toggle('alert', !!nextStore && g.money >= nextStore.cost);
-    this.ups.bar.classList.toggle('alert', !!nextBar && g.money >= nextBar.cost);
     // l'ordinateur (l'enveloppe est dessinée sur son écran) : son nom dit les commandes en attente
     const unread = this.unread;
     this.computerHit?.setAttribute('aria-label', `Ordinateur : ${g.orders.length} commande${g.orders.length > 1 ? 's' : ''}${ready ? `, ${ready} à livrer` : ''}${unread ? `, ${unread} message${unread > 1 ? 's' : ''}` : ''}`);
@@ -571,9 +571,10 @@ export class App {
     this.root.style.setProperty('--toast-bottom', sheetTop ? `${Math.round(window.innerHeight - sheetTop)}px` : 'var(--bottom-h, 70px)');
     // le tutoriel montre le bouton dont il parle
     this.brewBtn.classList.toggle('tuto', g.tips === 2);
-    this.storagePlaque.textContent = `▣ ${STORAGE[g.storageLevel - 1]!.name}`;
-    this.officePlaque.textContent = `▣ ${COMPUTERS[g.computerLevel - 1]!.name}`;
-    this.barPlaque.textContent = `★ ${g.barLevel} · ${g.bar.name}`;
+    setPlaque(this.plaque, `★ ${g.breweryLevel} · ${g.breweryName}`, stationUp, 'amélioration');
+    setPlaque(this.storagePlaque, `▣ ${STORAGE[g.storageLevel - 1]!.name}`, !!nextStore && g.money >= nextStore.cost, 'agrandissement');
+    setPlaque(this.officePlaque, `▣ ${COMPUTERS[g.computerLevel - 1]!.name}`, !!nextPc && g.money >= nextPc.cost, 'amélioration');
+    setPlaque(this.barPlaque, `★ ${g.barLevel} · ${g.bar.name}`, !!nextBar && g.money >= nextBar.cost, 'agrandissement');
     // pastilles des onglets de pièces
     const badges: Record<RoomId, string> = {
       office: g.orders.length ? String(g.orders.length) : unread ? '✉' : '',
