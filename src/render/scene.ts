@@ -50,6 +50,15 @@ export function nozzles(lv: number): number[] {
   const n = lv <= 2 ? 1 : lv === 3 ? 4 : 5;
   return Array.from({ length: n }, (_, j) => (j - (n - 1) / 2) * NOZZLE_GAP);
 }
+/**
+ * Écart entre deux cuves en parallèle : 40 % de leur largeur (leur jauge reste visible), resserré pour que
+ * la rangée tienne dans sa moitié d'étage.
+ */
+function tankGap(w: number, tanks: number): number {
+  if (tanks <= 1) return 0;
+  return Math.max(6, Math.min(Math.round(w * 0.4), Math.floor((78 - w) / (tanks - 1))));
+}
+
 /** Écart entre deux becs : une bouteille (11 px avec son contour) et un peu de jeu. */
 const NOZZLE_GAP = 12;
 
@@ -110,7 +119,7 @@ export class Scene {
     if (id === 'bottling') return { x: LINE.fillX - 32, y: LINE.top, w: 78, h: LINE.belt - LINE.top };
     const def = SPRITES[id][level - 1]!;
     const s = SLOTS[id];
-    const shift = id === 'fermenter' ? this.fermentShift : 0;
+    const shift = id === 'fermenter' ? this.fermentShift : id === 'conditioning' ? this.gardeShift : 0;
     return { x: Math.round(s.cx - def.w / 2) + shift, y: s.floor - def.h, w: def.w, h: def.h };
   }
 
@@ -127,6 +136,8 @@ export class Scene {
   }
   /** Décalage de la fermentation vers la droite : ses cuves supplémentaires se rangent à sa gauche. */
   private fermentShift = 0;
+  /** … et la garde vers la droite, pour que la sienne ne déborde pas sur la moitié gauche. */
+  private gardeShift = 0;
   /** Décalage du bec qui remplit la bouteille d'essai. */
   private tasteDx = 0;
 
@@ -194,7 +205,17 @@ export class Scene {
       if (this.cacheLost(game.breweryLevel)) this.invalidate();
     }
     const lv = this.preview?.level ?? game.breweryLevel;
-    this.fermentShift = (game.tankCount('fermenter') - 1) * 8;
+    {
+      // la fermentation se décale vers la droite pour que sa rangée de cuves tienne à gauche
+      const n = game.tankCount('fermenter');
+      const fw = SPRITES.fermenter[game.level('fermenter') - 1]!.w;
+      const slotX = Math.round(SLOTS.fermenter.cx - fw / 2);
+      this.fermentShift = Math.max(0, 2 + (n - 1) * tankGap(fw, n) - slotX);
+      const m = game.tankCount('conditioning');
+      const cw = SPRITES.conditioning[game.level('conditioning') - 1]!.w;
+      const cx = Math.round(SLOTS.conditioning.cx - cw / 2);
+      this.gardeShift = Math.max(0, Math.min(150 - cw - cx, 80 - (cx - (m - 1) * tankGap(cw, m))));
+    }
     const decor = { room: this.key, lv, t, game, preview: !!this.preview, top: this.b.T };
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.imageSmoothingEnabled = false; // réinitialisé si le contexte est restauré
@@ -474,21 +495,6 @@ export class Scene {
     const sh = ellipseShadow(Math.max(4, Math.round(r.w / 2)), 3, 0.8);
     g.drawImage(sh, Math.round(r.x + r.w / 2 - sh.width / 2) + 1, fl - 4);
     if (def.flame && active) this.flames(r.x + def.flame.x, r.y + def.flame.y, def.flame.w, t);
-    // cuves en parallèle : une rangée de cuves en retrait, à gauche de la principale qui se tient devant
-    // (la même disposition pour la fermentation et la garde ; la fermentation se décale vers la droite pour leur faire place)
-    const tanks = game.tankCount(id);
-    if (tanks > 1) {
-      const busy = game.batchesAt(id).length;
-      for (let k = tanks - 1; k >= 1; k--) {
-        const dx = -8 * k;
-        g.drawImage(this.shadedSprite(id, lv), r.x + dx, r.y - 2 * k);
-        // une cuve qui travaille : un voyant vert
-        if (k < busy) {
-          g.fillStyle = Math.floor(t * 2 + k) % 2 ? '#7cff9c' : '#3e9028';
-          g.fillRect(r.x + dx + Math.floor(r.w / 2), r.y - 2 * k + 3, 2, 2);
-        }
-      }
-    }
     g.drawImage(stationCanvas(id, lv), r.x, r.y);
 
     // liquide visible dans le hublot
@@ -538,6 +544,34 @@ export class Scene {
         if (Math.floor(t * 3 + i) % 3) continue;
         g.fillStyle = '#e0f6ff';
         g.fillRect(r.x + 6 + i * 7, r.y + 8 + ((i * 5) % 12), 1, 1);
+      }
+    }
+    // cuves en parallèle, en éventail : chaque cuve en plus se place à gauche de la précédente et passe devant elle,
+    // si bien que le côté droit de chacune (sa jauge) reste visible
+    const tanks = game.tankCount(id);
+    if (tanks > 1) {
+      const gap = tankGap(def.w, tanks);
+      const all = game.batchesAt(id);
+      for (let k = 1; k < tanks; k++) {
+        const x = r.x - gap * k;
+        const es = ellipseShadow(Math.max(4, Math.round(r.w / 2)), 3, 0.8);
+        g.drawImage(es, Math.round(x + r.w / 2 - es.width / 2) + 1, fl - 4);
+        g.drawImage(stationCanvas(id, lv), x, r.y);
+        const tb = all[k];
+        if (def.window && tb) {
+          const w = def.window;
+          const p = Math.min(1, tb.elapsed / Math.max(0.01, tb.duration));
+          const h = Math.round(w.h * Math.min(1, 0.35 + p * 2));
+          const col = LIQUID[id];
+          g.fillStyle = col[3]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, w.w, h);
+          g.fillStyle = col[2]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, Math.max(1, w.w - 1), h);
+          g.fillStyle = col[0]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, w.w, 1);
+        }
+        // une cuve qui travaille : un voyant vert
+        if (tb) {
+          g.fillStyle = Math.floor(t * 2 + k) % 2 ? '#7cff9c' : '#3e9028';
+          g.fillRect(x + Math.floor(r.w / 2), r.y + 3, 2, 2);
+        }
       }
     }
     // appareil sélectionné : liseré clignotant
