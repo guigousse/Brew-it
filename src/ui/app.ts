@@ -394,6 +394,9 @@ export class App {
       const pane = h('div', 'room');
       const view = h('div', 'room-view');
       view.append(wraps[t.id]);
+      // le nom de la pièce, dans le coin de l'écran (à égale distance du haut et de la gauche), pas dans le plan
+      const title = wraps[t.id].querySelector('.room-title');
+      if (title) view.append(title);
       pane.append(view);
       this.track.append(pane);
       this.wraps.push(wraps[t.id]);
@@ -503,6 +506,14 @@ export class App {
       o.label.classList.toggle('busy', !!batch);
       o.label.style.left = `${(r.x + r.w / 2) * s}px`;
       o.label.style.top = `${Math.max(0, r.y * s - 18)}px`;
+      // le nom de la pièce est dans le coin : l'étiquette de l'appareil d'en dessous passe sous lui
+      if (id === 'mill') {
+        const tr = this.plaque.getBoundingClientRect();
+        const lr = o.label.getBoundingClientRect();
+        if (tr.width && lr.left < tr.right && lr.right > tr.left && lr.top < tr.bottom && lr.bottom > tr.top) {
+          o.label.style.top = `${parseFloat(o.label.style.top) + (tr.bottom - lr.top) + 2}px`;
+        }
+      }
       const pct = batch ? Math.min(1, batch.elapsed / Math.max(0.01, batch.duration)) : 0;
       const all = g.batchesAt(id);
       const many = g.tankCount(id) > 1 ? all.length : 0;

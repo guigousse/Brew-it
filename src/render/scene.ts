@@ -32,14 +32,26 @@ const EYE = 150;
  * en file d'attente (f < 0), elle avance sous le bec (0 → 0,2), se remplit (0,2 → 1),
  * puis repart d'un cran (1 → 1,2) et défile vers l'étiqueteuse et le carton.
  */
-function bottlePos(f: number): { x: number; fill: number } {
-  const { fillX, spacing } = LINE;
-  if (f < 0) return { x: fillX - Math.ceil(-f) * spacing, fill: 0 };
-  if (f < 0.2) return { x: fillX - spacing + (f / 0.2) * spacing, fill: 0 };
+/**
+ * Position du centre d'une tournée de bouteilles (autant que de becs, sur une largeur g) selon son avancement f :
+ * elle attend, arrive sous les becs (0 à 0,2), se remplit (0,2 à 1), repart (1 à 1,2) puis file vers le carton.
+ */
+function groupPos(f: number, g: number): { x: number; fill: number } {
+  const { fillX } = LINE;
+  if (f < 0) return { x: fillX - Math.ceil(-f) * g, fill: 0 };
+  if (f < 0.2) return { x: fillX - g + (f / 0.2) * g, fill: 0 };
   if (f < 1) return { x: fillX, fill: (f - 0.2) / 0.8 };
-  if (f < 1.2) return { x: fillX + ((f - 1) / 0.2) * spacing, fill: 1 };
-  return { x: fillX + spacing * (1 + (f - 1.2) * 1.25), fill: 1 };
+  if (f < 1.2) return { x: fillX + ((f - 1) / 0.2) * g, fill: 1 };
+  return { x: fillX + g * (1 + (f - 1.2) * 1.25), fill: 1 };
 }
+
+/** Becs de la remplisseuse selon son niveau : 1 (entonnoir, canne), puis 4, puis 5 ; décalage de chacun. */
+export function nozzles(lv: number): number[] {
+  const n = lv <= 2 ? 1 : lv === 3 ? 4 : 5;
+  return Array.from({ length: n }, (_, j) => (j - (n - 1) / 2) * NOZZLE_GAP);
+}
+/** Écart entre deux becs : une bouteille (11 px avec son contour) et un peu de jeu. */
+const NOZZLE_GAP = 12;
 
 /** Ligne d'embouteillage au premier plan. */
 export const LINE = {
@@ -95,10 +107,11 @@ export class Scene {
 
   /** Rectangle occupé par un appareil (coordonnées de la scène). L'embouteillage = la remplisseuse au premier plan. */
   rect(id: StationId, level: number): Rect {
-    if (id === 'bottling') return { x: LINE.fillX - 24, y: LINE.top, w: 70, h: LINE.belt - LINE.top };
+    if (id === 'bottling') return { x: LINE.fillX - 32, y: LINE.top, w: 78, h: LINE.belt - LINE.top };
     const def = SPRITES[id][level - 1]!;
     const s = SLOTS[id];
-    return { x: Math.round(s.cx - def.w / 2), y: s.floor - def.h, w: def.w, h: def.h };
+    const shift = id === 'fermenter' ? this.fermentShift : 0;
+    return { x: Math.round(s.cx - def.w / 2) + shift, y: s.floor - def.h, w: def.w, h: def.h };
   }
 
   private anchor(id: StationId, level: number, which: 'inlet' | 'outlet'): Pt {
@@ -110,8 +123,12 @@ export class Scene {
 
   /** Position (scène) du bouton « Goûter » : au-dessus du bec de remplissage. */
   get tastePoint(): Pt {
-    return { x: LINE.fillX, y: LINE.top - 6 };
+    return { x: LINE.fillX + this.tasteDx, y: LINE.top - 6 };
   }
+  /** Décalage de la fermentation vers la droite : ses cuves supplémentaires se rangent à sa gauche. */
+  private fermentShift = 0;
+  /** Décalage du bec qui remplit la bouteille d'essai. */
+  private tasteDx = 0;
 
   private checkedAt = 0;
 
@@ -177,6 +194,7 @@ export class Scene {
       if (this.cacheLost(game.breweryLevel)) this.invalidate();
     }
     const lv = this.preview?.level ?? game.breweryLevel;
+    this.fermentShift = (game.tankCount('fermenter') - 1) * 8;
     const decor = { room: this.key, lv, t, game, preview: !!this.preview, top: this.b.T };
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.imageSmoothingEnabled = false; // réinitialisé si le contexte est restauré
@@ -349,7 +367,7 @@ export class Scene {
       const grain = from === 'mill';
       this.pipe(path, grain);
       const since = t - (this.flows.get(i) ?? -99);
-      if (since < 2.5) this.flow(path, t, grain ? PAL.malt : LIQUID[to]);
+      if (since < 2.5) this.flow(path, t, since, 2.5, grain, grain ? PAL.malt : LIQUID[to]);
     }
   }
 
@@ -386,31 +404,56 @@ export class Scene {
     g.fillStyle = PAL.rd[2]!; g.fillRect(m.x, m.y - 5, 1, 3);
   }
 
-  /** Liquide (ou grain) qui circule pendant un transfert. */
-  private flow(path: Pt[], t: number, col: readonly string[]): void {
+  /**
+   * Liquide (ou grain) qui circule pendant un transfert : le tuyau se remplit depuis l'appareil de départ,
+   * le courant défile en continu (reflets qui glissent au pixel près, avec un fondu entre deux pixels),
+   * puis le tuyau se vide par l'arrière à la fin du transfert.
+   */
+  private flow(path: Pt[], t: number, since: number, span: number, grain: boolean, col: readonly string[]): void {
     const g = this.g;
-    let total = 0;
     const segs = path.slice(1).map((b, k) => {
       const a = path[k]!;
-      const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
-      total += len;
-      return { a, b, len };
+      return { a, b, len: Math.abs(b.x - a.x) + Math.abs(b.y - a.y) };
     });
-    for (let d = (t * 40) % 6; d < total; d += 6) {
-      let rest = d;
-      for (const s of segs) {
-        if (rest > s.len) {
-          rest -= s.len;
+    const total = segs.reduce((s, x) => s + x.len, 0);
+    if (total <= 0) return;
+    const ease = (x: number) => 1 - (1 - Math.min(1, Math.max(0, x))) ** 2;
+    const head = total * ease(since / 0.45); // le front avance vite, puis ralentit en arrivant
+    const tail = total * ease((since - (span - 0.5)) / 0.5); // la queue part en dernier
+    const speed = 34; // px par seconde
+    const period = 7;
+    const phase = t * speed;
+    // couleurs : le fond du courant, ses reflets (le grain : des grains qui roulent)
+    const base = grain ? col[3]! : col[2]!;
+    const shine = grain ? col[1]! : col[0]!;
+    let d = 0;
+    for (const sgm of segs) {
+      const dx = Math.sign(sgm.b.x - sgm.a.x);
+      const dy = Math.sign(sgm.b.y - sgm.a.y);
+      for (let i = 0; i <= sgm.len; i++, d++) {
+        if (d < tail || d > head) continue;
+        const x = sgm.a.x + dx * i;
+        const y = sgm.a.y + dy * i;
+        // le courant occupe le cœur du tuyau (2 px) ; le bord avant du front est plus clair
+        const front = head - d < 2 && head < total;
+        g.fillStyle = front ? shine : base;
+        if (dy === 0) g.fillRect(x, y, 1, 2);
+        else g.fillRect(x, y, 2, 1);
+        if (grain) {
+          // des grains : un sur trois, qui avancent
+          if (Math.floor(d - phase) % 3 === 0) { g.fillStyle = shine; g.fillRect(x, y, 1, 1); }
           continue;
         }
-        const k = s.len ? rest / s.len : 0;
-        const x = Math.round(s.a.x + (s.b.x - s.a.x) * k);
-        const y = Math.round(s.a.y + (s.b.y - s.a.y) * k);
-        g.fillStyle = col[1]!;
-        g.fillRect(x, y, 2, 1);
-        g.fillStyle = col[3]!;
-        g.fillRect(x, y + 1, 2, 1);
-        break;
+        // reflet qui glisse : intensité selon la distance au centre de la vague (sous-pixel)
+        const w = (((d - phase) % period) + period) % period;
+        const k = Math.max(0, 1 - Math.abs(w - period / 2) / 1.6);
+        if (k > 0) {
+          g.globalAlpha = k * 0.9;
+          g.fillStyle = shine;
+          if (dy === 0) g.fillRect(x, y, 1, 1);
+          else g.fillRect(x, y, 1, 1);
+          g.globalAlpha = 1;
+        }
       }
     }
   }
@@ -431,12 +474,13 @@ export class Scene {
     const sh = ellipseShadow(Math.max(4, Math.round(r.w / 2)), 3, 0.8);
     g.drawImage(sh, Math.round(r.x + r.w / 2 - sh.width / 2) + 1, fl - 4);
     if (def.flame && active) this.flames(r.x + def.flame.x, r.y + def.flame.y, def.flame.w, t);
-    // cuves en parallèle : rangée de cuves en retrait, derrière la principale
+    // cuves en parallèle : une rangée de cuves en retrait, à gauche de la principale qui se tient devant
+    // (la même disposition pour la fermentation et la garde ; la fermentation se décale vers la droite pour leur faire place)
     const tanks = game.tankCount(id);
     if (tanks > 1) {
       const busy = game.batchesAt(id).length;
       for (let k = tanks - 1; k >= 1; k--) {
-        const dx = (id === 'fermenter' ? 11 : -11) * k;
+        const dx = -8 * k;
         g.drawImage(this.shadedSprite(id, lv), r.x + dx, r.y - 2 * k);
         // une cuve qui travaille : un voyant vert
         if (k < busy) {
@@ -523,20 +567,34 @@ export class Scene {
    * Les bouteilles arrivent vides, se remplissent sous le bec, avancent, sont étiquetées puis rangées en carton.
    * Le défilement suit l'avancement du lot : chaque bouteille k a une phase f = (bouteilles remplies) − k.
    */
+  /**
+   * La ligne d'embouteillage : les bouteilles (ou les fûts) arrivent par tournées, autant que la remplisseuse a de becs,
+   * se remplissent ensemble, passent à l'étiqueteuse et tombent dans le carton.
+   */
   private drawLine(game: Game, t: number): void {
     const g = this.g;
     const lv = game.level('bottling');
     const b = game.batchAt('bottling');
     const keg = b?.format === 'keg';
-    const n = (keg ? b?.kegs : b?.bottles) ?? 0;
+    const trial = !!b && b.beerId == null;
+    const offs = nozzles(lv);
+    const N = offs.length;
+    const G = N === 1 ? LINE.spacing : N * NOZZLE_GAP; // largeur d'une tournée
+    const total = (keg ? b?.kegs : b?.bottles) ?? 0;
     const p = b ? (b.waiting ? 1 : Math.min(1, b.elapsed / Math.max(0.01, b.duration))) : 0;
-    const done = p * n;
+    // un essai : une seule bouteille, sous le bec du milieu (on la goûte)
+    const n = trial ? 1 : total;
+    const done = trial ? Math.min(1, (b!.elapsed * Math.max(1, total)) / Math.max(0.01, b!.duration)) : p * n;
+    const per = trial ? 1 : N; // bouteilles par tournée
+    const slots = trial ? [offs[Math.floor((N - 1) / 2)]!] : offs;
+    this.tasteDx = offs[Math.floor((N - 1) / 2)]!;
+    const groupsDone = done / per;
     const beer = b?.beerId != null ? game.beers.find((x) => x.id === b.beerId) : undefined;
     const label = beer?.label ?? null;
-    const { fillX, labelX, cartonX, belt, spacing } = LINE;
+    const { fillX, labelX, cartonX, belt } = LINE;
 
     // bande du tapis qui défile
-    const shift = Math.floor((done * spacing) % 4);
+    const shift = Math.floor((groupsDone * (trial ? LINE.spacing : G)) % 4);
     g.fillStyle = '#4a4458';
     for (let x = from(-4 + shift, 4, this.b.L - 4); x < this.b.R; x += 4) g.fillRect(x, belt + 2, 2, 1);
 
@@ -545,25 +603,28 @@ export class Scene {
     this.drawLabeler(lv, !!b && !b.waiting, t);
 
     // bouteilles sur le tapis
-    if (!b) {
-      for (let i = 1; i <= 3; i++) this.bottle(fillX - i * spacing, belt, 0, null, false);
-    } else {
-      const kMin = Math.max(0, Math.floor(done) - 8);
-      const kMax = Math.min(n - 1, Math.floor(done) + 3);
-      for (let k = kMin; k <= kMax; k++) {
-        const f = done - k;
-        const { x, fill } = bottlePos(f);
-        if (x >= cartonX + 2 || x < -8) continue;
-        if (keg) this.keg(Math.round(x), belt, fill, label);
-        else this.bottle(Math.round(x), belt, fill, x >= labelX && label ? label : null, f >= 1);
-        if (f >= 0.2 && f < 1) this.pour(fillX, belt, t);
-      }
-    }
-    // carton en bout de ligne
-    // bouteilles arrivées au carton : celles dont la position a dépassé son bord
     let inCarton = 0;
-    if (b && !keg) for (let k = 0; k < Math.min(n, Math.ceil(done)); k++) if (bottlePos(done - k).x >= cartonX + 2) inCarton++;
-    this.drawCarton(inCarton, label);
+    if (!b) {
+      for (const dx of offs) this.bottle(fillX - G + dx, belt, 0, null, false);
+    } else {
+      const gNow = Math.floor(groupsDone);
+      for (let gi = Math.max(0, gNow - 6); gi <= gNow + 1; gi++) {
+        const { x: gx, fill } = groupPos(groupsDone - gi, trial ? LINE.spacing : G);
+        slots.forEach((dx, j) => {
+          const k = gi * per + j;
+          if (k >= n) return;
+          const x = gx + dx;
+          if (x >= cartonX + 2) { inCarton++; return; }
+          if (x < this.b.L - 8) return;
+          if (keg) this.keg(Math.round(x), belt, fill, label);
+          else this.bottle(Math.round(x), belt, fill, x >= labelX && label ? label : null, groupsDone - gi >= 1);
+          if (fill > 0 && fill < 1 && !b.waiting) this.pour(Math.round(fillX + dx), belt, t, keg);
+        });
+      }
+      // les tournées plus anciennes sont toutes dans le carton
+      if (!keg && !trial) inCarton += Math.max(0, Math.min(n, (gNow - 6) * per));
+    }
+    this.drawCarton(keg || trial ? 0 : inCarton, label);
   }
 
   /** Une bouteille de 33 cl (9 × 26 px), pied posé sur le tapis. */
@@ -625,11 +686,15 @@ export class Scene {
     if (label && fill >= 1) drawMiniLabel(g, label, x + 1, y + 6, 5);
   }
 
-  /** Filet de bière qui coule du bec dans le goulot. */
-  private pour(cx: number, base: number, t: number): void {
+  /** Filet de bière qui coule du bec dans le goulot (ou dans le fût). */
+  private pour(cx: number, base: number, t: number, keg = false): void {
     const g = this.g;
-    g.fillStyle = Math.floor(t * 12) % 2 ? '#e8a530' : '#f2c14e';
-    g.fillRect(cx, base - 32, 1, 8);
+    const top = LINE.top + 40;
+    const bottom = keg ? base - 18 : base - 25;
+    for (let y = top; y < bottom; y++) {
+      g.fillStyle = (y + Math.floor(t * 30)) % 3 ? '#e8a530' : '#f2c14e';
+      g.fillRect(cx, y, 1, 1);
+    }
   }
 
   private drawFiller(lv: number, active: boolean, t: number): void {
@@ -665,7 +730,8 @@ export class Scene {
       return;
     }
     const fut = lv === 5;
-    const w = lv === 3 ? 34 : 44;
+    const offs = nozzles(lv);
+    const w = (offs.length - 1) * NOZZLE_GAP + 12; // la remplisseuse est aussi large que ses becs
     const body = lv === 3 ? P.st : lv === 4 ? P.tl : (['#ffffff', '#f4f8fc', '#dce6f0', '#b8c6d6', '#8a9ab0', '#5a6a82'] as const);
     px(x - w / 2 - 1, top - 1, w + 2, 36, '#1b1424');
     for (let i = 0; i < w; i++) {
@@ -684,14 +750,12 @@ export class Scene {
     px(x + w / 2 - 10, top + 12, 1, 1, active && Math.floor(t * 4) % 2 ? '#6cc040' : '#3e9028');
     px(x + w / 2 - 6, top + 12, 1, 1, '#e85a3a');
     // becs (ou pinces robotisées)
-    const nozzles = lv === 3 ? [-12, -4, 4, 12] : [-16, -8, 0, 8, 16];
-    for (const dx of nozzles) {
-      const reach = dx === 0 ? 6 : 4;
+    for (const dx of offs) {
+      const reach = 6;
       px(x + dx - 1, top + 34, 3, reach, fut ? '#8a9ab0' : P.st[4]!);
       px(x + dx - 1, top + 34, 1, reach, fut ? '#ffffff' : P.st[1]!);
       if (fut) px(x + dx, top + 34 + reach, 1, 1, '#5ef0ff');
     }
-    if (lv === 3) px(x - 1, top + 34, 3, 6, P.st[4]!);
   }
 
   private drawLabeler(lv: number, active: boolean, t: number): void {
