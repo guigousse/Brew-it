@@ -10,8 +10,6 @@ import type { Game } from '../core/game';
 import type { Label } from '../core/label';
 import { MAX_RANGE } from '../core/warehouse';
 import { drawMiniLabel } from './labelArt';
-import { instBox } from './decor';
-import { decorLayout } from './decorLayout';
 import { drawDigits, hash, painter, Room, type Px } from './rooms';
 import { boxShadow, dim, dropShadow, floor, floorLight, from, mix, rgb, seam, shade, skew, trap, wallLight, type Bounds } from './space';
 import type { Rect } from './sprites';
@@ -35,7 +33,7 @@ const SHELF_Y = [SHOWCASE.y + Math.floor(SHOWCASE.h / 2) - 1, SHOWCASE.y + SHOWC
 const DESK: Rect = { x: 4, y: 190, w: 120, h: 106 };
 const DESK_TOP = 228;
 
-export type OfficeHit = 'window' | 'board' | 'display' | 'computer' | 'radio';
+export type OfficeHit = 'window' | 'board' | 'display' | 'computer';
 
 /** Ce que le bureau voit de l'atelier par sa fenêtre : son canvas, et où se trouve son plan dedans. */
 export interface WorkshopView { canvas: HTMLCanvasElement; b: Bounds }
@@ -48,8 +46,6 @@ export class OfficeRoom extends Room {
       { id: 'board', rect: BOARD },
       { id: 'display', rect: DISPLAY },
       { id: 'computer', rect: DESK },
-      // la radio, là où elle est posée (au-dessus des autres zones)
-      ...(decorLayout.office[1] ?? []).filter((i) => i.a === 'radio').map((i) => ({ id: 'radio' as const, rect: instBox(i)! })),
     ];
   }
 

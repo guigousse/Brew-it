@@ -5,7 +5,6 @@
 import type { DecorAsset, DecorCtx } from './decor';
 import { drawMiniLabel } from './labelArt';
 import { ellipseShadow, shade, trap } from './space';
-import { radio } from '../audio/radio';
 
 const P = (g: CanvasRenderingContext2D) => (x: number, y: number, w: number, h: number, c: string) => {
   g.fillStyle = c;
@@ -535,7 +534,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       px(7, 2, 12, 2, '#7ee081'); for (let i = 0; i < 4; i++) px(4 + i * 5, 10, 3, 2, '#c4d0dc');
     },
   },
-  // ------------------------------------------------------------------ bureau : objets sur le plateau, corbeille, radio
+  // ------------------------------------------------------------------ bureau : objets sur le plateau, corbeille
   {
     id: 'rotaryPhone', name: 'Téléphone à cadran', room: 'office', w: 18, h: 11,
     draw(g) {
@@ -625,46 +624,6 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
         px(bx, by + 1, 1, 1, '#c8bca4'); px(bx + 1, by + 2, 1, 1, '#c8bca4');
       }
       px(2, 14, 10, 1, lo);
-    },
-  },
-  {
-    id: 'radio', name: 'Radio', room: 'office', w: 26, h: 14, pad: 14, anim: true,
-    draw(g, c) {
-      const px = P(g);
-      const lv = c.lv;
-      const on = radio.on;
-      const t = c.t;
-      const [body, hi, lo, grille] =
-        lv === 1 ? ['#7a4a22', '#a8743c', '#3a2010', '#c8a870'] : lv === 2 ? ['#a8483a', '#d06a52', '#6e2a22', '#e8dcc0']
-        : lv === 3 ? ['#e8dcc0', '#fff4dc', '#a89e88', '#8a6a3c'] : lv === 4 ? ['#2c283a', '#545068', '#1b1424', '#6c6884'] : ['#f4f8fc', '#ffffff', '#8a9ab0', '#c4d0dc'];
-      g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(3, 12, 24, 2);
-      if (lv === 1) {
-        // poste de TSF au dessus arrondi
-        g.fillStyle = body; g.beginPath(); g.ellipse(13, 5, 13, 5, 0, Math.PI, 0); g.fill();
-        px(0, 5, 26, 9, body);
-      } else px(0, 2, 26, 12, body);
-      px(0, lv === 1 ? 5 : 2, 26, 1, hi);
-      px(25, 2, 1, 12, lo);
-      // la grille du haut-parleur, le cadran et le bouton
-      px(2, 6, 12, 6, grille);
-      for (let x = 3; x < 13; x += 2) px(x, 6, 1, 6, lo);
-      px(16, 6, 8, 3, on ? '#fff4b0' : '#3a3048');
-      if (on) { const k = Math.floor(t * 1.5) % 6; px(17 + k, 6, 1, 3, '#a8483a'); }
-      px(18, 10, 3, 3, lo); px(19, 11, 1, 1, hi);
-      if (lv >= 4) px(2, 3, 2, 2, on ? (lv === 5 ? '#5ef0ff' : '#7ee081') : lo); // voyant
-      if (lv !== 1) px(4, -2, 1, 4, lo); // antenne
-      // les notes s'envolent quand elle joue
-      if (on) {
-        const cols = ['#f2c14e', '#ff9ad0', '#5ef0ff'];
-        for (let i = 0; i < 3; i++) {
-          const k = (t * 0.45 + i / 3) % 1;
-          const x = Math.round(8 + i * 6 + Math.sin(t * 2 + i) * 3);
-          const y = Math.round(2 - k * 14);
-          g.globalAlpha = 1 - k;
-          px(x, y, 2, 2, cols[i]!); px(x + 1, y - 3, 1, 3, cols[i]!);
-          g.globalAlpha = 1;
-        }
-      }
     },
   },
 ];

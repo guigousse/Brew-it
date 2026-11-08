@@ -6,12 +6,10 @@ import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { createStorage } from './platform/storage';
 import { App } from './ui/app';
-import { initRadio } from './audio/radio';
 
 const AUTOSAVE_SECONDS = 20;
 
 async function boot() {
-  initRadio();
   const saves = new SaveManager(createStorage());
   let game: Game;
   try {
