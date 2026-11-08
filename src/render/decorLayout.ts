@@ -39,8 +39,7 @@ const list = (specs: Spec[]): DecorInst[] => {
 
 /** Mobilier du bar (affiché quand il est acheté), le même à tous les niveaux. */
 const BAR_FURNITURE: Spec[] = [
-  ['barDoor', 124, 80],
-  ['posterBottle', 86, 40], ['posterMug', 102, 40], ['smallPlant', 58, 89, { f: true }], ['smallPlant', 100, 95],
+  ['posterBottle', 86, 40], ['posterMug', 102, 40], ['smallPlant', 58, 89, { f: true }], ['smallPlant', 118, 95],
   ['neonSign', 18, 118], ['jukebox', 145, 112],
 ];
 /** Le bureau : ce qui est commun à tous les niveaux, puis les objets posés sur le plateau, qui changent avec l'ordinateur. */
@@ -57,22 +56,22 @@ export const DECOR_DEFAULT: DecorLayout = {
   bar: {
     1: list([
       ['cobweb', 0, 0], ['cobweb', 141, 0, { f: true }], ['crack', 104, 26], ['bulb', 41, 14], ['lightRayWide', 6, 18], ['openSign', 23, 24],
-      ['bottleShelf', 8, 56], ['barrel', 115, 164], ['emptyCrate', 10, 170], ['cellarStairs', 126, 204], ['cobweb', 0, 206], ...BAR_FURNITURE,
+      ['bottleShelf', 8, 56], ['barrel', 115, 164], ['emptyCrate', 10, 170], ['cellarVent', 66, 210], ...BAR_FURNITURE,
     ]),
     2: list([
       ['greenPendant', 15, 14], ['greenPendant', 61, 14], ['greenPendant', 115, 14], ['lightRay', -4, 18], ['lightRay', 42, 18], ['lightRay', 96, 18],
-      ['bottleShelf', 8, 52], ['bottleShelf', 8, 76], ['board', 23, 26], ['cellarStairs', 126, 204], ['co2Bottle', 2, 250], ...BAR_FURNITURE,
+      ['bottleShelf', 8, 52], ['bottleShelf', 8, 76], ['board', 23, 26], ['cellarVent', 66, 210], ...BAR_FURNITURE,
     ]),
     3: list([
       ['brassSconce', 20, 8], ['brassSconce', 60, 8], ['brassSconce', 100, 8], ['brassSconce', 136, 8],
-      ['bottleShelf', 8, 52], ['bottleShelf', 8, 76], ['board', 23, 26], ['cellarStairs', 126, 204], ['co2Bottle', 2, 250], ...BAR_FURNITURE,
+      ['bottleShelf', 8, 52], ['bottleShelf', 8, 76], ['board', 23, 26], ...BAR_FURNITURE,
     ]),
     4: list([
       ['brewSign', 6, 2], ['factoryLamp', 94, 22], ['factoryLamp', 134, 22],
-      ['bottleShelf', 8, 44], ['bottleShelf', 8, 64], ['bottleShelf', 8, 84], ['board', 23, 26], ['cellarCooler', 130, 214], ['co2Bottle', 2, 250], ...BAR_FURNITURE,
+      ['bottleShelf', 8, 44], ['bottleShelf', 8, 64], ['bottleShelf', 8, 84], ['board', 23, 26], ...BAR_FURNITURE,
     ]),
     5: list([
-      ['cityViewSmall', 6, 1], ['bottleShelf', 8, 44], ['bottleShelf', 8, 64], ['bottleShelf', 8, 84], ['board', 23, 26], ['kegRobot', 126, 206], ['co2Bottle', 2, 250], ...BAR_FURNITURE,
+      ['cityViewSmall', 6, 1], ['bottleShelf', 8, 44], ['bottleShelf', 8, 64], ['bottleShelf', 8, 84], ['board', 23, 26], ...BAR_FURNITURE,
     ]),
   },
   storage: {

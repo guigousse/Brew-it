@@ -695,49 +695,6 @@ export function drawKeg(g: CanvasRenderingContext2D, x: number, y: number, s: nu
 
 // =================================================================== bar
 
-/**
- * Un fût de cave, debout : jupe ajourée en haut (les poignées), tête de soutirage, cerclages, reflet,
- * bande à la couleur de la bière avec son étiquette, et la fenêtre de jauge où l'on voit le niveau.
- */
-function drawCellarKeg(g: CanvasRenderingContext2D, r: Rect, label: Label, level: number, lv: number): void {
-  const px = painter(g);
-  const steel = lv === 1 ? ['#e0d8c8', '#c8c0b0', '#a89e8e', '#7a7062', '#4a4238'] : ['#ffffff', '#dce6f0', '#b0bccb', '#7a8898', '#465264'];
-  const { x, y, w, h } = r;
-  const cx = x + Math.floor(w / 2);
-  // ombre sur le mur et au sol
-  g.fillStyle = 'rgba(16,10,24,0.35)';
-  g.fillRect(x + 3, y + 2, w, h - 2);
-  g.drawImage(ellipseShadow(Math.round(w / 2) + 2, 2, 0.8), x - 1, y + h - 2);
-  // corps, éclairé de la gauche
-  px(x, y + 1, w, h - 1, steel[4]!);
-  for (let i = 1; i < w - 1; i++) {
-    const k = i / w;
-    px(x + i, y + 1, 1, h - 2, steel[k < 0.12 ? 2 : k < 0.3 ? 0 : k < 0.55 ? 1 : k < 0.8 ? 2 : 3]!);
-  }
-  // jupe du haut et du bas, poignées
-  px(x, y, w, 1, steel[3]!);
-  px(x, y + 5, w, 1, steel[3]!);
-  px(x + 3, y + 2, 4, 2, '#1b1424'); px(x + w - 7, y + 2, 4, 2, '#1b1424');
-  px(x, y + h - 5, w, 1, steel[3]!);
-  // cerclages
-  for (const ry of [y + Math.round(h * 0.33), y + Math.round(h * 0.7)]) { px(x, ry, w, 2, steel[3]!); px(x, ry, w, 1, steel[0]!); }
-  // tête de soutirage
-  px(cx - 3, y - 2, 7, 3, '#2c283a'); px(cx - 2, y - 2, 5, 1, '#545068'); px(cx + 3, y - 1, 3, 1, '#2c283a');
-  // bande de la bière et son étiquette
-  const by = y + Math.round(h * 0.4);
-  const bh = Math.max(4, Math.round(h * 0.25));
-  px(x + 1, by, w - 2, bh, label.bg);
-  px(x + 1, by, w - 2, 1, '#ffffff50');
-  if (w >= 14) drawMiniLabel(g, label, x + 3, by + Math.floor((bh - 7) / 2), 7);
-  // fenêtre de jauge
-  const gx = x + w - 6;
-  const gy = y + 7;
-  const gh = h - 13;
-  px(gx, gy, 3, gh, '#1b1424');
-  const fill = Math.round(gh * Math.max(0, Math.min(1, level)));
-  if (fill > 0) { px(gx, gy + gh - fill, 3, fill, '#e8a530'); px(gx, gy + gh - fill, 3, 1, '#fff1c8'); }
-}
-
 /** Le bar occupe les 2/3 du haut, la cave et ses fûts le tiers du bas. */
 export const CELLAR_Y = 200;
 /** Comptoir : dessus et façade (sa place est dans barLayout : la moitié gauche de la salle). */
@@ -746,10 +703,8 @@ const CT = () => {
   return { top: c.y, front: c.y + c.h, x0: c.x, x1: c.x + c.w };
 };
 const BAR_HIT: Rect = { x: 0, y: 24, w: ROOM_W, h: CELLAR_Y - 24 };
-/** Sol de la cave, où reposent les fûts ; étagère de la seconde rangée ; zone des fûts (à gauche des boutons). */
+/** Sol de la cave, où reposent les fûts. */
 const KEG_FLOOR = 290;
-const KEG_SHELF = 250;
-const KEG_ZONE = { x0: 16, x1: 128 };
 /**
  * Coin du bar, en haut à droite, où s'installe l'objet de l'événement en cours (télé, cible, boule à facettes).
  * Le décor de chaque niveau laisse cette place libre.
@@ -818,7 +773,7 @@ function seatsFor(level: number, n: number, bench = 0): Seat[] {
   const rest = n - stools;
   for (let i = 0; i < rest; i++) {
     const c = tableSpot(Math.floor(i / 2));
-    out.push({ x: c.x + (i % 2 ? 12 : -12), y: c.y, kind: 'table' });
+    out.push({ x: c.x + (i % 2 ? 9 : -9), y: c.y, kind: 'table' });
   }
   return out;
 }
@@ -841,90 +796,18 @@ const PEOPLE = [
   ['#b07850', '#e8e4dc', '#d4823a'], ['#e0a77f', '#2c283a', '#e8eef4'],
 ] as const;
 
-/** Durée d'un service au comptoir (s), et du trajet d'un client entre la porte et sa place. */
-const SERVE = 7;
-const WALK = 3;
-/** La porte d'entrée du bar, au fond à droite : les clients y entrent et en sortent (pied du passage). */
-const BAR_DOOR = { x: 133, y: 121 };
-
-type Look = { skin: string; hair: string; shirt: string; style: number; tall: number };
-/** L'allure d'un client : peau, cheveux, haut, coiffure (courts, longs, chauve, casquette, chignon), taille. */
-function personLook(i: number, slot: number): Look {
-  const [skin, hair, shirt] = PEOPLE[Math.floor(hash(i, slot + 99) * PEOPLE.length)]!;
-  return { skin, hair, shirt, style: Math.floor(hash(i, slot + 7) * 5), tall: Math.floor(hash(i, slot + 3) * 3) };
-}
-
-/** Un verre de 25 cl (3 × 6 px), avec sa mousse. */
-function drawGlass(g: CanvasRenderingContext2D, x: number, y: number, level: number): void {
-  const px = painter(g);
-  px(x, y, 3, 6, '#c8f0e880');
-  const lh = Math.round(5 * level);
-  if (lh > 0) { px(x, y + 6 - lh, 3, lh, '#e8a530'); px(x, y + 6 - lh, 3, 1, '#fff1c8'); }
-}
-
-/**
- * Un client : de dos sur un tabouret, de profil à table (tourné vers la droite ou la gauche), ou en marche.
- * arm : le bras levé (il boit, ou trinque) ; en marche, le sens de la marche.
- */
-function drawPerson(g: CanvasRenderingContext2D, x: number, foot: number, l: Look, pose: 'back' | 'left' | 'right' | 'walk', t: number, arm: boolean): void {
-  const px = painter(g);
-  const hairTop = (hx: number, hy: number, w: number, back: boolean) => {
-    if (l.style === 2) { px(hx, hy + 1, w, 1, l.hair); return; } // presque chauve : une couronne
-    if (l.style === 3) { px(hx - 1, hy - 1, w + 2, 3, l.shirt); px(hx - 1, hy + 1, w + 2, 1, '#00000040'); return; } // casquette
-    px(hx, hy - 1, w, back ? 6 : 2, l.hair);
-    if (l.style === 1) { px(hx - 1, hy, 1, 7, l.hair); px(hx + w, hy, 1, 7, l.hair); } // cheveux longs
-    if (l.style === 4) px(hx + Math.floor(w / 2) - 1, hy - 3, 3, 2, l.hair); // chignon
-  };
-  if (pose === 'back') {
-    const y = foot - 13 - l.tall;
-    px(x - 4, y, 9, 11 + l.tall, l.shirt);
-    px(x - 4, y, 1, 11 + l.tall, '#00000030');
-    px(x - 3, y - 7, 7, 7, l.skin);
-    hairTop(x - 3, y - 6, 7, true);
-    px(x - 2, foot - 3, 2, 3, '#2c283a'); px(x + 1, foot - 3, 2, 3, '#2c283a');
-    if (arm) { px(x + 4, y - 3, 2, 5, l.shirt); px(x + 4, y - 4, 2, 2, l.skin); }
-    else { px(x - 3, y + 2, 1, 2, l.skin); px(x + 3, y + 2, 1, 2, l.skin); }
-    return;
-  }
-  if (pose === 'walk') {
-    const step = Math.sin(t * 9) > 0 ? 1 : 0;
-    const y = foot - 19 - l.tall;
-    px(x - 2, foot - 6, 2, 6 - step, '#2c283a'); px(x + 1, foot - 6, 2, 5 + step, '#2c283a');
-    px(x - 3, y + 6, 7, 8 + l.tall, l.shirt);
-    px(x - 3, y + 6, 1, 8 + l.tall, '#00000030');
-    px(x - 2, y, 5, 6, l.skin);
-    hairTop(x - 2, y, 5, false);
-    px(x - 1, y + 3, 1, 1, '#2b2135'); px(x + 1, y + 3, 1, 1, '#2b2135');
-    return;
-  }
-  const right = pose === 'right';
-  const y = foot - 12 - l.tall;
-  px(x - 3, y, 7, 10 + l.tall, l.shirt);
-  px(x - 2, y - 6, 5, 6, l.skin);
-  hairTop(x - 2, y - 6, 5, false);
-  if (l.style === 1) px(right ? x - 3 : x + 3, y - 6, 1, 6, l.hair);
-  px(right ? x + 2 : x - 2, y - 4, 1, 1, '#2b2135');
-  // le bras qui tient le verre
-  if (arm) px(right ? x + 3 : x - 4, y - 4, 2, 5, l.shirt);
-  else px(right ? x + 3 : x - 4, y + 2, 3, 2, l.shirt);
-}
+/** Temps que met un client pour rejoindre sa place, ou pour repartir (s). */
+const WALK_S = 3.5;
 
 export class BarRoom extends Room {
   readonly key = 'bar' as const;
-  /**
-   * Emplacement du fût de chaque tireuse, dans la cave : groupés à gauche (le coin droit est sous les boutons),
-   * sur une rangée, ou deux au-delà de 4 tireuses (la seconde sur une étagère, décalée d'un demi-fût).
-   */
+  /** Emplacement du fût de chaque tireuse, dans la cave. */
   kegRect(i: number, taps: number): Rect {
-    const rows = taps > 4 ? 2 : 1;
-    const perRow = Math.ceil(taps / rows);
-    const back = rows === 2 && i >= perRow;
-    const k = back ? i - perRow : i;
-    const slot = (KEG_ZONE.x1 - KEG_ZONE.x0) / perRow;
-    const w = Math.min(22, Math.floor(slot) - 6);
+    const slot = (ROOM_W - 12) / taps;
+    const w = Math.min(22, Math.floor(slot) - 4);
     const h = Math.round(w * 1.35);
-    const x = Math.round(KEG_ZONE.x0 + slot * k + (slot - w) / 2 + (back && taps - perRow < perRow ? slot / 2 : 0));
-    return { x, y: (back ? KEG_SHELF : KEG_FLOOR) - h, w, h };
+    const x = Math.round(6 + slot * i + (slot - w) / 2);
+    return { x, y: KEG_FLOOR - h, w, h };
   }
 
   /** Abscisse de la tireuse i sur le comptoir. */
@@ -940,7 +823,7 @@ export class BarRoom extends Room {
     const out = [{ id: 'counter', rect: BAR_HIT }];
     for (let i = 0; i < taps; i++) {
       const r = this.kegRect(i, taps);
-      out.push({ id: `keg${i}`, rect: { x: r.x - 3, y: r.y - 6, w: r.w + 6, h: r.h + 8 } });
+      out.push({ id: `keg${i}`, rect: { x: r.x - 3, y: CELLAR_Y + 18, w: r.w + 6, h: KEG_FLOOR - CELLAR_Y - 14 } });
     }
     if (eventOn) out.push({ id: 'event', rect: barLayout.event });
     return out;
@@ -1068,10 +951,8 @@ export class BarRoom extends Room {
     this.decor(game, lv, t, false);
     this.drawEventItem(game, lv, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
-    const taps = this.preview ? BAR[lv - 1]!.taps : game.taps.length;
-    const sv = this.service(labels, taps, lv, t, game.barServing || !!this.preview);
-    this.drawBartender(game, lv, t, sv);
-    this.drawTaps(labels, taps, lv, sv);
+    this.drawTaps(labels, this.preview ? BAR[lv - 1]!.taps : game.taps.length, lv);
+    this.drawBartender(game, lv, t);
     this.drawGuests(game, lv, t);
     if (lv === 1) this.dust(t);
     if (lv === 5) {
@@ -1161,7 +1042,7 @@ export class BarRoom extends Room {
     for (const st of seatsFor(lv, BAR[lv - 1]!.seats)) {
       if (st.kind === 'stool') dropShadow(g, this.b, st.x + 1, st.y + 10, 6, 2, 0.5);
     }
-    for (let i = 0; i < Math.ceil(Math.max(0, BAR[lv - 1]!.seats - (lv === 1 ? 2 : 6)) / 2); i++) { const c = tableSpot(i); dropShadow(g, this.b, c.x + 1, c.y + 6, 13, 2, 0.5); }
+    for (let i = 0; i < Math.ceil(Math.max(0, BAR[lv - 1]!.seats - (lv === 1 ? 2 : 6)) / 2); i++) { const c = tableSpot(i); dropShadow(g, this.b, c.x + 1, c.y + 6, 10, 2, 0.5); }
     // ---------------------------------------------------------------- la cave
     const c = CELLAR_Y;
     // dalle du plancher
@@ -1192,34 +1073,22 @@ export class BarRoom extends Room {
     }
   }
 
-  /**
-   * La cave : un fût par tireuse ; chacun a sa ligne de bière, qui longe le plafond de la cave puis remonte
-   * sous le comptoir jusqu'à sa tireuse. La jauge du fût baisse à chaque verre.
-   */
+  /** La cave : un fût par tireuse, relié au comptoir par un tuyau ; sa jauge baisse à chaque verre. */
   private drawCellar(game: Game, lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
     const n = game.taps.length;
-    const pipe = lv === 1 ? ['#8a8070', '#b8ae9c'] : lv === 5 ? ['#1c8ca8', '#5ef0ff'] : ['#8a5a1c', '#e8b030'];
-    // l'étagère de la seconde rangée
-    if (n > 4) {
-      const shelf = lv === 5 ? ['#dce6f0', '#8a9ab0'] : lv >= 3 ? ['#98a6b6', '#5a6a82'] : ['#a06830', '#5a3418'];
-      g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(KEG_ZONE.x0 - 4, KEG_SHELF + 3, KEG_ZONE.x1 - KEG_ZONE.x0 + 8, 2);
-      px(KEG_ZONE.x0 - 6, KEG_SHELF, KEG_ZONE.x1 - KEG_ZONE.x0 + 12, 3, shelf[1]!); px(KEG_ZONE.x0 - 6, KEG_SHELF, KEG_ZONE.x1 - KEG_ZONE.x0 + 12, 1, shelf[0]!);
-      for (const x of [KEG_ZONE.x0 - 6, KEG_ZONE.x1 + 4]) { px(x, KEG_SHELF, 2, KEG_FLOOR - KEG_SHELF, shelf[1]!); px(x, KEG_SHELF, 1, KEG_FLOOR - KEG_SHELF, shelf[0]!); }
-    }
     for (let i = 0; i < n; i++) {
       const tap = game.taps[i]!;
       const r = this.kegRect(i, n);
       const beer = game.beer(tap.beerId);
+      const level = tap.glasses / Math.max(1, tap.capacity);
       const cx = r.x + Math.floor(r.w / 2);
-      // la ligne de bière : monte du fût jusqu'à son couloir au plafond, file vers la tireuse et traverse le plancher
+      // tuyau jusqu'à la tireuse (traverse le plancher)
       const tx = this.tapX(i, n, lv);
-      const ly = CELLAR_Y + 8 + i;
-      const col = beer && tap.glasses > 0 ? pipe[1]! : pipe[0]!;
-      px(cx, ly, 1, r.y - 2 - ly, col);
-      px(Math.min(cx, tx), ly, Math.abs(cx - tx) + 1, 1, col);
-      px(tx, CELLAR_Y, 1, ly - CELLAR_Y, col);
+      const pipe = lv === 1 ? '#8a8070' : lv === 5 ? '#5ef0ff' : '#b88420';
+      px(cx, CELLAR_Y + 6, 1, r.y - CELLAR_Y - 6, pipe);
+      px(Math.min(cx, tx), CELLAR_Y + 3, Math.abs(cx - tx) + 1, 1, pipe);
       if (!beer) {
         // pas de fût : silhouette et « + »
         g.fillStyle = '#ffffff30';
@@ -1229,82 +1098,63 @@ export class BarRoom extends Room {
         px(cx, r.y + Math.floor(r.h / 2) - 3, 1, 7, '#f2c14e');
         continue;
       }
-      drawCellarKeg(g, r, beer.label, tap.glasses / Math.max(1, tap.capacity), lv);
+      // son ombre sur le mur de la cave et au sol
+      g.fillStyle = 'rgba(16,10,24,0.35)';
+      g.fillRect(r.x + 3, r.y + 2, r.w, r.h - 2);
+      const ks = ellipseShadow(Math.round(r.w / 2) + 2, 2, 0.8);
+      g.drawImage(ks, r.x - 1, r.y + r.h - 2);
+      // fût inox : corps, cerclages, jauge
+      const steel = lv === 1 ? ['#c8c0b0', '#a89e8e', '#7a7062', '#5a5246'] : ['#e8eef4', '#c4d0dc', '#98a6b6', '#6c7a8c'];
+      px(r.x, r.y, r.w, r.h, steel[3]!);
+      px(r.x + 1, r.y, r.w - 2, r.h, steel[1]!);
+      px(r.x + 2, r.y, 2, r.h, steel[0]!);
+      px(r.x + r.w - 3, r.y, 2, r.h, steel[2]!);
+      for (const yy of [r.y + 2, r.y + r.h - 4]) px(r.x, yy, r.w, 2, steel[2]!);
+      px(cx - 2, r.y - 2, 5, 2, '#2c283a'); // tête de soutirage
+      // jauge : fenêtre où l'on voit la bière
+      const gx = r.x + r.w - 6;
+      const gy = r.y + 5;
+      const gh = r.h - 10;
+      px(gx, gy, 3, gh, '#1b1424');
+      const fill = Math.round(gh * level);
+      if (fill > 0) { px(gx, gy + gh - fill, 3, fill, '#e8a530'); px(gx, gy + gh - fill, 3, 1, '#fff1c8'); }
+      // étiquette de la bière
+      drawMiniLabel(g, beer.label, r.x + 3, r.y + Math.floor(r.h / 2) - 3, Math.min(7, r.w - 10));
       if (tap.glasses <= 0) {
         // vide : à changer
-        g.fillStyle = 'rgba(27,20,36,0.45)'; g.fillRect(r.x, r.y - 2, r.w, r.h + 2);
-        if (Math.floor(t * 2) % 2 === 0) { px(cx - 1, r.y - 11, 3, 5, '#e8553a'); px(cx - 1, r.y - 5, 3, 1, '#e8553a'); }
+        g.fillStyle = 'rgba(27,20,36,0.45)'; g.fillRect(r.x, r.y, r.w, r.h);
+        if (Math.floor(t * 2) % 2 === 0) { px(cx - 1, r.y - 9, 3, 5, '#e8553a'); px(cx - 1, r.y - 3, 3, 1, '#e8553a'); }
       }
       if (this.selected === `keg${i}`) this.outline(r, t);
     }
   }
 
-  /**
-   * Le service, rythmé par l'horloge : le barman va à une tireuse qui coule, tire un verre (la poignée basculée,
-   * la bière monte, la mousse au-dessus), le fait glisser sur le comptoir vers un client, puis revient.
-   */
-  private service(labels: (Label | null)[], taps: number, lv: number, t: number, on: boolean) {
-    const live = labels.map((l, i) => (l ? i : -1)).filter((i) => i >= 0 && i < taps);
-    if (!on || !live.length) return null;
-    const c = Math.floor(t / SERVE);
-    const s = t - c * SERVE;
-    const tap = live[c % live.length]!;
-    const tx = this.tapX(tap, taps, lv);
-    const { x0, x1 } = CT();
-    const stools = seatsFor(lv, lv === 1 ? 2 : 6).filter((st) => st.kind === 'stool');
-    const to = stools[Math.floor(hash(c, 5) * stools.length)]?.x ?? Math.round((x0 + x1) / 2);
-    const home = x1 - 16;
-    const at = Math.min(x1 - 12, tx + 3);
-    const lerp = (a: number, b2: number, u: number) => Math.round(a + (b2 - a) * Math.max(0, Math.min(1, u)));
-    const barman = s < 1 ? lerp(home, at, s) : s < 5 ? at : s < 6 ? lerp(at, home, s - 5) : home;
-    const fill = s < 1 ? 0 : Math.min(1, (s - 1) / 2.5);
-    const glass = s < 1 ? null : s < 3.5 ? { x: tx - 1, fill } : s < 5 ? { x: lerp(tx - 1, to - 1, (s - 3.5) / 1.5), fill: 1 } : null;
-    return { tap, pouring: s >= 1 && s < 3.5, barman, glass };
-  }
-
-  /** Une tireuse par fût ; sa poignée prend la couleur de l'étiquette (grise quand le fût est vide) et bascule quand on tire. */
-  private drawTaps(labels: (Label | null)[], taps: number, lv: number, sv: ReturnType<BarRoom['service']>): void {
+  /** Une tireuse par fût ; sa poignée prend la couleur de l'étiquette (grise quand le fût est vide). */
+  private drawTaps(labels: (Label | null)[], taps: number, lv: number): void {
     const g = this.g;
     const px = painter(g);
     const { top } = CT();
-    const thin = taps > 5;
     for (let i = 0; i < taps; i++) {
       const x = this.tapX(i, taps, lv);
       const label = labels[i];
       const metal = lv === 5 ? PAL.st : lv === 1 ? ['#c8c0b0', '#a89e8e', '#8a8070', '#6a6050', '#4a4038', '#2a2420'] : PAL.br;
       px(x - 2, top - 4, 5, 4, metal[3]!); px(x - 2, top - 4, 5, 1, metal[1]!);
       px(x - 1, top - 9, 3, 5, metal[2]!);
-      px(x + 2, top - 7, thin ? 2 : 3, 2, metal[2]!);
-      const tilt = sv?.pouring && sv.tap === i ? 1 : 0;
-      // poignée : droite au repos, basculée vers l'avant pendant qu'on tire
-      for (let k = 0; k < 9; k++) {
-        const dx = tilt ? Math.round(((8 - k) / 8) * 3) : 0;
-        px(x - 1 + dx, top - 18 + k, thin ? 2 : 3, 1, '#1b1424');
-        if (k > 0 && k < 8) px(x + dx, top - 18 + k, 1, 1, label ? label.bg : '#5c4a6e');
-      }
-      const hx = x + (tilt ? 3 : 0);
-      if (label && !thin) drawMiniLabel(g, label, hx - 2, top - 23, 5);
-      else if (label) px(hx - 1, top - 21, 3, 3, label.bg);
-      else px(hx - 1, top - 20, 3, 2, '#3e3a50');
-    }
-    if (sv?.glass) {
-      // le verre : sous le bec pendant qu'il se remplit, puis il glisse sur le comptoir
-      const { x, fill } = sv.glass;
-      const y = top - 6;
-      px(x, y, 3, 6, '#c8f0e880');
-      const h = Math.round(5 * fill);
-      if (h > 0) { px(x, y + 6 - h, 3, h, '#e8a530'); px(x, y + 6 - h, 3, 1, '#fff1c8'); }
-      if (sv.pouring) px(x + 1, top - 9, 1, 3, '#e8a530'); // le filet qui coule du bec
+      px(x + 2, top - 7, 3, 2, metal[2]!);
+      px(x - 1, top - 18, 3, 9, '#1b1424');
+      px(x, top - 17, 1, 7, label ? label.bg : '#5c4a6e');
+      if (label) drawMiniLabel(g, label, x - 2, top - 23, 5);
+      else px(x - 1, top - 20, 3, 2, '#3e3a50');
     }
   }
 
-  /** Gaston derrière le comptoir : il va tirer les bières, sinon il essuie un verre. */
-  private drawBartender(game: Game, lv: number, t: number, sv: ReturnType<BarRoom['service']>): void {
+  /** Gaston au comptoir, qui essuie un verre. */
+  private drawBartender(game: Game, lv: number, t: number): void {
     // le barman en renfort, gilet sombre et nœud papillon, de l'autre côté des tireuses
     const { x0, x1 } = CT();
     if (game.barmanOn) this.drawHelper(game, lv === 1 ? x0 + 4 : Math.round((x0 + x1) / 2) - 10, t);
     const px = painter(this.g);
-    const x = sv ? sv.barman : x1 - 16;
+    const x = x1 - 16;
     const y = CT().top - 26;
     px(x, y, 10, 4, '#e8e4dc');
     px(x + 1, y + 3, 8, 7, '#e0a77f');
@@ -1312,10 +1162,7 @@ export class BarRoom extends Room {
     px(x + 2, y + 8, 6, 2, '#f3efe6');
     px(x - 1, y + 10, 12, 16, '#4f7a5a');
     px(x + 2, y + 12, 6, 14, '#e8dcc0');
-    if (sv?.pouring) {
-      // le bras tendu vers la poignée
-      px(x - 3, y + 12, 3, 2, '#4f7a5a'); px(x - 4, y + 11, 2, 2, '#e0a77f');
-    } else if (game.barServing || this.preview) {
+    if (game.barServing) {
       const k = Math.round(Math.sin(t * 4) * 2);
       px(x + 10 + k, y + 14, 4, 6, '#c8f0e8');
       px(x + 9 + k, y + 16, 2, 3, '#e0a77f');
@@ -1373,45 +1220,53 @@ export class BarRoom extends Room {
       } else if (i % 2 === 1 || i === seats.length - 1) {
         const mate = seats[i - 1]?.kind === 'table' && i % 2 === 1 ? seats[i - 1]! : s;
         const tx = Math.round((s.x + mate.x) / 2);
-        const top = lv === 5 ? ['#ffffff', '#b8c6d6'] : lv === 4 ? ['#4a4e54', '#2c3038'] : ['#c88a4a', '#7a4a20'];
-        px(tx - 10, s.y - 9, 21, 2, top[0]!); px(tx - 10, s.y - 7, 21, 1, top[1]!);
-        px(tx, s.y - 6, 1, 11, '#2c283a');
-        px(tx - 3, s.y + 5, 7, 1, '#2c283a');
+        px(tx - 7, s.y - 8, 15, 2, lv === 5 ? '#ffffff' : '#a06830');
+        px(tx, s.y - 6, 1, 12, '#2c283a');
       }
     }
-    // les clients : ils entrent par la porte, s'installent, boivent et trinquent, puis repartent
     for (let i = 0; i < seats.length; i++) {
       const s = seats[i]!;
       const period = 40 + hash(i, 11) * 40;
       const slot = Math.floor((t + hash(i, 12) * period) / period);
       const phase = ((t + hash(i, 12) * period) % period) / period;
       if (!(serving && hash(i, slot) < busy)) continue;
-      const look = personLook(i, slot);
-      const walk = WALK / period;
+      const [skin, hair, shirt] = PEOPLE[Math.floor(hash(i, slot + 99) * PEOPLE.length)]!;
+      // il arrive par la droite et rejoint sa place ; son verre fini, il repart par où il est venu
+      const walk = WALK_S / period;
       if (!this.preview && (phase < walk || phase > 1 - walk)) {
-        // en chemin, entre la porte et sa place
         const u = phase < walk ? phase / walk : (1 - phase) / walk;
-        const x = Math.round(BAR_DOOR.x + (s.x - BAR_DOOR.x) * u);
-        const y = Math.round(BAR_DOOR.y + (s.y + 8 - BAR_DOOR.y) * u);
-        drawPerson(g, x, y, look, 'walk', t + i, phase < walk);
+        const ex = this.b.R + 6;
+        const x = Math.round(ex + (s.x - ex) * u);
+        const foot = s.y + (s.kind === 'stool' ? 10 : 5);
+        const step = Math.sin(t * 10 + i) > 0 ? 1 : 0;
+        px(x - 2, foot - 6, 2, 6 - step, '#2c283a'); px(x + 1, foot - 6, 2, 5 + step, '#2c283a');
+        px(x - 3, foot - 15, 7, 9, shirt);
+        px(x - 3, foot - 15, 1, 9, '#00000030');
+        px(x - 2, foot - 21, 5, 6, skin);
+        px(x - 2, foot - 22, 5, 2, hair);
+        px(x + (phase < walk ? -2 : 2), foot - 19, 1, 1, '#2b2135');
         continue;
       }
-      const sip = Math.sin(t * 0.9 + i * 2.3) > 0.93; // de temps en temps, il lève son verre
-      const level = Math.max(0, 1 - phase * 1.1);
       if (s.kind === 'stool') {
-        drawPerson(g, s.x, s.y, look, 'back', t, sip);
-        const gx = sip ? s.x + 4 : s.x - 1;
-        const gy = sip ? s.y - 20 : CT().top - 6;
-        drawGlass(g, gx, gy, level);
+        px(s.x - 4, s.y - 13, 9, 11, shirt);
+        px(s.x - 4, s.y - 13, 1, 11, '#00000030');
+        px(s.x - 3, s.y - 20, 7, 7, hair);
+        px(s.x - 3, s.y - 15, 1, 2, skin);
+        px(s.x + 3, s.y - 15, 1, 2, skin);
+        px(s.x - 2, s.y - 3, 2, 3, '#2c283a'); px(s.x + 1, s.y - 3, 2, 3, '#2c283a');
       } else {
-        const right = i % 2 === 0; // face à son voisin de table
-        const mate = right ? seats[i + 1] : seats[i - 1];
-        const cheers = Math.sin(t * 0.5 + Math.floor(i / 2) * 1.7) > 0.95 && !!mate;
-        drawPerson(g, s.x, s.y, look, right ? 'right' : 'left', t, cheers || sip);
-        const up = cheers || sip;
-        const gx = s.x + (right ? (up ? 5 : 5) : up ? -7 : -7) + (cheers ? (right ? 2 : -2) : 0);
-        drawGlass(g, gx, up ? s.y - 20 : s.y - 14, level);
+        const right = i % 2 === 0;
+        px(s.x - 3, s.y - 12, 7, 10, shirt);
+        px(s.x - 2, s.y - 18, 5, 6, skin);
+        px(s.x - 2, s.y - 19, 5, 2, hair);
+        px(right ? s.x + 2 : s.x - 2, s.y - 16, 1, 1, '#2b2135');
       }
+      const gx = s.kind === 'stool' ? s.x - 1 : s.x + (i % 2 === 0 ? 5 : -7);
+      const gy = s.kind === 'stool' ? CT().top - 6 : s.y - 14;
+      const level = Math.max(0, 1 - phase * 1.1);
+      px(gx, gy, 3, 6, '#c8f0e880');
+      const lh = Math.round(5 * level);
+      if (lh > 0) { px(gx, gy + 6 - lh, 3, lh, '#e8a530'); px(gx, gy + 6 - lh, 3, 1, '#fff1c8'); }
     }
     if (!serving) {
       const sx = Math.round((CT().x0 + CT().x1) / 2) - 11;
