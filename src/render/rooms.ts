@@ -13,6 +13,7 @@ import { PAL } from './painter';
 import type { Rect } from './sprites';
 import { boxShadow, dropShadow, ellipseShadow, floor, floorLight, from, mix, rgb, seam, shade, dim, trap, wallLight, type Bounds } from './space';
 import { BAR } from '../core/market';
+import { barLayout } from './barLayout';
 
 export const ROOM_W = 160;
 export const ROOM_H = 300;
@@ -514,8 +515,11 @@ export function drawKeg(g: CanvasRenderingContext2D, x: number, y: number, s: nu
 
 /** Le bar occupe les 2/3 du haut, la cave et ses fûts le tiers du bas. */
 export const CELLAR_Y = 200;
-/** Comptoir : dessus et façade. */
-const COUNTER = { top: 112, front: 134, x0: 8, x1: 152 };
+/** Comptoir : dessus et façade (sa place est dans barLayout : la moitié gauche de la salle). */
+const CT = () => {
+  const c = barLayout.counter;
+  return { top: c.y, front: c.y + c.h, x0: c.x, x1: c.x + c.w };
+};
 const BAR_HIT: Rect = { x: 0, y: 24, w: ROOM_W, h: CELLAR_Y - 24 };
 /** Sol de la cave, où reposent les fûts. */
 const KEG_FLOOR = 290;
@@ -573,24 +577,34 @@ function paintBarFloor(g: CanvasRenderingContext2D, b: Bounds, top: number, bott
   }
 }
 
-export const EVENT_SLOT: Rect = { x: 118, y: 0, w: 38, h: 44 };
 
 interface Seat { x: number; y: number; kind: 'stool' | 'table' }
 
 /** Les places : tabourets au comptoir d'abord, puis des tables devant (les places des banquettes sont toujours à table). */
 function seatsFor(level: number, n: number, bench = 0): Seat[] {
   const out: Seat[] = [];
+  const { x0, x1, front } = CT();
   const stools = Math.min(n - bench, level === 1 ? 2 : 6);
-  const span = level === 1 ? 50 : COUNTER.x1 - COUNTER.x0 - 24;
-  const start = level === 1 ? 48 : COUNTER.x0 + 12;
-  for (let i = 0; i < stools; i++) out.push({ x: Math.round(start + (stools === 1 ? span / 2 : (span * i) / (stools - 1))), y: COUNTER.front + 14, kind: 'stool' });
+  const span = level === 1 ? Math.min(30, x1 - x0 - 20) : x1 - x0 - 16;
+  const start = level === 1 ? Math.round((x0 + x1) / 2 - span / 2) : x0 + 8;
+  for (let i = 0; i < stools; i++) out.push({ x: Math.round(start + (stools === 1 ? span / 2 : (span * i) / (stools - 1))), y: front + 14, kind: 'stool' });
   const rest = n - stools;
   for (let i = 0; i < rest; i++) {
-    const tIdx = Math.floor(i / 2);
-    const tx = 28 + (tIdx % 3) * 52;
-    out.push({ x: tx + (i % 2 ? 9 : -9), y: 186, kind: 'table' });
+    const c = tableSpot(Math.floor(i / 2));
+    out.push({ x: c.x + (i % 2 ? 9 : -9), y: c.y, kind: 'table' });
   }
   return out;
+}
+
+/**
+ * Centre (et pied) de la table n, dans la zone des tables de barLayout : deux colonnes, le premier rang devant
+ * (en bas), les suivants de plus en plus au fond.
+ */
+function tableSpot(n: number): { x: number; y: number } {
+  const z = barLayout.tables;
+  const col = n % 2;
+  const row = Math.floor(n / 2);
+  return { x: z.x + 17 + col * 34, y: z.y + z.h - row * 26 };
 }
 
 /** Couleurs des clients : peau, cheveux, haut. */
@@ -612,8 +626,10 @@ export class BarRoom extends Room {
 
   /** Abscisse de la tireuse i sur le comptoir. */
   private tapX(i: number, taps: number, lv: number): number {
-    const span = lv === 1 ? 30 : COUNTER.x1 - COUNTER.x0 - 30;
-    const start = lv === 1 ? 58 : COUNTER.x0 + 15;
+    const { x0, x1 } = CT();
+    // les tireuses à gauche, le barman à droite du comptoir
+    const span = lv === 1 ? 0 : x1 - x0 - 34;
+    const start = lv === 1 ? Math.round(x0 + (x1 - x0 - 20) / 2) : x0 + 8;
     return Math.round(start + (taps === 1 ? span / 2 : (span * i) / (taps - 1)));
   }
 
@@ -623,14 +639,14 @@ export class BarRoom extends Room {
       const r = this.kegRect(i, taps);
       out.push({ id: `keg${i}`, rect: { x: r.x - 3, y: CELLAR_Y + 18, w: r.w + 6, h: KEG_FLOOR - CELLAR_Y - 14 } });
     }
-    if (eventOn) out.push({ id: 'event', rect: EVENT_SLOT });
+    if (eventOn) out.push({ id: 'event', rect: barLayout.event });
     return out;
   }
 
   /** L'objet de l'événement en cours, dans le coin en haut à droite : il n'est là que le temps de l'événement. */
   private drawEventItem(game: Game, lv: number, t: number): void {
-    if (!game.partying) return;
-    const ev = game.eventId;
+    if (!game.partying && !this.preview) return;
+    const ev = this.preview?.event ?? game.eventId;
     if (ev === 'foot') this.drawTv(lv, t);
     else if (ev === 'darts') this.drawDarts(lv, t);
     else this.drawDisco(t);
@@ -642,10 +658,10 @@ export class BarRoom extends Room {
     const px = painter(g);
     const W = 34;
     const H = 24;
-    const x = EVENT_SLOT.x + Math.floor((EVENT_SLOT.w - W) / 2);
-    const y = 12;
+    const x = barLayout.event.x + Math.floor((barLayout.event.w - W) / 2);
+    const y = barLayout.event.y + 12;
     // suspentes
-    px(x + 6, 0, 1, y, '#1b1424'); px(x + W - 7, 0, 1, y, '#1b1424');
+    px(x + 6, this.b.T, 1, y - this.b.T, '#1b1424'); px(x + W - 7, this.b.T, 1, y - this.b.T, '#1b1424');
     let sx: number, sy: number, sw: number, sh: number;
     if (lv <= 2) {
       px(x, y, W, H, '#1b1424');
@@ -684,8 +700,8 @@ export class BarRoom extends Room {
     const g = this.g;
     const px = painter(g);
     const S = 28;
-    const x = EVENT_SLOT.x + Math.floor((EVENT_SLOT.w - S) / 2);
-    const y = 10;
+    const x = barLayout.event.x + Math.floor((barLayout.event.w - S) / 2);
+    const y = barLayout.event.y + 10;
     const panel = lv <= 2 ? ['#a8743c', '#7a5228'] : lv <= 4 ? ['#3a2418', '#241410'] : ['#f4f8fc', '#c4d0dc'];
     px(x, y, S, S, '#1b1424'); px(x + 1, y + 1, S - 2, S - 2, panel[0]!); px(x + 1, y + S - 3, S - 2, 2, panel[1]!);
     const cx = x + S / 2;
@@ -711,10 +727,10 @@ export class BarRoom extends Room {
   private drawDisco(t: number): void {
     const g = this.g;
     const px = painter(g);
-    const cx = EVENT_SLOT.x + Math.floor(EVENT_SLOT.w / 2);
-    const cy = 24;
+    const cx = barLayout.event.x + Math.floor(barLayout.event.w / 2);
+    const cy = barLayout.event.y + 24;
     const r = 9;
-    px(cx, 0, 1, cy - r, '#c4d0dc');
+    px(cx, this.b.T, 1, cy - r - this.b.T, '#c4d0dc');
     g.fillStyle = '#1b1424'; g.beginPath(); g.arc(cx + 0.5, cy + 0.5, r + 1, 0, Math.PI * 2); g.fill();
     const spin = Math.floor(t * 6);
     for (let y = -r; y <= r; y += 2) for (let x = -r; x <= r; x += 2) {
@@ -734,26 +750,33 @@ export class BarRoom extends Room {
   }
 
   protected levelOf(game: Game): number {
-    return game.barLevel;
+    return this.preview?.level ?? game.barLevel;
+  }
+
+  /** Aperçu de l'outil de mise en page (dev) : niveau choisi, tout le mobilier et l'objet d'événement affichés. */
+  preview: { level: number; event: 'party' | 'foot' | 'darts' } | null = null;
+
+  private has(game: Game, id: Parameters<Game['hasFurniture']>[0]): boolean {
+    return !!this.preview || game.hasFurniture(id);
   }
 
   draw(game: Game, t: number): void {
     const g = this.g;
     g.imageSmoothingEnabled = false;
-    const lv = game.barLevel;
+    const lv = this.levelOf(game);
     this.begin(lv, t);
     this.drawBoard(game, lv);
     this.drawFurniture(game, lv, t);
     this.drawEventItem(game, lv, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
-    this.drawTaps(labels, game.taps.length, lv);
+    this.drawTaps(labels, this.preview ? BAR[lv - 1]!.taps : game.taps.length, lv);
     this.drawBartender(game, lv, t);
     this.drawGuests(game, lv, t);
     if (lv === 1) this.dust(t);
     if (lv === 5) {
       const k = 0.5 + 0.5 * Math.sin(t * 2);
       g.fillStyle = `rgba(94,240,255,${0.25 + 0.2 * k})`;
-      g.fillRect(COUNTER.x0, COUNTER.front - 1, COUNTER.x1 - COUNTER.x0, 1);
+      g.fillRect(CT().x0, CT().front - 1, CT().x1 - CT().x0, 1);
     }
     if (game.partying && game.eventId === 'party') this.party(t); // projecteurs et confettis : seulement pour la fête
     this.drawCellar(game, lv, t);
@@ -783,7 +806,8 @@ export class BarRoom extends Room {
     const g = this.g;
     for (let i = 0; i < 16; i++) {
       const k = (t * 0.05 + hash(i, 3)) % 1;
-      const x = 64 + hash(i, 4) * 40 + Math.sin(t * 0.7 + i) * 4 + k * 12;
+      const { x0, x1 } = CT();
+      const x = (x0 + x1) / 2 - 16 + hash(i, 4) * 40 + Math.sin(t * 0.7 + i) * 4 + k * 12;
       const y = 20 + k * 100;
       g.fillStyle = `rgba(255,240,200,${0.5 * Math.sin(k * Math.PI)})`;
       g.fillRect(Math.round(x), Math.round(y), 1, 1);
@@ -796,10 +820,13 @@ export class BarRoom extends Room {
     const { L, R, T, B } = this.b;
     const WW = R - L;
     const m = (a: number, n: number) => ((a % n) + n) % n;
-    const back = COUNTER.top;
+    const back = CT().top;
     wall(g, px, lv <= 2 ? 'plank' : lv === 3 ? 'green' : lv === 4 ? 'brick' : 'future', BAR_FLOOR, this.b);
+    const { x0: cx0, x1: cx1 } = CT();
+    const mid = Math.round((cx0 + cx1) / 2);
+    const sign = barLayout.sign;
     if (lv === 1) {
-      // bois grisé par la poussière, fissure, toiles d'araignée, une seule ampoule
+      // bois grisé par la poussière, fissure, toiles d'araignée, une seule ampoule au-dessus du comptoir
       g.fillStyle = 'rgba(90,80,70,0.45)'; g.fillRect(L, T, WW, BAR_FLOOR - T);
       px(104, 26, 1, 10, '#3a2c20'); px(105, 35, 1, 8, '#3a2c20');
       g.strokeStyle = 'rgba(255,255,255,0.22)';
@@ -809,41 +836,44 @@ export class BarRoom extends Room {
         g.moveTo(x0 + dir * 6, 1); g.lineTo(x0, 7); g.moveTo(x0 + dir * 11, 1); g.lineTo(x0, 12);
         g.stroke();
       }
-      px(80, T, 1, 14 - T, '#1b1424'); px(78, 14, 5, 5, '#f0d890'); px(79, 15, 3, 3, '#fff4b0');
+      px(mid, T, 1, 14 - T, '#1b1424'); px(mid - 2, 14, 5, 5, '#f0d890'); px(mid - 1, 15, 3, 3, '#fff4b0');
       g.fillStyle = 'rgba(255,230,160,0.06)';
-      g.beginPath(); g.moveTo(76, 18); g.lineTo(85, 18); g.lineTo(118, back); g.lineTo(44, back); g.fill();
-      g.save(); g.translate(22, 30); g.rotate(-0.12);
+      g.beginPath(); g.moveTo(mid - 4, 18); g.lineTo(mid + 5, 18); g.lineTo(mid + 38, back); g.lineTo(mid - 36, back); g.fill();
+      g.save(); g.translate(sign.x + 18, sign.y + 26); g.rotate(-0.12);
       px(0, 0, 34, 11, '#5a3a1c'); px(1, 1, 32, 9, '#e8dcc0');
       g.fillStyle = '#a8483a'; g.font = '8px monospace'; g.fillText('OUVERT', 2, 8);
       g.restore();
     } else if (lv === 2) {
-      for (const lx of [36, 100]) {
+      for (const lx of [cx0 + 14, cx1 - 14, 120]) {
         px(lx, 0, 1, 14, '#1b1424'); px(lx - 5, 14, 11, 4, '#2c5a3a'); px(lx - 3, 18, 7, 1, '#fff4b0');
         g.fillStyle = 'rgba(255,220,140,0.07)'; g.beginPath(); g.moveTo(lx - 4, 18); g.lineTo(lx + 5, 18); g.lineTo(lx + 24, back); g.lineTo(lx - 23, back); g.fill();
       }
     } else if (lv === 3) {
       px(L, 76, WW, BAR_FLOOR - 76, '#4a2c14');
       for (let x = from(0, 20, L); x < R; x += 20) { px(x + 2, 80, 16, 26, '#5a3a1c'); px(x + 2, 80, 16, 1, '#744620'); }
-      for (const lx of [24, 64, 104]) { px(lx, 0, 1, 8, '#8a5c14'); px(lx - 4, 8, 9, 3, '#e8b030'); px(lx - 3, 11, 7, 1, '#fff4b0'); }
+      for (const lx of [24, 64, 104, 140]) { px(lx, 0, 1, 8, '#8a5c14'); px(lx - 4, 8, 9, 3, '#e8b030'); px(lx - 3, 11, 7, 1, '#fff4b0'); }
     } else if (lv === 4) {
-      px(30, 4, 72, 16, '#1b1424');
-      g.fillStyle = '#ff5ad0'; g.font = '11px monospace'; g.fillText('BREW IT', 40, 16);
-      g.fillStyle = 'rgba(255,90,208,0.10)'; g.fillRect(26, 0, 80, 24);
-      for (const lx of [14, 110]) { px(lx, 0, 1, 22, '#1b1424'); px(lx - 6, 22, 13, 5, '#2c283a'); px(lx - 5, 27, 11, 1, '#fff4b0'); }
+      px(sign.x, sign.y, sign.w, sign.h, '#1b1424');
+      g.fillStyle = '#ff5ad0'; g.font = '11px monospace'; g.fillText('BREW IT', sign.x + 10, sign.y + 12);
+      g.fillStyle = 'rgba(255,90,208,0.10)'; g.fillRect(sign.x - 4, sign.y - 4, sign.w + 8, sign.h + 8);
+      for (const lx of [100, 140]) { px(lx, 0, 1, 22, '#1b1424'); px(lx - 6, 22, 13, 5, '#2c283a'); px(lx - 5, 27, 11, 1, '#fff4b0'); }
     } else {
-      px(8, 4, 104, 22, '#0c1420');
-      for (let i = 0; i < 26; i++) px(9 + ((i * 37) % 102), 5 + ((i * 13) % 9), 1, 1, i % 5 ? '#ffffff' : '#5ef0ff');
-      for (let i = 0; i < 12; i++) { const h = 5 + ((i * 11) % 10); px(10 + i * 8, 26 - h, 6, h, '#1c2a44'); px(11 + i * 8, 27 - h, 1, 1, '#f2c14e'); }
-      px(8, 3, 104, 1, '#5ef0ff'); px(8, 26, 104, 1, '#5ef0ff');
+      // vue sur la ville du futur, au-dessus du comptoir
+      const [sx, sy, sw] = [sign.x, sign.y, sign.w];
+      px(sx, sy, sw, 22, '#0c1420');
+      for (let i = 0; i < 26; i++) px(sx + 1 + ((i * 37) % (sw - 2)), sy + 1 + ((i * 13) % 9), 1, 1, i % 5 ? '#ffffff' : '#5ef0ff');
+      for (let i = 0; i < Math.floor((sw - 4) / 8); i++) { const h = 5 + ((i * 11) % 10); px(sx + 2 + i * 8, sy + 22 - h, 6, h, '#1c2a44'); px(sx + 3 + i * 8, sy + 23 - h, 1, 1, '#f2c14e'); }
+      px(sx, sy - 1, sw, 1, '#5ef0ff'); px(sx, sy + 22, sw, 1, '#5ef0ff');
     }
     // étagères de bouteilles derrière le comptoir (vides et poussiéreuses au début)
-    const shelves = lv === 1 ? [70] : lv <= 3 ? [66, 90] : [58, 78, 98];
+    const sh = barLayout.shelves;
+    const shelves = (lv === 1 ? [28] : lv <= 3 ? [24, 48] : [16, 36, 56]).map((d) => sh.y + d);
     for (const sy of shelves) {
-      px(14, sy, W - 28, 2, lv === 5 ? '#dce6f0' : '#5a3a1c'); px(14, sy, W - 28, 1, lv === 5 ? '#ffffff' : '#8a5a2c');
-      const n = lv === 1 ? 4 : 12;
+      px(sh.x, sy, sh.w, 2, lv === 5 ? '#dce6f0' : '#5a3a1c'); px(sh.x, sy, sh.w, 1, lv === 5 ? '#ffffff' : '#8a5a2c');
+      const n = lv === 1 ? 3 : Math.max(2, Math.floor(sh.w / 11));
       for (let i = 0; i < n; i++) {
-        if (lv === 1 && i === 2) continue;
-        const bx = 18 + Math.floor(((W - 40) * i) / Math.max(1, n - 1)) + (lv === 1 ? Math.floor(hash(i, sy) * 20) : 0);
+        if (lv === 1 && i === 1) continue;
+        const bx = sh.x + 4 + Math.floor(((sh.w - 12) * i) / Math.max(1, n - 1)) + (lv === 1 ? Math.floor(hash(i, sy) * 10) : 0);
         const hgt = 8 + Math.floor(hash(i, sy + 1) * 4);
         const col = lv === 1 ? '#6a6458' : ['#2c5a3a', '#6e3a08', '#a85c26', '#245c56', '#842416'][Math.floor(hash(i, sy + 2) * 5)]!;
         px(bx, sy - hgt, 5, hgt, col); px(bx + 1, sy - hgt - 3, 3, 3, col); px(bx + 1, sy - hgt + 2, 1, hgt - 4, '#ffffff40');
@@ -852,20 +882,21 @@ export class BarRoom extends Room {
     }
     if (lv >= 2) {
       // ardoise ou écran de la carte
-      px(60, 30, 40, lv === 2 ? 24 : 20, lv === 5 ? '#0c1420' : '#2a3030');
-      px(59, 29, 42, 1, '#8a5a2c');
+      const bd = barLayout.board;
+      px(bd.x, bd.y, bd.w, lv === 2 ? bd.h : bd.h - 4, lv === 5 ? '#0c1420' : '#2a3030');
+      px(bd.x - 1, bd.y - 1, bd.w + 2, 1, '#8a5a2c');
     }
     // ombrage du mur : coins, plafond, pied ; halo des lampes
-    const barLamps: [number, number, number, number][] = lv === 1 ? [[80, 18, 50, 0.3]] : lv === 2 ? [[36, 20, 34, 0.25], [100, 20, 34, 0.25]] : lv === 3 ? [[24, 12, 26, 0.2], [64, 12, 26, 0.2], [104, 12, 26, 0.2]] : lv === 4 ? [[14, 28, 30, 0.2], [110, 28, 30, 0.2], [66, 12, 40, 0.15]] : [[80, 14, 70, 0.1]];
+    const barLamps: [number, number, number, number][] = lv === 1 ? [[mid, 18, 50, 0.3]] : lv === 2 ? [[cx0 + 14, 20, 34, 0.25], [cx1 - 14, 20, 34, 0.25], [120, 20, 34, 0.25]] : lv === 3 ? [[24, 12, 26, 0.2], [64, 12, 26, 0.2], [104, 12, 26, 0.2], [140, 12, 26, 0.2]] : lv === 4 ? [[100, 28, 30, 0.2], [140, 28, 30, 0.2], [sign.x + sign.w / 2, 12, 40, 0.15]] : [[80, 14, 70, 0.1]];
     wallLight(g, this.b, T, BAR_FLOOR, barLamps, lv === 5 ? 0.84 : 0.66);
     // ---- le sol de la salle, en perspective : il passe sous le comptoir, qui y est posé
-    const f = COUNTER.front;
+    const f = CT().front;
     paintBarFloor(g, this.b, BAR_FLOOR, CELLAR_Y, lv);
     floorLight(g, this.b, BAR_FLOOR, barLamps.map(([x, , r, k]) => [x, f + 20, r * 1.3, k * 0.6] as const), 0.55);
     px(L, BAR_FLOOR - 3, WW, 3, lv === 5 ? '#dce6f0' : '#2a1a10'); // plinthe
     px(L, BAR_FLOOR - 3, WW, 1, lv === 5 ? '#ffffff' : '#5a3a1c');
     // comptoir : le dessus (sous les yeux, on le voit d'en haut), la façade, son ombre au sol
-    const { top, front, x0, x1 } = COUNTER;
+    const { top, front, x0, x1 } = CT();
     const kk = 6 / (top - EYE_BAR + 6);
     trap(g, top - 6, top, x0 - 2 + (VX - x0) * kk, x1 + 2 - (x1 - VX) * kk, x0 - 2, x1 + 2, lv === 1 ? '#7a6c5c' : lv === 5 ? '#f4f8fc' : lv === 4 ? '#dce4ec' : '#b07a40');
     shade(g, this.b, { x: x0 - 2, y: top - 6, w: x1 - x0 + 4, h: 6 }, (_, y) => 0.85 + ((y - top + 6) / 6) * 0.2);
@@ -884,17 +915,17 @@ export class BarRoom extends Room {
     for (const st of seatsFor(lv, BAR[lv - 1]!.seats)) {
       if (st.kind === 'stool') dropShadow(g, this.b, st.x + 1, st.y + 10, 6, 2, 0.5);
     }
-    for (let i = 0; i < Math.ceil(Math.max(0, BAR[lv - 1]!.seats - (lv === 1 ? 2 : 6)) / 2); i++) dropShadow(g, this.b, 28 + (i % 3) * 52 + 1, 192, 10, 2, 0.5);
+    for (let i = 0; i < Math.ceil(Math.max(0, BAR[lv - 1]!.seats - (lv === 1 ? 2 : 6)) / 2); i++) { const c = tableSpot(i); dropShadow(g, this.b, c.x + 1, c.y + 6, 10, 2, 0.5); }
     if (lv === 1) {
-      // vieux tonneau, caisse de bouteilles vides, balai oublié
-      const bx = 116, by = 166;
+      // vieux tonneau et balai oublié, caisse de bouteilles vides
+      const { x: bx, y: by0 } = barLayout.barrel;
+      const by = by0 + 2;
       px(bx, by, 18, 24, '#6a4422'); px(bx + 2, by, 14, 24, '#7a5228'); px(bx + 5, by, 5, 24, '#8a5a2c');
       for (const yy of [by + 4, by + 18]) px(bx, yy, 18, 2, '#4a4038');
       px(bx - 1, by - 2, 20, 3, '#5a3a1c'); px(bx - 1, by - 2, 20, 1, '#8a7a68');
-      px(16, 178, 24, 12, '#6a5a4a'); px(16, 178, 24, 1, '#8a7a68');
-      for (let i = 0; i < 4; i++) { px(19 + i * 5, 171, 3, 8, '#4a5a4a'); px(20 + i * 5, 168, 1, 3, '#4a5a4a'); }
-      for (let i = 0; i < 16; i++) px(152 - Math.floor(i * 0.5), 140 + i * 3, 1, 3, '#8a5a2c');
-      px(141, 186, 8, 6, '#c8a860');
+      const { x: kx, y: ky } = barLayout.crate;
+      px(kx, ky + 10, 24, 12, '#6a5a4a'); px(kx, ky + 10, 24, 1, '#8a7a68');
+      for (let i = 0; i < 4; i++) { px(kx + 3 + i * 5, ky + 3, 3, 8, '#4a5a4a'); px(kx + 4 + i * 5, ky, 1, 3, '#4a5a4a'); }
     }
     // ---------------------------------------------------------------- la cave
     const c = CELLAR_Y;
@@ -992,11 +1023,12 @@ export class BarRoom extends Room {
     if (lv < 2) return;
     const px = painter(this.g);
     const shown = game.taps.filter((tp) => tp.beerId != null).slice(0, 3);
+    const { x, y } = barLayout.board;
     shown.forEach((tp, i) => {
       const b = game.beer(tp.beerId)!;
-      drawMiniLabel(this.g, b.label, 63, 33 + i * 6, 5);
-      px(70, 35 + i * 6, 8 + (b.name.length % 5) * 3, 1, lv === 5 ? '#5ef0ff' : '#e8e4dc');
-      px(92, 35 + i * 6, 5, 1, tp.glasses > 0 ? '#f2c14e' : '#a8483a');
+      drawMiniLabel(this.g, b.label, x + 3, y + 3 + i * 6, 5);
+      px(x + 10, y + 5 + i * 6, 8 + (b.name.length % 5) * 3, 1, lv === 5 ? '#5ef0ff' : '#e8e4dc');
+      px(x + 32, y + 5 + i * 6, 5, 1, tp.glasses > 0 ? '#f2c14e' : '#a8483a');
     });
   }
 
@@ -1008,14 +1040,14 @@ export class BarRoom extends Room {
   private drawFurniture(game: Game, lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
-    const { top, front } = COUNTER;
+    const { top, front } = CT();
     const frame = lv === 5 ? ['#dce6f0', '#ffffff'] : lv === 4 ? ['#2c283a', '#545068'] : ['#5a3a1c', '#8a5a2c'];
-    if (game.hasFurniture('posters')) {
+    if (this.has(game, 'posters')) {
       // deux affiches encadrées, sous les lampes : une bouteille, une chope
       const art = [
         ['#e8553a', '#f2c14e', '#7a4a24'], ['#2c6a3a', '#f6ecd6', '#f2c14e'],
       ];
-      [[4, 29], [104, 29]].forEach(([x, y], i) => {
+      [barLayout.poster1, barLayout.poster2].map((p) => [p.x, p.y]).forEach(([x, y], i) => {
         g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(x! + 2, y! + 2, 12, 15);
         px(x!, y!, 12, 15, frame[0]!); px(x!, y!, 12, 1, frame[1]!);
         const [bg, a, b] = art[i]!;
@@ -1025,9 +1057,11 @@ export class BarRoom extends Room {
         if (lv === 1) g.fillStyle = 'rgba(90,80,70,0.35)', g.fillRect(x! + 2, y! + 2, 8, 11); // jaunies par la poussière
       });
     }
-    if (game.hasFurniture('plants')) {
+    if (this.has(game, 'plants')) {
       // une plante en pot à chaque bout du comptoir
-      for (const [x, flip] of [[6, 1], [146, -1]] as const) {
+      for (const [spot, flip] of [[barLayout.plant1, -1], [barLayout.plant2, 1]] as const) {
+        const x = spot.x;
+        const top = spot.y + spot.h; // le pied du pot
         const pot = lv === 5 ? ['#ffffff', '#b8c6d6'] : lv === 4 ? ['#3e3a50', '#2c283a'] : ['#b05a32', '#7a3a1c'];
         g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(x + 1, top - 1, 9, 1);
         px(x, top - 7, 8, 7, pot[0]!); px(x + 6, top - 7, 2, 7, pot[1]!); px(x - 1, top - 8, 10, 2, pot[0]!);
@@ -1038,15 +1072,16 @@ export class BarRoom extends Room {
         }
       }
     }
-    if (game.hasFurniture('neon')) {
+    if (this.has(game, 'neon')) {
       // enseigne au néon sur la façade du comptoir ; elle grésille de temps en temps
       const col = ['#ff9a3a', '#7ee081', '#f2c14e', '#ff5ad0', '#5ef0ff'][lv - 1]!;
       const on = Math.floor(t * 8) % 37 !== 0;
-      const x = 58;
-      const y = top + 8;
-      px(x - 2, y - 2, 48, front - top - 14, '#1b1424');
+      const nb = barLayout.neon;
+      const x = nb.x + 2;
+      const y = nb.y + 2;
+      px(nb.x, nb.y, nb.w, nb.h, '#1b1424');
       if (on) {
-        g.fillStyle = col + '30'; g.fillRect(x - 6, y - 5, 56, front - top - 6);
+        g.fillStyle = col + '30'; g.fillRect(nb.x - 4, nb.y - 3, nb.w + 8, nb.h + 6);
       }
       g.fillStyle = on ? col : '#3a3048';
       g.font = '8px monospace';
@@ -1054,10 +1089,9 @@ export class BarRoom extends Room {
       g.fillText('BIÈRES', x + 6, y + 8);
       if (on) { g.fillStyle = '#ffffff60'; g.fillText('BIÈRES', x + 6, y + 7); }
     }
-    if (game.hasFurniture('jukebox')) {
+    if (this.has(game, 'jukebox')) {
       // le juke-box, dans le coin de la salle : ses lumières suivent la musique
-      const x = 145;
-      const y = 152;
+      const { x, y } = barLayout.jukebox;
       const body = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : lv === 4 ? ['#2c283a', '#545068', '#1b1424'] : ['#8a2a1c', '#c85a2c', '#4a1408'];
       const ks = ellipseShadow(10, 3, 0.8);
       g.drawImage(ks, x - 3, y + 39);
@@ -1083,7 +1117,7 @@ export class BarRoom extends Room {
   private drawTaps(labels: (Label | null)[], taps: number, lv: number): void {
     const g = this.g;
     const px = painter(g);
-    const { top } = COUNTER;
+    const { top } = CT();
     for (let i = 0; i < taps; i++) {
       const x = this.tapX(i, taps, lv);
       const label = labels[i];
@@ -1101,10 +1135,11 @@ export class BarRoom extends Room {
   /** Gaston au comptoir, qui essuie un verre. */
   private drawBartender(game: Game, lv: number, t: number): void {
     // le barman en renfort, gilet sombre et nœud papillon, de l'autre côté des tireuses
-    if (game.barmanOn) this.drawHelper(game, lv === 1 ? 26 : 16, t);
+    const { x0, x1 } = CT();
+    if (game.barmanOn) this.drawHelper(game, lv === 1 ? x0 + 4 : Math.round((x0 + x1) / 2) - 10, t);
     const px = painter(this.g);
-    const x = lv === 1 ? 106 : 128;
-    const y = COUNTER.top - 26;
+    const x = x1 - 16;
+    const y = CT().top - 26;
     px(x, y, 10, 4, '#e8e4dc');
     px(x + 1, y + 3, 8, 7, '#e0a77f');
     px(x + 2, y + 5, 1, 1, '#2b2135'); px(x + 6, y + 5, 1, 1, '#2b2135');
@@ -1121,7 +1156,7 @@ export class BarRoom extends Room {
   /** Barman embauché en renfort. */
   private drawHelper(game: Game, x: number, t: number): void {
     const px = painter(this.g);
-    const y = COUNTER.top - 26;
+    const y = CT().top - 26;
     px(x + 1, y, 8, 3, '#4a2a14');
     px(x + 1, y + 3, 8, 7, '#c98563');
     px(x + 2, y + 5, 1, 1, '#2b2135'); px(x + 6, y + 5, 1, 1, '#2b2135');
@@ -1141,16 +1176,18 @@ export class BarRoom extends Room {
   private drawGuests(game: Game, lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
-    const seats = seatsFor(lv, game.barSeats, game.barSeats - game.bar.seats);
-    const serving = game.barServing;
+    // en aperçu : toutes les places du niveau, banquettes comprises, et la salle pleine
+    const seats = this.preview ? seatsFor(lv, BAR[lv - 1]!.seats + 2, 2) : seatsFor(lv, game.barSeats, game.barSeats - game.bar.seats);
+    const serving = game.barServing || !!this.preview;
     // un client reste ~20 min : la salle compte en moyenne affluence × 20 personnes
-    const busy = serving ? Math.min(0.95, (game.barRate * 20) / seats.length) : 0;
-    if (game.hasFurniture('benches')) {
+    const busy = this.preview ? 1 : serving ? Math.min(0.95, (game.barRate * 20) / seats.length) : 0;
+    if (this.has(game, 'benches')) {
       // banquettes capitonnées derrière chaque table
       const tone = lv === 5 ? ['#f4f8fc', '#dce6f0', '#8a9ab0'] : lv === 4 ? ['#3a6aa8', '#2e5a9a', '#1c3a6a'] : ['#8a2a32', '#a8343c', '#5a1a20'];
       const xs = [...new Set(seats.filter((st) => st.kind === 'table').map((st, i, all) => Math.round((st.x + (all[i % 2 ? i - 1 : i + 1] ?? st).x) / 2)))];
+      const ys = new Map(seats.filter((st) => st.kind === 'table').map((st, i, all) => [Math.round((st.x + (all[i % 2 ? i - 1 : i + 1] ?? st).x) / 2), st.y]));
       for (const tx of xs) {
-        const y = 186;
+        const y = ys.get(tx) ?? 186;
         g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(tx - 16, y - 1, 34, 2);
         px(tx - 17, y - 17, 34, 13, tone[2]!); px(tx - 16, y - 16, 32, 11, tone[0]!);
         for (let k = 0; k < 4; k++) px(tx - 13 + k * 8, y - 13, 1, 1, tone[2]!); // capitons
@@ -1193,18 +1230,19 @@ export class BarRoom extends Room {
         px(right ? s.x + 2 : s.x - 2, s.y - 16, 1, 1, '#2b2135');
       }
       const gx = s.kind === 'stool' ? s.x - 1 : s.x + (i % 2 === 0 ? 5 : -7);
-      const gy = s.kind === 'stool' ? COUNTER.top - 6 : s.y - 14;
+      const gy = s.kind === 'stool' ? CT().top - 6 : s.y - 14;
       const level = Math.max(0, 1 - phase * 1.1);
       px(gx, gy, 3, 6, '#c8f0e880');
       const lh = Math.round(5 * level);
       if (lh > 0) { px(gx, gy + 6 - lh, 3, lh, '#e8a530'); px(gx, gy + 6 - lh, 3, 1, '#fff1c8'); }
     }
     if (!serving) {
-      px(70, COUNTER.top - 9, 22, 9, '#1b1424');
-      px(71, COUNTER.top - 8, 20, 7, '#e8dcc0');
+      const sx = Math.round((CT().x0 + CT().x1) / 2) - 11;
+      px(sx, CT().top - 9, 22, 9, '#1b1424');
+      px(sx + 1, CT().top - 8, 20, 7, '#e8dcc0');
       g.fillStyle = '#a8483a';
       g.font = '6px monospace';
-      g.fillText('À SEC', 72, COUNTER.top - 2);
+      g.fillText('À SEC', sx + 2, CT().top - 2);
     }
   }
 }

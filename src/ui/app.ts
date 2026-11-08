@@ -18,6 +18,7 @@ import { BOOST_GROUPS, BOOSTS, DECOR_ORDER, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
+import { openBarLayoutTool } from '../dev/barLayoutTool'; // DEV
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const el = document.createElement(tag);
@@ -2197,7 +2198,21 @@ export class App {
     }
     speed.append(h('div', 'section-title', 'Mode test : vitesse'), chips);
     if (import.meta.env.DEV) card.append(speed);
-    card.append(fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
+    // DEV : outil de mise en page du bar, à retirer avant la sortie
+    const dev = this.btn('btn', 'Outil dev : disposition du bar', () => {
+      this.closeModal();
+      this.goView('bar');
+      openBarLayoutTool({
+        room: this.barRoom,
+        wrap: this.barWrap,
+        scale: () => this.scale,
+        changed: () => {
+          this.barRoom.invalidate();
+          this.syncKegHits(true);
+        },
+      });
+    });
+    card.append(dev, fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
   }
 
   private modalCard(title: string): HTMLElement {
