@@ -39,6 +39,7 @@ export const DECOR_ICON: Record<DecorId, IconId> = {
 };
 
 export class ShopRoom extends Room {
+  readonly key = 'shop' as const;
   protected levelOf(): number {
     return 1;
   }
@@ -62,22 +63,15 @@ export class ShopRoom extends Room {
     for (let y = from(6, 12, T); y < FLOOR; y += 12) for (let x = from(2, 8, L); x < R; x += 8) px(x + m(y / 12, 2) * 4, y, 1, 1, '#8a5a6a');
     px(L, FLOOR - 14, WW, 14, '#6a4422'); px(L, FLOOR - 14, WW, 1, '#a8743c'); px(L, FLOOR - 1, WW, 1, '#3a2010');
     for (let x = from(4, 20, L); x < R; x += 20) { px(x, FLOOR - 11, 16, 8, '#5a3a1c'); px(x, FLOOR - 4, 16, 1, '#8a5a2c'); }
-    // la suspension éclaire le mur et le sol
-    wallLight(g, b, T, FLOOR - 14, [[80, 44, 80, 0.3]], 0.62);
-    // enseigne, avec son ombre
-    boxShadow(g, b, { x: 36, y: 10, w: 92, h: 18 }, 3, 0.55);
-    px(34, 8, 92, 18, '#1b1424'); px(35, 9, 90, 16, '#3a2418'); px(35, 9, 90, 1, '#6a4422');
-    g.fillStyle = '#f2c14e'; g.font = '9px monospace'; g.textBaseline = 'alphabetic'; g.fillText('MAGASIN', 61, 21);
-    px(46, T, 1, 8 - T, '#1b1424'); px(113, T, 1, 8 - T, '#1b1424');
+    // les lampes (des décors : voir decorLayout) éclairent le mur et le sol
+    const lamps = this.lights(1);
+    wallLight(g, b, T, FLOOR - 14, lamps, 0.62);
     // sol en damier, qui fuit vers le point de fuite
     const light = rgb('#c8b89a');
     const darkT = rgb('#8a7a62');
     floor(g, b, FLOOR, 80, EYE, 22, (u, v) => ((Math.floor(u) + Math.floor(v)) & 1 ? light : darkT));
-    floorLight(g, b, FLOOR, [[80, FLOOR + 16, 70, 0.28]], 0.5);
+    floorLight(g, b, FLOOR, lamps.map(([x, , r, k]) => [x, FLOOR + 16, r * 0.9, k * 0.9] as const), 0.5);
     shade(g, b, { x: L, y: FLOOR, w: WW, h: 3 }, (_, y) => 0.55 + (y - FLOOR) * 0.14);
-    // suspension
-    px(80, T, 1, 36 - T, '#1b1424'); trap(g, 34, 40, 76, 85, 73, 88, '#2c5a3a'); px(73, 39, 15, 1, '#1c3a26'); px(76, 40, 9, 1, '#fff4b0');
-    g.fillStyle = 'rgba(255,230,160,0.06)'; g.beginPath(); g.moveTo(75, 40); g.lineTo(86, 40); g.lineTo(122, FLOOR); g.lineTo(38, FLOOR); g.fill();
     // étagères : montants, planches (le dessous de celle du haut, au-dessus des yeux ; le dessus des autres), consoles, ombres
     for (const x of [8, 149]) { boxShadow(g, b, { x: x + 2, y: 41, w: 3, h: FLOOR - 55 }, 3, 0.6); }
     px(8, 40, 3, FLOOR - 54, '#4a2c14'); px(8, 40, 1, FLOOR - 54, '#6a4422'); px(149, 40, 3, FLOOR - 54, '#4a2c14'); px(149, 40, 1, FLOOR - 54, '#6a4422');
@@ -98,9 +92,6 @@ export class ShopRoom extends Room {
     for (let x = 24; x < 140; x += 14) { px(x, cy + 10, 10, 28, '#6a4422'); px(x, cy + 10, 10, 1, '#4a2c14'); px(x + 9, cy + 10, 1, 28, '#8a6034'); }
     shade(g, b, { x: 18, y: cy + 6, w: 124, h: 36 }, (_, y) => 0.95 - ((y - cy - 6) / 36) * 0.25);
     shade(g, b, { x: 18, y: cy + 6, w: 124, h: 3 }, () => 0.6); // ombre du plateau sur la façade
-    px(104, cy - 13, 24, 12, '#3e3a50'); px(104, cy - 13, 24, 1, '#8c88a0'); px(108, cy - 19, 16, 6, '#2c283a');
-    px(103, cy - 1, 26, 1, 'rgba(0,0,0,0.4)');
-    px(110, cy - 17, 12, 2, '#7ee081'); for (let i = 0; i < 4; i++) px(107 + i * 5, cy - 9, 3, 2, '#c4d0dc');
   }
 
   draw(game: Game, t: number): void {
@@ -108,6 +99,7 @@ export class ShopRoom extends Room {
     const boosting = !!(game.boostOf('brew') || game.boostOf('yeast') || game.boostOf('bar') || game.boostOf('wholesale') || game.advertising);
     g.imageSmoothingEnabled = false;
     this.begin(1, t);
+    this.decor(game, 1, t, false);
     const px = painter(g);
     // la pièce de décoration en vente, sur la plus haute étagère, qui brille un peu quand on peut se l'offrir
     const item = game.nextDecor;
@@ -165,5 +157,6 @@ export class ShopRoom extends Room {
     px(kx - 1, ky + 10, 12, 16, '#3f6a8a'); px(kx + 2, ky + 11, 6, 15, '#c8b89a');
     const wave = Math.floor(t * 1.5) % 6 === 0 ? -3 : 0;
     px(kx + 11, ky + 11 + wave, 2, 6, '#e0a77f');
+    this.decor(game, 1, t, true);
   }
 }

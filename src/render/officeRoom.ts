@@ -25,7 +25,6 @@ const GLASS: Rect = { x: 13, y: 22, w: 134, h: 84 };
 const VIEW = { x: 13, y: 58 };
 /** Panneau de liège : une feuille épinglée par commande. */
 const BOARD: Rect = { x: 8, y: 120, w: 58, h: 42 };
-const CLOCK = { x: 82, y: 136, r: 9 };
 /** Présentoir de la gamme, contre le mur : 2 étagères de 4 bouteilles. */
 const DISPLAY: Rect = { x: 100, y: 114, w: 54, h: 98 };
 const SHOWCASE = { x: DISPLAY.x + 3, y: DISPLAY.y + 14, w: DISPLAY.w - 6, h: DISPLAY.h - 22 };
@@ -40,6 +39,7 @@ export type OfficeHit = 'window' | 'board' | 'display' | 'computer';
 export interface WorkshopView { canvas: HTMLCanvasElement; b: Bounds }
 
 export class OfficeRoom extends Room {
+  readonly key = 'office' as const;
   hits(): { id: OfficeHit; rect: Rect }[] {
     return [
       { id: 'window', rect: WIN },
@@ -54,13 +54,14 @@ export class OfficeRoom extends Room {
   }
 
   draw(game: Game, t: number, workshop: WorkshopView): void {
-    const lv = this.levelOf(game);
+    const lv = this.lv(game);
     this.begin(lv, t);
     this.drawWindow(lv, t, workshop);
+    this.decor(game, lv, t, false);
     this.drawBoard(game);
-    this.drawClock(game, lv);
     this.drawDisplay(game, lv);
     this.drawComputer(game, lv, t);
+    this.decor(game, lv, t, true);
     for (const { id, rect } of this.hits()) if (this.selected === id) this.outline(rect, t);
   }
 
@@ -172,28 +173,6 @@ export class OfficeRoom extends Room {
     }
   }
 
-  private drawClock(game: Game, lv: number): void {
-    const g = this.g;
-    const { x, y, r } = CLOCK;
-    // l'heure du jeu : une journée de jeu démarre à 8 h
-    const day = (game.time + 8 * 3600) % 86400;
-    const hAng = ((day / 3600) % 12) / 12 * Math.PI * 2 - Math.PI / 2;
-    const mAng = ((day / 60) % 60) / 60 * Math.PI * 2 - Math.PI / 2;
-    g.fillStyle = '#1b1424';
-    for (let dy = -r - 1; dy <= r + 1; dy++) for (let dx = -r - 1; dx <= r + 1; dx++) if (dx * dx + dy * dy <= (r + 1) * (r + 1)) g.fillRect(x + dx, y + dy, 1, 1);
-    g.fillStyle = lv === 5 ? '#1c2230' : '#f6ecd6';
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= r * r - 2) g.fillRect(x + dx, y + dy, 1, 1);
-    const ink = lv === 5 ? '#5ef0ff' : '#1b1424';
-    g.fillStyle = ink;
-    for (let k = 0; k < 12; k += 3) g.fillRect(x + Math.round(Math.cos((k / 12) * Math.PI * 2) * (r - 2)), y + Math.round(Math.sin((k / 12) * Math.PI * 2) * (r - 2)), 1, 1);
-    const hand = (a: number, len: number, col: string) => {
-      g.fillStyle = col;
-      for (let s = 0; s <= len; s += 0.5) g.fillRect(x + Math.round(Math.cos(a) * s), y + Math.round(Math.sin(a) * s), 1, 1);
-    };
-    hand(mAng, r - 2, ink);
-    hand(hAng, r - 4, lv === 5 ? '#ffffff' : '#e8553a');
-  }
-
   // ---------------------------------------------------------------- ordinateur
 
   /** L'ordinateur : son écran montre l'enveloppe et le nombre de commandes ; elle scintille quand on peut en livrer. */
@@ -271,8 +250,7 @@ export class OfficeRoom extends Room {
     const WW = R - L;
     // ---- le mur
     paintWall(g, px, b, lv);
-    const lamp: [number, number, number, number] = [DESK.x + DESK.w - 13, DESK_TOP - 18, 34, 0.12];
-    wallLight(g, b, T, FLOOR, [[VX, WIN.y + WIN.h + 8, 70, 0.1], lamp], lv === 5 ? 0.6 : 0.7);
+    wallLight(g, b, T, FLOOR, [[VX, WIN.y + WIN.h + 8, 70, 0.1], ...this.lights(lv)], lv === 5 ? 0.6 : 0.7);
     // ---- le sol, qui fuit vers le point de fuite
     paintFloor(g, b, lv);
     floorLight(g, b, FLOOR, [[VX, FLOOR + 6, 80, lv === 5 ? 0.35 : 0.16]], lv === 5 ? 0.45 : 0.55);
@@ -315,7 +293,6 @@ export class OfficeRoom extends Room {
     px(bd.x + 2, bd.y + 2, bd.w - 4, bd.h - 4, lv === 5 ? '#c4d0dc' : '#c48a50');
     px(bd.x + 2, bd.y + 2, bd.w - 4, 1, lv === 5 ? '#98a6b6' : '#8a5a2c'); // ombre du cadre sur le liège
     if (lv !== 5) for (let i = 0; i < 70; i++) px(bd.x + 2 + Math.floor(hash(i, 41) * (bd.w - 4)), bd.y + 3 + Math.floor(hash(i, 42) * (bd.h - 5)), 1, 1, i % 3 ? '#a8703c' : '#d89c60');
-    dropShadow(g, b, CLOCK.x + 2, CLOCK.y + 3, CLOCK.r + 2, CLOCK.r + 2, 0.55);
 
     // ---- le présentoir, posé au sol contre le mur
     const d = DISPLAY;
@@ -346,27 +323,6 @@ export class OfficeRoom extends Room {
     // socle
     px(d.x - 1, d.y + d.h - 6, d.w + 2, 6, cabLo);
     px(d.x - 1, d.y + d.h - 6, d.w + 2, 1, cabHi);
-
-    // ---- la plante verte, à droite
-    const pxp = 126;
-    dropShadow(g, b, pxp + 13, 295, 16, 4, 0.5);
-    const pot = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : ['#b05a32', '#d8843a', '#6e3418'];
-    trap(g, 273, 294, pxp, pxp + 24, pxp + 3, pxp + 21, pot[0]!);
-    skew(g, pxp + 21, pxp + 24, 294, 294, 273, 273, pot[2]!); // flanc dans l'ombre
-    shade(g, b, { x: pxp, y: 273, w: 24, h: 21 }, (x) => 1.12 - ((x - pxp) / 24) * 0.35);
-    trap(g, 270, 274, pxp - 1, pxp + 25, pxp - 1, pxp + 25, pot[1]!); // bord du pot
-    trap(g, 271, 273, pxp + 1, pxp + 23, pxp + 1, pxp + 23, '#2a1a10'); // terreau
-    for (let i = 0; i < 16; i++) {
-      const a = -Math.PI / 2 + (hash(i, 61) - 0.5) * 2.5;
-      const len = 14 + hash(i, 62) * 18;
-      for (let k = 0; k < len; k++) {
-        const lx = Math.round(pxp + 12 + Math.cos(a) * k);
-        const ly = Math.round(272 + Math.sin(a) * k + (k / len) ** 2 * 4);
-        const tip = k > len - 6;
-        px(lx, ly, 2, 2, tip ? '#7ee081' : a > -Math.PI / 2 ? '#2c8a4a' : '#3aa05a');
-        if (!tip && a > -Math.PI / 2) px(lx, ly + 2, 2, 1, '#1c5a30');
-      }
-    }
 
     // ---- le bureau : plateau vu d'en haut, face avant, pieds ; ombres dessous
     const dk = DESK;
@@ -408,30 +364,6 @@ export class OfficeRoom extends Room {
     }
     shade(g, b, { x: dk.x, y: front + 5, w: dk.w, h: 296 - front - 5 }, (_, y) => 1 - ((y - front - 5) / (296 - front - 5)) * 0.3);
     dropShadow(g, b, dk.x + 20, 297, 22, 3, 0.45);
-    // lampe de bureau, et sa lumière sur le plateau
-    const lx = dk.x + dk.w - 18;
-    shade(g, b, { x: lx - 16, y: back, w: 40, h: front - back }, (x) => 1.25 - Math.min(1, Math.abs(x - lx - 5) / 18) * 0.25);
-    px(lx - 1, DESK_TOP - 1, 12, 2, 'rgba(0,0,0,0.35)');
-    px(lx, DESK_TOP - 3, 10, 2, '#2c283a'); px(lx + 4, DESK_TOP - 17, 2, 14, '#2c283a'); px(lx, DESK_TOP - 21, 10, 5, lv === 5 ? '#5ef0ff' : '#2c8a4a');
-    px(lx, DESK_TOP - 21, 10, 1, lv === 5 ? '#ffffff' : '#5ec07a'); px(lx + 1, DESK_TOP - 16, 8, 1, '#fff4b0');
-    g.fillStyle = 'rgba(255,240,180,0.10)'; g.beginPath(); g.moveTo(lx + 1, DESK_TOP - 16); g.lineTo(lx + 9, DESK_TOP - 16); g.lineTo(lx + 16, DESK_TOP + 1); g.lineTo(lx - 6, DESK_TOP + 1); g.fill();
-    // une tasse
-    px(dk.x + 4, DESK_TOP - 1, 8, 1, 'rgba(0,0,0,0.35)');
-    px(dk.x + 4, DESK_TOP - 7, 6, 6, '#f6ecd6'); px(dk.x + 10, DESK_TOP - 6, 2, 3, '#f6ecd6'); px(dk.x + 5, DESK_TOP - 7, 4, 1, '#6a4422'); px(dk.x + 8, DESK_TOP - 6, 2, 5, '#c8bca4');
-    // chaise, de dos, devant le bureau
-    const cx = dk.x + 34;
-    const seat = front + 8;
-    dropShadow(g, b, cx + 13, 296, 15, 3, 0.4);
-    const backc = lv === 5 ? '#f4f8fc' : lv >= 3 ? '#2c283a' : '#3e3a50';
-    const cushion = lv === 5 ? '#dce6f0' : lv >= 3 ? '#3a3650' : '#4a4660';
-    px(cx + 12, seat + 22, 3, 12, '#2c283a'); px(cx + 12, seat + 22, 1, 12, '#545068');
-    px(cx + 3, seat + 33, 21, 2, '#2c283a');
-    for (const wx of [cx + 2, cx + 12, cx + 22]) px(wx, seat + 35, 3, 2, '#1b1424');
-    px(cx - 1, seat, 28, 23, '#1b1424');
-    px(cx, seat, 26, 22, backc);
-    px(cx + 2, seat + 2, 22, 18, cushion);
-    px(cx + 2, seat + 2, 22, 1, '#ffffff30');
-    shade(g, b, { x: cx, y: seat, w: 26, h: 22 }, (x, y) => 1.08 - ((x - cx) / 26) * 0.2 - ((y - seat) / 22) * 0.12);
   }
 }
 

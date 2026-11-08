@@ -6,12 +6,12 @@ import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { createStorage } from './platform/storage';
 import { App } from './ui/app';
-import { loadDevBarLayout } from './dev/barLayoutTool'; // DEV
+import { loadDevLayout } from './dev/layoutTool'; // DEV
 
 const AUTOSAVE_SECONDS = 20;
 
 async function boot() {
-  loadDevBarLayout(); // DEV : disposition du bar gardée par l'outil de mise en page
+  loadDevLayout(); // DEV : mise en page des décors gardée par l'outil
   const saves = new SaveManager(createStorage());
   let game: Game;
   try {

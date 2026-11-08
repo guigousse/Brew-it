@@ -7,6 +7,7 @@ import { STATION_ORDER, type StationId } from '../core/stations';
 import { PAL } from './painter';
 import { clearSpriteCache, SPRITES, stationCanvas, type Pt, type Rect } from './sprites';
 import { drawMiniLabel } from './labelArt';
+import { clearDecorCache, drawDecor, paintDecor } from './decor';
 import { dim, ellipseShadow, floor, floorLight, from, mix, rgb, seam, shade, silhouette, wallLight, type Bounds, type RGB } from './space';
 
 export const SCENE_W = 160;
@@ -66,6 +67,9 @@ export class Scene {
   /** Instant (s) du dernier transfert vers chaque étape, pour animer le liquide dans les tuyaux. */
   private flows = new Map<number, number>();
   selected: StationId | null = null;
+  readonly key = 'workshop' as const;
+  /** Aperçu de l'outil de mise en page (dev) : le niveau de décor affiché. */
+  preview: { level: number } | null = null;
   /** Limites de la pièce (le plan de 160 × 300 au centre du canvas, le décor peint jusqu'aux bords). */
   b: Bounds = { L: 0, R: SCENE_W, T: 0, B: SCENE_H, ox: 0, oy: 0 };
 
@@ -119,6 +123,7 @@ export class Scene {
     this.bgs.clear();
     this.shaded.clear();
     clearSpriteCache();
+    clearDecorCache();
   }
 
   /** Le décor en cache a-t-il été effacé par le système ? (il est entièrement opaque : un pixel transparent = perdu) */
@@ -171,13 +176,17 @@ export class Scene {
       this.checkedAt = t;
       if (this.cacheLost(game.breweryLevel)) this.invalidate();
     }
+    const lv = this.preview?.level ?? game.breweryLevel;
+    const decor = { room: this.key, lv, t, game, preview: !!this.preview, top: this.b.T };
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.imageSmoothingEnabled = false; // réinitialisé si le contexte est restauré
-    g.drawImage(this.background(game.breweryLevel), 0, 0);
+    g.drawImage(this.background(lv), 0, 0);
     g.setTransform(1, 0, 0, 1, this.b.ox, this.b.oy);
+    drawDecor(g, decor, false);
     this.drawPipes(game, t);
     for (const id of STATION_ORDER) if (id !== 'bottling') this.drawStation(game, id, t);
     this.drawLine(game, t);
+    drawDecor(g, decor, true);
     const k = t - this.flashAt;
     if (k >= 0 && k < 1.2) {
       g.fillStyle = `rgba(255,248,220,${(1 - k / 1.2) * 0.85})`;
@@ -227,20 +236,7 @@ export class Scene {
       for (const bx of [4, 152]) { px(bx, 0, 5, top, '#5a3a1c'); px(bx, 0, 1, top, '#7a5228'); }
       px(L, 0, WW, 5, '#5a3a1c'); px(L, 4, WW, 1, '#3a240e');
       for (let bx = from(4, 148, L); bx < R; bx += 148) if (bx !== 4 && bx !== 152) { px(bx, 0, 5, top, '#5a3a1c'); px(bx, 0, 1, top, '#7a5228'); }
-      // lucarne ronde au clair de lune
-      g.fillStyle = '#2a2030'; g.beginPath(); g.arc(80, 18, 11, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#1c2a4a'; g.beginPath(); g.arc(80, 18, 9, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#f6ecd6'; g.beginPath(); g.arc(84, 15, 3, 0, Math.PI * 2); g.fill();
-      px(80, 9, 1, 18, '#2a2030'); px(71, 18, 18, 1, '#2a2030');
-      // étagères de bocaux et grimoires
-      for (const [sx, sy] of [[60, 98], [64, 170]] as const) {
-        px(sx, sy, 34, 2, '#7a5228');
-        const cols = ['#6cc040', '#e8553a', '#4ea8f0', '#f2c14e', '#8a5cc8'];
-        for (let i = 0; i < 5; i++) { px(sx + 2 + i * 7, sy - 6, 5, 6, '#c8f0e8'); px(sx + 3 + i * 7, sy - 4, 3, 4, cols[i]!); }
-      }
-      // toiles d'araignée
-      g.strokeStyle = 'rgba(255,255,255,0.18)';
-      g.beginPath(); g.moveTo(9, 5); g.lineTo(22, 5); g.moveTo(9, 5); g.lineTo(9, 18); g.moveTo(9, 5); g.lineTo(19, 15); g.stroke();
+      // lucarne, étagères, toiles d'araignée : des décors (voir decorLayout)
     } else if (level === 2) {
       // garage : mur de briques, fenêtres hautes
       const bricks = ['#9a4a3a', '#8a4232', '#7a3a2c', '#6a3226', '#5a2a20'];
@@ -248,11 +244,6 @@ export class Scene {
       for (let y = from(0, 6, T); y < B; y += 6) {
         px(L, y + 5, WW, 1, '#4a221a');
         for (let x = from((((y / 6) % 2) + 2) % 2 * 6, 12, L - 12); x < R; x += 12) { px(x, y, 1, 5, '#4a221a'); px(x + 1, y, 10, 1, '#b2604a'); }
-      }
-      for (const wx of [62, 84]) {
-        px(wx - 1, 3, 16, 24, '#2a1a20'); px(wx, 4, 14, 22, '#6cc0f0'); px(wx, 4, 14, 8, '#a8e0ff');
-        px(wx + 6, 4, 2, 22, '#2a1a20'); px(wx, 14, 14, 1, '#2a1a20');
-        cone(wx + 7, 26, 23, 38, 0.07, '255,240,200');
       }
     } else if (level === 3) {
       // microbrasserie : carreaux métro blancs, poutres en bois, grandes baies en arc
@@ -263,17 +254,6 @@ export class Scene {
       }
       px(L, Math.min(0, T), WW, 6 - Math.min(0, T), '#8a5a2c'); px(L, 5, WW, 1, '#5a3a18');
       for (let bx = from(0, 78, L - 4); bx < R; bx += 78) px(bx, T, 4, top - T, '#8a5a2c');
-      for (const wx of [24, 104]) {
-        px(wx, 10, 32, 30, '#3a2c20');
-        g.fillStyle = '#3a2c20'; g.beginPath(); g.arc(wx + 16, 10, 16, Math.PI, 0); g.fill();
-        g.fillStyle = '#8ad0f0'; g.beginPath(); g.arc(wx + 16, 10, 14, Math.PI, 0); g.fill();
-        px(wx + 2, 10, 28, 28, '#8ad0f0'); px(wx + 2, 10, 28, 10, '#c0ecff');
-        px(wx + 15, -4, 2, 42, '#3a2c20'); px(wx + 2, 22, 28, 1, '#3a2c20');
-        cone(wx + 16, 38, 26, 30, 0.08, '255,250,220');
-      }
-      // ardoise des bières
-      px(66, 94, 28, 18, '#5a3a18'); px(67, 95, 26, 16, '#2a3030');
-      for (let i = 0; i < 4; i++) px(70, 98 + i * 3, 10 + ((i * 7) % 9), 1, '#e8e4dc');
     } else if (level === 4) {
       // usine : tôle ondulée, verrière quadrillée, poutres IPN
       for (let x = L; x < R; x++) px(x, T, 1, B - T, ['#5c6878', '#6c788a', '#7c889a', '#6c788a', '#56606e', '#4a5462'][((x % 6) + 6) % 6]!);
@@ -292,10 +272,6 @@ export class Scene {
       px(L, T, WW, B - T, '#e8eef4');
       for (let y = from(0, 22, T); y < top; y += 22) px(L, y, WW, 1, '#c4d0dc');
       for (let x = from(0, 32, L); x < R; x += 32) px(x, T, 1, top - T, '#c4d0dc');
-      px(30, 6, 100, 28, '#0c1420');
-      for (let i = 0; i < 40; i++) px(31 + ((i * 37) % 98), 7 + ((i * 13) % 12), 1, 1, i % 5 ? '#ffffff' : '#5ef0ff');
-      for (let i = 0; i < 12; i++) { const h = 6 + ((i * 11) % 12); px(32 + i * 8, 34 - h, 6, h, '#1c2a44'); px(33 + i * 8, 35 - h, 1, 1, '#f2c14e'); px(35 + i * 8, 37 - h, 1, 1, '#5ef0ff'); }
-      px(30, 5, 100, 1, '#5ef0ff'); px(30, 34, 100, 1, '#5ef0ff');
       for (const y of [98, 168]) { px(L, y, WW, 1, '#5ef0ff'); px(L, y + 1, WW, 1, '#1c8ca8'); }
     }
     // ---------------------------------------------------------------- ombrage des murs, étage par étage
@@ -335,23 +311,6 @@ export class Scene {
         shade(g, this.b, { x: L, y: f + 12, w: WW, h: 4 }, (_, y) => 0.7 + (y - f - 12) * 0.075);
       }
     }
-    // ---------------------------------------------------------------- éclairage
-    for (const [lx, ly] of [[80, 68], [80, 138]] as const) {
-      if (level === 1) {
-        // bougie sur un bougeoir
-        px(lx - 2, ly + 14, 5, 2, '#a8742a'); px(lx - 1, ly + 8, 3, 6, '#f6ecd6');
-        px(lx, ly + 5, 1, 3, '#ff9a2e'); px(lx, ly + 6, 1, 1, '#fff4b0');
-        g.fillStyle = 'rgba(255,190,90,0.10)'; g.beginPath(); g.arc(lx, ly + 7, 22, 0, Math.PI * 2); g.fill();
-      } else if (level === 5) {
-        px(lx - 14, ly + 2, 29, 2, '#ffffff'); px(lx - 13, ly + 4, 27, 1, '#5ef0ff');
-        cone(lx, ly + 5, 26, 50, 0.06, '160,240,255');
-      } else {
-        px(lx, ly, 1, 6, '#2c283a');
-        px(lx - 4, ly + 6, 9, 3, level === 3 ? '#b88420' : '#465264');
-        px(lx - 3, ly + 9, 7, 1, '#fff4b0');
-        cone(lx, ly + 10, 21, 50, 0.06);
-      }
-    }
     // ---------------------------------------------------------------- sol de la salle d'embouteillage, en perspective
     paintWorkshopFloor(g, this.b, top, level);
     floorLight(g, this.b, top, [[80, top + 24, 70, 0.2]], 0.5);
@@ -367,6 +326,7 @@ export class Scene {
     }
     // l'ombre de la ligne d'embouteillage sur le sol, derrière le tapis
     shade(g, this.b, { x: L, y: LINE.belt - 6, w: WW, h: 6 }, (_, y) => 0.6 + (LINE.belt - y) * 0.065);
+    paintDecor(g, { room: this.key, lv: level, t: 0, game: null, preview: !!this.preview, top: T });
     this.bgs.set(level, c);
     return c;
   }

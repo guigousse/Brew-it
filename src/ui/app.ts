@@ -18,7 +18,8 @@ import { BOOST_GROUPS, BOOSTS, DECOR_ORDER, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
-import { openBarLayoutTool } from '../dev/barLayoutTool'; // DEV
+import { openLayoutTool, type ToolHost } from '../dev/layoutTool'; // DEV
+import type { RoomKey } from '../render/decorLayout'; // DEV
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const el = document.createElement(tag);
@@ -403,6 +404,9 @@ export class App {
     this.track.style.width = `${TABS.length * 100}vw`;
     this.stage.append(this.track);
     this.bindSwipe();
+    // DEV : bouton de l'outil de mise en page, dans chaque pièce
+    this.devFab.onclick = () => this.openLayoutTool();
+    this.stage.append(this.devFab);
 
     // barre du bas : ses boutons changent selon la pièce
     this.rangeBtn.onclick = () => this.open({ kind: 'range' });
@@ -1935,7 +1939,7 @@ export class App {
   private bindSwipe(): void {
     const st = this.stage;
     st.addEventListener('pointerdown', (e) => {
-      if (this.swipe) return;
+      if (this.swipe || this.devLock) return; // DEV : pas de glissement pendant l'outil de mise en page
       if ((e.target as HTMLElement).closest('.sales-canvas')) return; // le graphique se parcourt au doigt
       this.swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false, t: performance.now() };
     });
@@ -2173,6 +2177,34 @@ export class App {
     card.append(this.btn('btn primary', 'Fermer', () => this.closeModal()));
   }
 
+  // DEV : outil de mise en page des décors (src/dev), à retirer avant la sortie
+  private devLock = false;
+  private openLayoutTool(): void {
+    const rooms: Record<RoomKey, () => { wrap: HTMLElement; renderer: { preview: { level: number; event?: 'party' | 'foot' | 'darts' } | null; invalidate(): void }; level: () => number }> = {
+      workshop: () => ({ wrap: this.sceneWrap, renderer: this.scene, level: () => this.game().breweryLevel }),
+      office: () => ({ wrap: this.officeWrap, renderer: this.officeRoom, level: () => this.game().computerLevel }),
+      storage: () => ({ wrap: this.storageWrap, renderer: this.storageRoom, level: () => this.game().storageLevel }),
+      bar: () => ({ wrap: this.barWrap, renderer: this.barRoom, level: () => this.game().barLevel }),
+      shop: () => ({ wrap: this.shopWrap, renderer: this.shopRoom, level: () => 1 }),
+    };
+    const host: ToolHost = {
+      room: (k) => rooms[k](),
+      current: () => (this.view in rooms ? (this.view as RoomKey) : null),
+      go: (k) => this.goView(k),
+      scale: () => this.scale,
+      lock: (on) => {
+        this.devLock = on;
+        this.devFab.classList.toggle('hidden', on);
+      },
+      changed: (k) => {
+        if (k === 'bar') this.syncKegHits(true);
+        this.roomsDrawUntil = performance.now() + 600;
+      },
+    };
+    openLayoutTool(host);
+  }
+  private devFab = h('button', 'dev-fab', 'DEV');
+
   private openOptions(): void {
     const g = this.game();
     const card = this.modalCard('Options');
@@ -2198,19 +2230,10 @@ export class App {
     }
     speed.append(h('div', 'section-title', 'Mode test : vitesse'), chips);
     if (import.meta.env.DEV) card.append(speed);
-    // DEV : outil de mise en page du bar, à retirer avant la sortie
-    const dev = this.btn('btn', 'Outil dev : disposition du bar', () => {
+    // DEV : outil de mise en page des décors, à retirer avant la sortie
+    const dev = this.btn('btn', 'Outil dev : décors des pièces', () => {
       this.closeModal();
-      this.goView('bar');
-      openBarLayoutTool({
-        room: this.barRoom,
-        wrap: this.barWrap,
-        scale: () => this.scale,
-        changed: () => {
-          this.barRoom.invalidate();
-          this.syncKegHits(true);
-        },
-      });
+      this.openLayoutTool();
     });
     card.append(dev, fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
   }
