@@ -39,8 +39,8 @@ const list = (specs: Spec[]): DecorInst[] => {
 
 /** Mobilier du bar (affiché quand il est acheté), le même à tous les niveaux. */
 const BAR_FURNITURE: Spec[] = [
-  ['posterBottle', 86, 40], ['posterMug', 102, 40], ['smallPlant', 58, 89, { f: true }], ['smallPlant', 118, 95],
-  ['neonSign', 18, 118], ['jukebox', 145, 112],
+  ['posterBottle', 86, 40], ['posterMug', 102, 40], ['smallPlant', 58, 89, { f: true }], ['smallPlant', 104, 95],
+  ['neonSign', 18, 118], ['jukebox', 140, 77],
 ];
 /** Le bureau : ce qui est commun à tous les niveaux, puis les objets posés sur le plateau, qui changent avec l'ordinateur. */
 const OFFICE: Spec[] = [['clock', 72, 126], ['deskLamp', 0, 207], ['wasteBin', 98, 280], ['chair', 28, 245], ['bigPlant', 118, 240]];

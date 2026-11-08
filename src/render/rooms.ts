@@ -697,10 +697,15 @@ export function drawKeg(g: CanvasRenderingContext2D, x: number, y: number, s: nu
 
 /** Le bar occupe les 2/3 du haut, la cave et ses fûts le tiers du bas. */
 export const CELLAR_Y = 200;
-/** Comptoir : dessus et façade (sa place est dans barLayout : la moitié gauche de la salle). */
+/** Bord gauche de l'écran du bar, dans son plan (le comptoir part de là). */
+let barEdge = 0;
+/**
+ * Comptoir : dessus et façade. Il part du bord gauche de l'écran (son bout gauche reste hors champ, quelle que soit
+ * la largeur de l'écran) et va jusqu'au milieu de la salle (sa fin et sa hauteur sont dans barLayout).
+ */
 const CT = () => {
   const c = barLayout.counter;
-  return { top: c.y, front: c.y + c.h, x0: c.x, x1: c.x + c.w };
+  return { top: c.y, front: c.y + c.h, x0: Math.min(c.x, barEdge - 3), x1: c.x + c.w };
 };
 const BAR_HIT: Rect = { x: 0, y: 24, w: ROOM_W, h: CELLAR_Y - 24 };
 /** Sol de la cave, où reposent les fûts. */
@@ -801,6 +806,11 @@ const WALK_S = 3.5;
 
 export class BarRoom extends Room {
   readonly key = 'bar' as const;
+
+  override resize(w: number, h: number): void {
+    super.resize(w, h);
+    barEdge = this.b.L;
+  }
   /** Emplacement du fût de chaque tireuse, dans la cave. */
   kegRect(i: number, taps: number): Rect {
     const slot = (ROOM_W - 12) / taps;
@@ -1198,17 +1208,24 @@ export class BarRoom extends Room {
     // un client reste ~20 min : la salle compte en moyenne affluence × 20 personnes
     const busy = this.preview ? 1 : serving ? Math.min(0.95, (game.barRate * 20) / seats.length) : 0;
     if (this.has(game, 'benches')) {
-      // banquettes capitonnées derrière chaque table
+      // banquettes capitonnées en U autour de chaque table, ouvertes vers l'avant de la salle
       const tone = lv === 5 ? ['#f4f8fc', '#dce6f0', '#8a9ab0'] : lv === 4 ? ['#3a6aa8', '#2e5a9a', '#1c3a6a'] : ['#8a2a32', '#a8343c', '#5a1a20'];
       const xs = [...new Set(seats.filter((st) => st.kind === 'table').map((st, i, all) => Math.round((st.x + (all[i % 2 ? i - 1 : i + 1] ?? st).x) / 2)))];
       const ys = new Map(seats.filter((st) => st.kind === 'table').map((st, i, all) => [Math.round((st.x + (all[i % 2 ? i - 1 : i + 1] ?? st).x) / 2), st.y]));
       for (const tx of xs) {
         const y = ys.get(tx) ?? 186;
-        g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(tx - 16, y - 1, 34, 2);
-        px(tx - 17, y - 17, 34, 13, tone[2]!); px(tx - 16, y - 16, 32, 11, tone[0]!);
-        for (let k = 0; k < 4; k++) px(tx - 13 + k * 8, y - 13, 1, 1, tone[2]!); // capitons
-        px(tx - 17, y - 5, 34, 4, tone[1]!); px(tx - 17, y - 5, 34, 1, tone[0]!);
-        px(tx - 17, y - 1, 2, 2, '#2c283a'); px(tx + 15, y - 1, 2, 2, '#2c283a');
+        // le dossier du fond
+        g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(tx - 18, y + 3, 38, 2);
+        px(tx - 19, y - 18, 38, 9, tone[2]!); px(tx - 18, y - 17, 36, 7, tone[0]!);
+        for (let k = 0; k < 4; k++) px(tx - 13 + k * 8, y - 14, 1, 1, tone[2]!); // capitons
+        px(tx - 19, y - 9, 38, 3, tone[1]!); px(tx - 19, y - 9, 38, 1, tone[0]!);
+        // les deux côtés du U, qui descendent vers l'avant
+        for (const sx of [tx - 19, tx + 14]) {
+          px(sx, y - 18, 5, 22, tone[2]!); px(sx + 1, y - 17, 3, 20, tone[0]!);
+          px(sx + 1, y - 6, 3, 1, tone[2]!);
+          px(sx, y + 4, 5, 1, tone[2]!);
+          px(sx + 1, y + 5, 1, 1, '#2c283a'); px(sx + 3, y + 5, 1, 1, '#2c283a');
+        }
       }
     }
     for (let i = 0; i < seats.length; i++) {
