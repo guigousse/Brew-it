@@ -402,8 +402,17 @@ export class Scene {
       const to = STATION_ORDER[i]!;
       const a = this.anchor(from, game.level(from), 'outlet');
       const b = this.anchor(to, game.level(to), 'inlet');
-      const top = ['mash', 'boil', 'fermenter', 'bottling'].includes(to);
-      const path: Pt[] = top
+      // vers une rangée de cuves, le tuyau passe par-dessus pour arriver sur la cuve du fond
+      const top = ['mash', 'boil', 'fermenter', 'bottling'].includes(to) || (this.rows[to]?.n ?? 1) > 1;
+      const garde = to === 'conditioning' && (this.rows.conditioning?.n ?? 1) > 1;
+      // de la fermentation à une rangée de garde : le long de la passerelle, sous les cuves, puis on remonte
+      // par la droite de la rangée et on redescend sur la cuve du fond
+      const floorY = SLOTS.fermenter.floor - 3;
+      const gr = this.rect('conditioning', game.level('conditioning'));
+      const xr = Math.min(157, gr.x + gr.w + 4);
+      const path: Pt[] = garde
+        ? [a, { x: a.x, y: floorY }, { x: xr, y: floorY }, { x: xr, y: b.y - 6 }, { x: b.x, y: b.y - 6 }, b]
+        : top
         ? [a, { x: a.x + 5, y: a.y }, { x: a.x + 5, y: b.y - 6 }, { x: b.x, y: b.y - 6 }, b]
         : (() => {
             const mx = Math.round((a.x + b.x) / 2);
@@ -598,16 +607,16 @@ export class Scene {
           g.fillRect(x + Math.floor(r.w / 2), r.y + 3, 2, 2);
         }
       }
-      // les cuves sont reliées en série par le haut : un col de cygne d'une cuve à la suivante
-      const row = { n: tanks, gap };
-      const top = r.y + def.inlet.y;
-      const over = r.y - 5;
+      // les cuves sont reliées en série : un court tuyau sort de chaque cuve et entre dans celle de devant
+      const cy = r.y + Math.round(def.h * 0.72);
+      const since = t - (this.seriesFlow.get(id) ?? -99);
       for (let j = 0; j < tanks - 1; j++) {
-        const a = this.tankPort(r, def.inlet.x, row, j);
-        const b = this.tankPort(r, def.inlet.x, row, j + 1);
-        this.pipe([{ x: a, y: top }, { x: a, y: over }, { x: b, y: over }, { x: b, y: top }], false, false);
-        const since = t - (this.seriesFlow.get(id) ?? -99);
-        if (since < 2.5) this.flow([{ x: a, y: top }, { x: a, y: over }, { x: b, y: over }, { x: b, y: top }], t, since, 2.5, false, LIQUID[id]);
+        const xr = r.x - gap * j + r.w - Math.max(2, Math.round(gap / 2)); // sur la bande visible de la cuve j
+        const xl = r.x - gap * (j + 1) + r.w - 2; // le flanc droit de la cuve de devant
+        const path = [{ x: xr, y: cy }, { x: xl, y: cy }];
+        this.pipe(path, false, false);
+        g.fillStyle = PAL.st[4]!; g.fillRect(xl - 1, cy - 2, 2, 5); g.fillRect(xr, cy - 2, 2, 5); // brides
+        if (since < 2.5) this.flow(path, t, since, 2.5, false, LIQUID[id]);
       }
     }
     // appareil sélectionné : liseré clignotant

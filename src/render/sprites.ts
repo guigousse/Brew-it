@@ -327,17 +327,17 @@ const FERMENTER: SpriteDef[] = [
     for (const y of [14, 20, 26, 32]) { p.band(3, y, 40, P.bl); }
     p.rect(31, 0, 3, 4, P.gl[2]!);
     p.rect(7, 15, 5, 24, P.st[4]!);
-    p.panel(28, 35, 12, 8);
+    p.panel(30, 34, 8, 5); // petit écran, posé sur la cuve
     p.rect(21, 55, 5, 3, P.st[3]!); p.valveWheel(23, 59);
     p.outline();
   } },
-  { w: 46, h: 66, window: { x: 11, y: 14, w: 20, h: 26 }, inlet: { x: 21, y: 4 }, outlet: { x: 21, y: 63 }, steam: { x: 34, y: 0 }, draw: (p) => {
+  { w: 37, h: 66, window: { x: 11, y: 14, w: 20, h: 26 }, inlet: { x: 21, y: 4 }, outlet: { x: 21, y: 63 }, steam: { x: 34, y: 0 }, draw: (p) => {
     p.rect(8, 60, 28, 4, FUT[3]!); p.hl(8, 60, 28, FUT[1]!); neonRing(p, 10, 64, 24);
     p.cylinder(7, 4, 28, 8, FUT); p.dome(7, 0, 28, 5, FUT); neonRing(p, 7, 11, 28);
     p.rect(8, 12, 26, 30, P.gl[2]!); p.vl(8, 12, 30, P.gl[4]!); p.vl(33, 12, 30, P.gl[4]!); p.vl(10, 13, 28, '#ffffff');
     p.cone(7, 42, 28, 14, FUT, 8); neonRing(p, 7, 42, 28);
     p.rect(33, 0, 3, 4, NEON_DIM);
-    holoScreen(p, 37, 18, 9, 12); p.rect(37, 32, 9, 2, FUT[3]!); p.px(39, 33, NEON); p.px(43, 33, '#7cff9c');
+    holoScreen(p, 26, 31, 6, 7); // petit écran, sur la vitre de la cuve
     p.rect(19, 56, 5, 5, FUT[3]!);
     p.outline();
   } },
@@ -376,9 +376,9 @@ const CONDITIONING: SpriteDef[] = [
     p.cylinder(3, 9, 36, 40, P.pl); p.dome(3, 3, 36, 7, P.pl); // isolation blanche
     for (const y of [14, 28, 42]) p.band(3, y, 36, P.st);
     p.rect(7, 15, 5, 24, P.st[4]!);
-    p.rect(30, 30, 14, 12, P.st[3]!); p.hl(30, 30, 14, P.st[1]!); // groupe froid
-    for (let y = 32; y < 41; y += 2) p.hl(32, y, 10, P.st[4]!);
-    p.px(41, 31, P.bl[1]!);
+    p.rect(29, 31, 8, 8, P.st[3]!); p.hl(29, 31, 8, P.st[1]!); // groupe froid, plus discret, sur la cuve
+    for (let y = 33; y < 38; y += 2) p.hl(30, y, 6, P.st[4]!);
+    p.px(35, 32, P.bl[1]!);
     p.gauge(22, 22);
     p.outline();
   } },
@@ -391,7 +391,7 @@ const CONDITIONING: SpriteDef[] = [
     }
     p.rect(11, 13, 18, 30, '#1c3c6a'); p.rect(12, 14, 16, 28, '#4a7cc8'); p.vl(13, 15, 26, '#a8d8ff'); // hublot de stase
     neonRing(p, 8, 12, 24); neonRing(p, 8, 44, 24);
-    p.rect(32, 26, 10, 14, FUT[2]!); p.hl(32, 26, 10, FUT[0]!); for (let y = 28; y < 39; y += 2) p.hl(34, y, 6, NEON_DIM);
+    p.rect(28, 30, 6, 9, FUT[2]!); p.hl(28, 30, 6, FUT[0]!); for (let y = 32; y < 38; y += 2) p.hl(29, y, 4, NEON_DIM); // panneau discret, sur la capsule
     p.rect(39, 45, 5, 3, FUT[3]!);
     p.outline();
   } },
