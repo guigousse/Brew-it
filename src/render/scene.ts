@@ -134,7 +134,8 @@ export class Scene {
     const row = this.rows[id];
     // une rangée de cuves en série : on entre par la cuve du fond (à droite), on sort par celle de devant (à gauche)
     if (row && row.n > 1) {
-      if (which === 'outlet') return { x: r.x - row.gap * (row.n - 1) + p.x, y: r.y + p.y };
+      // la sortie, sous la cuve de devant (entièrement visible), au milieu : le tuyau descend sans passer derrière les autres
+      if (which === 'outlet') return { x: r.x - row.gap * (row.n - 1) + Math.round(r.w / 2), y: r.y + r.h - 1 };
       return { x: this.tankPort(r, p.x, row, 0), y: r.y + p.y };
     }
     return { x: r.x + p.x, y: r.y + p.y };
