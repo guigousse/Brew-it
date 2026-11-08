@@ -19,7 +19,7 @@ export interface DecorCtx {
   lv: number;
   t: number;
   game: Game | null;
-  /** Aperçu de l'outil de mise en page : tout s'affiche, mobilier compris. */
+  /** Aperçu (captures de contrôle) : tout s'affiche, mobilier compris. */
   preview: boolean;
   /** Limites du canvas de l'asset (pour shade et compagnie). */
   b: Bounds;
@@ -152,7 +152,7 @@ export function decorLights(room: RoomKey, lv: number): [number, number, number,
   return out;
 }
 
-/** Boîte d'un asset posé (outil de mise en page). */
+/** Boîte d'un asset posé. */
 export function instBox(inst: DecorInst): { x: number; y: number; w: number; h: number } | null {
   const a = byId.get(inst.a);
   if (!a) return null;

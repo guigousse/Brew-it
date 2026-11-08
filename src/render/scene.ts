@@ -68,7 +68,7 @@ export class Scene {
   private flows = new Map<number, number>();
   selected: StationId | null = null;
   readonly key = 'workshop' as const;
-  /** Aperçu de l'outil de mise en page (dev) : le niveau de décor affiché. */
+  /** Aperçu (captures de contrôle) : le niveau de décor affiché. */
   preview: { level: number } | null = null;
   /** Limites de la pièce (le plan de 160 × 300 au centre du canvas, le décor peint jusqu'aux bords). */
   b: Bounds = { L: 0, R: SCENE_W, T: 0, B: SCENE_H, ox: 0, oy: 0 };

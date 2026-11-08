@@ -69,7 +69,7 @@ export abstract class Room {
   selected: string | null = null;
   /** La pièce, pour ses décors (decorLayout). */
   abstract readonly key: RoomKey;
-  /** Aperçu de l'outil de mise en page (dev) : le niveau affiché, et tout le mobilier. */
+  /** Aperçu (captures de contrôle) : le niveau affiché, et tout le mobilier. */
   preview: { level: number; event?: 'party' | 'foot' | 'darts' } | null = null;
 
   constructor() {

@@ -1,7 +1,7 @@
 /**
  * Où sont posés les décors : pour chaque pièce et chaque niveau de la pièce, la liste de ses assets
  * (position du coin haut-gauche dans le plan de 160 × 300, échelle, retourné, devant le reste).
- * L'outil de mise en page (dev) modifie `decorLayout` et exporte le code de DECOR_DEFAULT.
+ * Pour changer le rendu d'une pièce : ajouter, retirer ou déplacer des lignes ici.
  */
 export type RoomKey = 'workshop' | 'office' | 'storage' | 'bar' | 'shop';
 
@@ -88,7 +88,7 @@ export const DECOR_DEFAULT: DecorLayout = {
 
 const clone = (l: DecorLayout): DecorLayout => JSON.parse(JSON.stringify(l));
 
-/** Disposition en cours (modifiée par l'outil de mise en page). */
+/** Disposition en cours. */
 export const decorLayout: DecorLayout = clone(DECOR_DEFAULT);
 
 export function resetDecor(room?: RoomKey, lv?: number): void {

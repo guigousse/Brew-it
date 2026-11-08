@@ -578,32 +578,3 @@ button:disabled { cursor: default; opacity: .5; }
 .ws-fill { height: 100%; background: var(--good); }
 .ws-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .ws-have { flex: 1; color: var(--dim); }
-
-/* --- DEV : outil de mise en page des décors (à retirer avant la sortie) ----------------------- */
-.dev-fab { position: absolute; z-index: 40; left: 4px; top: 50%; padding: 1px 5px; font-size: 12px; line-height: 14px; color: #ff5ad0; background: #1b1424c0; border: 1px solid #ff5ad0; opacity: .75; }
-.dev-layer { position: absolute; inset: -400px; z-index: 30; touch-action: none; }
-.dev-layer > .dev-box { margin: 400px 0 0 400px; }
-.dev-box { position: absolute; touch-action: none; border: 1px dashed #5ef0ffb0; background: #5ef0ff10; cursor: move; }
-.dev-box.fixed { border-color: #f2c14eb0; background: #f2c14e10; }
-.dev-box.on { border: 2px solid #ff5ad0; background: #ff5ad022; z-index: 2; }
-.dev-tag { position: absolute; left: 0; top: -14px; font-size: 11px; line-height: 13px; padding: 0 3px; white-space: nowrap; background: #1b1424d8; color: #ff5ad0; pointer-events: none; }
-.dev-box:not(.on) .dev-tag { display: none; }
-.dev-handle { position: absolute; right: -7px; bottom: -7px; width: 12px; height: 12px; background: #ff5ad0; border: 2px solid #1b1424; touch-action: none; cursor: nwse-resize; }
-.dev-box:not(.on) .dev-handle { display: none; }
-.dev-box.fixed:not(.resizable) .dev-handle { display: none; }
-.dev-panel {
-  position: fixed; z-index: 1000; left: 6px; right: 6px; bottom: calc(var(--bottom-h, 70px) + 4px); max-height: 46vh; overflow: auto;
-  display: grid; gap: 5px; padding: 5px 6px; font-size: 14px; color: var(--text); background: #1b1424f0; border: 2px solid #ff5ad0;
-}
-.dev-panel.top { bottom: auto; top: calc(var(--top-h, 56px) + 4px); }
-.dev-body { display: grid; gap: 5px; }
-.dev-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
-.dev-grow { flex: 1; min-width: 0; }
-.dev-field { display: flex; align-items: center; gap: 3px; }
-.dev-input { font: inherit; color: var(--text); background: var(--panel-2); border: 2px solid var(--ink); padding: 1px 3px; min-width: 0; max-width: 100%; }
-.dev-num { width: 54px; text-align: center; }
-.dev-btn { font: inherit; padding: 1px 7px; background: var(--panel-2); border: 2px solid var(--ink); color: var(--text); }
-.dev-btn:disabled { opacity: .4; }
-.dev-bad { color: #ffb4a4; }
-.dev-out { width: 100%; height: 120px; font: 11px monospace; color: var(--text); background: var(--ink); border: 2px solid #5c4a6e; }
-.dev-panel .hidden, .dev-fab.hidden { display: none; }

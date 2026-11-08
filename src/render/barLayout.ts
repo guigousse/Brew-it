@@ -7,7 +7,7 @@ export interface BarSpot { x: number; y: number; w: number; h: number }
 
 export type BarItem = 'counter' | 'event' | 'tables';
 
-/** Nom de chaque élément (outil de mise en page). */
+/** Nom de chaque élément. */
 export const BAR_ITEM_NAMES: Record<BarItem, string> = { counter: 'Comptoir', event: 'Objet d\'événement', tables: 'Tables' };
 
 /** Seul le comptoir change de taille (largeur, hauteur de la façade). */
@@ -22,7 +22,7 @@ export const BAR_LAYOUT_DEFAULT: Readonly<Record<BarItem, BarSpot>> = {
 const clone = (l: Readonly<Record<BarItem, BarSpot>>) =>
   Object.fromEntries(Object.entries(l).map(([k, v]) => [k, { ...v }])) as Record<BarItem, BarSpot>;
 
-/** Disposition en cours (modifiable par l'outil de mise en page). */
+/** Disposition en cours. */
 export const barLayout: Record<BarItem, BarSpot> = clone(BAR_LAYOUT_DEFAULT);
 
 export function resetBarLayout(): void {

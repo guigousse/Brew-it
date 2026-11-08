@@ -6,12 +6,10 @@ import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { createStorage } from './platform/storage';
 import { App } from './ui/app';
-import { loadDevLayout } from './dev/layoutTool'; // DEV
 
 const AUTOSAVE_SECONDS = 20;
 
 async function boot() {
-  loadDevLayout(); // DEV : mise en page des décors gardée par l'outil
   const saves = new SaveManager(createStorage());
   let game: Game;
   try {
