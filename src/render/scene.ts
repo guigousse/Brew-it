@@ -68,9 +68,145 @@ export const LINE = {
   belt: 286, // dessus du tapis (pied des bouteilles)
   fillX: 60, // bec de remplissage
   labelX: 100, // étiqueteuse
-  cartonX: 124, // le carton commence ici
   spacing: 13,
 };
+
+/**
+ * Le tapis roulant (châssis, avec son ombre au sol ; la bande défile, voir drawBeltBand) de x0 à x1.
+ * Il traverse l'atelier et se prolonge dans le stockage.
+ */
+export function paintBelt(g: CanvasRenderingContext2D, b: Bounds, x0: number, x1: number, lv: number): void {
+  const px = (x: number, y: number, w: number, h: number, c: string) => {
+    g.fillStyle = c;
+    g.fillRect(x, y, w, h);
+  };
+  shade(g, b, { x: x0, y: LINE.belt - 6, w: x1 - x0, h: 6 }, (_, y) => 0.6 + (LINE.belt - y) * 0.065);
+  px(x0, LINE.belt, x1 - x0, 6, lv === 1 ? '#5a3a1c' : '#2c283a');
+  px(x0, LINE.belt, x1 - x0, 1, lv === 1 ? '#a87a48' : '#8c88a0');
+  px(x0, LINE.belt + 6, x1 - x0, 2, '#1c1828');
+  for (let x = from(8, 48, b.L - 3); x < x1 - 2; x += 48) {
+    if (x < x0) continue;
+    px(x, LINE.belt + 8, 3, b.B - LINE.belt - 8, '#3e3a50');
+    px(x, LINE.belt + 8, 1, b.B - LINE.belt - 8, '#6c6884');
+  }
+}
+
+/** Le lot à l'embouteillage et l'avancement de ses tournées (de quoi dessiner la ligne, dans l'atelier ou au stockage). */
+export function lineState(game: Game) {
+  const lv = game.level('bottling');
+  const b = game.batchAt('bottling');
+  const keg = b?.format === 'keg';
+  const trial = !!b && b.beerId == null;
+  const offs = nozzles(lv);
+  const N = offs.length;
+  const step = trial || N === 1 ? LINE.spacing : N * NOZZLE_GAP; // largeur d'une tournée
+  const total = (keg ? b?.kegs : b?.bottles) ?? 0;
+  const p = b ? (b.waiting ? 1 : Math.min(1, b.elapsed / Math.max(0.01, b.duration))) : 0;
+  // un essai : une seule bouteille, sous le bec du milieu (on la goûte)
+  const n = trial ? 1 : total;
+  const done = trial ? Math.min(1, (b!.elapsed * Math.max(1, total)) / Math.max(0.01, b!.duration)) : p * n;
+  const per = trial ? 1 : N; // bouteilles par tournée
+  const slots = trial ? [offs[Math.floor((N - 1) / 2)]!] : offs;
+  const beer = b?.beerId != null ? game.beers.find((x) => x.id === b.beerId) : undefined;
+  return { lv, b, keg, trial, offs, step, n, per, slots, groupsDone: done / per, beer, label: beer?.label ?? null };
+}
+export type LineState = ReturnType<typeof lineState>;
+
+/** Combien de tournées en arrière il faut remonter pour trouver celles qui ont dépassé x. */
+const groupsBack = (st: LineState, x: number) => Math.max(2, Math.ceil(((x + 20 - LINE.fillX) / st.step - 1) / 1.25 + 2));
+
+/** Chaque bouteille (ou fût) de la ligne dont le centre est entre x0 et x1 (repère de l'atelier) ; f : sa phase. */
+export function lineItems(st: LineState, x0: number, x1: number, cb: (x: number, fill: number, f: number) => void): void {
+  if (!st.b) return;
+  const { step, groupsDone, slots, per, n } = st;
+  const gNow = Math.floor(groupsDone);
+  for (let gi = Math.max(0, gNow - groupsBack(st, x1)); gi <= gNow + 1; gi++) {
+    const { x: gx, fill } = groupPos(groupsDone - gi, step);
+    slots.forEach((dx, j) => {
+      if (gi * per + j >= n) return;
+      const x = gx + dx;
+      if (x >= x0 && x < x1) cb(x, fill, groupsDone - gi);
+    });
+  }
+}
+
+/** Nombre de bouteilles (ou de fûts) du lot déjà arrivées au-delà de x (repère de l'atelier). */
+export function lineArrived(st: LineState, x: number): number {
+  if (!st.b || st.trial) return 0;
+  const gNow = Math.floor(st.groupsDone);
+  const back = groupsBack(st, x);
+  // les tournées récentes une à une, les plus anciennes d'un bloc
+  let c = Math.max(0, gNow - back) * st.per;
+  for (let gi = Math.max(0, gNow - back); gi <= gNow + 1; gi++) {
+    const { x: gx } = groupPos(st.groupsDone - gi, st.step);
+    st.slots.forEach((dx, j) => { if (gi * st.per + j < st.n && gx + dx >= x) c++; });
+  }
+  return Math.min(st.n, c);
+}
+
+/** Une bouteille de 33 cl (9 × 26 px), pied posé sur le tapis. */
+export function drawBeltBottle(g: CanvasRenderingContext2D, cx: number, base: number, fill: number, label: import('../core/label').Label | null, capped: boolean): void {
+  const x = cx - 4;
+  const y = base - 26;
+  g.fillStyle = '#1a0c06';
+  g.fillRect(x - 1, y + 10, 11, 17); // contour du corps
+  g.fillRect(x + 2, y + 1, 5, 10); // contour du col
+  g.fillRect(x, y + 9, 9, 2); // épaule
+  // verre brun
+  g.fillStyle = '#5a3a20';
+  g.fillRect(x, y + 11, 9, 15);
+  g.fillRect(x + 3, y + 2, 3, 9);
+  g.fillRect(x + 1, y + 10, 7, 1);
+  // bière qui monte (corps puis col)
+  if (fill > 0) {
+    const h = Math.round(24 * fill);
+    const body = Math.min(15, h);
+    g.fillStyle = '#c47a1c';
+    g.fillRect(x, y + 26 - body, 9, body);
+    g.fillStyle = '#e8a530';
+    g.fillRect(x + 1, y + 26 - body, 2, body);
+    if (h > 15) {
+      g.fillStyle = '#c47a1c';
+      g.fillRect(x + 3, y + 11 - (h - 15), 3, h - 15);
+    }
+    g.fillStyle = '#fff1c8'; // mousse
+    if (h > 15) g.fillRect(x + 3, y + 11 - (h - 15), 3, 1);
+    else g.fillRect(x, y + 26 - body, 9, 1);
+  }
+  // reflets du verre
+  g.fillStyle = 'rgba(255,255,255,0.5)';
+  g.fillRect(x + 1, y + 12, 1, 12);
+  g.fillRect(x + 3, y + 3, 1, 6);
+  if (capped) {
+    g.fillStyle = '#f2c14e';
+    g.fillRect(x + 2, y, 5, 2);
+    g.fillStyle = '#a8742a';
+    g.fillRect(x + 2, y + 1, 5, 1);
+  }
+  if (label) drawMiniLabel(g, label, x + 1, y + 14, 7);
+}
+
+/** Un fût de 5 L (11 × 16 px) sur le tapis : la jauge monte sous le bec. */
+export function drawBeltKeg(g: CanvasRenderingContext2D, cx: number, base: number, fill: number, label: import('../core/label').Label | null): void {
+  const x = cx - 5;
+  const y = base - 16;
+  g.fillStyle = '#465264'; g.fillRect(x, y, 11, 16);
+  g.fillStyle = '#c4d0dc'; g.fillRect(x + 1, y, 9, 16);
+  g.fillStyle = '#ffffff'; g.fillRect(x + 2, y, 1, 16);
+  g.fillStyle = '#98a6b6'; g.fillRect(x, y + 2, 11, 1); g.fillRect(x, y + 13, 11, 1);
+  g.fillStyle = '#2c283a'; g.fillRect(x + 4, y - 2, 3, 2);
+  g.fillStyle = '#1b1424'; g.fillRect(x + 7, y + 4, 2, 8);
+  const h = Math.round(8 * fill);
+  if (h > 0) { g.fillStyle = '#e8a530'; g.fillRect(x + 7, y + 12 - h, 2, h); }
+  if (label && fill >= 1) drawMiniLabel(g, label, x + 1, y + 6, 5);
+}
+
+/** La bande du tapis qui défile avec les tournées, de x0 à x1 (origin : décalage du repère, pour le stockage). */
+export function drawBeltBand(g: CanvasRenderingContext2D, st: LineState, x0: number, x1: number, origin = 0): void {
+  const shift = Math.floor((st.groupsDone * st.step) % 4);
+  g.fillStyle = '#4a4458';
+  for (let x = x0 - 4 + ((((shift - x0 - origin) % 4) + 4) % 4); x < x1; x += 4) g.fillRect(x, LINE.belt + 2, 2, 1);
+}
 
 /** Couleur du liquide selon l'étape. */
 const LIQUID: Record<StationId, readonly string[]> = {
@@ -380,16 +516,7 @@ export class Scene {
     floorLight(g, this.b, top, [[80, top + 24, 70, 0.2]], 0.5);
     px(L, top, WW, 2, level === 5 ? '#5ef0ff' : '#5c4848');
     shade(g, this.b, { x: L, y: top + 2, w: WW, h: 4 }, (_, y) => 0.6 + (y - top - 2) * 0.1);
-    // tapis roulant (châssis, la bande est animée)
-    px(L, LINE.belt, WW, 6, level === 1 ? '#5a3a1c' : '#2c283a');
-    px(L, LINE.belt, WW, 1, level === 1 ? '#a87a48' : '#8c88a0');
-    px(L, LINE.belt + 6, WW, 2, '#1c1828');
-    for (let x = from(8, 48, L - 3); x < R; x += 48) {
-      px(x, LINE.belt + 8, 3, B - LINE.belt - 8, '#3e3a50');
-      px(x, LINE.belt + 8, 1, B - LINE.belt - 8, '#6c6884');
-    }
-    // l'ombre de la ligne d'embouteillage sur le sol, derrière le tapis
-    shade(g, this.b, { x: L, y: LINE.belt - 6, w: WW, h: 6 }, (_, y) => 0.6 + (LINE.belt - y) * 0.065);
+    paintBelt(g, this.b, L, R, level);
     paintDecor(g, { room: this.key, lv: level, t: 0, game: null, preview: !!this.preview, top: T });
     this.bgs.set(level, c);
     return c;
@@ -644,126 +771,29 @@ export class Scene {
   // ------------------------------------------------------------------ embouteillage au premier plan
 
   /**
-   * Les bouteilles arrivent vides, se remplissent sous le bec, avancent, sont étiquetées puis rangées en carton.
-   * Le défilement suit l'avancement du lot : chaque bouteille k a une phase f = (bouteilles remplies) − k.
-   */
-  /**
    * La ligne d'embouteillage : les bouteilles (ou les fûts) arrivent par tournées, autant que la remplisseuse a de becs,
-   * se remplissent ensemble, passent à l'étiqueteuse et tombent dans le carton.
+   * se remplissent ensemble, passent à l'étiqueteuse et filent sur le tapis jusqu'au stockage, où on les met en caisse.
    */
   private drawLine(game: Game, t: number): void {
     const g = this.g;
-    const lv = game.level('bottling');
-    const b = game.batchAt('bottling');
-    const keg = b?.format === 'keg';
-    const trial = !!b && b.beerId == null;
-    const offs = nozzles(lv);
-    const N = offs.length;
-    const G = N === 1 ? LINE.spacing : N * NOZZLE_GAP; // largeur d'une tournée
-    const total = (keg ? b?.kegs : b?.bottles) ?? 0;
-    const p = b ? (b.waiting ? 1 : Math.min(1, b.elapsed / Math.max(0.01, b.duration))) : 0;
-    // un essai : une seule bouteille, sous le bec du milieu (on la goûte)
-    const n = trial ? 1 : total;
-    const done = trial ? Math.min(1, (b!.elapsed * Math.max(1, total)) / Math.max(0.01, b!.duration)) : p * n;
-    const per = trial ? 1 : N; // bouteilles par tournée
-    const slots = trial ? [offs[Math.floor((N - 1) / 2)]!] : offs;
-    this.tasteDx = offs[Math.floor((N - 1) / 2)]!;
-    const groupsDone = done / per;
-    const beer = b?.beerId != null ? game.beers.find((x) => x.id === b.beerId) : undefined;
-    const label = beer?.label ?? null;
-    const { fillX, labelX, cartonX, belt } = LINE;
-
-    // bande du tapis qui défile
-    const shift = Math.floor((groupsDone * (trial ? LINE.spacing : G)) % 4);
-    g.fillStyle = '#4a4458';
-    for (let x = from(-4 + shift, 4, this.b.L - 4); x < this.b.R; x += 4) g.fillRect(x, belt + 2, 2, 1);
-
+    const st = lineState(game);
+    const { lv, b, keg, offs, label } = st;
+    this.tasteDx = offs[Math.floor((offs.length - 1) / 2)]!;
+    const { fillX, labelX, belt } = LINE;
+    drawBeltBand(g, st, this.b.L, this.b.R);
     this.drawPallet(game);
     this.drawFiller(lv, !!b && !b.waiting, t);
     this.drawLabeler(lv, !!b && !b.waiting, t);
-
-    // bouteilles sur le tapis
-    let inCarton = 0;
+    // bouteilles sur le tapis : elles filent vers la droite, jusque dans le stockage
     if (!b) {
-      for (const dx of offs) this.bottle(fillX - G + dx, belt, 0, null, false);
-    } else {
-      const gNow = Math.floor(groupsDone);
-      for (let gi = Math.max(0, gNow - 6); gi <= gNow + 1; gi++) {
-        const { x: gx, fill } = groupPos(groupsDone - gi, trial ? LINE.spacing : G);
-        slots.forEach((dx, j) => {
-          const k = gi * per + j;
-          if (k >= n) return;
-          const x = gx + dx;
-          if (x >= cartonX + 2) { inCarton++; return; }
-          if (x < this.b.L - 8) return;
-          if (keg) this.keg(Math.round(x), belt, fill, label);
-          else this.bottle(Math.round(x), belt, fill, x >= labelX && label ? label : null, groupsDone - gi >= 1);
-          if (fill > 0 && fill < 1 && !b.waiting) this.pour(Math.round(fillX + dx), belt, t, keg);
-        });
-      }
-      // les tournées plus anciennes sont toutes dans le carton
-      if (!keg && !trial) inCarton += Math.max(0, Math.min(n, (gNow - 6) * per));
+      for (const dx of offs) drawBeltBottle(g, fillX - st.step + dx, belt, 0, null, false);
+      return;
     }
-    this.drawCarton(keg || trial ? 0 : inCarton, label);
-  }
-
-  /** Une bouteille de 33 cl (9 × 26 px), pied posé sur le tapis. */
-  private bottle(cx: number, base: number, fill: number, label: import('../core/label').Label | null, capped: boolean): void {
-    const g = this.g;
-    const x = cx - 4;
-    const y = base - 26;
-    g.fillStyle = '#1a0c06';
-    g.fillRect(x - 1, y + 10, 11, 17); // contour du corps
-    g.fillRect(x + 2, y + 1, 5, 10); // contour du col
-    g.fillRect(x, y + 9, 9, 2); // épaule
-    // verre brun
-    g.fillStyle = '#5a3a20';
-    g.fillRect(x, y + 11, 9, 15);
-    g.fillRect(x + 3, y + 2, 3, 9);
-    g.fillRect(x + 1, y + 10, 7, 1);
-    // bière qui monte (corps puis col)
-    if (fill > 0) {
-      const h = Math.round(24 * fill);
-      const body = Math.min(15, h);
-      g.fillStyle = '#c47a1c';
-      g.fillRect(x, y + 26 - body, 9, body);
-      g.fillStyle = '#e8a530';
-      g.fillRect(x + 1, y + 26 - body, 2, body);
-      if (h > 15) {
-        g.fillStyle = '#c47a1c';
-        g.fillRect(x + 3, y + 11 - (h - 15), 3, h - 15);
-      }
-      g.fillStyle = '#fff1c8'; // mousse
-      if (h > 15) g.fillRect(x + 3, y + 11 - (h - 15), 3, 1);
-      else g.fillRect(x, y + 26 - body, 9, 1);
-    }
-    // reflets du verre
-    g.fillStyle = 'rgba(255,255,255,0.5)';
-    g.fillRect(x + 1, y + 12, 1, 12);
-    g.fillRect(x + 3, y + 3, 1, 6);
-    if (capped) {
-      g.fillStyle = '#f2c14e';
-      g.fillRect(x + 2, y, 5, 2);
-      g.fillStyle = '#a8742a';
-      g.fillRect(x + 2, y + 1, 5, 1);
-    }
-    if (label) drawMiniLabel(g, label, x + 1, y + 14, 7);
-  }
-
-  /** Un fût de 5 L (11 × 16 px) sur le tapis : la jauge monte sous le bec. */
-  private keg(cx: number, base: number, fill: number, label: import('../core/label').Label | null): void {
-    const g = this.g;
-    const x = cx - 5;
-    const y = base - 16;
-    g.fillStyle = '#465264'; g.fillRect(x, y, 11, 16);
-    g.fillStyle = '#c4d0dc'; g.fillRect(x + 1, y, 9, 16);
-    g.fillStyle = '#ffffff'; g.fillRect(x + 2, y, 1, 16);
-    g.fillStyle = '#98a6b6'; g.fillRect(x, y + 2, 11, 1); g.fillRect(x, y + 13, 11, 1);
-    g.fillStyle = '#2c283a'; g.fillRect(x + 4, y - 2, 3, 2);
-    g.fillStyle = '#1b1424'; g.fillRect(x + 7, y + 4, 2, 8);
-    const h = Math.round(8 * fill);
-    if (h > 0) { g.fillStyle = '#e8a530'; g.fillRect(x + 7, y + 12 - h, 2, h); }
-    if (label && fill >= 1) drawMiniLabel(g, label, x + 1, y + 6, 5);
+    lineItems(st, this.b.L - 8, this.b.R + 8, (x, fill, f) => {
+      if (keg) drawBeltKeg(g, Math.round(x), belt, fill, label);
+      else drawBeltBottle(g, Math.round(x), belt, fill, x >= labelX && label ? label : null, f >= 1);
+      if (fill > 0 && fill < 1 && !b.waiting) this.pour(Math.round(x), belt, t, keg);
+    });
   }
 
   /** Filet de bière qui coule du bec dans le goulot (ou dans le fût). */
@@ -863,31 +893,6 @@ export class Scene {
     g.fillRect(Math.round(x + Math.cos(a) * 3), Math.round(top + 9 + Math.sin(a) * 3), 1, 1);
     g.fillStyle = fut ? '#8a9ab0' : '#6c6884'; g.fillRect(x - 1, top + 24, 3, 22);
     g.fillStyle = '#f6ecd6'; g.fillRect(x - 3, top + 40, 2, 6);
-  }
-
-  private drawCarton(count: number, label: import('../core/label').Label | null): void {
-    const g = this.g;
-    const x = LINE.cartonX + 2;
-    const base = LINE.belt;
-    const inBox = count % 12;
-    const closed = count > 0 && inBox === 0;
-    g.fillStyle = '#5c3a1c'; g.fillRect(x - 1, base - 19, 32, 20);
-    g.fillStyle = '#c8945a'; g.fillRect(x, base - 18, 30, 18);
-    g.fillStyle = '#a87440'; g.fillRect(x, base - 18, 30, 2);
-    g.fillStyle = '#e0b07a'; g.fillRect(x, base - 16, 3, 16);
-    g.fillStyle = '#9a6a3a'; g.fillRect(x + 27, base - 16, 3, 16);
-    // goulots et capsules des bouteilles rangées (2 rangées de 6)
-    for (let i = 0; i < (closed ? 0 : inBox); i++) {
-      const bx = x + 3 + (i % 6) * 4;
-      const by = base - 23 + Math.floor(i / 6) * 3;
-      g.fillStyle = '#5a3a20'; g.fillRect(bx, by + 1, 3, 4);
-      g.fillStyle = '#f2c14e'; g.fillRect(bx, by, 3, 1);
-    }
-    if (closed) {
-      g.fillStyle = '#b07c48'; g.fillRect(x, base - 23, 30, 5); // rabats fermés
-      g.fillStyle = '#d8b078'; g.fillRect(x + 14, base - 23, 2, 23); // scotch
-    }
-    if (label) drawMiniLabel(g, label, x + 19, base - 12, 7);
   }
 
   /** Palette de cartons pleins à gauche : le stock de bouteilles de la gamme. */

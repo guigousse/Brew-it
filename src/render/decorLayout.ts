@@ -75,11 +75,11 @@ export const DECOR_DEFAULT: DecorLayout = {
     ]),
   },
   storage: {
-    1: list([['bulb', 78, 12], ['toolBoard', 130, 8], ['trolley', 10, 222], ['maltSacks', 104, 236, { s: 1.5 }], ['bucket', 110, 274, { s: 1.3 }]]),
-    2: list([['lantern', 76, 12], ['lantern', 138, 12], ['trolley', 10, 222], ['barrel', 128, 230, { s: 1.4 }], ['emptyCrate', 108, 256, { s: 1.3 }]]),
-    3: list([['coldUnit', 78, 4], ['thermometer', 134, 6], ['trolley', 10, 222], ['coolBoxes', 106, 232, { s: 1.5 }]]),
-    4: list([['trolley', 10, 222], ['extinguisher', 146, 214, { s: 1.3 }], ['palletJack', 100, 246, { s: 1.3 }]]),
-    5: list([['robotArm', 20, 6], ['deliveryBot', 4, 246, { s: 1.3 }], ['coolBoxes', 106, 232, { s: 1.5 }]]),
+    1: list([['bulb', 78, 12], ['toolBoard', 130, 8], ['maltSacks', 117, 246, { s: 1.2 }], ['bucket', 146, 272, { s: 1.2 }]]),
+    2: list([['lantern', 76, 12], ['lantern', 138, 12], ['barrel', 134, 230, { s: 1.4 }], ['emptyCrate', 118, 258, { s: 1.2 }]]),
+    3: list([['coldUnit', 78, 4], ['thermometer', 134, 6], ['coolBoxes', 117, 242, { s: 1.3 }]]),
+    4: list([['extinguisher', 146, 214, { s: 1.3 }], ['palletJack', 112, 252, { s: 1.1 }]]),
+    5: list([['robotArm', 20, 6], ['deliveryBot', 116, 250, { s: 1.1 }]]),
   },
   shop: {
     1: list([['shopSign', 34, 8], ['shopPendant', 73, 34], ['lightRay', 56, 40, { s: 1.75 }], ['register', 103, 233]]),
