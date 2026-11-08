@@ -42,7 +42,7 @@ const BAR_FURNITURE: Spec[] = [
   ['posterBottle', 86, 40], ['posterMug', 102, 40], ['smallPlant', 58, 89, { f: true }], ['smallPlant', 118, 95],
   ['neonSign', 18, 118], ['jukebox', 145, 112],
 ];
-const OFFICE: Spec[] = [['clock', 72, 126], ['bigPlant', 108, 240], ['deskLamp', 86, 227], ['mug', 10, 240], ['chair', 37, 258]];
+const OFFICE: Spec[] = [['clock', 72, 126], ['bigPlant', 108, 240], ['deskLamp', 100, 207], ['mug', 8, 220], ['chair', 35, 258]];
 
 export const DECOR_DEFAULT: DecorLayout = {
   bar: {

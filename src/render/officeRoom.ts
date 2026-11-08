@@ -30,8 +30,8 @@ const DISPLAY: Rect = { x: 100, y: 114, w: 54, h: 98 };
 const SHOWCASE = { x: DISPLAY.x + 3, y: DISPLAY.y + 14, w: DISPLAY.w - 6, h: DISPLAY.h - 22 };
 const SHELF_Y = [SHOWCASE.y + Math.floor(SHOWCASE.h / 2) - 1, SHOWCASE.y + SHOWCASE.h - 2];
 /** Bureau et ordinateur, au premier plan ; DESK_TOP : là où se posent les objets (milieu du plateau). */
-const DESK: Rect = { x: 6, y: 212, w: 104, h: 84 };
-const DESK_TOP = 248;
+const DESK: Rect = { x: 4, y: 190, w: 120, h: 106 };
+const DESK_TOP = 228;
 
 export type OfficeHit = 'window' | 'board' | 'display' | 'computer';
 
@@ -327,7 +327,7 @@ export class OfficeRoom extends Room {
     // ---- le bureau : plateau vu d'en haut, face avant, pieds ; ombres dessous
     const dk = DESK;
     const front = DESK_TOP + 2;
-    const back = DESK_TOP - 6;
+    const back = DESK_TOP - 8;
     const kk = (back - front) / (EYE - front); // fuite du plateau vers le point de fuite
     const bl = dk.x + (VX - dk.x) * kk;
     const br = dk.x + dk.w + (VX - dk.x - dk.w) * kk;
@@ -348,7 +348,7 @@ export class OfficeRoom extends Room {
       // caisson à tiroirs à gauche, pied à droite
       px(dk.x + 2, front + 5, 36, 296 - front - 5, face);
       px(dk.x + 2, front + 5, 1, 296 - front - 5, hi);
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < Math.floor((296 - front - 10) / 12); k++) {
         const ty = front + 8 + k * 12;
         px(dk.x + 5, ty, 30, 10, top); px(dk.x + 5, ty, 30, 1, hi); px(dk.x + 5, ty + 9, 30, 1, edge);
         px(dk.x + 17, ty + 4, 6, 2, '#c8a860');
@@ -359,7 +359,7 @@ export class OfficeRoom extends Room {
       // piétement : un caisson fin et un pied
       px(dk.x + 3, front + 5, 32, 296 - front - 5, top);
       px(dk.x + 3, front + 5, 1, 296 - front - 5, hi);
-      for (let k = 0; k < 3; k++) px(dk.x + 8, front + 12 + k * 12, 22, 1, edge);
+      for (let k = 0; k < Math.floor((296 - front - 14) / 12); k++) px(dk.x + 8, front + 12 + k * 12, 22, 1, edge);
       px(dk.x + dk.w - 6, front + 5, 3, 296 - front - 5, edge);
     }
     shade(g, b, { x: dk.x, y: front + 5, w: dk.w, h: 296 - front - 5 }, (_, y) => 1 - ((y - front - 5) / (296 - front - 5)) * 0.3);
