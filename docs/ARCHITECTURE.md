@@ -12,7 +12,6 @@ src/
 │   ├── orders.ts         tableau de commandes : profils de clients, types de commandes, diamants, grossiste
 │   ├── trends.ts         tendances du moment et popularité (bières, marque)
 │   ├── shop.ts           catalogues : diamants (monnaie premium), boosts par poste, personnel, mobilier du bar, déblocages d'étiquettes
-│   ├── advice.ts         le conseil de Gaston au comptoir du magasin, selon l'onglet
 │   ├── warehouse.ts      niveaux du stockage, places de la gamme
 │   ├── game.ts           état de la partie : lots dans la chaîne, gamme, bar, commandes, améliorations, hors-ligne
 │   └── save.ts           sauvegarde JSON (emplacement « brewit-sim-1 »)
