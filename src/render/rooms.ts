@@ -860,10 +860,10 @@ export class BarRoom extends Room {
   private drawTv(lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
-    const W = 50;
-    const H = 34;
+    const W = 60;
+    const H = 42;
     const x = barLayout.event.x + Math.floor((barLayout.event.w - W) / 2);
-    const y = barLayout.event.y + 10;
+    const y = barLayout.event.y + 20;
     // suspentes
     px(x + 6, this.b.T, 1, y - this.b.T, '#1b1424'); px(x + W - 7, this.b.T, 1, y - this.b.T, '#1b1424');
     let sx: number, sy: number, sw: number, sh: number;
@@ -903,26 +903,26 @@ export class BarRoom extends Room {
   private drawDarts(lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
-    const S = 38;
+    const S = 46;
     const x = barLayout.event.x + Math.floor((barLayout.event.w - S) / 2);
-    const y = barLayout.event.y + 8;
+    const y = barLayout.event.y + 18;
     // suspente : la cible descend du plafond avec son panneau
     px(x + Math.floor(S / 2), this.b.T, 1, y - this.b.T, '#1b1424');
     const panel = lv <= 2 ? ['#a8743c', '#7a5228'] : lv <= 4 ? ['#3a2418', '#241410'] : ['#f4f8fc', '#c4d0dc'];
     px(x, y, S, S, '#1b1424'); px(x + 1, y + 1, S - 2, S - 2, panel[0]!); px(x + 1, y + S - 3, S - 2, 2, panel[1]!);
     const cx = x + S / 2;
     const cy = y + S / 2;
-    for (const [r, c] of [[15, '#1b1424'], [14, '#b83a24'], [12, '#1b1424'], [11, '#e8dcc0'], [8, '#2c8a4a'], [7, '#e8dcc0'], [4, '#b83a24'], [2, '#2c8a4a']] as const) {
+    for (const [r, c] of [[19, '#1b1424'], [18, '#b83a24'], [15, '#1b1424'], [14, '#e8dcc0'], [10, '#2c8a4a'], [9, '#e8dcc0'], [5, '#b83a24'], [2.5, '#2c8a4a']] as const) {
       g.fillStyle = c; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
     }
     // secteurs
     g.strokeStyle = 'rgba(27,20,36,0.5)';
-    for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * 12, cy + Math.sin(a) * 12); g.stroke(); }
+    for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * 15, cy + Math.sin(a) * 15); g.stroke(); }
     // trois fléchettes, relancées à tour de rôle
     for (let i = 0; i < 3; i++) {
       const round = Math.floor(t * 0.7 + i / 3);
       const a = hash(round, i) * Math.PI * 2;
-      const d = hash(round, i + 7) * 11;
+      const d = hash(round, i + 7) * 14;
       const fx = Math.round(cx + Math.cos(a) * d);
       const fy = Math.round(cy + Math.sin(a) * d);
       px(fx, fy, 1, 1, '#1b1424'); px(fx + 1, fy - 1, 1, 1, '#c4d0dc'); px(fx + 2, fy - 2, 1, 1, '#c4d0dc'); px(fx + 3, fy - 3, 2, 2, '#f2c14e'); px(fx + 5, fy - 5, 1, 1, '#e8553a'); px(fx + 4, fy - 5, 1, 1, '#e8553a');
@@ -934,8 +934,8 @@ export class BarRoom extends Room {
     const g = this.g;
     const px = painter(g);
     const cx = barLayout.event.x + Math.floor(barLayout.event.w / 2);
-    const cy = barLayout.event.y + 26;
-    const r = 13;
+    const cy = barLayout.event.y + 40;
+    const r = 17;
     px(cx, this.b.T, 1, cy - r - this.b.T, '#c4d0dc');
     g.fillStyle = '#1b1424'; g.beginPath(); g.arc(cx + 0.5, cy + 0.5, r + 1, 0, Math.PI * 2); g.fill();
     const spin = Math.floor(t * 6);
@@ -1174,7 +1174,7 @@ export class BarRoom extends Room {
     const { x0, x1 } = CT();
     if (game.barmanOn) this.drawHelper(game, lv === 1 ? 26 : 16, t);
     const px = painter(this.g);
-    const x = lv === 1 ? 106 : 128;
+    const x = lv === 1 ? 92 : x1 - 24;
     const y = CT().top - 26;
     px(x, y, 10, 4, '#e8e4dc');
     px(x + 1, y + 3, 8, 7, '#e0a77f');
