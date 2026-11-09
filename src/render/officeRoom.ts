@@ -31,13 +31,13 @@ const SHOWCASE = { x: DISPLAY.x + 3, y: DISPLAY.y + 14, w: DISPLAY.w - 6, h: DIS
 const SHELF_Y = [SHOWCASE.y + Math.floor(SHOWCASE.h / 2) - 1, SHOWCASE.y + SHOWCASE.h - 2];
 /**
  * Bureau et ordinateur, au premier plan ; DESK_TOP : là où se posent les objets (milieu du plateau), DESK_FEET : le pied
- * des meubles. Le bureau est dessiné à l'échelle DESK_S (ses mesures d'origine, ×0,9), un peu en retrait vers le mur.
+ * des meubles. Le bureau est dessiné à l'échelle DESK_S (ses mesures d'origine, ×0,95), un peu en retrait vers le mur.
  */
-const DESK_S = 0.9;
+const DESK_S = 0.95;
 const ds = (v: number) => Math.round(v * DESK_S);
-const DESK: Rect = { x: 6, y: 186, w: 108, h: 96 };
+const DESK: Rect = { x: 2, y: 185, w: 114, h: 101 };
 const DESK_TOP = 221;
-const DESK_FEET = 282;
+const DESK_FEET = 286;
 
 export type OfficeHit = 'window' | 'board' | 'display' | 'computer';
 
