@@ -77,7 +77,7 @@ export const DECOR_DEFAULT: DecorLayout = {
       ...shelves(58, 78, 98), ...BAR_FURNITURE,
     ]),
     5: list([
-      ['cityView', 30, -1], ['neonSign', 56, 29], ...shelves(58, 78, 98), ...BAR_FURNITURE,
+      ['cityView', 30, -1], ['neonSignHanging', 56, 30], ...shelves(58, 78, 98), ...BAR_FURNITURE,
     ]),
   },
   storage: {

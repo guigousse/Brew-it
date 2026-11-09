@@ -1915,7 +1915,7 @@ export class App {
     const key = `${n}|${g.partying}|${g.barLevel}`;
     if (!force && this.kegKey === key) return;
     this.kegKey = key;
-    const sign = decorLayout.bar[g.barLevel]?.find((i) => i.a === 'neonSign');
+    const sign = decorLayout.bar[g.barLevel]?.find((i) => i.a.startsWith('neonSign'));
     const box = sign && instBox(sign);
     if (box) Object.assign(this.signRect, { x: box.x - 4, y: box.y - 3, w: box.w + 8, h: box.h + 6 });
     for (const el of this.kegHits) {

@@ -795,6 +795,11 @@ const PEOPLE = [
   ['#b07850', '#e8e4dc', '#d4823a'], ['#e0a77f', '#2c283a', '#e8eef4'],
 ] as const;
 
+/** Maillots des deux équipes du soir de match : couleur, et celle du col, de la bande et du numéro. */
+const JERSEYS = [['#e8553a', '#ffffff'], ['#3f88d4', '#f2c14e']] as const;
+/** Où dansent les clients pendant la fête (pied du danseur) : entre les tables, puis devant elles. */
+const DANCE_SPOTS: readonly (readonly [number, number])[] = [[54, 197], [106, 197], [8, 197], [152, 197], [80, 192], [28, 192], [132, 192]];
+
 /** Temps que met un client pour rejoindre sa place, ou pour repartir (s). */
 const WALK_S = 3.5;
 
@@ -1217,6 +1222,8 @@ export class BarRoom extends Room {
     const serving = game.barServing || !!this.preview;
     // un client reste ~20 min : la salle compte en moyenne affluence × 20 personnes
     const busy = this.preview ? 1 : serving ? Math.min(0.95, (game.barRate * 20) / seats.length) : 0;
+    // l'événement en cours : soir de match (les supporters en maillot) ou fête (on danse)
+    const ev = this.preview ? this.preview.event ?? null : game.partying ? game.eventId : null;
     if (this.has(game, 'benches')) {
       // banquettes capitonnées derrière chaque table
       const tone = lv === 5 ? ['#f4f8fc', '#dce6f0', '#8a9ab0'] : lv === 4 ? ['#3a6aa8', '#2e5a9a', '#1c3a6a'] : ['#8a2a32', '#a8343c', '#5a1a20'];
@@ -1250,7 +1257,10 @@ export class BarRoom extends Room {
       const slot = Math.floor((t + hash(i, 12) * period) / period);
       const phase = ((t + hash(i, 12) * period) % period) / period;
       if (!(serving && hash(i, slot) < busy)) continue;
-      const [skin, hair, shirt] = PEOPLE[Math.floor(hash(i, slot + 99) * PEOPLE.length)]!;
+      const [skin, hair, shirt0] = PEOPLE[Math.floor(hash(i, slot + 99) * PEOPLE.length)]!;
+      // soir de match : la plupart viennent en maillot, de l'une des deux équipes
+      const jersey = ev === 'foot' && hash(i, slot + 5) < 0.8 ? JERSEYS[hash(i, slot + 6) < 0.5 ? 0 : 1]! : null;
+      const shirt = jersey ? jersey[0] : shirt0;
       // il arrive par la droite et rejoint sa place ; son verre fini, il repart par où il est venu
       const walk = WALK_S / period;
       if (!this.preview && (phase < walk || phase > 1 - walk)) {
@@ -1261,6 +1271,7 @@ export class BarRoom extends Room {
         const step = Math.sin(t * 10 + i) > 0 ? 1 : 0;
         px(x - 2, foot - 6, 2, 6 - step, '#2c283a'); px(x + 1, foot - 6, 2, 5 + step, '#2c283a');
         px(x - 3, foot - 15, 7, 9, shirt);
+        if (jersey) { px(x, foot - 15, 1, 9, jersey[1]); px(x - 1, foot - 15, 3, 1, jersey[1]); }
         px(x - 3, foot - 15, 1, 9, '#00000030');
         px(x - 2, foot - 21, 5, 6, skin);
         px(x - 2, foot - 22, 5, 2, hair);
@@ -1269,6 +1280,14 @@ export class BarRoom extends Room {
       }
       if (s.kind === 'stool') {
         px(s.x - 4, s.y - 13, 9, 11, shirt);
+        if (jersey) {
+          // vu de dos : le col et le numéro
+          px(s.x - 2, s.y - 13, 5, 1, jersey[1]);
+          const num = Math.floor(hash(i, slot + 8) * 3);
+          if (num === 0) { px(s.x - 1, s.y - 11, 1, 5, jersey[1]); px(s.x + 1, s.y - 11, 1, 5, jersey[1]); } // 11
+          else if (num === 1) { px(s.x - 1, s.y - 11, 3, 1, jersey[1]); px(s.x + 1, s.y - 10, 1, 4, jersey[1]); } // 7
+          else { px(s.x - 2, s.y - 11, 1, 5, jersey[1]); px(s.x, s.y - 11, 2, 1, jersey[1]); px(s.x, s.y - 7, 2, 1, jersey[1]); px(s.x, s.y - 11, 1, 5, jersey[1]); px(s.x + 2, s.y - 11, 1, 5, jersey[1]); } // 10
+        }
         px(s.x - 4, s.y - 13, 1, 11, '#00000030');
         px(s.x - 3, s.y - 20, 7, 7, hair);
         px(s.x - 3, s.y - 15, 1, 2, skin);
@@ -1277,6 +1296,7 @@ export class BarRoom extends Room {
       } else {
         const right = i % 2 === 0;
         px(s.x - 3, s.y - 12, 7, 10, shirt);
+        if (jersey) { px(s.x - 1, s.y - 12, 3, 1, jersey[1]); px(s.x, s.y - 11, 1, 9, jersey[1]); } // col et bande
         px(s.x - 2, s.y - 18, 5, 6, skin);
         px(s.x - 2, s.y - 19, 5, 2, hair);
         px(right ? s.x + 2 : s.x - 2, s.y - 16, 1, 1, '#2b2135');
@@ -1287,6 +1307,32 @@ export class BarRoom extends Room {
       px(gx, gy, 3, 6, '#c8f0e880');
       const lh = Math.round(5 * level);
       if (lh > 0) { px(gx, gy + 6 - lh, 3, lh, '#e8a530'); px(gx, gy + 6 - lh, 3, 1, '#fff1c8'); }
+    }
+    // la fête : des clients dansent, debout entre les tables et devant la salle
+    if (ev === 'party' && serving) {
+      // pas de danseur là où il y a une table
+      const tables = seats.filter((st) => st.kind === 'table').map((st) => st.x);
+      const spots = DANCE_SPOTS.filter(([x]) => !tables.some((tx) => Math.abs(tx - x) < 14));
+      const n = this.preview ? spots.length : Math.min(spots.length, 2 + lv);
+      for (let i = 0; i < n; i++) {
+        const [x0, foot] = spots[i]!;
+        const [skin, hair, shirt] = PEOPLE[Math.floor(hash(i, 51) * PEOPLE.length)]!;
+        const beat = t * 4 + hash(i, 52) * 6; // chacun son rythme
+        const bob = Math.sin(beat * Math.PI) > 0 ? 1 : 0;
+        const sway = Math.round(Math.sin(beat * Math.PI * 0.5) * 2);
+        const x = x0 + sway;
+        const y = foot - bob;
+        px(x - 2, y - 6, 2, 6 - bob, '#2c283a'); px(x + 1, y - 6, 2, 5 + bob, '#2c283a');
+        px(x - 3, y - 15, 7, 9, shirt);
+        px(x - 3, y - 15, 1, 9, '#00000030');
+        px(x - 2, y - 21, 5, 6, skin);
+        px(x - 2, y - 22, 5, 2, hair);
+        px(x - 1, y - 19, 1, 1, '#2b2135'); px(x + 1, y - 19, 1, 1, '#2b2135');
+        // les bras en l'air, l'un après l'autre
+        const up = Math.floor(beat) % 2 === 0;
+        px(x - 5, up ? y - 22 : y - 14, 2, up ? 8 : 5, shirt); px(x - 5, up ? y - 23 : y - 10, 2, 1, skin);
+        px(x + 4, up ? y - 14 : y - 22, 2, up ? 5 : 8, shirt); px(x + 4, up ? y - 10 : y - 23, 2, 1, skin);
+      }
     }
     if (!serving) {
       const sx = Math.round((CT().x0 + CT().x1) / 2) - 11;

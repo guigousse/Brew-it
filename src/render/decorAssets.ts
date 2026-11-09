@@ -34,6 +34,30 @@ const cone = (g: CanvasRenderingContext2D, w: number, h: number, alpha: number, 
 };
 
 /** Vue sur la ville du futur, la nuit, dans une baie de w × h. */
+/** Panneau lumineux du bar : le message choisi défile de droite à gauche, dans la couleur du niveau ; il grésille parfois. */
+function messageSign(g: CanvasRenderingContext2D, c: DecorCtx): void {
+  const px = P(g);
+  const col = ['#ff9a3a', '#7ee081', '#f2c14e', '#ff5ad0', '#5ef0ff'][c.lv - 1] ?? '#f2c14e';
+  const on = Math.floor(c.t * 8) % 37 !== 0;
+  px(0, 0, 48, 10, '#1b1424');
+  px(1, 1, 46, 8, '#0c0a10');
+  if (on) { g.fillStyle = col + '24'; g.fillRect(-4, -3, 56, 16); }
+  const text = c.game?.barMessage ?? BAR_MESSAGE;
+  g.save();
+  g.beginPath(); g.rect(2, 1, 44, 8); g.clip();
+  g.font = '8px monospace';
+  g.textBaseline = 'alphabetic';
+  const w = Math.ceil(g.measureText(text).width);
+  const x = Math.round(46 - ((c.t * 14) % (w + 48)));
+  g.fillStyle = on ? col : '#3a3048';
+  g.fillText(text, x, 8);
+  if (on) { g.fillStyle = '#ffffff50'; g.fillText(text, x, 7); }
+  g.restore();
+  // la trame des LED
+  g.fillStyle = 'rgba(12,10,16,0.45)';
+  for (let y = 2; y < 9; y += 2) g.fillRect(2, y, 44, 1);
+}
+
 function city(g: CanvasRenderingContext2D, w: number, h: number): void {
   const px = P(g);
   px(0, 0, w, h, '#0c1420');
@@ -460,30 +484,17 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'neonSign', name: 'Panneau à message', room: 'bar', w: 48, h: 10, pad: 4, anim: true, furniture: 'neon', hang: { xs: [4, 43], color: '#1b1424' },
+    id: 'neonSign', name: 'Panneau à message (au mur)', room: 'bar', w: 48, h: 10, pad: 4, anim: true, furniture: 'neon',
     draw(g, c) {
-      const px = P(g);
-      // panneau lumineux suspendu au-dessus des bouteilles : le message choisi défile de droite à gauche
-      const col = ['#ff9a3a', '#7ee081', '#f2c14e', '#ff5ad0', '#5ef0ff'][c.lv - 1] ?? '#f2c14e';
-      const on = Math.floor(c.t * 8) % 37 !== 0; // il grésille de temps en temps
-      px(0, 0, 48, 10, '#1b1424');
-      px(1, 1, 46, 8, '#0c0a10');
-      if (on) { g.fillStyle = col + '24'; g.fillRect(-4, -3, 56, 16); }
-      const text = c.game?.barMessage ?? BAR_MESSAGE;
-      g.save();
-      g.beginPath(); g.rect(2, 1, 44, 8); g.clip();
-      g.font = '8px monospace';
-      g.textBaseline = 'alphabetic';
-      const w = Math.ceil(g.measureText(text).width);
-      const x = Math.round(46 - ((c.t * 14) % (w + 48)));
-      g.fillStyle = on ? col : '#3a3048';
-      g.fillText(text, x, 8);
-      if (on) { g.fillStyle = '#ffffff50'; g.fillText(text, x, 7); }
-      g.restore();
-      // la trame des LED
-      g.fillStyle = 'rgba(12,10,16,0.45)';
-      for (let y = 2; y < 9; y += 2) g.fillRect(2, y, 44, 1);
+      wallShadow(g, 0, 0, 48, 10, 0.4);
+      messageSign(g, c);
+      // les deux pattes qui le tiennent au mur
+      g.fillStyle = '#545068'; g.fillRect(3, -1, 2, 1); g.fillRect(43, -1, 2, 1);
     },
+  },
+  {
+    id: 'neonSignHanging', name: 'Panneau à message (suspendu)', room: 'bar', w: 48, h: 10, pad: 4, anim: true, furniture: 'neon', hang: { xs: [4, 43], color: '#8a9ab0' },
+    draw(g, c) { messageSign(g, c); },
   },
   {
     id: 'jukebox', name: 'Juke-box', room: 'bar', w: 14, h: 42, pad: 14, anim: true, furniture: 'jukebox',
