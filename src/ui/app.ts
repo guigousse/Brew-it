@@ -15,8 +15,7 @@ import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
-import { BOOST_POSTS, BOOSTS, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type LabelUnlock, type UnlockKind } from '../core/shop';
-import { shopAdvice, type ShopTab } from '../core/advice';
+import { BOOST_POSTS, BOOSTS, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
@@ -69,14 +68,18 @@ const DECOR_ICON: Record<DecorId, IconId> = {
   plants: 'plant', darts: 'darts', posters: 'poster', tv: 'tv', neon: 'neon', disco: 'disco', benches: 'bench', jukebox: 'jukebox',
 };
 
+/** Onglets du magasin. */
+type ShopTab = 'bar' | 'boosts' | 'labels';
 /** Onglets du magasin, de gauche à droite. */
 const SHOP_TABS: readonly { id: ShopTab; name: string; icon: IconId }[] = [
   { id: 'bar', name: 'Bar', icon: 'plant' },
   { id: 'boosts', name: 'Boosts', icon: 'bolt' },
   { id: 'labels', name: 'Étiquettes', icon: 'labels' },
 ];
-/** Icône de chaque poste de boost (null : les coups ponctuels). */
-const POST_ICON: Record<BoostChannel | 'none', IconId> = { brew: 'brew', yeast: 'bubble', bar: 'mug', wholesale: 'truck', none: 'envelope' };
+/** Icône de chaque boost : dans le magasin, et en haut à droite de l'écran quand il est actif. */
+const BOOST_ICON: Record<BoostId, IconId> = {
+  rush: 'flame', cadence: 'fast2', nightShift: 'moon', fullSpeed: 'fast3', yeast: 'yeast', happyHour: 'mug', buzz: 'bubble', broker: 'truck', prospect: 'envelope',
+};
 /** L'événement qu'ouvre chaque objet d'événement de la décoration. */
 const DECOR_EVENT: Partial<Record<DecorId, 'darts' | 'foot' | 'party'>> = { darts: 'darts', tv: 'foot', disco: 'party' };
 /** Hauteur de la vitrine du bar, en px. */
@@ -257,9 +260,8 @@ export class App {
   private rangeBtn = fab('range', 'Ma gamme');
   private eventsBtn = fab('events', 'Événements');
   private barmanBtn = fab('barman', 'Barman en renfort');
-  /** Le magasin : le comptoir de Gaston (son conseil), trois onglets, et le rayon affiché dessous. */
+  /** Le magasin : trois onglets, et le rayon affiché dessous. */
   private shopPane = h('div', 'shop');
-  private shopBubble = h('p', 'shop-bubble');
   private shopBody = h('div', 'shop-body');
   private shopTabs = new Map<ShopTab, { btn: HTMLButtonElement; mark: HTMLElement }>();
   private shopTab: ShopTab = 'bar';
@@ -271,6 +273,9 @@ export class App {
   /** Le bar, redessiné dans la vitrine avec l'objet en vente déjà installé. */
   readonly showcase = new BarRoom();
   private showcaseScene: HTMLElement | null = null;
+  /** Boosts actifs, en haut à droite de l'écran : leur icône et le temps qui reste. */
+  private boostHud = h('div', 'boost-hud hidden');
+  private boostHudKey = '';
   /** Diamants, à côté de l'argent. */
   private gemsEl = h('span', 'gems-value');
   private gemsPill = h('button', 'gems');
@@ -463,7 +468,7 @@ export class App {
       e.preventDefault();
       this.toast(`Il te manque ${moneyInt(Math.ceil(missing))}`, 'bad');
     }, true);
-    root.append(this.header, this.stage, this.fabs, this.harvest, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
+    root.append(this.header, this.stage, this.fabs, this.harvest, this.boostHud, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }
@@ -601,6 +606,7 @@ export class App {
     if (!this.moneyAnim) this.moneyEl.textContent = compact(g.money);
     const moneyAria = `Argent : ${moneyInt(g.money)}`;
     if (this.moneyPill.getAttribute('aria-label') !== moneyAria) this.moneyPill.setAttribute('aria-label', moneyAria);
+    this.renderBoostHud(g);
     const gems = compact(g.gems);
     if (this.gemsEl.textContent !== gems) this.gemsEl.textContent = gems;
     const off = g.offline;
@@ -2631,16 +2637,8 @@ export class App {
 
   // ------------------------------------------------------------------ magasin
 
-  /** Le comptoir de Gaston (étagère, portrait, bulle) et les trois onglets ; le rayon s'affiche dessous. */
+  /** Les trois onglets du magasin ; le rayon s'affiche dessous. */
   private buildShop(): void {
-    const counter = h('div', 'shop-counter');
-    const shelf = h('div', 'shop-shelf');
-    for (const id of ['tv', 'disco', 'labels', 'bolt', 'jukebox'] as const) shelf.append(iconCanvas(id, 1, 'shop-good'));
-    const face = h('div', 'shop-gaston');
-    const av = h('canvas', 'shop-gaston-face');
-    drawGaston(av);
-    face.append(av);
-    counter.append(shelf, face, this.shopBubble);
     const tabs = h('div', 'shop-tabs');
     for (const t of SHOP_TABS) {
       const btn = h('button', 'shop-tab');
@@ -2650,7 +2648,7 @@ export class App {
       tabs.append(btn);
       this.shopTabs.set(t.id, { btn, mark });
     }
-    this.shopPane.append(counter, tabs, this.shopBody);
+    this.shopPane.append(tabs, this.shopBody);
   }
 
   /** Ouvre le magasin sur un onglet (et, au bar, sur une pièce de la décoration). */
@@ -2674,6 +2672,41 @@ export class App {
     return out.filter((k) => !this.shopSeen.has(k));
   }
 
+  /**
+   * Les boosts actifs, empilés en haut à droite de l'écran : l'icône du boost et le temps qui reste.
+   * Les toucher ouvre les boosts du magasin. Masqués au magasin (le rayon les montre) et sous une fenêtre.
+   */
+  private renderBoostHud(g: Game): void {
+    const live = BOOST_POSTS.flatMap((p) => {
+      const b = p.id ? g.boostOf(p.id) : null;
+      return b ? [b] : [];
+    });
+    const hide = !live.length || this.view === 'shop' || this.modalOpen;
+    this.boostHud.classList.toggle('hidden', hide);
+    this.boostHud.classList.toggle('below-harvest', !this.harvest.classList.contains('hidden'));
+    if (hide) return;
+    const key = live.map((b) => b.id).join('|');
+    if (key !== this.boostHudKey) {
+      this.boostHudKey = key;
+      this.boostHud.replaceChildren();
+      for (const b of live) {
+        const el = h('button', 'boost-chip');
+        el.dataset.until = String(b.until);
+        el.append(iconCanvas(BOOST_ICON[b.id], 1, 'boost-chip-icon'), h('span', 'boost-chip-time'));
+        el.onclick = () => this.openShop('boosts');
+        this.boostHud.append(el);
+      }
+    }
+    this.boostHud.querySelectorAll<HTMLElement>('.boost-chip').forEach((el, i) => {
+      const b = live[i]!;
+      const left = Math.max(0, b.until - g.time);
+      const t = left >= 3600 ? `${Math.floor(left / 3600)} h ${String(Math.floor((left % 3600) / 60)).padStart(2, '0')}` : clock(left);
+      const span = el.lastElementChild!;
+      if (span.textContent !== t) span.textContent = t;
+      el.setAttribute('aria-label', `${BOOSTS.find((x) => x.id === b.id)?.name} : encore ${duration(left)}`);
+    });
+  }
+
   /** Redessine le rayon quand ce qu'il montre change ; la bulle de Gaston et les minuteurs, à chaque appel. */
   private renderShop(): void {
     const g = this.game();
@@ -2682,8 +2715,6 @@ export class App {
     if (this.view === 'shop') {
       for (const k of this.shopNews(g)) if ((tab === 'bar') === k.startsWith('decor:')) this.shopSeen.add(k);
     }
-    const advice = shopAdvice(g, tab);
-    if (this.shopBubble.textContent !== advice.text) this.shopBubble.textContent = advice.text;
     // marques des onglets : décoration abordable, boost en cours (temps restant), étiquette abordable
     const live = BOOST_POSTS.flatMap((p) => (p.id ? [g.boostOf(p.id)] : [])).filter((b) => !!b);
     const soonest = live.length ? Math.min(...live.map((b) => b!.until)) - g.time : 0;
@@ -2701,7 +2732,7 @@ export class App {
     }
     this.shopBody.querySelectorAll<HTMLElement>('[data-until]').forEach((el) => (el.textContent = clock(Math.max(0, Number(el.dataset.until) - g.time))));
     const key = JSON.stringify([
-      tab, this.decorPick, this.labelTab, g.gems, g.owned, g.furniture, g.unlocked, g.barLevel, g.beers.length, advice.target,
+      tab, this.decorPick, this.labelTab, g.gems, g.owned, g.furniture, g.unlocked, g.barLevel, g.beers.length,
       tab === 'bar' ? DECOR_ORDER.map((id) => g.money >= g.decorDef(id).cost) : 0,
       tab === 'boosts' ? [BOOSTS.map((b) => [b.channel ? g.boostOf(b.channel)?.id : 0, g.boostBlocked(b.id)]), g.batches.length > 0 || g.planned > 0] : 0,
       tab === 'labels' ? LABEL_UNLOCKS.map((x) => g.money >= x.cost) : 0,
@@ -2711,9 +2742,9 @@ export class App {
     const scroll = this.shopBody.scrollTop;
     this.shopBody.replaceChildren();
     this.showcaseScene = null;
-    if (tab === 'bar') this.shopBar(g, advice.target);
-    if (tab === 'boosts') this.shopBoosts(g, advice.target);
-    if (tab === 'labels') this.shopLabels(g, advice.target);
+    if (tab === 'bar') this.shopBar(g);
+    if (tab === 'boosts') this.shopBoosts(g);
+    if (tab === 'labels') this.shopLabels(g);
     this.shopBody.scrollTop = scroll;
   }
 
@@ -2733,9 +2764,9 @@ export class App {
   }
 
   /** Rayon Bar : la vitrine (la pièce choisie, montrée dans le bar), puis toute la piste de la décoration. */
-  private shopBar(g: Game, target?: string): void {
+  private shopBar(g: Game): void {
     const next = g.nextDecor;
-    const pick = this.decorPick ?? (target as DecorId | undefined) ?? next?.id ?? DECOR_ORDER[DECOR_ORDER.length - 1]!;
+    const pick = this.decorPick ?? next?.id ?? DECOR_ORDER[DECOR_ORDER.length - 1]!;
     const d = g.decorDef(pick);
     const owned = g.ownsDecor(pick);
     const isNext = next?.id === pick;
@@ -2814,31 +2845,33 @@ export class App {
   }
 
   /** Rayon Boosts : un bloc par poste ; un poste occupé montre son temps restant et grise les autres effets. */
-  private shopBoosts(g: Game, target?: string): void {
-    this.shopBody.append(h('p', 'hint', 'Un effet à la fois par poste. Le même effet se prolonge, jusqu\'à 24 h d\'avance ; plus il dure, moins il coûte à la minute.'));
+  private shopBoosts(g: Game): void {
     for (const post of BOOST_POSTS) {
       const cur = post.id ? g.boostOf(post.id) : null;
       const box = h('div', `post${cur ? ' live' : ''}`);
       const head = h('div', 'post-head');
-      const state = h('span', `post-state${cur ? ' on' : ''}`);
+      head.append(h('span', 'post-name', post.name));
       if (cur) {
         const left = h('span', '', clock(cur.until - g.time));
         left.dataset.until = String(cur.until);
-        state.append(`⚡ ${BOOSTS.find((b) => b.id === cur.id)?.name} · `, left);
-      } else state.textContent = post.id ? 'libre' : '';
-      head.append(iconCanvas(POST_ICON[post.id ?? 'none'], 2), h('span', 'post-name', post.name), state);
+        const state = h('span', 'post-state on');
+        state.append('⚡ ', left);
+        head.append(state);
+      }
       box.append(head);
       for (const def of BOOSTS.filter((b) => (b.channel ?? null) === post.id)) {
-        const row = h('div', `post-row${def.id === target ? ' advised' : ''}`);
-        const text = h('div', 'post-text');
-        text.append(h('span', 'post-boost', def.name), h('span', 'post-fx', boostShort(def)));
+        const mine = cur?.id === def.id;
+        const row = h('div', `boost-row${mine ? ' mine' : ''}`);
+        const icon = h('div', 'boost-icon');
+        icon.append(iconCanvas(BOOST_ICON[def.id], 2));
+        const text = h('div', 'boost-text');
+        text.append(h('span', 'boost-name', def.name), h('span', 'boost-effect', def.text));
         const blocked = g.boostBlocked(def.id);
-        const extend = !!cur && !blocked;
         let b: HTMLButtonElement;
-        if (blocked && cur) {
-          b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
-        } else {
-          b = this.gemsBtn(extend ? `+${def.minutes >= 60 ? `${def.minutes / 60} h` : `${def.minutes} min`}` : '', def.gems, () => {
+        if (blocked && cur) b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
+        else {
+          const extend = !!cur;
+          b = this.gemsBtn('', def.gems, () => {
             const r = g.buyBoost(def.id);
             if (!r.ok) return this.toast(r.reason!, 'bad');
             this.toast(extend ? `${def.name} : prolongé !` : `${def.name} !`, 'good');
@@ -2846,19 +2879,18 @@ export class App {
             this.renderShop();
           });
           if (blocked) b.classList.add('short');
+          b.setAttribute('aria-label', `${extend ? 'Prolonger avec' : 'Lancer'} ${def.name} : ${gemsText(def.gems)}`);
         }
-        row.append(text, b);
+        row.append(icon, text, b);
         box.append(row);
       }
       this.shopBody.append(box);
     }
-    if (!g.batches.length && !g.planned) this.shopBody.append(h('p', 'note bad', 'Rien ne brasse en ce moment : un boost des machines n\'aurait aucun effet.'));
-    this.shopBody.append(h('p', 'hint gems-note', `Tu as ${gemsText(g.gems)}. Chaque commande livrée en rapporte, d'autant plus qu'elle est difficile ; chaque niveau de la brasserie aussi.`));
   }
 
   /** Rayon Étiquettes : bouteilles, formes, logos et motifs ; toucher un objet l'essaie sur ta bière. */
   private labelTab: UnlockKind = 'bottle';
-  private shopLabels(g: Game, target?: string): void {
+  private shopLabels(g: Game): void {
     const kind = this.labelTab;
     const tabs = h('div', 'chips');
     for (const k of UNLOCK_KINDS) {
@@ -2877,7 +2909,7 @@ export class App {
     const grid = h('div', `unlock-grid${kind === 'bottle' ? ' bottles' : ''}`);
     for (const x of LABEL_UNLOCKS.filter((y) => y.kind === kind)) {
       const owned = g.unlocked.includes(x.id);
-      const cell = h('div', `unlock${owned ? ' owned' : ''}${x.id === target ? ' advised' : ''}${x.gems ? ' premium' : ''}`);
+      const cell = h('div', `unlock${owned ? ' owned' : ''}${x.gems ? ' premium' : ''}`);
       // l'objet, montré avec l'étiquette de ta première bière
       const preview = h('div', 'unlock-preview');
       const l = { ...sample, [x.kind]: x.value } as Label;

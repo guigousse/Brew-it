@@ -7,7 +7,6 @@ import { Rng } from './rng';
 import { popTarget, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
 import { GEMS } from './shop';
-import { shopAdvice } from './advice';
 import { STATION_ORDER } from './stations';
 import { STORAGE } from './warehouse';
 
@@ -779,22 +778,6 @@ describe('diamants', () => {
     const g = Game.fromJSON(raw);
     expect(g.gems).toBe(42);
     expect((g as unknown as { caps?: number }).caps).toBeUndefined();
-  });
-});
-
-describe('conseil de Gaston au magasin', () => {
-  it('un seul conseil, selon le rayon et la partie', () => {
-    const g = withBeer(1e6);
-    expect(shopAdvice(g, 'bar').target).toBe('plants');
-    expect(shopAdvice(g, 'bar').text).toContain('à ta portée');
-    g.money = 100;
-    expect(shopAdvice(g, 'bar').text).toContain('Encore 300 €');
-    // des fûts qui attendent : le happy hour
-    g.beers[0]!.kegs = Array(8).fill(1);
-    expect(shopAdvice(g, 'boosts').target).toBe('happyHour');
-    // une étiquette abordable à essayer
-    g.money = 1e6;
-    expect(shopAdvice(g, 'labels').target).toBe('emblem:leaf');
   });
 });
 

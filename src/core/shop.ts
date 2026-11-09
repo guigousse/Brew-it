@@ -49,15 +49,15 @@ export const BOOST_POSTS: readonly { id: BoostChannel | null; name: string; text
 ];
 
 export const BOOSTS: readonly BoostDef[] = [
-  { id: 'rush', channel: 'brew', name: 'Coup de feu', text: 'Machines ×2 pendant 30 min.', mult: 2, minutes: 30, gems: 3 },
-  { id: 'cadence', channel: 'brew', name: 'Cadence ×2', text: 'Machines ×2 pendant 2 h.', mult: 2, minutes: 120, gems: 10 },
-  { id: 'nightShift', channel: 'brew', name: 'Équipe de nuit', text: 'Machines ×2 pendant 8 h : toute la nuit.', mult: 2, minutes: 480, gems: 30 },
-  { id: 'fullSpeed', channel: 'brew', name: 'Plein régime', text: 'Machines ×3 pendant 1 h.', mult: 3, minutes: 60, gems: 12 },
-  { id: 'yeast', channel: 'yeast', name: 'Levure express', text: 'Fermentation et garde ×3 pendant 2 h.', mult: 3, minutes: 120, gems: 8 },
-  { id: 'happyHour', channel: 'bar', name: 'Happy hour', text: 'Deux fois plus de clients pendant 2 h, mais les verres 20 % moins chers : de quoi écouler des fûts.', mult: 2, minutes: 120, priceMult: 0.8, gems: 6 },
-  { id: 'buzz', channel: 'bar', name: 'Bouche-à-oreille', text: '50 % de clients en plus pendant 8 h.', mult: 1.5, minutes: 480, gems: 15 },
-  { id: 'broker', channel: 'wholesale', name: 'Grossiste généreux', text: 'Le grossiste paie 50 % de plus pendant 4 h.', mult: 1.5, minutes: 240, gems: 8 },
-  { id: 'prospect', name: 'Prospection', text: 'Une nouvelle commande arrive tout de suite (s\'il reste une place au tableau).', mult: 1, minutes: 0, gems: 3 },
+  { id: 'rush', channel: 'brew', name: 'Coup de feu', text: 'Machines 2× plus vite · 30 min', mult: 2, minutes: 30, gems: 3 },
+  { id: 'cadence', channel: 'brew', name: 'Cadence ×2', text: 'Machines 2× plus vite · 2 h', mult: 2, minutes: 120, gems: 10 },
+  { id: 'nightShift', channel: 'brew', name: 'Équipe de nuit', text: 'Machines 2× plus vite · 8 h', mult: 2, minutes: 480, gems: 30 },
+  { id: 'fullSpeed', channel: 'brew', name: 'Plein régime', text: 'Machines 3× plus vite · 1 h', mult: 3, minutes: 60, gems: 12 },
+  { id: 'yeast', channel: 'yeast', name: 'Levure express', text: 'Cuves 3× plus vite · 2 h', mult: 3, minutes: 120, gems: 8 },
+  { id: 'happyHour', channel: 'bar', name: 'Happy hour', text: 'Clients ×2, verres −20 % · 2 h', mult: 2, minutes: 120, priceMult: 0.8, gems: 6 },
+  { id: 'buzz', channel: 'bar', name: 'Bouche-à-oreille', text: '50 % de clients en plus · 8 h', mult: 1.5, minutes: 480, gems: 15 },
+  { id: 'broker', channel: 'wholesale', name: 'Grossiste généreux', text: 'Le grossiste paie +50 % · 4 h', mult: 1.5, minutes: 240, gems: 8 },
+  { id: 'prospect', name: 'Prospection', text: 'Une commande arrive tout de suite', mult: 1, minutes: 0, gems: 3 },
 ];
 export const boostById = (id: string) => BOOSTS.find((b) => b.id === id);
 
