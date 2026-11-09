@@ -386,6 +386,25 @@ const GRIDS = {
     '................',
     '................',
   ],
+  // horloge : le temps qui reste à une commande, ou avant la prochaine lettre
+  clock: [
+    '................',
+    '.....kkkkkk.....',
+    '...kkwwwwwwkk...',
+    '..kwwwwkwwwwwk..',
+    '..kwwwwkwwwwwk..',
+    '.kwwwwwkwwwwwwk.',
+    '.kwwwwwkwwwwwwk.',
+    '.kwwwwwkkkkwwwk.',
+    '.kwwwwwwwwwwwwk.',
+    '.kwwwwwwwwwwwwk.',
+    '..kwwwwwwwwwwk..',
+    '..kwwwwwwwwwwk..',
+    '...kkwwwwwwkk...',
+    '.....kkkkkk.....',
+    '................',
+    '................',
+  ],
   // fût en inox, cerclé : les commandes de fûts
   keg: [
     '................',

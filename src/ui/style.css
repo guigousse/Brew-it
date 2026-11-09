@@ -678,62 +678,57 @@ button:disabled { cursor: default; opacity: .5; }
 .ws-have { flex: 1; color: var(--dim); }
 
 
-/* --- Commandes : des lettres sur papier crème ------------------------------------------------- */
-.letter {
-  position: relative; display: grid; gap: 6px; padding: 10px 10px 8px; color: #3a2a20; background: #f3e6c4;
-  border: 2px solid #1b1424; box-shadow: inset -3px -3px 0 #d8c69c, 3px 3px 0 #0006;
-  background-image: repeating-linear-gradient(#0000 0 21px, #c9b48a55 21px 22px);
-}
-.letter::before { content: ''; position: absolute; top: -5px; left: 50%; width: 10px; height: 10px; margin-left: -5px; background: #e8553a; border: 2px solid #1b1424; box-shadow: inset -2px -2px 0 #8a2a1c; }
-.letter.ready { box-shadow: inset -3px -3px 0 #d8c69c, 0 0 0 3px var(--accent), 3px 3px 0 #0006; }
+/* --- Commandes : des lettres épurées, sur papier crème ---------------------------------------- */
+.letter { position: relative; display: grid; gap: 8px; padding: 10px; color: #2a1a12; background: #f3e6c4; border: 2px solid #1b1424; box-shadow: inset -3px -3px 0 #d8c69c; }
+.letter.ready { box-shadow: inset -3px -3px 0 #d8c69c, 0 0 0 3px var(--accent); }
 .letter-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.letter-face { width: 48px; height: 48px; flex: none; image-rendering: pixelated; background: #e2d2a8; border: 2px solid #1b1424; }
-.letter-who { display: grid; min-width: 0; line-height: 1.05; }
-.letter-client { font-size: 20px; color: #2a1a12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.letter-type { font-size: 15px; color: #7a6248; }
-/* tampons, de travers comme posés à la main */
-.letter-stamp { margin-left: auto; flex: none; padding: 1px 6px; font-family: var(--font-title); font-size: 10px; text-transform: uppercase; border: 2px solid currentColor; transform: rotate(-8deg); opacity: .85; }
-.stamp-urgent { color: #c8301c; }
-.stamp-style { color: #2c6a3a; }
-.stamp-keg { color: #3f5a8a; }
-.stamp-mix { color: #7a3a8a; }
-.stamp-prestige { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; font-size: 16px; color: #ffe7a0; background: #a8742a; border: 2px solid #5c3a0c; border-radius: 50%; box-shadow: inset -3px -3px 0 #8a5c14; opacity: 1; }
-.letter-quote { margin: 0; font-size: 18px; line-height: 1.1; color: #4a3424; font-style: italic; }
-.letter-ask { display: flex; flex-wrap: wrap; gap: 4px; }
-.ask-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; font-size: 17px; color: #2a1a12; background: #e2d2a8; border: 2px solid #1b1424; }
+.letter-client { flex: 1; min-width: 0; font-size: 21px; line-height: 1.05; color: #2a1a12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* minuteur : horloge et temps en clair, sur fond d'encre ; vert, orange, puis rouge */
+.timer { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 5px; font-size: 19px; color: #7ee081; background: #1b1424; font-variant-numeric: tabular-nums; }
+.timer-icon { width: 16px; height: 16px; image-rendering: pixelated; }
+.timer.mid { color: #f2c14e; }
+.timer.low { color: #ff8a6a; }
+.kind-urgent .timer.low { animation: pulse 1s steps(2) infinite; }
+.timer.wait { color: var(--accent); }
+.letter-bar { height: 5px; margin-top: -4px; background: #d8c69c; }
+.letter-bar > i { display: block; height: 100%; background: #4c8a50; transition: width .3s steps(4); }
+.letter-bar.mid > i { background: #d4823a; }
+.letter-bar.low > i { background: #c8301c; }
+/* la demande : des pastilles pleines, bien contrastées */
+.letter-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.ask-kind { padding: 2px 7px; font-family: var(--font-title); font-size: 11px; text-transform: uppercase; color: #fff; background: #5c4a6e; border: 2px solid #1b1424; }
+.ask-kind.kind-urgent { background: #c8301c; }
+.ask-kind.kind-style { background: #2c6a3a; }
+.ask-kind.kind-keg { background: #3f5a8a; }
+.ask-kind.kind-mix { background: #7a3a8a; }
+.ask-kind.kind-prestige { background: #a8742a; }
+.ask-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: 18px; color: #1b1424; background: #fffaf0; border: 2px solid #1b1424; }
 .ask-icon { width: 16px; height: 16px; image-rendering: pixelated; }
-.ask-style { background: #c8e8b0; }
-.ask-quality { color: #a8742a; letter-spacing: -1px; }
-.letter-beers { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.letter-beer { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px 1px 2px; font-size: 16px; background: #fff8e4; border: 2px solid #b8a888; }
-.letter-beer.ok { border-color: #4c8a50; color: #24502a; }
-.letter-beer .label-thumb { width: 28px; }
-.letter-none { margin: 0; font-size: 16px; color: #8a4a2a; }
+.ask-style { color: #fff; background: #2c6a3a; }
+.ask-quality { color: #f2c14e; background: #1b1424; letter-spacing: -1px; }
+/* ce qui partira : une ligne de texte franche */
+.letter-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: 18px; line-height: 1.1; }
+.letter-status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.letter-status.ok { color: #1e5a2a; }
+.letter-status.short { color: #8a4a1c; }
+.letter-status.none { color: #8a2a1c; }
 .letter .chips .chip { color: var(--text); }
-/* jauge du temps : verte, orange, rouge */
-.letter-gauge { position: relative; height: 16px; background: #d8c69c; border: 2px solid #1b1424; overflow: hidden; }
-.letter-gauge-fill { position: absolute; inset: 0 auto 0 0; background: #6cc040; transition: width .3s steps(4); }
-.letter-gauge.mid .letter-gauge-fill { background: #e8a030; }
-.letter-gauge.low .letter-gauge-fill { background: #e8553a; }
-.kind-urgent .letter-gauge.low .letter-gauge-fill { animation: pulse 1s steps(2) infinite; }
-.letter-gauge-time { position: absolute; right: 4px; top: -3px; font-size: 15px; color: #1b1424; }
 .letter .row { display: flex; flex-wrap: nowrap; gap: 6px; }
 .order-send-label { min-width: 0; text-align: left; line-height: 1; }
 /* livraison : tampon « LIVRÉ » */
 .letter.delivered { animation: letter-out .35s steps(3) 1s forwards; }
 .letter-delivered {
-  position: absolute; left: 50%; top: 42%; padding: 2px 12px; font-family: var(--font-title); font-size: 26px; color: #2c8a4a;
+  position: absolute; left: 50%; top: 50%; padding: 2px 12px; font-family: var(--font-title); font-size: 26px; color: #2c8a4a;
   border: 4px solid #2c8a4a; background: #f3e6c4cc; transform: translate(-50%, -50%) rotate(-12deg); animation: stamp .3s steps(3) both; pointer-events: none;
 }
 @keyframes stamp { from { transform: translate(-50%, -50%) rotate(-12deg) scale(2.4); opacity: 0; } to { transform: translate(-50%, -50%) rotate(-12deg) scale(1); opacity: 1; } }
 @keyframes letter-out { to { opacity: 0; transform: translateY(-10px); } }
 /* emplacement libre : une lettre attendue */
-.letter-slot { display: flex; align-items: center; gap: 8px; padding: 8px 10px; color: var(--dim); border: 2px dashed #5c4a6e; background: #1b142466; }
-.letter-slot-icon { width: 32px; height: 32px; image-rendering: pixelated; opacity: .6; flex: none; }
-.letter-slot-text { flex: 1; display: grid; line-height: 1.1; min-width: 0; }
-.letter-slot-title { color: var(--text); font-size: 17px; }
-.letter-slot-time { color: var(--accent); font-family: var(--font-title); font-size: 18px; font-variant-numeric: tabular-nums; }
-.letter-slot .btn.price { width: auto; min-height: 36px; font-size: 16px; padding: 3px 8px; }
+.slot-free { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 2px dashed #5c4a6e; background: #1b142466; }
+.slot-free-icon { width: 32px; height: 32px; image-rendering: pixelated; opacity: .7; flex: none; }
+.slot-free-info { flex: 1; min-width: 0; display: grid; justify-items: start; gap: 2px; }
+.slot-free-text { font-size: 17px; color: var(--dim); }
+.slot-free .btn.price { width: auto; min-height: 36px; font-size: 16px; padding: 3px 8px; }
 /* pièces et diamants qui filent vers le compteur */
 .fly { position: fixed; z-index: 50; width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none; transition: transform .7s cubic-bezier(.5, -0.4, .7, 1), opacity .7s; image-rendering: pixelated; }
 .fly.coin { border-radius: 50%; }

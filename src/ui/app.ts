@@ -8,8 +8,6 @@ import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type St
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
-import { drawPortrait } from '../render/portraits';
-import { CLIENT_KIND_NAME, orderQuote, orderThanks } from '../core/letters';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, labelSpot, type ShelfBottleKind } from '../render/bottleArt';
 import { instBox } from '../render/decor';
 import { decorLayout } from '../render/decorLayout';
@@ -1609,7 +1607,7 @@ export class App {
       }
     }
     st.ui.querySelectorAll<HTMLElement>('[data-expires]').forEach((el) => {
-      if (el.classList.contains('letter-gauge')) this.paintGauge(el, g.time);
+      if (el.classList.contains('timer')) this.paintTimer(el, g.time);
       else el.textContent = `⏳ ${duration(Number(el.dataset.expires) - g.time)}`;
     });
     const waits = g.slotWaits;
@@ -1803,15 +1801,21 @@ export class App {
     card.append(foot);
   }
 
-  /** Un emplacement libre : la prochaine lettre arrive dans… ; le plus proche propose la prospection. */
+  /** Minuteur lisible : une horloge et le temps, en clair sur fond d'encre ; sa couleur dit l'urgence. */
+  private timer(text: string, cls = ''): HTMLElement {
+    const t = h('span', `timer ${cls}`);
+    t.append(iconCanvas('clock', 1, 'timer-icon'), h('span', 'timer-text', text));
+    return t;
+  }
+
+  /** Un emplacement libre : le temps avant sa prochaine lettre ; le plus proche propose la prospection. */
   private emptySlot(g: Game, wait: number, i: number): HTMLElement {
-    const el = h('div', 'letter-slot');
-    const icon = iconCanvas('envelope', 2, 'letter-slot-icon');
-    const text = h('div', 'letter-slot-text');
-    const left = h('span', 'letter-slot-time', clock(wait));
-    left.dataset.slot = String(i);
-    text.append(h('span', 'letter-slot-title', 'Prochaine lettre'), left);
-    el.append(icon, text);
+    const el = h('div', 'slot-free');
+    const t = this.timer(clock(wait), 'wait');
+    t.querySelector<HTMLElement>('.timer-text')!.dataset.slot = String(i);
+    const info = h('div', 'slot-free-info');
+    info.append(h('span', 'slot-free-text', 'Prochaine lettre'), t);
+    el.append(iconCanvas('envelope', 2, 'slot-free-icon'), info);
     if (i === 0) {
       const b = this.gemsBtn('Prospecter', g.boostCost('prospect'), () => {
         const r = g.buyBoost('prospect');
@@ -1827,31 +1831,32 @@ export class App {
   }
 
   /**
-   * Une commande, présentée comme une lettre : le client (portrait, type, sa phrase), ce qu'il demande en images,
-   * les bières qui partiront, le temps qui reste, et le bouton d'envoi avec ce qu'elle rapporte.
+   * Une commande, en lettre épurée : qui et combien de temps il reste ; ce qu'il demande (type, quantité, style,
+   * qualité) ; ce qui partira ; le bouton d'envoi avec ce qu'elle rapporte.
    */
   private orderCard(g: Game, o: Order): HTMLElement {
     if (!this.picks.has(o.id)) this.picks.set(o.id, g.autoPick(o));
     const pick = this.picks.get(o.id)!;
     const q = g.quote(o, pick);
     const card = h('div', `letter kind-${o.kind}${q.ok ? ' ready' : ''}`);
-    card.dataset.order = String(o.id);
-    // en-tête : portrait, nom, type de client ; le tampon du type de commande
+    // en-tête : le client, le temps qui reste (et sa barre)
     const head = h('div', 'letter-head');
-    const face = h('canvas', 'letter-face');
-    drawPortrait(face, o.type, o.client);
-    const who = h('div', 'letter-who');
-    who.append(h('span', 'letter-client', o.client), h('span', 'letter-type', CLIENT_KIND_NAME[o.type] ?? ''));
-    head.append(face, who);
-    if (o.kind !== 'classic') head.append(h('span', `letter-stamp stamp-${o.kind}`, o.kind === 'prestige' ? '★' : KIND_LABEL[o.kind]));
-    card.append(head, h('p', 'letter-quote', `« ${orderQuote(o)} »`));
-    // la demande, en images
+    const time = this.timer(duration(o.expires - g.time));
+    time.dataset.expires = String(o.expires);
+    time.dataset.received = String(o.received);
+    head.append(h('span', 'letter-client', o.client), time);
+    const bar = h('div', 'letter-bar');
+    bar.append(h('i', ''));
+    card.append(head, bar);
+    this.paintTimer(time, g.time);
+    // la demande, en pastilles lisibles
     const ask = h('div', 'letter-ask');
+    if (o.kind !== 'classic') ask.append(h('span', `ask-kind kind-${o.kind}`, KIND_LABEL[o.kind]));
     const qty = h('span', 'ask-chip');
     qty.append(iconCanvas(o.kind === 'keg' ? 'keg' : 'range', 1, 'ask-icon'), `×${o.qty}`);
     qty.setAttribute('aria-label', o.kind === 'keg' ? `${o.qty} fûts` : `${o.qty} bouteilles`);
     ask.append(qty);
-    if (o.mix) ask.append(h('span', 'ask-chip', `${o.mix} bières différentes`));
+    if (o.mix) ask.append(h('span', 'ask-chip', `${o.mix} bières`));
     const want = o.want ? trendById(o.want) : undefined;
     if (want) ask.append(h('span', 'ask-chip ask-style', want.short));
     const q5 = Math.round(o.minQuality * 5);
@@ -1859,19 +1864,14 @@ export class App {
     quality.setAttribute('aria-label', `Qualité minimale : ${Math.round(o.minQuality * 100)} %`);
     ask.append(quality);
     card.append(ask);
-    // les bières qui partiront
+    // ce qui partira
     const ok = g.suitable(o);
     const avail = (b: Beer) => (o.kind === 'keg' ? b.kegs.length : b.stock);
-    if (!ok.length) card.append(h('p', 'letter-none', 'Aucune bière de ta gamme ne convient pour l\'instant.'));
+    if (!ok.length) card.append(h('p', 'letter-status none', '✗ Aucune bière ne convient'));
     else if (!this.editing.has(o.id)) {
-      const line = h('div', 'letter-beers');
-      for (const t of q.take.length ? q.take : ok.slice(0, 3).map((beer) => ({ beer, n: 0 }))) {
-        const chip = h('span', `letter-beer${q.ok ? ' ok' : ''}`);
-        const thumb = h('canvas', 'label-thumb');
-        drawLabel(thumb, t.beer.label, t.beer.name);
-        chip.append(thumb, h('span', '', `${t.beer.name}${q.ok ? ' ✓' : ` · ${avail(t.beer)}`}`));
-        line.append(chip);
-      }
+      const line = h('div', `letter-status ${q.ok ? 'ok' : 'short'}`);
+      const names = (q.take.length ? q.take.map((t) => t.beer) : ok).map((b) => b.name).join(', ');
+      line.append(h('span', 'letter-status-text', q.ok ? `✓ ${names}` : `Stock insuffisant : ${names}`));
       if (ok.length > 1) line.append(this.btn('btn small', 'Changer', () => {
         this.editing.add(o.id);
         this.computer!.key = '';
@@ -1882,10 +1882,7 @@ export class App {
       const chips = h('div', 'chips');
       for (const b of ok) {
         const on = pick.includes(b.id);
-        const chip = h('button', `chip beer-chip${on ? ' active' : ''}`);
-        const thumb = h('canvas', 'label-thumb');
-        drawLabel(thumb, b.label, b.name);
-        chip.append(thumb, h('span', '', `${b.name} · ${avail(b)}`));
+        const chip = h('button', `chip${on ? ' active' : ''}`, `${b.name} · ${avail(b)}`);
         chip.disabled = !on && avail(b) <= 0;
         chip.onclick = () => {
           this.picks.set(o.id, on ? pick.filter((x) => x !== b.id) : [...pick, b.id]);
@@ -1895,15 +1892,6 @@ export class App {
       }
       card.append(chips);
     }
-    // le temps qui reste : une jauge qui se vide
-    const gauge = h('div', 'letter-gauge');
-    const fill = h('i', 'letter-gauge-fill');
-    const left = h('span', 'letter-gauge-time');
-    gauge.dataset.expires = String(o.expires);
-    gauge.dataset.received = String(o.received);
-    gauge.append(fill, left);
-    this.paintGauge(gauge, g.time);
-    card.append(gauge);
     // envoyer : le bouton dit ce que rapporte la commande (euros + diamants)
     const row = h('div', 'row');
     const gems = orderGems(o);
@@ -1914,13 +1902,13 @@ export class App {
       this.editing.delete(o.id);
       this.onSent?.();
       this.sheetKey = '';
-      this.deliver(card, send, o, r.amount!, gems);
+      this.deliver(card, send, r.amount!, gems);
     });
     send.disabled = !q.ok;
     const gain = h('span', 'order-gain');
     gain.append(h('span', '', moneyInt(o.reward)), h('span', 'order-gain-sep', '+'), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(gems)));
-    send.append(h('span', 'order-send-label', q.ok ? 'Envoyer' : 'Stock insuffisant'), gain);
-    send.setAttribute('aria-label', `${q.ok ? 'Envoyer' : 'Stock insuffisant'} : ${moneyInt(o.reward)} et ${gemsText(gems)}`);
+    send.append(h('span', 'order-send-label', 'Envoyer'), gain);
+    send.setAttribute('aria-label', `Envoyer : ${moneyInt(o.reward)} et ${gemsText(gems)}`);
     row.append(send, this.confirmBtn('btn small bad', 'Refuser', 'Refuser ?', () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
@@ -1931,26 +1919,29 @@ export class App {
     return card;
   }
 
-  /** Jauge du temps qui reste à une commande : verte, puis orange, puis rouge. */
-  private paintGauge(gauge: HTMLElement, now: number): void {
-    const end = Number(gauge.dataset.expires);
-    const start = Number(gauge.dataset.received);
+  /** Minuteur d'une commande : le temps qui reste, et la barre sous l'en-tête ; vert, orange, puis rouge. */
+  private paintTimer(timer: HTMLElement, now: number): void {
+    const end = Number(timer.dataset.expires);
+    const start = Number(timer.dataset.received);
     const k = Math.max(0, Math.min(1, (end - now) / Math.max(1, end - start)));
-    const fill = gauge.firstElementChild as HTMLElement;
-    fill.style.width = `${Math.round(k * 100)}%`;
-    gauge.classList.toggle('mid', k <= 0.5 && k > 0.2);
-    gauge.classList.toggle('low', k <= 0.2);
-    const t = `⏳ ${duration(end - now)}`;
-    if (gauge.lastElementChild!.textContent !== t) gauge.lastElementChild!.textContent = t;
+    const level = k <= 0.2 ? 'low' : k <= 0.5 ? 'mid' : '';
+    timer.classList.toggle('mid', level === 'mid');
+    timer.classList.toggle('low', level === 'low');
+    const text = timer.querySelector('.timer-text')!;
+    const t = duration(end - now);
+    if (text.textContent !== t) text.textContent = t;
+    const card = timer.closest('.letter');
+    const fill = card?.querySelector<HTMLElement>('.letter-bar > i');
+    if (fill) fill.style.width = `${Math.round(k * 100)}%`;
+    card?.querySelector('.letter-bar')?.classList.toggle('mid', level === 'mid');
+    card?.querySelector('.letter-bar')?.classList.toggle('low', level === 'low');
   }
 
-  /** Livraison : le tampon « LIVRÉ » s'abat, le client remercie, les pièces et les diamants filent vers le haut. */
+  /** Livraison : le tampon « LIVRÉ » s'abat, les pièces et les diamants filent vers les compteurs du haut. */
   private deliveringUntil = 0;
-  private deliver(card: HTMLElement, from: HTMLElement, o: Order, amount: number, gems: number): void {
+  private deliver(card: HTMLElement, from: HTMLElement, amount: number, gems: number): void {
     this.deliveringUntil = performance.now() + 1300;
     card.classList.add('delivered');
-    const quote = card.querySelector('.letter-quote');
-    if (quote) quote.textContent = `« ${orderThanks(o)} »`;
     card.append(h('div', 'letter-delivered', 'LIVRÉ'));
     this.gainToast(amount);
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
