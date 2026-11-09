@@ -2,16 +2,18 @@
 
 ## Le rythme visé
 
-| Critère | Cible | Résultat (novembre 2026, joueur simulé réparé) |
+| Critère | Cible | Résultat (rééquilibrage de novembre 2026) |
 |---|---|---|
-| Durée pour tout débloquer (4 visites/jour) | 4 semaines environ | **plus de 120 jours** : 7 machines au niveau 5 vers J96, il reste encore des cuves, l'ordinateur 5 et 2 places de gamme |
-| Durée pour un joueur occasionnel (2 visites/jour) | 5 à 6 semaines | **plus de 150 jours** |
-| Visites où l'on peut acheter quelque chose | au moins 1 sur 2 | **61 %** (82 % à 2 visites/jour) |
-| Plus longue période sans rien acheter | 1 journée au plus | **5 visites** (4 à 2 visites/jour) |
-| Premier jour | beaucoup de récompenses | ~20 achats, niveau 2 en 4 h 30 de jeu |
-| Niveau 3 des machines | — | les 7 entre J9 et J18 ; niveau 4 de J33 à J54 |
+| Durée pour tout débloquer (4 visites/jour) | 4 semaines environ | **29 jours** |
+| Durée pour un joueur occasionnel (2 visites/jour) | 5 à 6 semaines | **48 jours** (un peu long, voir plus bas) |
+| Visites où l'on peut acheter quelque chose | au moins 1 sur 2 | **82 %** (98 % à 2 visites/jour) |
+| Plus longue période sans rien acheter | 1 journée au plus | **2 visites** (1 à 2 visites/jour) |
+| Premier jour | beaucoup de récompenses | ~20 achats, niveau 2 en 4 h 30 de jeu (inchangé) |
+| Machines (4 visites/jour) | des paliers réguliers | niveau 3 à J4, niveau 4 à J10, niveau 5 à J18 |
 
-**Le jeu est aujourd'hui 4 fois plus long que l'objectif.** Les chiffres « 28 jours » des sections plus bas datent d'avant le mobilier du bar : depuis, le joueur simulé n'achetait plus rien après le premier jour (voir « Joueur simulé réparé », en fin de document), et l'écart est passé inaperçu. Le rééquilibrage reste à faire ; le premier suspect est le saut de prix des machines entre les niveaux 2 et 3 (×250, `TIER_COST`).
+Avant ce rééquilibrage, le joueur simulé réparé mettait **plus de 120 jours** (voir « Rééquilibrage de novembre 2026 », en fin de document).
+
+**À 2 visites par jour, le jeu reste plus long que la cible** : la brasserie ne tourne que 8 h pendant l'absence, et deux visites espacées de 12 h perdent environ 8 h de production par jour. Pour s'en rapprocher sans toucher au rythme des joueurs assidus, on pourrait porter l'absence à 12 h, éventuellement dans une offre premium.
 
 Le jeu ne doit pas se terminer en une semaine, mais on ne doit jamais être bloqué plus d'une journée. Revenir plusieurs fois par jour fait avancer, sans qu'il faille « farmer » : la brasserie tourne seule jusqu'à 8 h.
 
@@ -199,3 +201,25 @@ Corrections du script :
 - il ne lance une **campagne de pub** que si elle coûte au plus un dixième du prochain achat. Avant, il la relançait dès qu'il avait 4 fois son prix, et la pub mangeait l'épargne des machines (30 000 € la campagne au niveau 3).
 
 Mesures (`npm run balance 120`, puis `SESSIONS=8,20 npm run balance 150`) : voir le tableau en tête de document. Le revenu passe d'environ 10 k€ par jour (J3) à 80 k€ (J31), 325 k€ (J61) et 1,4 M€ (J106).
+
+## Rééquilibrage de novembre 2026
+
+**Machines.** `TIER_COST` passe de ×1, ×250, ×2 500, ×10 000 à **×1, ×40, ×400, ×2 000** (niveaux 2 à 5). Le saut de ×250 au niveau 3 coûtait 137 500 € pour les 7 appareils, alors que le joueur gagnait environ 15 000 € par jour. Il reste un palier régulier d'environ ×10, comme pour le bar, le stockage et l'ordinateur.
+
+**Fin de partie.** Places de gamme 7 et 8 : 1,5 M€ et 3 M€ (au lieu de 3 M€ et 8 M€) ; ordinateur 5 : 2 M€ (au lieu de 3 M€) ; bar 5 : 900 000 € (au lieu de 1,2 M€) ; stockage 5 : 800 000 € (au lieu de 1 M€).
+
+**Événements du bar.** Mesure : on reprend l'état de la partie simulée au dernier passage à chaque niveau du bar, on joue 24 h avec et sans l'événement (6 fûts prévus par tireuse), en moyenne sur plusieurs tirages. Un événement ne crée presque pas de ventes : il vide plus vite les fûts, qui se seraient vendus de toute façon. Son bénéfice vient du **prix des verres pendant l'événement** (fléchettes ×1,3, foot ×1,5, fête ×2). Les anciens prix (jusqu'à 900 000 € la fête) ne rapportaient que 3 à 35 % de leur prix. Nouveau prix de référence : 80, 450, 2 000, 4 000, 12 000 € ; un événement rapporte maintenant de 1,3 à 3,3 fois son prix quand la cave est prête, rien quand elle est vide.
+
+| Bar | Fléchettes | Foot | Fête |
+|---|---|---|---|
+| 1 | ×3,3 | ×1,9 | ×1,7 |
+| 2 | ×1,9 | ×1,8 | ×2,8 |
+| 3 | ×3,3 | ×2,0 | ×1,7 |
+| 4 | ×1,7 | ×1,4 | ×1,9 |
+| 5 | ×1,8 | ×1,3 | ×1,6 |
+
+**Campagnes de pub.** Cinq campagnes, une par niveau de l'ordinateur (voir GAME_DESIGN.md). Prix = part d'une journée de revenus typique au niveau de la brasserie (`AD_REF` : 1 500, 12 000, 90 000, 500 000, 1,8 M€ ; parts de 4 à 13 %). L'ancienne campagne coûtait 30 000 € au niveau 3, soit une journée de revenus, pour un rendement d'environ ×0,2. Mesure à 24 h, en livrant toutes les 30 min : de ×1,2 à ×4,5 à partir du niveau 2 de la brasserie, avec un bruit d'environ ±50 % (les commandes sont tirées au hasard) ; au niveau 1, les affiches ne rapportent rien faute de stock. Dans la partie complète à 4 visites par jour, les pubs sont à peu près neutres : les lettres en plus attendent la visite suivante. Elles récompensent le joueur actif.
+
+**Mesurer la rentabilité.** `SNAP=/tmp/snaps npm run balance 45` garde l'état de la partie à chaque niveau, puis `npm run roi /tmp/snaps ev` (événements) ou `npm run roi /tmp/snaps ad` (pubs) rejoue 24 h avec et sans chaque action.
+
+**Joueur simulé.** Il lance la meilleure campagne débloquée dès le niveau 2, quand il a deux fois son prix, et un événement seulement s'il ne retarde pas son prochain achat (au plus un dixième de son prix). Avant ce garde-fou, il enchaînait des fêtes à perte qui mangeaient son épargne.

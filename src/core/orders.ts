@@ -113,7 +113,7 @@ export const COMPUTERS: readonly { name: string; slots: number; cost: number }[]
   { name: 'PC d\'occasion', slots: 3, cost: 1500 },
   { name: 'Poste de bureau', slots: 4, cost: 40000 },
   { name: 'Logiciel de gestion', slots: 5, cost: 400000 },
-  { name: 'Intelligence logistique', slots: 6, cost: 3000000 },
+  { name: 'Intelligence logistique', slots: 6, cost: 2000000 },
 ];
 /** Délai entre deux nouvelles commandes (s de jeu) : de 30 à 60 min. */
 export const ORDER_GAP_MIN_S = 30 * 60;
@@ -160,7 +160,12 @@ export interface OrderContext {
   trends: readonly Trend[];
   /** Commande de démarrage : classique, chez un particulier ou un bistrot, et livrable avec le premier brassin. */
   starter?: boolean;
+  /** Type imposé (la pub télé fait venir une commande de prestige). */
+  kind?: OrderKind;
 }
+
+/** Qualité exigée par une commande de prestige (« Excellente »). */
+export const PRESTIGE_QUALITY = 0.85;
 
 /** Les premières commandes de la partie sont des commandes de démarrage, livrables avec la blonde du tutoriel. */
 export const STARTER_ORDERS = 3;
@@ -183,7 +188,7 @@ export function drawOrder(id: number, ctx: OrderContext): Order {
   const open = openTypes(ctx.breweryLevel, ctx.brand);
   const types = ctx.starter ? open.filter((c) => c.kinds.classic && c.minQuality <= 0.45) : open;
   const type = (types.length ? types : open)[Math.floor(rng.next() * (types.length || open.length))]!;
-  let kind = ctx.starter ? 'classic' : pickWeighted(rng, type.kinds);
+  let kind: OrderKind = ctx.starter ? 'classic' : ctx.kind ?? pickWeighted(rng, type.kinds);
   if (kind === 'mix' && ctx.beers < 2) kind = 'classic';
   let bottles = (ORDER_BASE[ctx.breweryLevel - 1] ?? 15) * type.size * (0.6 + 0.8 * rng.next());
   if (kind === 'urgent') bottles *= 0.6;
@@ -192,7 +197,7 @@ export function drawOrder(id: number, ctx: OrderContext): Order {
   if (ctx.starter) bottles = Math.min(bottles, STARTER_MAX_BOTTLES);
   const order: Order = {
     id, type: type.id, client: type.names[Math.floor(rng.next() * type.names.length)]!, kind, qty: bottles,
-    minQuality: kind === 'prestige' ? 0.85 : type.minQuality, reward: 0, received: ctx.time,
+    minQuality: kind === 'prestige' ? PRESTIGE_QUALITY : type.minQuality, reward: 0, received: ctx.time,
     expires: ctx.time + (kind === 'urgent' ? URGENT_LIFE_S : ORDER_LIFE_MIN_S + (ORDER_LIFE_MAX_S - ORDER_LIFE_MIN_S) * rng.next()),
   };
   if (kind === 'style' || kind === 'urgent' || kind === 'prestige') {

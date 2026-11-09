@@ -2,8 +2,8 @@ import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Level
 import { EventBus } from './events';
 import type { Label } from './label';
 import { PARTY } from './market';
-import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type BarEventId, type ShopItemId } from './market';
-import { orderGems, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
+import { AD_EXTEND, adById, adCost, ADS, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type AdDef, type AdId, type BarEventId, type ShopItemId } from './market';
+import { orderGems, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, PRESTIGE_QUALITY, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
@@ -207,6 +207,10 @@ export class Game {
   barMessage = BAR_MESSAGE;
   /** Fin de la campagne de pub en cours. */
   adUntil = 0;
+  /** La campagne de pub en cours (ou la dernière). */
+  adId: AdId = 'paper';
+  /** La pub télé fait venir une commande de prestige : la prochaine lettre en sera une. */
+  adPrestige = false;
   /** Boosts en cours, un par canal (brasserie, levure, bar, grossiste). */
   boosts: Partial<Record<BoostChannel, { id: BoostId; until: number }>> = {};
   /** Fin des contrats du livreur et de l'apprenti (le barman a le sien : barmanUntil). */
@@ -792,7 +796,7 @@ export class Game {
   get barRate(): number {
     const beers = new Set(this.flowing.map((t) => t.beerId)).size;
     return this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * variety(Math.max(1, beers)) * (this.partying ? this.barEvent.mult : 1)
-      * this.boostMult('bar') * this.furnitureMult('clients');
+      * this.boostMult('bar') * this.furnitureMult('clients') * (this.ad?.bar ?? 1);
   }
 
   /** Places du bar, banquettes comprises. */
@@ -1091,24 +1095,60 @@ export class Game {
     });
   }
 
-  get adCost(): number {
-    return AD_COST[this.breweryLevel - 1] ?? AD_COST[0];
+  /** Prix d'une campagne, selon le niveau de la brasserie. */
+  adCost(id: AdId): number {
+    return adCost(adById(id)!, this.breweryLevel);
+  }
+
+  /** La campagne est-elle débloquée (chaque niveau de l'ordinateur en ouvre une) ? */
+  adUnlocked(id: AdId): boolean {
+    return this.computerLevel >= (adById(id)?.computer ?? Infinity);
   }
 
   get advertising(): boolean {
     return this.time < this.adUntil;
   }
 
-  /** Campagne de pub : toute la gamme gagne en popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. */
-  advertise(): CommandResult {
+  /** La campagne en cours. */
+  get ad(): AdDef | null {
+    return this.advertising ? adById(this.adId) ?? null : null;
+  }
+
+  /** La meilleure campagne débloquée. */
+  get bestAd(): AdDef {
+    return [...ADS].reverse().find((a) => this.adUnlocked(a.id)) ?? ADS[0]!;
+  }
+
+  /**
+   * Lance une campagne (une seule à la fois) : toute la gamme gagne en popularité, des lettres arrivent tout de suite
+   * selon la campagne, puis plus souvent jusqu'à la fin, et mieux payées pour les plus grosses.
+   */
+  advertise(id: AdId = 'flyers'): CommandResult {
+    const ad = adById(id);
+    if (!ad) return { ok: false, reason: 'Campagne inconnue' };
+    if (!this.adUnlocked(id)) return { ok: false, reason: `Il faut d'abord : ${COMPUTERS[ad.computer - 1]?.name}` };
     if (this.advertising) return { ok: false, reason: 'Une campagne est déjà en cours' };
-    if (this.money < this.adCost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= this.adCost;
-    this.adUntil = this.time + AD.duration;
-    for (const b of this.beers) b.pop = Math.max(b.pop, Math.min(this.popCap, b.pop + AD.pop));
+    const cost = this.adCost(id);
+    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    this.money -= cost;
+    this.adId = id;
+    this.adUntil = this.time + ad.duration;
+    this.adPrestige = ad.prestige;
+    for (const b of this.beers) b.pop = Math.max(b.pop, Math.min(this.popCap, b.pop + ad.pop));
     this.syncSlots();
-    const soon = this.orderWaits.indexOf(Math.min(...this.orderWaits));
-    if (soon >= 0) this.orderWaits[soon] = Math.min(this.orderWaits[soon]!, 60);
+    // des lettres tout de suite : les emplacements libres les plus proches (au moins un, dans la minute)
+    const order = this.orderWaits.map((w, i) => [w, i] as const).sort((a, b) => a[0] - b[0]);
+    order.slice(0, Math.max(1, Math.min(ad.letters, order.length))).forEach(([w, i]) => (this.orderWaits[i] = Math.min(w, ad.letters ? 1 : 60)));
+    return { ok: true };
+  }
+
+  /** Prolonge la campagne en cours de quelques heures, en diamants (jusqu'à 24 h d'avance). */
+  extendAd(): CommandResult {
+    if (!this.advertising) return { ok: false, reason: 'Aucune campagne en cours' };
+    if (this.adUntil - this.time + AD_EXTEND.hours * 3600 > AD_EXTEND.maxAhead) return { ok: false, reason: 'Pas plus de 24 h d\'avance' };
+    if (this.gems < AD_EXTEND.gems) return { ok: false, reason: 'Pas assez de diamants' };
+    this.gems -= AD_EXTEND.gems;
+    this.adUntil += AD_EXTEND.hours * 3600;
     return { ok: true };
   }
 
@@ -1616,7 +1656,7 @@ export class Game {
 
   /** Temps réel restant (s de jeu) avant la lettre de chaque emplacement libre, du plus proche au plus lointain. */
   get slotWaits(): number[] {
-    const speed = this.advertising ? AD.orderBoost : 1;
+    const speed = this.ad?.orderBoost ?? 1;
     return [...this.orderWaits].sort((a, b) => a - b).map((w) => Math.max(0, w / speed));
   }
 
@@ -1635,7 +1675,7 @@ export class Game {
       this.orders = this.orders.filter((o) => o.expires > this.time);
     }
     this.syncSlots();
-    const step = dt * (this.advertising ? AD.orderBoost : 1);
+    const step = dt * (this.ad?.orderBoost ?? 1);
     for (let i = 0; i < this.orderWaits.length; i++) this.orderWaits[i]! -= step;
     while (this.orderWaits.some((w) => w <= 0)) {
       this.orderWaits.splice(this.orderWaits.findIndex((w) => w <= 0), 1);
@@ -1643,7 +1683,12 @@ export class Game {
         rng: this.rng, time: this.time, breweryLevel: this.breweryLevel, brand: this.brand, beers: this.beers.length,
         storageCap: this.storageCap, kegLiters: kegLiters(this.batchLiters), trends: this.trends,
         starter: this.ordersDone + this.orders.length < STARTER_ORDERS,
+        kind: this.adPrestige && this.advertising && this.beers.some((b) => b.tasting.quality >= PRESTIGE_QUALITY) ? 'prestige' : undefined,
       });
+      if (o.kind === 'prestige') this.adPrestige = false;
+      // une commande reçue pendant une grosse campagne est mieux payée
+      const ad = this.ad;
+      if (ad && ad.pay !== 1) o.reward = Math.round(o.reward * ad.pay);
       this.orders.push(o);
       this.events.emit({ type: 'order', client: o.client });
     }
@@ -1665,7 +1710,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1745,6 +1790,8 @@ export class Game {
     // la fête demande désormais une boule à facettes : qui en a déjà organisé une la garde
     if (g.partyReadyAt > 0 && !g.owned.includes('disco')) g.owned.push('disco');
     g.adUntil ??= 0;
+    g.adId ??= 'paper'; // les campagnes d'avant les types de pub ressemblaient à l'annonce dans le journal
+    g.adPrestige ??= false;
     g.boosts ??= {};
     // la monnaie premium s'appelait « capsules » : elles deviennent des diamants, à nombre égal
     const oldCaps = (g as unknown as { caps?: number }).caps;

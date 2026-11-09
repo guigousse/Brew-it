@@ -1,7 +1,7 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
-import { AD, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type BarEventId, type ShopItemId } from '../core/market';
+import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
@@ -42,6 +42,22 @@ function fab(icon: IconId, label: string): HTMLButtonElement {
   b.append(iconCanvas(icon, 2), h('span', 'fab-badge hidden'));
   b.setAttribute('aria-label', label);
   return b;
+}
+
+/** Icône de chaque campagne de pub. */
+const AD_ICON: Record<AdId, IconId> = { flyers: 'poster', paper: 'clipboard', radio: 'bubble', tv: 'tv', national: 'trend' };
+
+/** L'effet d'une campagne en une ligne : « 6 h · lettres ×2 · popularité +10 % · une lettre tout de suite ». */
+export function adEffect(ad: AdDef): string {
+  const fr = (x: number) => String(x).replace('.', ',');
+  const nb = '\u00a0'; // espace insécable : « +10 % » ne se coupe pas
+  const parts = [`${ad.duration / 3600}${nb}h`, `lettres${nb}×${fr(ad.orderBoost)}`, `popularité +${Math.round(ad.pop * 100)}${nb}%`];
+  if (ad.letters === 1) parts.push('une lettre tout de suite');
+  else if (ad.letters > 1) parts.push('emplacements remplis');
+  if (ad.pay !== 1) parts.push(`commandes +${Math.round((ad.pay - 1) * 100)}${nb}%`);
+  if (ad.prestige) parts.push('une commande de prestige');
+  if (ad.bar !== 1) parts.push(`bar +${Math.round((ad.bar - 1) * 100)}${nb}% de clients`);
+  return parts.join(' · ');
 }
 
 /** Nom de la pièce en haut à gauche : un bouton qui ouvre son amélioration. Quand on peut se l'offrir,
@@ -1615,7 +1631,7 @@ export class App {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
-      app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.advertising, g.money >= g.adCost, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
+      app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
   }
 
   /** Reconstruit l'écran quand une commande arrive, expire, ou que le stock change ; le tableau de bord vit en direct. */
@@ -2000,18 +2016,64 @@ export class App {
     }, 700);
   }
 
+  /** Les campagnes de pub : une par niveau de l'ordinateur, une seule à la fois ; celle en cours se prolonge en diamants. */
+  private adsBox(g: Game): HTMLElement {
+    const cur = g.ad;
+    const box = h('div', `post${cur ? ' live' : ''}`);
+    const head = h('div', 'post-head');
+    head.append(h('span', 'post-name', 'Campagnes de pub'));
+    if (cur) {
+      const left = h('span', '', duration(g.adUntil - g.time));
+      left.dataset.expires = String(g.adUntil);
+      head.append(h('span', 'post-state on', ''));
+      head.lastElementChild!.append(left);
+    }
+    box.append(head);
+    for (const ad of ADS) {
+      const mine = cur?.id === ad.id;
+      const row = h('div', `boost-row ad-row${mine ? ' mine' : ''}`);
+      const icon = h('div', 'boost-icon');
+      icon.append(iconCanvas(AD_ICON[ad.id], 2));
+      const text = h('div', 'boost-text');
+      text.append(h('span', 'boost-name', ad.name), h('span', 'boost-effect', adEffect(ad)));
+      const cost = g.adCost(ad.id);
+      let b: HTMLButtonElement;
+      if (!g.adUnlocked(ad.id)) {
+        const pc = COMPUTERS[ad.computer - 1]!;
+        b = this.btn('btn price lock', `🔒 ${pc.name}`, () => this.toast(`${ad.name} : avec l'ordinateur « ${pc.name} »`, 'info'));
+      } else if (mine) {
+        b = this.gemsBtn(`+${AD_EXTEND.hours} h`, AD_EXTEND.gems, () => {
+          const r = g.extendAd();
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          this.toast(`${ad.name} : prolongée de ${AD_EXTEND.hours} h`, 'good');
+          this.onSent?.();
+          this.computer!.key = '';
+          this.refreshComputer();
+        });
+        b.setAttribute('aria-label', `Prolonger ${ad.name} de ${AD_EXTEND.hours} heures : ${gemsText(AD_EXTEND.gems)}`);
+      } else if (cur) {
+        b = this.btn('btn price lock', 'occupé', () => this.toast(`${cur.name} est en cours : une seule campagne à la fois`, 'info'));
+      } else {
+        b = this.btn('btn primary price', moneyShort(cost), () => {
+          const r = g.advertise(ad.id);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          this.toast(`${ad.name} : ta gamme fait parler d'elle`, 'good');
+          this.computer!.key = '';
+          this.refreshComputer();
+        });
+        b.setAttribute('aria-label', `Lancer ${ad.name} : ${moneyInt(cost)}`);
+        this.costGate(b, cost);
+      }
+      row.append(icon, text, b);
+      box.append(row);
+    }
+    return box;
+  }
+
   /** La popularité de la marque et les tendances du moment. */
   private trendsTab(g: Game, card: HTMLElement): void {
     card.append(h('div', 'stats-line strong', `Ta marque : ${starText(g.brand)}`));
-    const ad = this.btn('btn primary', g.advertising ? `📣 Campagne en cours · ${duration(g.adUntil - g.time)}` : `📣 Campagne de pub · ${moneyShort(g.adCost)}`, () => {
-      const r = g.advertise();
-      if (!r.ok) return this.toast(r.reason!, 'bad');
-      this.toast('Campagne lancée : ta gamme fait parler d\'elle', 'good');
-      this.computer!.key = '';
-      this.refreshComputer();
-    });
-    ad.disabled = g.advertising || g.money < g.adCost;
-    card.append(ad, h('p', 'hint', `+${Math.round(AD.pop * 100)} % de popularité, commandes ×${AD.orderBoost} pendant ${AD.duration / 3600} h.`));
+    card.append(this.adsBox(g));
     for (const tr of g.trends) {
       const def = trendById(tr.id);
       if (!def) continue;
@@ -2591,7 +2653,7 @@ export class App {
     const taps = g.taps.filter((t) => t.glasses > 0).length;
     line('Bar', `${taps}/${g.taps.length} tireuses · ${g.glassesLeft} verres`);
     if (g.partying) line('Fête', `🎉 ${clock(g.partyUntil - g.time)}`);
-    if (g.advertising) line('Campagne de pub', `📣 ${clock(g.adUntil - g.time)}`);
+    if (g.ad) line(g.ad.name, `📣 ${clock(g.adUntil - g.time)}`);
     const fc = this.forecast(g);
     if (fc) line('File de brassins', `${g.planned} · ${fc.res.done ? `fin dans ${clock(fc.at + fc.res.total - g.time)}` : BLOCKED_TEXT[fc.res.blocked ?? 'slow']}`, fc.res.done ? '' : 'bad');
     else line('File de brassins', 'vide');

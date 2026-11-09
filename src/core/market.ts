@@ -29,7 +29,7 @@ export const BAR: readonly BarLevel[] = [
   { name: 'Bistrot de quartier', rate: 1.5, taps: 2, seats: 4, priceMult: 1.15, cost: 400 },
   { name: 'Pub', rate: 3, taps: 3, seats: 7, priceMult: 1.3, cost: 6000 },
   { name: 'Taproom', rate: 5, taps: 5, seats: 10, priceMult: 1.5, cost: 120000 },
-  { name: 'Bar du futur', rate: 10, taps: 8, seats: 12, priceMult: 1.8, cost: 1200000 },
+  { name: 'Bar du futur', rate: 10, taps: 8, seats: 12, priceMult: 1.8, cost: 900000 },
 ];
 
 /** Part de l'affluence maximale atteinte par une marque inconnue. */
@@ -71,7 +71,7 @@ export function glassPrice(level: number, t: Tasting, trends = 0): number {
  */
 export const PARTY = { mult: 60, duration: 45 * 60, cooldown: 6 * 3600 } as const;
 /** Prix de référence des événements (une soirée foot), selon le niveau du bar. */
-export const PARTY_COST = [100, 1000, 10000, 80000, 600000] as const;
+export const PARTY_COST = [80, 450, 2000, 4000, 12000] as const;
 
 /**
  * Barman en renfort : pendant 8 h, il rebranche tout seul les fûts vides avec ceux du stockage (même pendant l'absence).
@@ -116,13 +116,50 @@ export interface BarEvent {
   needs: ShopItemId | null;
 }
 export const BAR_EVENTS: readonly BarEvent[] = [
-  { id: 'darts', name: 'Tournoi de fléchettes', text: '1 h : 15 fois plus de clients, et ta gamme se fait 3 fois plus vite connaître.', mult: 15, duration: 3600, priceMult: 1, popMult: 3, cost: 0.5, needs: 'darts' },
-  { id: 'foot', name: 'Soirée foot', text: '1 h 30 de match : 20 fois plus de clients, et les verres 20 % plus chers.', mult: 20, duration: 90 * 60, priceMult: 1.2, popMult: 1, cost: 1, needs: 'tv' },
-  { id: 'party', name: 'Fête', text: '45 min : 60 fois plus de clients, la salle est en délire.', mult: PARTY.mult, duration: PARTY.duration, priceMult: 1, popMult: 1.5, cost: 1.5, needs: 'disco' },
+  { id: 'darts', name: 'Tournoi de fléchettes', text: '1 h : 15 fois plus de clients, verres 30 % plus chers, et ta gamme se fait 3 fois plus vite connaître.', mult: 15, duration: 3600, priceMult: 1.3, popMult: 3, cost: 0.5, needs: 'darts' },
+  { id: 'foot', name: 'Soirée foot', text: '1 h 30 de match : 20 fois plus de clients, et les verres 50 % plus chers.', mult: 20, duration: 90 * 60, priceMult: 1.5, popMult: 1, cost: 1, needs: 'tv' },
+  { id: 'party', name: 'Fête', text: '45 min : 60 fois plus de clients, verres 2 fois plus chers, la salle est en délire.', mult: PARTY.mult, duration: PARTY.duration, priceMult: 2, popMult: 1.5, cost: 1.5, needs: 'disco' },
 ];
 export const barEventById = (id: string) => BAR_EVENTS.find((e) => e.id === id);
 
-/** Campagne de pub : la gamme gagne en popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. */
-export const AD = { pop: 0.1, duration: 6 * 3600, orderBoost: 2 } as const;
-/** Prix d'une campagne selon le niveau de la brasserie. */
-export const AD_COST = [150, 2500, 30000, 250000, 2000000] as const;
+/**
+ * Campagnes de pub. Chaque niveau de l'ordinateur en débloque une nouvelle, plus chère mais plus rentable.
+ * Une seule campagne à la fois. Pendant la campagne, les lettres arrivent plus vite (orderBoost) ; au lancement,
+ * toute la gamme gagne en popularité (pop) et des lettres arrivent tout de suite (letters : nombre d'emplacements
+ * libres remplis, Infinity = tous). Les commandes reçues pendant la campagne sont mieux payées (pay) ; la télé fait
+ * venir une commande de prestige ; la campagne nationale amène aussi du monde au bar (bar).
+ */
+export type AdId = 'flyers' | 'paper' | 'radio' | 'tv' | 'national';
+export interface AdDef {
+  id: AdId;
+  name: string;
+  /** Niveau de l'ordinateur qui la débloque. */
+  computer: number;
+  duration: number;
+  orderBoost: number;
+  pop: number;
+  letters: number;
+  pay: number;
+  prestige: boolean;
+  bar: number;
+  /** Prix : part d'une journée de revenus typique au niveau de la brasserie (AD_REF). */
+  share: number;
+}
+export const ADS: readonly AdDef[] = [
+  { id: 'flyers', name: 'Affiches au marché', computer: 1, duration: 3 * 3600, orderBoost: 1.5, pop: 0.05, letters: 0, pay: 1, prestige: false, bar: 1, share: 0.04 },
+  { id: 'paper', name: 'Annonce dans le journal', computer: 2, duration: 6 * 3600, orderBoost: 2, pop: 0.1, letters: 1, pay: 1, prestige: false, bar: 1, share: 0.06 },
+  { id: 'radio', name: 'Spot à la radio', computer: 3, duration: 6 * 3600, orderBoost: 2, pop: 0.15, letters: Infinity, pay: 1.1, prestige: false, bar: 1, share: 0.08 },
+  { id: 'tv', name: 'Pub télé', computer: 4, duration: 8 * 3600, orderBoost: 2.5, pop: 0.2, letters: Infinity, pay: 1.2, prestige: true, bar: 1, share: 0.1 },
+  { id: 'national', name: 'Campagne nationale', computer: 5, duration: 12 * 3600, orderBoost: 3, pop: 0.25, letters: Infinity, pay: 1.3, prestige: false, bar: 1.5, share: 0.13 },
+];
+export const adById = (id: string) => ADS.find((a) => a.id === id);
+/** Revenu d'une journée typique selon le niveau de la brasserie (mesuré par le joueur simulé) : la base du prix des campagnes. */
+export const AD_REF = [1500, 12000, 90000, 500000, 1800000] as const;
+/** Prix d'une campagne au niveau de brasserie donné, arrondi à deux chiffres significatifs. */
+export function adCost(ad: AdDef, breweryLevel: number): number {
+  const raw = (AD_REF[breweryLevel - 1] ?? AD_REF[0]) * ad.share;
+  const p = 10 ** Math.max(0, Math.floor(Math.log10(raw)) - 1);
+  return Math.round(raw / p) * p;
+}
+/** Prolonger la campagne en cours : des heures en plus, payées en diamants, jusqu'à 24 h d'avance. */
+export const AD_EXTEND = { hours: 3, gems: 5, maxAhead: 24 * 3600 } as const;

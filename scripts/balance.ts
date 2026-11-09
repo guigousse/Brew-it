@@ -5,6 +5,7 @@
  *
  *   npx vite-node scripts/balance.ts [jours]
  */
+import { writeFileSync } from 'node:fs';
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
 import { DEFAULT_LABEL } from '../src/core/label';
 import { Game, simulateOffline } from '../src/core/game';
@@ -63,11 +64,31 @@ function tendBar() {
     const cost = g.eventCost(id);
     const ev = BAR_EVENTS.find((e) => e.id === id)!;
     if (ev.needs && !g.owns(ev.needs)) continue;
-    if (full >= g.taps.length * 3 && g.money >= cost * 2 && g.startEvent(id).ok) buy(ev.name, cost);
+    if (full >= g.taps.length * 3 && g.money >= cost * 2 && cost <= nextCost() * 0.1 && g.startEvent(id).ok) buy(ev.name, cost);
     break;
   }
 }
 const brandByDay: number[] = [];
+/** Prix du prochain achat (comme dans shop()) : une campagne ou un événement ne doit pas manger l'épargne. */
+function nextCost(): number {
+  const c: number[] = [];
+  for (const id of STATION_ORDER) if (g.level(id) < MAX_LEVEL) c.push(g.upgradeCost(id));
+  for (const id of ['fermenter', 'conditioning'] as const) {
+    const t = g.tankCost(id);
+    if (t != null) c.push(t);
+  }
+  const d = g.nextDecor;
+  if (d) c.push(d.cost);
+  const pc = COMPUTERS[g.computerLevel];
+  if (pc) c.push(pc.cost);
+  const bar = BAR[g.barLevel];
+  if (bar) c.push(bar.cost);
+  const st = STORAGE[g.storageLevel];
+  if (st) c.push(st.cost);
+  const sl = g.nextSlotCost;
+  if (sl != null) c.push(sl);
+  return c.length ? Math.min(...c) : Infinity;
+}
 /** Diamants gagnés (le joueur simulé ne les dépense pas : c'est ce qu'un joueur gratuit peut s'offrir). */
 const gemsByDay: number[] = [];
 
@@ -133,9 +154,9 @@ function shop() {
     const o = options.find((x) => x.cost <= g.money && x.act());
     if (!o) {
       // de l'argent en trop par rapport au prochain achat : une campagne de pub
-      // (une campagne ne doit pas retarder le prochain achat de plus d'un dixième de son prix)
-      const nextCost = options.at(0)?.cost ?? 0;
-      if (!g.advertising && g.beers.length && g.money >= g.adCost * 4 && g.adCost <= nextCost * 0.1 && g.advertise().ok) buy('Campagne de pub', g.adCost);
+      // une campagne rapporte environ 2 fois son prix en une journée : la meilleure débloquée, si elle ne vide pas la caisse
+      const ad = g.bestAd, adCost = g.adCost(ad.id);
+      if (!g.advertising && g.beers.length && g.breweryLevel >= 2 && g.money >= adCost * 2 && g.advertise(ad.id).ok) buy(ad.name, adCost);
       return;
     }
     buy(o.label, o.cost);
@@ -144,6 +165,8 @@ function shop() {
 
 function session(minutes: number) {
   if (g.offline) g.collectOffline();
+  // SNAP=dossier : garde le dernier état à chaque niveau de brasserie (bN) et de bar (rN), pour scripts/roi.ts
+  if (process.env.SNAP && g.beers.length) for (const k of ['b' + g.breweryLevel, 'r' + g.barLevel]) writeFileSync(`${process.env.SNAP}/${k}.json`, JSON.stringify(g.toJSON()));
   deliver();
   wholesale();
   tendBar();

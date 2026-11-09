@@ -49,7 +49,7 @@ export const INFECTION = [0, 0.1, 0.06, 0.02, 0, 0] as const;
 /** Pénalité d'oxydation selon le niveau de l'embouteillage. */
 export const OXIDATION = [0, 0.08, 0.05, 0.02, 0, 0] as const;
 /** Multiplicateur de prix pour passer au niveau n (index = niveau visé). */
-export const TIER_COST = [0, 0, 1, 250, 2500, 10000] as const;
+export const TIER_COST = [0, 0, 1, 40, 400, 2000] as const;
 
 export function upgradeCost(id: StationId, toLevel: number): number {
   return STATIONS[id].baseCost * (TIER_COST[toLevel] ?? Infinity);

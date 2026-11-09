@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "balance": "vite-node scripts/balance.ts",
     "quality": "vite-node scripts/quality.ts",
+    "roi": "vite-node scripts/roi.ts",
     "typecheck": "tsc --noEmit",
     "ios:sync": "npm run build && npx cap sync ios",
     "ios:open": "npx cap open ios"

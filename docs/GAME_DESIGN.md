@@ -98,7 +98,7 @@ Effet des niveaux (1 → 5) :
 - **Durée des étapes :** ×1,2, ×1, ×0,8, ×0,6, ×0,4. Une journée de fermentation ou deux journées de garde durent 30 s au niveau 2.
 - **Embouteillage :** 0,7 s, 0,5 s, 0,25 s, 0,08 s, puis 0,02 s par bouteille.
 - **Défauts réduits :** infection au refroidissement (10 %, 6 %, 2 %, 0, 0), oxydation à l'embouteillage (de 8 % à 0), goût de maïs cuit, astringence, limpidité (bonus aux niveaux 4 et 5).
-- **Prix :** prix de base de l'appareil (60 à 100 €) × 1, 250, 2 500, puis 10 000 pour les niveaux 2 à 5.
+- **Prix :** prix de base de l'appareil (60 à 100 €) × 1, 40, 400, puis 2 000 pour les niveaux 2 à 5 (les 7 appareils : 550 €, 22 000 €, 220 000 €, 1,1 M€). La courbe monte par paliers réguliers de ×10 environ, comme le bar, le stockage et l'ordinateur.
 
 **Niveau de la brasserie** : la brasserie prend le niveau de son appareil le moins avancé. Dès que les 7 appareils sont au niveau 2, elle passe niveau 2, et ainsi de suite. Chaque niveau change tout le décor et ouvre de nouveaux clients :
 
@@ -181,19 +181,19 @@ L'écran du bar est coupé en deux :
 | 2 · Bistrot de quartier | suspensions, ardoise, carrelage en damier | 4 | 2 | 1,5 | ×1,15 | 400 € |
 | 3 · Pub | vert anglais, lambris, cible de fléchettes, lampes en laiton, tables | 7 | 3 | 3 | ×1,3 | 6 000 € |
 | 4 · Taproom | briques, enseigne néon « BREW IT », comptoir inox ; cave en béton | 10 | 5 | 5 | ×1,5 | 120 000 € |
-| 5 · Bar du futur | baie sur la ville de nuit, néons, comptoir lumineux ; cave aux néons | 12 | 8 | 10 | ×1,8 | 1,2 M€ |
+| 5 · Bar du futur | baie sur la ville de nuit, néons, comptoir lumineux ; cave aux néons | 12 | 8 | 10 | ×1,8 | 900 000 € |
 
 Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au sommet, et bien plus au début. Le bar rapporte peu (environ 1 % du chiffre d'affaires) : c'est là que la marque se fait connaître.
 
 **Barman en renfort** (bouton carré au barman, dans le bar, ou application Personnel du bureau ; il occupe un poste de personnel) : on l'embauche pour **8 h**. Pendant ce temps, il rebranche tout seul les fûts vides avec ceux du stockage, même pendant l'absence. On peut prolonger son contrat d'avance, jusqu'à 24 h. Il faut ensuite le réembaucher. Il coûte 30 € au comptoir poussiéreux, puis 150 €, 700 €, 2 500 € et 5 000 € selon le niveau du bar : il rapporte environ 2,5 fois son prix quand on a prévu des fûts (6 par tireuse), presque rien sinon. Il apparaît derrière le comptoir, en gilet sombre et nœud papillon, et la pastille du bouton donne les heures qui lui restent.
 
-**Événements** (bouton à l'étoile, ou l'objet de l'événement dans le bar). Un seul à la fois, puis 6 h de repos avant le suivant. Pendant un événement, les fûts vides sont rebranchés tout seuls avec ceux du stockage : il faut donc **prévoir des fûts d'avance**. Ils se débloquent **l'un après l'autre**, en achetant leur objet au magasin. Chaque objet débloque l'achat du suivant, et les prix suivent les agrandissements du bar. Le prix d'un événement est un multiple d'un prix de référence, qui vaut 100 € au comptoir poussiéreux, puis 1 000 €, 10 000 €, 80 000 € et 600 000 € selon le niveau du bar.
+**Événements** (bouton à l'étoile, ou l'objet de l'événement dans le bar). Un seul à la fois, puis 6 h de repos avant le suivant. Pendant un événement, les fûts vides sont rebranchés tout seuls avec ceux du stockage : il faut donc **prévoir des fûts d'avance**. Ils se débloquent **l'un après l'autre**, en achetant leur objet au magasin. Chaque objet débloque l'achat du suivant, et les prix suivent les agrandissements du bar. Le prix d'un événement est un multiple d'un prix de référence, qui vaut 80 € au comptoir poussiéreux, puis 450 €, 2 000 €, 4 000 € et 12 000 € selon le niveau du bar. **Pendant un événement, les verres se vendent plus cher** : c'est là que se fait le bénéfice, sur les fûts préparés d'avance. Mesure (`npm run roi`, 24 h, 6 fûts par tireuse) : un événement rapporte de 1,3 à 3,3 fois son prix quand la cave est prête, rien quand elle est vide. Le bar reste une petite part du chiffre d'affaires : les événements y sont un coup de pouce et un moment de jeu, pas le moteur de la brasserie.
 
 | Événement | Durée | Effet | Prix | Objet (magasin) |
 |---|---|---|---|---|
-| Tournoi de fléchettes | 1 h | 15 fois plus de clients, la gamme se fait 3 fois plus vite connaître | ×0,5 | **Cible de fléchettes**, 300 € (vers le bistrot) |
-| Soirée foot | 1 h 30 | 20 fois plus de clients, verres 20 % plus chers | ×1 | **Télévision**, 5 000 € (vers le pub) |
-| Fête | 45 min | 60 fois plus de clients, la gamme se fait 1,5 fois plus vite connaître | ×1,5 | **Boule à facettes**, 60 000 € (vers la taproom) |
+| Tournoi de fléchettes | 1 h | 15 fois plus de clients, verres 30 % plus chers, la gamme se fait 3 fois plus vite connaître | ×0,5 | **Cible de fléchettes**, 300 € (vers le bistrot) |
+| Soirée foot | 1 h 30 | 20 fois plus de clients, verres 50 % plus chers | ×1 | **Télévision**, 5 000 € (vers le pub) |
+| Fête | 45 min | 60 fois plus de clients, verres 2 fois plus chers, la gamme se fait 1,5 fois plus vite connaître | ×1,5 | **Boule à facettes**, 60 000 € (vers la taproom) |
 
 Le **magasin** ouvre directement l'onglet Bar quand on touche « Achète … au magasin » depuis les événements, sur l'objet qui débloque l'événement. Les parties qui avaient déjà la boule à facettes la gardent.
 
@@ -224,12 +224,22 @@ L'objet d'un événement n'apparaît que pendant cet événement, toujours au m�
 
 L'application **Tendances** de l'ordinateur montre la popularité de la marque, les tendances du moment (avec les bières de la gamme qui les suivent) et la popularité de chaque bière. Les commandes « style recherché » reprennent souvent une tendance du moment. La fiche d'une bière de la gamme affiche aussi ses étoiles et ses tendances.
 
-**Campagne de pub** (application Tendances de l'ordinateur) : toute la gamme gagne 10 % de popularité, et les commandes arrivent deux fois plus souvent pendant 6 h. Une seule campagne à la fois. Prix selon le niveau de la brasserie : 150 €, 2 500 €, 30 000 €, 250 000 €, puis 2 M€.
+**Campagnes de pub** (application Tendances de l'ordinateur, payées en euros). **Chaque niveau de l'ordinateur débloque une campagne**, plus chère et plus forte. **Une seule campagne à la fois** : les autres affichent « occupé ». Au lancement, toute la gamme gagne en popularité ; pendant la campagne, les lettres arrivent plus vite.
+
+| Ordinateur | Campagne | Durée | Effet | Prix (part d'une journée de revenus) |
+|---|---|---|---|---|
+| Vieux minitel | Affiches au marché | 3 h | lettres ×1,5 · popularité +5 % | 4 % |
+| PC d'occasion | Annonce dans le journal | 6 h | lettres ×2 · popularité +10 % · une lettre tout de suite | 6 % |
+| Poste de bureau | Spot à la radio | 6 h | lettres ×2 · popularité +15 % · tous les emplacements libres reçoivent une lettre · commandes payées +10 % | 8 % |
+| Logiciel de gestion | Pub télé | 8 h | lettres ×2,5 · popularité +20 % · emplacements remplis · commandes +20 % · une commande de prestige (si une bière de la gamme est Excellente) | 10 % |
+| Intelligence logistique | Campagne nationale | 12 h | lettres ×3 · popularité +25 % · emplacements remplis · commandes +30 % · +50 % de clients au bar | 13 % |
+
+Le prix dépend du niveau de la brasserie : c'est une part d'une journée de revenus typique à ce niveau (1 500 €, 12 000 €, 90 000 €, 500 000 €, puis 1,8 M€ ; `AD_REF`). Au niveau 3, les affiches coûtent 3 600 € et la campagne nationale 12 000 €. **Prolonger** la campagne en cours : +3 h pour 5 diamants, jusqu'à 24 h d'avance (la seule place des diamants dans la pub). Mesure (24 h, livraisons toutes les 30 min) : une campagne rapporte environ 1,2 à 4,5 fois son prix à partir du niveau 2 de la brasserie ; pour un joueur qui ne passe que 4 fois par jour, elle est à peu près neutre, car les lettres attendent sa visite. Elle récompense le joueur actif.
 
 ## Commandes
 L'ordinateur du bureau rassemble les applications **Commandes**, **Tendances** et **Grossiste** (avec le Tableau de bord et les Messages).
 
-**Le tableau des commandes.** Il compte un nombre limité d'**emplacements** : 2 au début, 6 au plus, un de plus par amélioration de l'ordinateur. **Chaque emplacement a son propre délai** : quand une commande en part (envoyée, refusée ou expirée), son emplacement attend la lettre suivante 30 à 60 minutes de jeu (un peu moins quand la marque est connue, deux fois moins pendant une campagne de pub). Un emplacement gagné avec un nouvel ordinateur reçoit sa première lettre en 3 minutes ; au début de la partie, la première lettre arrive en 3 minutes et la seconde 30 minutes plus tard.
+**Le tableau des commandes.** Il compte un nombre limité d'**emplacements** : 2 au début, 6 au plus, un de plus par amélioration de l'ordinateur. **Chaque emplacement a son propre délai** : quand une commande en part (envoyée, refusée ou expirée), son emplacement attend la lettre suivante 30 à 60 minutes de jeu (un peu moins quand la marque est connue, plus vite pendant une campagne de pub, selon la campagne). Un emplacement gagné avec un nouvel ordinateur reçoit sa première lettre en 3 minutes ; au début de la partie, la première lettre arrive en 3 minutes et la seconde 30 minutes plus tard.
 
 **Commandes de démarrage.** Tant que moins de 3 commandes ont été livrées (en comptant celles en attente), chaque nouvelle lettre est une commande classique d'un particulier ou d'un bistrot, sans style imposé, de 12 bouteilles au plus : la blonde du tutoriel (15 bouteilles) suffit à la livrer. Une commande reste valable 8 à 12 h (2 h pour une urgente). Refuser une commande relance le délai de son emplacement, sans autre pénalité.
 
@@ -274,13 +284,13 @@ L'ordinateur du bureau rassemble les applications **Commandes**, **Tendances** e
 | PC d'occasion | 3 | 1 500 € |
 | Poste de bureau | 4 | 40 000 € |
 | Logiciel de gestion | 5 | 400 000 € |
-| Intelligence logistique | 6 | 3 M€ |
+| Intelligence logistique | 6 | 2 M€ |
 
 ## Le grossiste
 Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 1,60 € × (0,6 + 0,8 × qualité). Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'application Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
 
 ## Gamme : l'étagère
-La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 8 000 €, 50 000 €, 200 000 €, 600 000 €, 3 M€ puis 8 M€.
+La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 8 000 €, 50 000 €, 200 000 €, 600 000 €, 1,5 M€ puis 3 M€.
 
 ## Stockage
 Le stockage est une pièce à part entière. Ses rayonnages se remplissent de caisses aux couleurs des étiquettes ; dans les grands stockages, chaque case affichée est une palette de plusieurs caisses. L'ordinateur des commandes est au bureau.
@@ -293,7 +303,7 @@ Les bouteilles embouteillées rejoignent le stockage en caisses de 12. Quand il 
 | Cave voûtée | murs de pierre, voûte, lanternes, sol de terre battue et de pavés | 60 caisses | 250 € |
 | Chambre froide | panneaux isothermes, givre, brume au sol, écran plat | 400 caisses | 8 000 € |
 | Entrepôt | tôle, verrière, racks à palettes orange | 2 500 caisses | 120 000 € |
-| Plateforme logistique | néons, bras robotisé, terminal holographique | 12 000 caisses | 1 M€ |
+| Plateforme logistique | néons, bras robotisé, terminal holographique | 12 000 caisses | 800 000 € |
 
 Les fûts pleins y sont rangés à côté des caisses : ce sont de petits fûts inox, cerclés à la couleur de l'étiquette.
 

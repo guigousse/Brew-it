@@ -1,7 +1,7 @@
 import { GASTON_RECIPE } from './brewing/model';
 import { BAR_MESSAGE, BAR_MESSAGE_MAX, Game, simulateOffline } from './game';
 import { DEFAULT_LABEL } from './label';
-import { BAR, kegSpace, PARTY } from './market';
+import { AD_EXTEND, adCost, ADS, BAR, kegSpace, PARTY } from './market';
 import { COMPUTERS, WHOLESALE_PRICE, drawOrder, orderGems, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, STARTER_MAX_BOTTLES, fits, type Order } from './orders';
 import { Rng } from './rng';
 import { popTarget, TREND_COUNT, TRENDS } from './trends';
@@ -469,13 +469,46 @@ describe('jeu', () => {
     expect(g.barmanOn).toBe(false);
   });
 
-  it('une campagne de pub rend la gamme plus populaire', () => {
+  it('une campagne de pub rend la gamme plus populaire ; une seule à la fois', () => {
     const g = withBeer(1e6);
     const beer = g.beers[0]!;
     beer.pop = 0.2;
-    expect(g.advertise().ok).toBe(true);
-    expect(beer.pop).toBeCloseTo(0.3);
-    expect(g.advertise().ok).toBe(false); // une seule campagne à la fois
+    expect(g.advertise('flyers').ok).toBe(true);
+    expect(beer.pop).toBeCloseTo(0.25);
+    expect(g.ad?.id).toBe('flyers');
+    expect(g.advertise('flyers').ok).toBe(false); // une seule campagne à la fois
+  });
+
+  it('chaque ordinateur débloque une campagne plus chère et plus forte', () => {
+    const g = withBeer(1e9);
+    expect(ADS.map((a) => g.adUnlocked(a.id))).toEqual([true, false, false, false, false]);
+    expect(g.advertise('radio').ok).toBe(false);
+    for (let i = 0; i < 4; i++) expect(g.upgradeComputer().ok).toBe(true);
+    expect(ADS.every((a) => g.adUnlocked(a.id))).toBe(true);
+    const costs = ADS.map((a) => g.adCost(a.id));
+    expect([...costs].sort((a, b) => a - b)).toEqual(costs); // de plus en plus chères
+    expect(adCost(ADS[0]!, 3)).toBe(3600); // au niveau 3 de la brasserie, les affiches coûtent 4 % d'une journée de 90 k€
+    // la radio remplit tous les emplacements libres tout de suite, et ses commandes sont mieux payées
+    g.orders = [];
+    expect(g.advertise('radio').ok).toBe(true);
+    run(g, 5);
+    expect(g.orders.length).toBe(g.boardSlots);
+  });
+
+  it('la pub télé fait venir une commande de prestige ; une campagne se prolonge en diamants', () => {
+    const g = withBeer(1e9);
+    for (let i = 0; i < 3; i++) g.upgradeComputer();
+    g.beers[0]!.tasting.quality = 0.95;
+    g.orders = [];
+    g.gems = 7;
+    expect(g.advertise('tv').ok).toBe(true);
+    run(g, 5);
+    expect(g.orders.filter((o) => o.kind === 'prestige').length).toBe(1);
+    const until = g.adUntil;
+    expect(g.extendAd().ok).toBe(true);
+    expect(g.adUntil).toBe(until + AD_EXTEND.hours * 3600);
+    expect(g.gems).toBe(7 - AD_EXTEND.gems);
+    expect(g.extendAd().ok).toBe(false); // plus assez de diamants
   });
 
   it('améliorer l\'ordinateur ajoute une place au tableau des commandes', () => {
@@ -890,7 +923,7 @@ describe('mobilier et étiquettes', () => {
     expect(g.buyUnlock('emblem:bee').ok).toBe(true);
     expect(g.isUnlocked('emblem', 'bee')).toBe(true);
     // les cosmétiques premium se paient en diamants
-    g.gems = 10;
+    g.gems = 7;
     expect(g.buyUnlock('emblem:skull').ok).toBe(false);
     g.gems = 100;
     expect(g.buyUnlock('emblem:skull').ok).toBe(true);

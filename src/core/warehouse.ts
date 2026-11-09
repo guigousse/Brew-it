@@ -15,14 +15,14 @@ export const STORAGE: readonly StorageLevel[] = [
   { name: 'Cave voûtée', crates: 60, cost: 250 },
   { name: 'Chambre froide', crates: 400, cost: 8000 },
   { name: 'Entrepôt', crates: 2500, cost: 120000 },
-  { name: 'Plateforme logistique', crates: 12000, cost: 1000000 },
+  { name: 'Plateforme logistique', crates: 12000, cost: 800000 },
 ];
 
 /**
  * Prix d'une nouvelle place dans la gamme, selon le nombre de places déjà possédées.
  * La 2e est abordable, puis le prix grimpe de plus en plus vite.
  */
-export const SLOT_COSTS: readonly number[] = [150, 8000, 50000, 200000, 600000, 3000000, 8000000];
+export const SLOT_COSTS: readonly number[] = [150, 8000, 50000, 200000, 600000, 1500000, 3000000];
 export const MAX_RANGE = SLOT_COSTS.length + 1;
 
 export function slotCost(owned: number): number | null {
