@@ -808,9 +808,15 @@ const WALK_S = 3.5;
 
 export class BarRoom extends Room {
   readonly key = 'bar' as const;
-  /** Emplacement du fût de chaque tireuse, dans la cave. */
+  /**
+   * Largeur (px du plan) laissée libre à droite de la cave : les boutons du barman et des événements
+   * y sont posés par-dessus l'écran, et ne doivent pas cacher le dernier fût (réglée par l'interface).
+   */
+  kegReserve = 0;
+
+  /** Emplacement du fût de chaque tireuse, dans la cave (à gauche des boutons de la pièce). */
   kegRect(i: number, taps: number): Rect {
-    const slot = (ROOM_W - 12) / taps;
+    const slot = (ROOM_W - 12 - this.kegReserve) / taps;
     const w = Math.min(22, Math.floor(slot) - 4);
     const h = Math.round(w * 1.35);
     const x = Math.round(6 + slot * i + (slot - w) / 2);

@@ -11,7 +11,7 @@ import { drawLabel } from '../render/labelArt';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, labelSpot, type ShelfBottleKind } from '../render/bottleArt';
 import { instBox } from '../render/decor';
 import { decorLayout } from '../render/decorLayout';
-import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
+import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
@@ -501,6 +501,9 @@ export class App {
     for (const v of this.views) Object.assign(v.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px` });
     for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px`, left: `${ox * this.scale}px`, top: `${oy * this.scale}px` });
     this.scene.resize(vw, vh, b);
+    // la cave du bar : les fûts se rangent à gauche des boutons du barman et des événements (48 px, à 10 px du bord)
+    const fabLeft = (window.innerWidth - 10 - 48 - 6) / this.scale - ox;
+    this.barRoom.kegReserve = Math.max(0, Math.min(60, Math.ceil(ROOM_W - 6 - fabLeft)));
     for (const r of [this.officeRoom, this.storageRoom, this.barRoom]) r.resize(vw, vh);
     for (const c of [this.officeRoom.canvas, this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas]) {
       Object.assign(c.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px`, left: `${-ox * this.scale}px`, top: `${-oy * this.scale}px` });
