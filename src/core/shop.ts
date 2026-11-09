@@ -10,6 +10,7 @@ import type { StationId } from './stations';
 /**
  * Les diamants bleus : la monnaie premium. Ils paient les boosts et quelques cosmétiques d'étiquette.
  * On en gagne en jouant (au départ, à chaque commande livrée, à chaque niveau de la brasserie) ;
+ * ils achètent des boosts, qui vont dans la réserve, et quelques cosmétiques ;
  * l'achat avec de l'argent réel viendra plus tard.
  */
 export const GEMS = {
@@ -22,7 +23,10 @@ export const GEMS = {
 
 // ------------------------------------------------------------------ boosts
 
-/** Un boost occupe un « poste » : un seul effet actif par poste, que l'on peut prolonger. */
+/**
+ * Un boost s'achète (ou se gagne) pour la réserve, puis s'utilise quand on veut.
+ * Une fois utilisé, il occupe un « poste » : un seul effet actif par poste, que l'on peut prolonger.
+ */
 export type BoostChannel = 'brew' | 'yeast' | 'bar' | 'wholesale';
 export type BoostId = 'rush' | 'cadence' | 'fullSpeed' | 'nightShift' | 'yeast' | 'happyHour' | 'buzz' | 'prospect' | 'broker';
 
@@ -62,6 +66,23 @@ export const BOOSTS: readonly BoostDef[] = [
   { id: 'prospect', name: 'Prospection', text: 'Une nouvelle commande arrive tout de suite (s\'il reste une place au tableau).', mult: 1, minutes: 0, gems: 5 },
 ];
 export const boostById = (id: string) => BOOSTS.find((b) => b.id === id);
+
+/**
+ * Boosts gagnés en jouant : ils vont dans la réserve, on les utilise quand on veut.
+ * Au départ, un Coup de feu pour essayer ; à chaque niveau de la brasserie, un lot (indice = niveau atteint) ;
+ * à chaque commande de prestige livrée, le suivant de la liste, à tour de rôle.
+ */
+export const BOOST_REWARDS = {
+  start: { rush: 1 } as Partial<Record<BoostId, number>>,
+  breweryLevel: [
+    {}, {},
+    { rush: 2 },
+    { cadence: 1, happyHour: 1 },
+    { nightShift: 1, yeast: 1 },
+    { fullSpeed: 2, buzz: 1 },
+  ] as readonly Partial<Record<BoostId, number>>[],
+  prestige: ['rush', 'happyHour', 'yeast', 'prospect', 'broker'] as readonly BoostId[],
+} as const;
 
 /** Deux boosts au même effet (même poste, même multiplicateur) se prolongent l'un l'autre. */
 export const sameEffect = (a: BoostDef, b: BoostDef) => a.channel === b.channel && a.mult === b.mult && (a.priceMult ?? 1) === (b.priceMult ?? 1);

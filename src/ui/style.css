@@ -530,6 +530,7 @@ button:disabled { cursor: default; opacity: .5; }
 .shop-tab-mark { position: absolute; top: 4px; right: 8px; }
 .shop-tab-mark.hidden { display: none; }
 .shop-tab-mark.dot { width: 10px; height: 10px; background: var(--accent); border: 2px solid var(--ink); box-shadow: 0 0 6px #f2c14eaa; }
+.shop-tab-mark.count { right: 6px; min-width: 18px; padding: 0 4px; font-family: var(--font); font-size: 14px; text-transform: none; color: var(--ink); background: var(--good); border: 1px solid var(--ink); }
 .shop-tab-mark.timer { right: 4px; padding: 0 3px; font-family: var(--font); font-size: 14px; text-transform: none; color: var(--good); background: var(--ink); }
 .shop-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 12px 20px; display: flex; flex-direction: column; gap: 10px; }
 .shop-body > * { flex: none; }
@@ -578,7 +579,17 @@ button:disabled { cursor: default; opacity: .5; }
 .post-text { display: grid; min-width: 0; line-height: 1.05; }
 .post-boost { font-size: 18px; }
 .post-fx { font-size: 15px; color: var(--dim); }
-.post-row .btn.price { width: auto; min-width: 84px; min-height: 36px; padding: 3px 8px; font-size: 17px; }
+.post-row .btn.price { width: auto; min-width: 72px; min-height: 36px; padding: 3px 8px; font-size: 17px; }
+.post-acts { display: flex; gap: 4px; align-items: center; }
+.post-row.owned { background: #24402a33; }
+.post-stock { font-size: 15px; color: var(--good); }
+/* utiliser (vert) et acheter (bleu) ne se confondent pas ; quand on en a déjà, l'achat passe au second plan */
+.btn.price.use { background: #3e8a4a; color: #fff; box-shadow: inset 2px 2px 0 #7ee081, inset -2px -2px 0 #24402a; }
+.btn.gems-price.secondary.primary { background: var(--panel-2); color: #8cd0ff; box-shadow: inset 0 0 0 2px #3f88d4; }
+.reserve { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--panel); border: 2px solid var(--ink); }
+.reserve-title { font-family: var(--font-title); font-size: 12px; text-transform: uppercase; color: var(--dim); }
+.reserve-n { font-size: 18px; color: var(--dim); }
+.reserve-n.on { color: var(--good); }
 .gems-note { text-align: center; }
 
 /* étiquettes */
