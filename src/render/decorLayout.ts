@@ -62,18 +62,18 @@ export const DECOR_DEFAULT: DecorLayout = {
     ]),
     2: list([
       ['greenPendant', 31, 14], ['greenPendant', 95, 14], ['lightRay', 13, 18], ['lightRay', 77, 18],
-      ...shelves(66, 90), ['board', 60, 30], ['cellarVent', 66, 210], ...BAR_FURNITURE,
+      ...shelves(66, 90), ['cellarVent', 66, 210], ...BAR_FURNITURE,
     ]),
     3: list([
       ['brassSconce', 20, 8], ['brassSconce', 60, 8], ['brassSconce', 100, 8],
-      ...shelves(66, 90), ['board', 60, 30], ...BAR_FURNITURE,
+      ...shelves(66, 90), ...BAR_FURNITURE,
     ]),
     4: list([
       ['brewSign', 30, 4], ['factoryLamp', 8, 22], ['factoryLamp', 104, 22],
-      ...shelves(58, 78, 98), ['board', 60, 30], ...BAR_FURNITURE,
+      ...shelves(58, 78, 98), ...BAR_FURNITURE,
     ]),
     5: list([
-      ['cityView', 10, -1], ...shelves(58, 78, 98), ['board', 60, 30], ...BAR_FURNITURE,
+      ['cityView', 10, -1], ...shelves(58, 78, 98), ...BAR_FURNITURE,
     ]),
   },
   storage: {
