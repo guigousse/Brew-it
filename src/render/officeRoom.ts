@@ -29,9 +29,15 @@ const BOARD: Rect = { x: 8, y: 120, w: 58, h: 42 };
 const DISPLAY: Rect = { x: 100, y: 114, w: 54, h: 98 };
 const SHOWCASE = { x: DISPLAY.x + 3, y: DISPLAY.y + 14, w: DISPLAY.w - 6, h: DISPLAY.h - 22 };
 const SHELF_Y = [SHOWCASE.y + Math.floor(SHOWCASE.h / 2) - 1, SHOWCASE.y + SHOWCASE.h - 2];
-/** Bureau et ordinateur, au premier plan ; DESK_TOP : là où se posent les objets (milieu du plateau). */
-const DESK: Rect = { x: 4, y: 190, w: 120, h: 106 };
-const DESK_TOP = 228;
+/**
+ * Bureau et ordinateur, au premier plan ; DESK_TOP : là où se posent les objets (milieu du plateau), DESK_FEET : le pied
+ * des meubles. Le bureau est dessiné à l'échelle DESK_S (ses mesures d'origine, ×0,8), un peu en retrait vers le mur.
+ */
+const DESK_S = 0.8;
+const ds = (v: number) => Math.round(v * DESK_S);
+const DESK: Rect = { x: 12, y: 182, w: 96, h: 88 };
+const DESK_TOP = 216;
+const DESK_FEET = 270;
 
 export type OfficeHit = 'window' | 'board' | 'display' | 'computer';
 
@@ -187,8 +193,8 @@ export class OfficeRoom extends Room {
     const top = DESK_TOP + 1; // les écrans sont posés un peu en avant sur le plateau
     const n = game.orders.length;
     const ready = game.readyOrders.length;
-    const q = (v: number) => Math.round(v * 1.2); // l'ordinateur à l'échelle du bureau agrandi
-    const mx = d.x + 16;
+    const q = (v: number) => Math.round(v * 1.2 * DESK_S); // l'ordinateur à l'échelle du bureau
+    const mx = d.x + ds(16);
     const holo = lv === 5;
     const fg = holo ? '#5ef0ff' : lv <= 2 ? '#7cff9c' : '#f2c14e';
     const shine = ready > 0 ? 0.5 + 0.5 * Math.sin(t * 6) : 0;
@@ -219,7 +225,7 @@ export class OfficeRoom extends Room {
       px(mx + q(14), top - q(2), q(14), q(2), '#8a826a');
       [sx, sy, sw, sh] = [mx + q(4), top - q(25), q(34), q(19)];
       px(mx + q(46), top - 4, q(26), 4, '#c8c0a8'); for (let i = 0; i < 15; i++) px(mx + q(47) + i * 2, top - 3, 1, 1, '#6a604c'); for (let i = 0; i < 15; i++) px(mx + q(47) + i * 2, top - 1, 1, 1, '#6a604c');
-      px(d.x + d.w - 16, top + 7, 13, 34, '#c8c0a8'); px(d.x + d.w - 14, top + 11, 9, 2, '#6a604c'); px(d.x + d.w - 10, top + 35, 2, 2, '#7cff9c');
+      px(d.x + d.w - ds(16), top + ds(7), ds(13), ds(34), '#c8c0a8'); px(d.x + d.w - ds(14), top + ds(11), ds(9), 2, '#6a604c'); px(d.x + d.w - ds(10), top + ds(35), 2, 2, '#7cff9c');
     } else if (lv <= 4) {
       // écran plat sur pied (deux écrans pour le logiciel de gestion)
       const ww = q(lv === 4 ? 44 : 46);
@@ -249,7 +255,9 @@ export class OfficeRoom extends Room {
     const digits = String(Math.min(n, 99));
     const ew = 17;
     const eh = 11;
-    const total = ew + 3 + digits.length * 8 - 2;
+    // chiffres en double taille, ou en simple taille quand ils ne tiennent pas dans l'écran
+    const zoom = ew + 3 + digits.length * 8 - 2 <= sw - 2 ? 2 : 1;
+    const total = ew + 3 + digits.length * 4 * zoom - zoom;
     const ex = sx + Math.floor((sw - total) / 2);
     const ey = sy + Math.floor((sh - eh) / 2);
     const env = ready > 0 ? (shine > 0.5 ? '#ffffff' : '#f2c14e') : n > 0 ? fg : fg + '70';
@@ -262,8 +270,8 @@ export class OfficeRoom extends Room {
     for (let i = 0; i < 8; i++) { g.fillRect(ex + i, ey + Math.floor(i * 0.9), 1, 1); g.fillRect(ex + ew - 1 - i, ey + Math.floor(i * 0.9), 1, 1); }
     if (ready > 0 && shine > 0.7) { px(ex - 2, ey - 2, 1, 1, '#ffffff'); px(ex + ew + 1, ey + eh, 1, 1, '#ffffff'); }
     g.save();
-    g.translate(ex + ew + 3, ey);
-    g.scale(2, 2);
+    g.translate(ex + ew + 3, ey + (zoom === 2 ? 0 : 3));
+    g.scale(zoom, zoom);
     drawDigits(g, digits, 0, 0, ready > 0 ? env : n > 0 ? fg : fg + '70');
     g.restore();
   }
@@ -354,53 +362,53 @@ export class OfficeRoom extends Room {
     // ---- le bureau : plateau vu d'en haut, face avant, pieds ; ombres dessous
     const dk = DESK;
     const front = DESK_TOP + 2;
-    const back = DESK_TOP - 8;
+    const back = DESK_TOP - ds(8);
     const kk = (back - front) / (EYE - front); // fuite du plateau vers le point de fuite
     const bl = dk.x + (VX - dk.x) * kk;
     const br = dk.x + dk.w + (VX - dk.x - dk.w) * kk;
     const [top, face, edge, hi] = DESK_WOOD[lv - 1]!;
     // l'ombre sous le bureau, et son ombre portée au sol
-    shade(g, b, { x: dk.x - 4, y: front + 4, w: dk.w + 10, h: 300 - front - 2 }, (x, y) => {
+    shade(g, b, { x: dk.x - 4, y: front + 4, w: dk.w + 10, h: DESK_FEET + 4 - front - 2 }, (x, y) => {
       const inside = x >= dk.x && x <= dk.x + dk.w;
-      const k = (y - front - 4) / (300 - front - 2);
+      const k = (y - front - 4) / (DESK_FEET + 4 - front - 2);
       return inside ? 0.42 + 0.3 * k : 0.8 + 0.2 * Math.min(1, Math.abs(x < dk.x ? dk.x - x : x - dk.x - dk.w) / 4);
     });
     if (lv >= 2 && lv <= 4) {
       // les câbles de l'ordinateur pendent derrière le bureau jusqu'à la prise, au pied du mur
       const cols = lv === 2 ? ['#6a604c', '#4a4038'] : ['#1b1424', '#2c283a'];
-      [62, 66, 70].forEach((cx0, k) => {
+      [ds(62), ds(66), ds(70)].forEach((cx0, k) => {
         const col = cols[k % 2]!;
-        for (let y = front + 5; y < 288 - k * 2; y++) px(dk.x + cx0 + Math.round(Math.sin((y - front) / (9 + k * 3)) * 1.5), y, 1, 1, col);
-        px(dk.x + cx0, 288 - k * 2, dk.w - cx0 - 8, 1, col);
+        for (let y = front + 4; y < DESK_FEET - 8 - k * 2; y++) px(dk.x + cx0 + Math.round(Math.sin((y - front) / (9 + k * 3)) * 1.5), y, 1, 1, col);
+        px(dk.x + cx0, DESK_FEET - 8 - k * 2, dk.w - cx0 - ds(8), 1, col);
       });
-      px(dk.x + dk.w - 9, 283, 4, 7, '#e8e4dc'); px(dk.x + dk.w - 8, 285, 2, 1, '#8a8070'); // la multiprise
+      px(dk.x + dk.w - ds(9), DESK_FEET - 13, 4, 6, '#e8e4dc'); px(dk.x + dk.w - ds(8), DESK_FEET - 11, 2, 1, '#8a8070'); // la multiprise
     }
     trap(g, back, front, bl, br, dk.x, dk.x + dk.w, top);
     px(Math.round(bl), back, Math.round(br - bl), 1, hi);
     shade(g, b, { x: dk.x, y: back, w: dk.w, h: front - back }, (_, y) => 0.88 + ((y - back) / (front - back)) * 0.2);
-    px(dk.x, front, dk.w, 5, face);
+    px(dk.x, front, dk.w, 4, face);
     px(dk.x, front, dk.w, 1, hi);
-    px(dk.x, front + 4, dk.w, 1, edge);
+    px(dk.x, front + 3, dk.w, 1, edge);
     if (lv <= 2) {
       // caisson à tiroirs à gauche, pied à droite
-      px(dk.x + 2, front + 5, 36, 296 - front - 5, face);
-      px(dk.x + 2, front + 5, 1, 296 - front - 5, hi);
-      for (let k = 0; k < Math.floor((296 - front - 10) / 12); k++) {
-        const ty = front + 8 + k * 12;
-        px(dk.x + 5, ty, 30, 10, top); px(dk.x + 5, ty, 30, 1, hi); px(dk.x + 5, ty + 9, 30, 1, edge);
-        px(dk.x + 17, ty + 4, 6, 2, '#c8a860');
+      px(dk.x + 2, front + 4, ds(36), DESK_FEET - front - 5, face);
+      px(dk.x + 2, front + 4, 1, DESK_FEET - front - 5, hi);
+      for (let k = 0; k < Math.floor((DESK_FEET - front - 8) / 10); k++) {
+        const ty = front + 7 + k * 10;
+        px(dk.x + 4, ty, ds(30), 8, top); px(dk.x + 4, ty, ds(30), 1, hi); px(dk.x + 4, ty + 7, ds(30), 1, edge);
+        px(dk.x + ds(17), ty + 3, 5, 2, '#c8a860');
       }
-      px(dk.x + dk.w - 7, front + 5, 5, 296 - front - 5, face);
-      px(dk.x + dk.w - 7, front + 5, 1, 296 - front - 5, hi);
+      px(dk.x + dk.w - 6, front + 4, 4, DESK_FEET - front - 5, face);
+      px(dk.x + dk.w - 6, front + 4, 1, DESK_FEET - front - 5, hi);
     } else {
       // piétement : un caisson fin et un pied
-      px(dk.x + 3, front + 5, 32, 296 - front - 5, top);
-      px(dk.x + 3, front + 5, 1, 296 - front - 5, hi);
-      for (let k = 0; k < Math.floor((296 - front - 14) / 12); k++) px(dk.x + 8, front + 12 + k * 12, 22, 1, edge);
-      px(dk.x + dk.w - 6, front + 5, 3, 296 - front - 5, edge);
+      px(dk.x + 3, front + 4, ds(32), DESK_FEET - front - 5, top);
+      px(dk.x + 3, front + 4, 1, DESK_FEET - front - 5, hi);
+      for (let k = 0; k < Math.floor((DESK_FEET - front - 12) / 10); k++) px(dk.x + 6, front + 10 + k * 10, ds(22), 1, edge);
+      px(dk.x + dk.w - 6, front + 4, 3, DESK_FEET - front - 5, edge);
     }
-    shade(g, b, { x: dk.x, y: front + 5, w: dk.w, h: 296 - front - 5 }, (_, y) => 1 - ((y - front - 5) / (296 - front - 5)) * 0.3);
-    dropShadow(g, b, dk.x + 20, 297, 22, 3, 0.45);
+    shade(g, b, { x: dk.x, y: front + 4, w: dk.w, h: DESK_FEET - front - 5 }, (_, y) => 1 - ((y - front - 5) / (DESK_FEET - front - 5)) * 0.3);
+    dropShadow(g, b, dk.x + ds(20), DESK_FEET + 1, ds(22), 3, 0.45);
   }
 }
 

@@ -48,15 +48,20 @@ const BAR_FURNITURE: Spec[] = [
 ];
 /** Étagères à bouteilles derrière le comptoir, de sa largeur. */
 const shelves = (...ys: number[]): Spec[] => ys.map((y): Spec => ['barShelf', 30, y - 14]);
+/**
+ * Le bureau est dessiné à l'échelle 0,8, un peu en retrait vers le mur (voir officeRoom) : ce qui l'accompagne
+ * (lampe, chaise, corbeille, objets du plateau) suit, placé ici aux mesures d'origine.
+ */
+const desk = ([a, x, y, extra]: Spec): Spec => [a, Math.round(12 + (x - 4) * 0.8), Math.round(216 + (y - 228) * 0.8), { s: 0.8, ...extra }];
 /** Le bureau : ce qui est commun à tous les niveaux, puis les objets posés sur le plateau, qui changent avec l'ordinateur. */
-const OFFICE: Spec[] = [['clock', 72, 126], ['deskLamp', 0, 207], ['wasteBin', 98, 280], ['chair', 28, 245], ['bigPlant', 118, 240]];
-const OFFICE_DESK: Spec[][] = [
+const OFFICE: Spec[] = [['clock', 72, 126], ...([['deskLamp', 0, 207], ['wasteBin', 98, 280], ['chair', 28, 245]] as Spec[]).map(desk), ['bigPlant', 118, 240]];
+const OFFICE_DESK: Spec[][] = ([
   [['rotaryPhone', 105, 218]],
   [['orderPile', 107, 220]],
   [['deskPhone', 82, 220], ['binders', 100, 214], ['mug', 115, 221]],
   [['smartphone', 110, 225], ['postits', 66, 199, { front: true }]],
   [['smartSpeaker', 96, 218], ['mug', 112, 221]],
-];
+] as Spec[][]).map((l) => l.map(desk));
 
 export const DECOR_DEFAULT: DecorLayout = {
   bar: {

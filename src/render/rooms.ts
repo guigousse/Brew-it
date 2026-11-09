@@ -771,7 +771,7 @@ function seatsFor(level: number, n: number, bench = 0): Seat[] {
   const stools = Math.min(n - bench, level === 1 ? 2 : 6);
   const span = level === 1 ? 50 : x1 - x0 - 24;
   const start = level === 1 ? 48 : x0 + 12;
-  for (let i = 0; i < stools; i++) out.push({ x: Math.round(start + (stools === 1 ? span / 2 : (span * i) / (stools - 1))), y: front + 14, kind: 'stool' });
+  for (let i = 0; i < stools; i++) out.push({ x: Math.round(start + (stools === 1 ? span / 2 : (span * i) / (stools - 1))), y: front + 8, kind: 'stool' });
   const rest = n - stools;
   for (let i = 0; i < rest; i++) {
     const c = tableSpot(Math.floor(i / 2));
@@ -976,6 +976,8 @@ export class BarRoom extends Room {
     this.decor(game, lv, t, false);
     this.drawEventItem(game, lv, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
+    // le barman en renfort, derrière le comptoir, au bout gauche : les tireuses passent devant lui
+    if (game.barmanOn) this.drawHelper(game, lv === 1 ? 44 : CT().x0 + 8, t);
     this.drawTaps(labels, this.preview ? BAR[lv - 1]!.taps : game.taps.length, lv);
     this.drawBartender(game, lv, t);
     this.drawGuests(game, lv, t);
@@ -1175,9 +1177,7 @@ export class BarRoom extends Room {
 
   /** Gaston au comptoir, qui essuie un verre. */
   private drawBartender(game: Game, lv: number, t: number): void {
-    // le barman en renfort, gilet sombre et nœud papillon, de l'autre côté des tireuses
-    const { x0, x1 } = CT();
-    if (game.barmanOn) this.drawHelper(game, lv === 1 ? 26 : 16, t);
+    const { x1 } = CT();
     const px = painter(this.g);
     const x = lv === 1 ? 92 : x1 - 24;
     const y = CT().top - 26;
@@ -1194,7 +1194,7 @@ export class BarRoom extends Room {
     }
   }
 
-  /** Barman embauché en renfort. */
+  /** Barman embauché en renfort : gilet sombre et nœud papillon. */
   private drawHelper(game: Game, x: number, t: number): void {
     const px = painter(this.g);
     const y = CT().top - 26;
@@ -1251,6 +1251,7 @@ export class BarRoom extends Room {
         px(tx, s.y - 6, 1, 12, '#2c283a');
       }
     }
+    const walkers: { x: number; foot: number; i: number; left: boolean; skin: string; hair: string; shirt: string; jersey: readonly [string, string] | null }[] = [];
     for (let i = 0; i < seats.length; i++) {
       const s = seats[i]!;
       const period = 40 + hash(i, 11) * 40;
@@ -1262,20 +1263,12 @@ export class BarRoom extends Room {
       const jersey = ev === 'foot' && hash(i, slot + 5) < 0.8 ? JERSEYS[hash(i, slot + 6) < 0.5 ? 0 : 1]! : null;
       const shirt = jersey ? jersey[0] : shirt0;
       // il arrive par la droite et rejoint sa place ; son verre fini, il repart par où il est venu
+      // (dessiné après les clients assis : il passe devant eux)
       const walk = WALK_S / period;
       if (!this.preview && (phase < walk || phase > 1 - walk)) {
         const u = phase < walk ? phase / walk : (1 - phase) / walk;
-        const ex = this.b.R + 6;
-        const x = Math.round(ex + (s.x - ex) * u);
-        const foot = s.y + (s.kind === 'stool' ? 10 : 5);
-        const step = Math.sin(t * 10 + i) > 0 ? 1 : 0;
-        px(x - 2, foot - 6, 2, 6 - step, '#2c283a'); px(x + 1, foot - 6, 2, 5 + step, '#2c283a');
-        px(x - 3, foot - 15, 7, 9, shirt);
-        if (jersey) { px(x, foot - 15, 1, 9, jersey[1]); px(x - 1, foot - 15, 3, 1, jersey[1]); }
-        px(x - 3, foot - 15, 1, 9, '#00000030');
-        px(x - 2, foot - 21, 5, 6, skin);
-        px(x - 2, foot - 22, 5, 2, hair);
-        px(x + (phase < walk ? -2 : 2), foot - 19, 1, 1, '#2b2135');
+        const ex = this.b.R + 8;
+        walkers.push({ x: Math.round(ex + (s.x - ex) * u), foot: s.y + (s.kind === 'stool' ? 10 : 5), i, left: phase < walk, skin, hair, shirt, jersey });
         continue;
       }
       if (s.kind === 'stool') {
@@ -1307,6 +1300,22 @@ export class BarRoom extends Room {
       px(gx, gy, 3, 6, '#c8f0e880');
       const lh = Math.round(5 * level);
       if (lh > 0) { px(gx, gy + 6 - lh, 3, lh, '#e8a530'); px(gx, gy + 6 - lh, 3, 1, '#fff1c8'); }
+    }
+    // les clients qui arrivent ou repartent, un peu plus grands que ceux assis (debout, et plus près de nous) ;
+    // les plus proches de nous passent devant les autres
+    walkers.sort((a, b) => a.foot - b.foot);
+    for (const w of walkers) {
+      const { x, foot, skin, hair, shirt, jersey } = w;
+      const step = Math.sin(t * 10 + w.i) > 0 ? 1 : 0;
+      g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(x - 4, foot, 10, 1);
+      px(x - 3, foot - 8, 3, 8 - step, '#2c283a'); px(x + 1, foot - 8, 3, 7 + step, '#2c283a');
+      px(x - 4, foot - 19, 9, 11, shirt);
+      if (jersey) { px(x, foot - 19, 1, 11, jersey[1]); px(x - 1, foot - 19, 3, 1, jersey[1]); }
+      px(x - 4, foot - 19, 1, 11, '#00000030');
+      px(x - 5 + (step ? 0 : 9), foot - 17, 1, 6, shirt); // un bras qui se balance
+      px(x - 3, foot - 26, 7, 7, skin);
+      px(x - 3, foot - 27, 7, 2, hair);
+      px(x + (w.left ? -2 : 2), foot - 24, 1, 1, '#2b2135');
     }
     // la fête : des clients dansent, debout entre les tables et devant la salle
     if (ev === 'party' && serving) {
