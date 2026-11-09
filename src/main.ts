@@ -1,7 +1,6 @@
 import './ui/style.css';
 import { FixedStepLoop, Game, simulateOffline } from './core/game';
 import { SaveManager } from './core/save';
-import { boostById } from './core/shop';
 import { clientTypeById } from './core/orders';
 import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
@@ -74,12 +73,6 @@ async function boot() {
         tapFeedback(false);
       }
       if (e.type === 'autoSent') app.log(`Livreur : commande « ${e.client} » livrée, +${Math.round(e.amount).toLocaleString('fr-FR')} €`, 'good', 'courier');
-      if (e.type === 'boostsGained') {
-        const list = e.boosts.map((b) => `${b.n > 1 ? `${b.n} × ` : ''}${boostById(b.id)?.name ?? b.id}`).join(', ');
-        const why = e.why === 'level' ? 'Nouveau niveau' : 'Commande de prestige';
-        app.toast(`🎁 ${list} : dans ta réserve`, 'good');
-        app.log(`${why} : ${list} rejoin${e.boosts.length > 1 || e.boosts[0]!.n > 1 ? 'nent' : 't'} ta réserve de boosts (magasin, onglet Boosts)`, 'good', 'bolt');
-      }
       if (e.type === 'orderExpired') app.log(`Commande expirée : ${e.client}`, 'bad', 'clipboard');
     });
     app.update();

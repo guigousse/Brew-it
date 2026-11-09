@@ -2611,7 +2611,7 @@ export class App {
     const next = g.nextDecor;
     const marks: Record<ShopTab, { text: string; cls: string }> = {
       bar: next && g.money >= next.cost ? { text: '', cls: 'dot' } : { text: '', cls: '' },
-      boosts: soonest > 0 ? { text: clock(soonest), cls: 'timer' } : g.stockTotal ? { text: String(g.stockTotal), cls: 'count' } : { text: '', cls: '' },
+      boosts: soonest > 0 ? { text: clock(soonest), cls: 'timer' } : { text: '', cls: '' },
       labels: LABEL_UNLOCKS.some((x) => !g.unlocked.includes(x.id) && !x.gems && g.money >= x.cost) ? { text: '', cls: 'dot' } : { text: '', cls: '' },
     };
     for (const [id, { btn, mark }] of this.shopTabs) {
@@ -2624,7 +2624,7 @@ export class App {
     const key = JSON.stringify([
       tab, this.decorPick, this.labelTab, g.gems, g.owned, g.furniture, g.unlocked, g.barLevel, g.beers.length, advice.target,
       tab === 'bar' ? DECOR_ORDER.map((id) => g.money >= g.decorDef(id).cost) : 0,
-      tab === 'boosts' ? [BOOSTS.map((b) => [b.channel ? g.boostOf(b.channel)?.id : 0, g.boostBlocked(b.id), g.stockOf(b.id)]), g.batches.length > 0 || g.planned > 0] : 0,
+      tab === 'boosts' ? [BOOSTS.map((b) => [b.channel ? g.boostOf(b.channel)?.id : 0, g.boostBlocked(b.id)]), g.batches.length > 0 || g.planned > 0] : 0,
       tab === 'labels' ? LABEL_UNLOCKS.map((x) => g.money >= x.cost) : 0,
     ]);
     if (key === this.shopKey) return;
@@ -2736,10 +2736,7 @@ export class App {
 
   /** Rayon Boosts : un bloc par poste ; un poste occupé montre son temps restant et grise les autres effets. */
   private shopBoosts(g: Game, target?: string): void {
-    const total = g.stockTotal;
-    const intro = h('div', 'reserve');
-    intro.append(h('span', 'reserve-title', 'Ta réserve'), h('span', `reserve-n${total ? ' on' : ''}`, total ? `${total} boost${total > 1 ? 's' : ''}` : 'vide'));
-    this.shopBody.append(intro, h('p', 'hint', 'Achète tes boosts d\'avance (ou gagne-les), et utilise-les au bon moment. Un effet à la fois par poste ; le même effet se prolonge, jusqu\'à 24 h.'));
+    this.shopBody.append(h('p', 'hint', 'Un effet à la fois par poste. Le même effet se prolonge, jusqu\'à 24 h d\'avance ; plus il dure, moins il coûte à la minute.'));
     for (const post of BOOST_POSTS) {
       const cur = post.id ? g.boostOf(post.id) : null;
       const box = h('div', `post${cur ? ' live' : ''}`);
@@ -2753,43 +2750,31 @@ export class App {
       head.append(iconCanvas(POST_ICON[post.id ?? 'none'], 2), h('span', 'post-name', post.name), state);
       box.append(head);
       for (const def of BOOSTS.filter((b) => (b.channel ?? null) === post.id)) {
-        const n = g.stockOf(def.id);
-        const row = h('div', `post-row${def.id === target ? ' advised' : ''}${n ? ' owned' : ''}`);
+        const row = h('div', `post-row${def.id === target ? ' advised' : ''}`);
         const text = h('div', 'post-text');
         text.append(h('span', 'post-boost', def.name), h('span', 'post-fx', boostShort(def)));
-        if (n) text.append(h('span', 'post-stock', `${n} en réserve`));
         const blocked = g.boostBlocked(def.id);
-        const acts = h('div', 'post-acts');
-        // utiliser : seulement ce qu'on a en réserve
-        if (n) {
-          if (blocked) acts.append(this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin, il reste en réserve.`, 'info')));
-          else {
-            acts.append(this.btn('btn price use', cur ? 'Prolonger' : 'Utiliser', () => {
-              const r = g.useBoost(def.id);
-              if (!r.ok) return this.toast(r.reason!, 'bad');
-              this.toast(cur ? `${def.name} : prolongé !` : `${def.name} !`, 'good');
-              this.onSent?.();
-              this.renderShop();
-            }));
-          }
+        const extend = !!cur && !blocked;
+        let b: HTMLButtonElement;
+        if (blocked && cur) {
+          b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
+        } else {
+          b = this.gemsBtn(extend ? `+${def.minutes >= 60 ? `${def.minutes / 60} h` : `${def.minutes} min`}` : '', def.gems, () => {
+            const r = g.buyBoost(def.id);
+            if (!r.ok) return this.toast(r.reason!, 'bad');
+            this.toast(extend ? `${def.name} : prolongé !` : `${def.name} !`, 'good');
+            this.onSent?.();
+            this.renderShop();
+          });
+          if (blocked) b.classList.add('short');
         }
-        // acheter : toujours possible, le boost va dans la réserve
-        const buy = this.gemsBtn('+1', def.gems, () => {
-          const r = g.buyBoost(def.id);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`${def.name} : dans ta réserve`, 'good');
-          this.onSent?.();
-          this.renderShop();
-        }, n ? 'secondary' : '');
-        buy.setAttribute('aria-label', `Acheter ${def.name} pour ${gemsText(def.gems)}`);
-        acts.append(buy);
-        row.append(text, acts);
+        row.append(text, b);
         box.append(row);
       }
       this.shopBody.append(box);
     }
     if (!g.batches.length && !g.planned) this.shopBody.append(h('p', 'note bad', 'Rien ne brasse en ce moment : un boost des machines n\'aurait aucun effet.'));
-    this.shopBody.append(h('p', 'hint gems-note', `Tu as ${gemsText(g.gems)}. Chaque commande livrée en rapporte ${GEMS.order}. Les niveaux de la brasserie et les commandes de prestige offrent aussi des boosts.`));
+    this.shopBody.append(h('p', 'hint gems-note', `Tu as ${gemsText(g.gems)}. Chaque commande livrée en rapporte ${GEMS.order}, chaque niveau de la brasserie bien plus.`));
   }
 
   /** Rayon Étiquettes : bouteilles, formes, logos et motifs ; toucher un objet l'essaie sur ta bière. */

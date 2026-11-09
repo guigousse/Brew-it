@@ -17,11 +17,6 @@ const run = (g: Game, seconds: number) => {
 const runUntil = (g: Game, cond: () => boolean, max = 3000) => {
   for (let i = 0; i < max * 20 && !cond(); i++) g.step();
 };
-/** Achète un boost et l'utilise tout de suite. */
-const boost = (g: Game, id: Parameters<Game['buyBoost']>[0]) => {
-  const r = g.buyBoost(id);
-  return r.ok ? g.useBoost(id) : r;
-};
 /** Partie avec une première bière gardée dans la gamme. */
 const withBeer = (money = 250) => {
   const g = new Game();
@@ -678,7 +673,7 @@ describe('boosts', () => {
     const slow = withBeer(1e6);
     const fast = withBeer(1e6);
     fast.gems = 100;
-    expect(boost(fast, 'cadence').ok).toBe(true);
+    expect(fast.buyBoost('cadence').ok).toBe(true);
     slow.planBrew(slow.beers[0]!.id, 'bottle', 1);
     fast.planBrew(fast.beers[0]!.id, 'bottle', 1);
     run(slow, 120);
@@ -692,18 +687,18 @@ describe('boosts', () => {
   it('un boost au même effet se prolonge, un autre effet du même poste attend', () => {
     const g = withBeer(1e7);
     g.gems = 200;
-    expect(boost(g, 'rush').ok).toBe(true);
+    expect(g.buyBoost('rush').ok).toBe(true);
     const until = g.boostOf('brew')!.until;
-    expect(boost(g, 'rush').ok).toBe(true);
+    expect(g.buyBoost('rush').ok).toBe(true);
     expect(g.boostOf('brew')!.until).toBe(until + 15 * 60);
     // même effet (×2) : la cadence prolonge le coup de feu
-    expect(boost(g, 'cadence').ok).toBe(true);
+    expect(g.buyBoost('cadence').ok).toBe(true);
     expect(g.boostOf('brew')!.until).toBe(until + 75 * 60);
     // effet différent (×3) : il attend
-    expect(boost(g, 'fullSpeed').ok).toBe(false);
+    expect(g.buyBoost('fullSpeed').ok).toBe(false);
     expect(g.boostBlocked('fullSpeed')).toContain('Coup de feu');
     // la levure express a son propre poste
-    expect(boost(g, 'yeast').ok).toBe(true);
+    expect(g.buyBoost('yeast').ok).toBe(true);
     expect(g.stageMult('fermenter')).toBe(6);
     expect(g.stageMult('mill')).toBe(2);
   });
@@ -712,72 +707,28 @@ describe('boosts', () => {
     const g = withBeer(1e6);
     const money = g.money;
     g.gems = 3;
-    expect(g.buyBoost('cadence').ok).toBe(false);
+    expect(g.buyBoost('rush').ok).toBe(false);
     g.gems = 100;
-    expect(g.buyBoost('cadence').ok).toBe(true);
-    expect(g.gems).toBe(100 - g.boostCost('cadence'));
+    expect(g.buyBoost('rush').ok).toBe(true);
+    expect(g.gems).toBe(100 - g.boostCost('rush'));
     expect(g.money).toBe(money);
     // quatre fois 15 min coûtent plus qu'une heure, quatre heures moins que quatre fois une heure
     expect(4 * g.boostCost('rush')).toBeGreaterThan(g.boostCost('cadence'));
     expect(4 * g.boostCost('cadence')).toBeGreaterThan(g.boostCost('nightShift'));
   });
 
-  it('acheter met en réserve ; utiliser le lance, plus tard', () => {
-    const g = withBeer(1e6);
-    expect(g.stockOf('rush')).toBe(1); // un Coup de feu offert au départ
-    g.gems = 100;
-    expect(g.buyBoost('cadence').ok).toBe(true);
-    expect(g.stockOf('cadence')).toBe(1);
-    expect(g.boostOf('brew')).toBeNull(); // rien ne part à l'achat
-    expect(g.useBoost('cadence').ok).toBe(true);
-    expect(g.stockOf('cadence')).toBe(0);
-    expect(g.boostMult('brew')).toBe(2);
-    expect(g.useBoost('cadence').ok).toBe(false); // plus rien en réserve
-    // un effet différent attend : il reste en réserve
-    g.buyBoost('fullSpeed');
-    expect(g.useBoost('fullSpeed').ok).toBe(false);
-    expect(g.stockOf('fullSpeed')).toBe(1);
-    // la réserve est sauvegardée
-    const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
-    expect(back.stockOf('fullSpeed')).toBe(1);
-    expect(back.stockOf('rush')).toBe(1);
-  });
-
-  it('des boosts se gagnent : niveaux de la brasserie, commandes de prestige', () => {
-    const g = withBeer(1e7);
-    const gained: string[] = [];
-    g.events.on((e) => {
-      if (e.type === 'boostsGained') gained.push(...e.boosts.map((b) => `${b.id}×${b.n}`));
-    });
-    for (const id of STATION_ORDER) g.upgrade(id);
-    expect(g.breweryLevel).toBe(2);
-    expect(g.stockOf('rush')).toBe(3);
-    g.beers[0]!.stock = 500;
-    g.beers[0]!.tasting = { ...g.beers[0]!.tasting, quality: 1 };
-    g.orders = [{ ...drawOrder(997, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'prestige', qty: 6, minQuality: 0 } as Order];
-    expect(g.fulfill(997, [g.beers[0]!.id]).ok).toBe(true);
-    expect(g.stockOf('rush')).toBe(4); // le premier de la liste des récompenses de prestige
-    expect(gained).toEqual(['rush×2', 'rush×1']);
-  });
-
-  it('une ancienne partie commence avec une réserve vide', () => {
-    const raw = JSON.parse(JSON.stringify(withBeer(1e6).toJSON()));
-    delete raw.boostStock;
-    expect(Game.fromJSON(raw).stockTotal).toBe(0);
-  });
-
   it('happy hour : deux fois plus de clients, des verres moins chers ; le grossiste généreux paie plus', () => {
     const g = withBeer(1e6);
     g.gems = 100;
     const rate = g.barRate;
-    boost(g, 'happyHour');
+    g.buyBoost('happyHour');
     expect(g.barRate).toBeCloseTo(rate * 2);
     expect(g.barPriceMult).toBeCloseTo(0.8);
     g.beers[0]!.stock = 10;
     const before = g.money;
     g.sellWholesale(g.beers[0]!.id, 1);
     const normal = g.money - before;
-    boost(g, 'broker');
+    g.buyBoost('broker');
     const mid = g.money;
     g.sellWholesale(g.beers[0]!.id, 1);
     expect(g.money - mid).toBeCloseTo(normal * 1.5);
@@ -787,7 +738,7 @@ describe('boosts', () => {
     const g = withBeer(1e6);
     g.orders = [];
     g.gems = 100;
-    expect(boost(g, 'prospect').ok).toBe(true);
+    expect(g.buyBoost('prospect').ok).toBe(true);
     expect(g.orders.length).toBe(1);
   });
 });
@@ -894,7 +845,7 @@ describe('mobilier et étiquettes', () => {
     g.gems = 100;
     expect(g.buyUnlock('emblem:skull').ok).toBe(true);
     expect(g.gems).toBe(50);
-    boost(g, 'cadence');
+    g.buyBoost('cadence');
     g.hire('courier');
     const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
     expect(back.isUnlocked('emblem', 'bee')).toBe(true);

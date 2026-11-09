@@ -8,7 +8,7 @@ import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
-import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, BOOST_REWARDS, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
+import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -163,10 +163,6 @@ export class Game {
   money = STARTING_MONEY;
   /** Diamants : la monnaie premium (boosts, cosmétiques). */
   gems: number = GEMS.start;
-  /** Réserve de boosts : achetés ou gagnés, pas encore utilisés. */
-  boostStock: Partial<Record<BoostId, number>> = { ...BOOST_REWARDS.start };
-  /** Commandes de prestige livrées (la récompense en boost tourne sur cette liste). */
-  prestigeDone = 0;
   rng = new Rng(0xbee12);
   readonly events = new EventBus();
   stations: Record<StationId, StationState> = Object.fromEntries(STATION_ORDER.map((id) => [id, { level: 1 }])) as Record<StationId, StationState>;
@@ -654,7 +650,6 @@ export class Game {
     if (this.breweryLevel > before) {
       this.events.emit({ type: 'breweryLevel', level: this.breweryLevel });
       this.earnGems(GEMS.breweryLevel[this.breweryLevel] ?? 0, 'level');
-      this.gainBoosts(BOOST_REWARDS.breweryLevel[this.breweryLevel] ?? {}, 'level');
     }
     return { ok: true };
   }
@@ -972,7 +967,7 @@ export class Game {
     return (b ? boostById(b.id)?.priceMult ?? 1 : 1) * this.furnitureMult('price');
   }
 
-  /** Diamants gagnés (commande livrée, niveau de la brasserie). */
+  /** Diamants gagnées (commande livrée, niveau de la brasserie). */
   earnGems(n: number, why: 'order' | 'level'): void {
     if (n <= 0) return;
     this.gems += n;
@@ -997,46 +992,17 @@ export class Game {
     return null;
   }
 
-  /** Boosts en réserve de ce type. */
-  stockOf(id: BoostId): number {
-    return this.boostStock[id] ?? 0;
-  }
-
-  /** Boosts en réserve, tous types confondus. */
-  get stockTotal(): number {
-    return Object.values(this.boostStock).reduce((s, n) => s + (n ?? 0), 0);
-  }
-
-  /** Boosts gagnés : ils rejoignent la réserve. */
-  gainBoosts(gift: Partial<Record<BoostId, number>>, why: 'level' | 'prestige'): void {
-    const ids = (Object.keys(gift) as BoostId[]).filter((id) => (gift[id] ?? 0) > 0 && boostById(id));
-    if (!ids.length) return;
-    for (const id of ids) this.boostStock[id] = this.stockOf(id) + gift[id]!;
-    this.events.emit({ type: 'boostsGained', boosts: ids.map((id) => ({ id, n: gift[id]! })), why });
-  }
-
-  /** Achète un boost avec des diamants : il va dans la réserve, sans partir. */
+  /**
+   * Achète un boost avec des diamants. Un boost au même effet que celui en cours le prolonge
+   * (24 h d'avance au plus) ; un effet différent sur le même poste attend la fin.
+   */
   buyBoost(id: BoostId): CommandResult {
     const def = boostById(id);
     if (!def) return { ok: false, reason: 'Boost introuvable' };
-    if (this.gems < def.gems) return { ok: false, reason: 'Pas assez de diamants' };
-    this.gems -= def.gems;
-    this.boostStock[id] = this.stockOf(id) + 1;
-    return { ok: true };
-  }
-
-  /**
-   * Utilise un boost de la réserve. Un boost au même effet que celui en cours le prolonge
-   * (24 h d'avance au plus) ; un effet différent sur le même poste attend la fin, et reste en réserve.
-   */
-  useBoost(id: BoostId): CommandResult {
-    const def = boostById(id);
-    if (!def) return { ok: false, reason: 'Boost introuvable' };
-    if (this.stockOf(id) <= 0) return { ok: false, reason: 'Aucun en réserve' };
     const blocked = this.boostBlocked(id);
     if (blocked) return { ok: false, reason: blocked };
-    this.boostStock[id] = this.stockOf(id) - 1;
-    if (!this.boostStock[id]) delete this.boostStock[id];
+    if (this.gems < def.gems) return { ok: false, reason: 'Pas assez de diamants' };
+    this.gems -= def.gems;
     if (!def.channel) {
       this.orderTimer = 0;
       this.tickOrders(0);
@@ -1263,11 +1229,6 @@ export class Game {
     this.orders = this.orders.filter((x) => x !== o);
     this.events.emit({ type: 'sale', amount: o.reward });
     this.earnGems(GEMS.order, 'order');
-    if (o.kind === 'prestige') {
-      const id = BOOST_REWARDS.prestige[this.prestigeDone % BOOST_REWARDS.prestige.length]!;
-      this.prestigeDone++;
-      this.gainBoosts({ [id]: 1 }, 'prestige');
-    }
     return { ok: true, amount: o.reward };
   }
 
@@ -1656,7 +1617,7 @@ export class Game {
 
   toJSON() {
     return {
-      version: 7, time: this.time, money: this.money, gems: this.gems, boostStock: this.boostStock, prestigeDone: this.prestigeDone, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
+      version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
@@ -1738,9 +1699,6 @@ export class Game {
     const oldCaps = (g as unknown as { caps?: number }).caps;
     if ((s as { gems?: number }).gems == null) g.gems = oldCaps ?? GEMS.start;
     delete (g as unknown as { caps?: unknown }).caps;
-    // avant la réserve, un boost acheté partait tout de suite : les anciennes parties commencent avec une réserve vide
-    if ((s as { boostStock?: unknown }).boostStock == null) g.boostStock = {};
-    g.prestigeDone ??= 0;
     // la campagne de pub ne se vend plus au magasin (elle reste dans l'ordinateur)
     delete (g.boosts as Record<string, unknown>).ad;
     g.staffUntil ??= { courier: 0, apprentice: 0 };

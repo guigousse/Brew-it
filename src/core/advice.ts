@@ -32,21 +32,14 @@ export function shopAdvice(g: Game, tab: ShopTab): Advice {
   }
 
   if (tab === 'boosts') {
-    /** Un boost qu'on peut lancer maintenant : en réserve, ou à acheter avec les diamants. */
-    const can = (id: BoostId) => (g.stockOf(id) > 0 || g.gems >= g.boostCost(id)) && !g.boostBlocked(id);
-    const how = (id: BoostId, name: string) => (g.stockOf(id) > 0 ? `Ton ${name} en réserve, c'est le moment !` : `Un ${name} les écoulerait.`);
+    const can = (id: BoostId) => g.gems >= g.boostCost(id) && !g.boostBlocked(id);
     const kegs = g.beers.reduce((s, b) => s + b.kegs.length, 0);
-    if (kegs >= KEGS_WAITING && !g.boostOf('bar') && can('happyHour')) return { text: `${kegs} fûts attendent au stockage. ${how('happyHour', 'Happy hour')}`, target: 'happyHour' };
+    if (kegs >= KEGS_WAITING && !g.boostOf('bar') && can('happyHour')) return { text: `${kegs} fûts attendent au stockage. Un Happy hour les écoulerait.`, target: 'happyHour' };
     if (!g.batches.length && !g.planned) return { text: 'Rien ne brasse : programme des brassins avant d\'accélérer les machines.' };
-    if (g.planned >= PLAN_BUSY && !g.boostOf('brew')) {
-      const owned = (['nightShift', 'cadence', 'fullSpeed', 'rush'] as const).find((id) => g.stockOf(id) > 0 && !g.boostBlocked(id));
-      if (owned) return { text: `${g.planned} brassins en file : utilise ton ${boostById(owned)?.name} de la réserve !`, target: owned };
-      if (can('cadence')) return { text: `${g.planned} brassins en file : une Cadence ×2 les sortirait deux fois plus vite.`, target: 'cadence' };
-    }
-    if (g.orders.length === 0 && can('prospect')) return { text: 'Ton tableau de commandes est vide. Une Prospection fait venir un client tout de suite.', target: 'prospect' };
-    if (g.stockTotal) return { text: `${g.stockTotal} boost${g.stockTotal > 1 ? 's' : ''} en réserve : garde-les pour le bon moment, ou avant de partir.` };
+    if (g.planned >= PLAN_BUSY && !g.boostOf('brew') && can('cadence')) return { text: `${g.planned} brassins en file : une Cadence ×2 les sortirait deux fois plus vite.`, target: 'cadence' };
+    if (g.orders.length < g.boardSlots && g.orders.length === 0 && can('prospect')) return { text: 'Ton tableau de commandes est vide. Une Prospection fait venir un client tout de suite.', target: 'prospect' };
     if (g.gems < (boostById('rush')?.gems ?? 0)) return { text: 'Plus assez de diamants : chaque commande livrée t\'en rapporte un.' };
-    return { text: `Achète tes boosts d'avance : ils t'attendent dans la réserve. Tu as ${g.gems} diamant${g.gems > 1 ? 's' : ''}.` };
+    return { text: `Tu as ${g.gems} diamant${g.gems > 1 ? 's' : ''}. Chaque commande livrée t'en rapporte un de plus.` };
   }
 
   const beer = g.beers[0]?.name;
