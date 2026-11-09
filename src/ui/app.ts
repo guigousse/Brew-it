@@ -1845,22 +1845,19 @@ export class App {
     time.dataset.expires = String(o.expires);
     time.dataset.received = String(o.received);
     head.append(h('span', 'letter-client', o.client), time);
-    const bar = h('div', 'letter-bar');
-    bar.append(h('i', ''));
-    card.append(head, bar);
+    card.append(head);
     this.paintTimer(time, g.time);
-    // la demande, en pastilles lisibles
+    // la demande, sur une seule ligne : type (seulement s'il compte), quantité, style, qualité
     const ask = h('div', 'letter-ask');
-    if (o.kind !== 'classic') ask.append(h('span', `ask-kind kind-${o.kind}`, KIND_LABEL[o.kind]));
-    const qty = h('span', 'ask-chip');
-    qty.append(iconCanvas(o.kind === 'keg' ? 'keg' : 'range', 1, 'ask-icon'), `×${o.qty}`);
-    qty.setAttribute('aria-label', o.kind === 'keg' ? `${o.qty} fûts` : `${o.qty} bouteilles`);
-    ask.append(qty);
-    if (o.mix) ask.append(h('span', 'ask-chip', `${o.mix} bières`));
+    if (o.kind !== 'classic') ask.append(h('span', `ask-kind${o.kind === 'urgent' ? ' urgent' : ''}`, KIND_LABEL[o.kind]));
+    ask.append(iconCanvas(o.kind === 'keg' ? 'keg' : 'range', 1, 'ask-icon'));
     const want = o.want ? trendById(o.want) : undefined;
-    if (want) ask.append(h('span', 'ask-chip ask-style', want.short));
+    const parts = [`${o.qty}${o.kind === 'keg' ? ` fût${o.qty > 1 ? 's' : ''}` : ''}`];
+    if (o.mix) parts.push(`${o.mix} bières`);
+    if (want) parts.push(want.short);
+    ask.append(h('span', 'ask-text', parts.join(' · ')));
     const q5 = Math.round(o.minQuality * 5);
-    const quality = h('span', 'ask-chip ask-quality', '★'.repeat(q5) + '☆'.repeat(5 - q5));
+    const quality = h('span', 'ask-quality', '★'.repeat(q5) + '☆'.repeat(5 - q5));
     quality.setAttribute('aria-label', `Qualité minimale : ${Math.round(o.minQuality * 100)} %`);
     ask.append(quality);
     card.append(ask);
@@ -1909,7 +1906,7 @@ export class App {
     gain.append(h('span', '', moneyInt(o.reward)), h('span', 'order-gain-sep', '+'), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(gems)));
     send.append(h('span', 'order-send-label', 'Envoyer'), gain);
     send.setAttribute('aria-label', `Envoyer : ${moneyInt(o.reward)} et ${gemsText(gems)}`);
-    row.append(send, this.confirmBtn('btn small bad', 'Refuser', 'Refuser ?', () => {
+    row.append(send, this.confirmBtn('btn small letter-decline', 'Refuser', 'Refuser ?', () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
       this.computer!.key = '';
@@ -1919,7 +1916,7 @@ export class App {
     return card;
   }
 
-  /** Minuteur d'une commande : le temps qui reste, et la barre sous l'en-tête ; vert, orange, puis rouge. */
+  /** Minuteur d'une commande : le temps qui reste ; il ne passe au rouge qu'au dernier cinquième. */
   private paintTimer(timer: HTMLElement, now: number): void {
     const end = Number(timer.dataset.expires);
     const start = Number(timer.dataset.received);
@@ -1930,11 +1927,6 @@ export class App {
     const text = timer.querySelector('.timer-text')!;
     const t = duration(end - now);
     if (text.textContent !== t) text.textContent = t;
-    const card = timer.closest('.letter');
-    const fill = card?.querySelector<HTMLElement>('.letter-bar > i');
-    if (fill) fill.style.width = `${Math.round(k * 100)}%`;
-    card?.querySelector('.letter-bar')?.classList.toggle('mid', level === 'mid');
-    card?.querySelector('.letter-bar')?.classList.toggle('low', level === 'low');
   }
 
   /** Livraison : le tampon « LIVRÉ » s'abat, les pièces et les diamants filent vers les compteurs du haut. */

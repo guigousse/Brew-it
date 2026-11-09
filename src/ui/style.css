@@ -611,9 +611,9 @@ button:disabled { cursor: default; opacity: .5; }
 .unlock-row .btn.price { width: auto; min-width: 92px; min-height: 36px; padding: 3px 8px; font-size: 17px; }
 /* bouton d'envoi d'une commande : son libellé, puis ce qu'elle rapporte (euros + diamants) */
 .btn.order-send { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; }
-.btn.order-send:disabled { background: #3a3046; color: var(--dim); box-shadow: inset 2px 2px 0 #5c4a6e; opacity: 1; }
+.btn.order-send:disabled { background: #e2d2a8; color: #8a6a50; border-color: #b8a888; box-shadow: none; opacity: 1; }
 .order-gain { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; background: #1b142422; white-space: nowrap; }
-.btn.order-send:disabled .order-gain { background: var(--ink); color: var(--text); }
+.btn.order-send:disabled .order-gain { background: transparent; color: #6a5440; }
 .order-gain-sep { opacity: .6; }
 
 /* diamants dans le header */
@@ -679,42 +679,31 @@ button:disabled { cursor: default; opacity: .5; }
 
 
 /* --- Commandes : des lettres épurées, sur papier crème ---------------------------------------- */
-.letter { position: relative; display: grid; gap: 8px; padding: 10px; color: #2a1a12; background: #f3e6c4; border: 2px solid #1b1424; box-shadow: inset -3px -3px 0 #d8c69c; }
+.letter { position: relative; display: grid; gap: 8px; padding: 10px 12px; color: #2a1a12; background: #f3e6c4; border: 2px solid #1b1424; box-shadow: inset -3px -3px 0 #d8c69c; }
 .letter.ready { box-shadow: inset -3px -3px 0 #d8c69c, 0 0 0 3px var(--accent); }
 .letter-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .letter-client { flex: 1; min-width: 0; font-size: 21px; line-height: 1.05; color: #2a1a12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* minuteur : horloge et temps en clair, sur fond d'encre ; vert, orange, puis rouge */
-.timer { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 5px; font-size: 19px; color: #7ee081; background: #1b1424; font-variant-numeric: tabular-nums; }
+/* minuteur : horloge et temps, à l'encre ; rouge seulement quand il presse */
+.timer { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 19px; color: #2a1a12; font-variant-numeric: tabular-nums; }
 .timer-icon { width: 16px; height: 16px; image-rendering: pixelated; }
-.timer.mid { color: #f2c14e; }
-.timer.low { color: #ff8a6a; }
+.timer.low { color: #c8301c; }
 .kind-urgent .timer.low { animation: pulse 1s steps(2) infinite; }
 .timer.wait { color: var(--accent); }
-.letter-bar { height: 5px; margin-top: -4px; background: #d8c69c; }
-.letter-bar > i { display: block; height: 100%; background: #4c8a50; transition: width .3s steps(4); }
-.letter-bar.mid > i { background: #d4823a; }
-.letter-bar.low > i { background: #c8301c; }
-/* la demande : des pastilles pleines, bien contrastées */
-.letter-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
-.ask-kind { padding: 2px 7px; font-family: var(--font-title); font-size: 11px; text-transform: uppercase; color: #fff; background: #5c4a6e; border: 2px solid #1b1424; }
-.ask-kind.kind-urgent { background: #c8301c; }
-.ask-kind.kind-style { background: #2c6a3a; }
-.ask-kind.kind-keg { background: #3f5a8a; }
-.ask-kind.kind-mix { background: #7a3a8a; }
-.ask-kind.kind-prestige { background: #a8742a; }
-.ask-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: 18px; color: #1b1424; background: #fffaf0; border: 2px solid #1b1424; }
+/* la demande : une ligne de texte, une seule couleur ; l'urgence seule en rouge */
+.letter-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 18px; color: #4a3424; }
+.ask-kind { font-family: var(--font-title); font-size: 11px; text-transform: uppercase; color: #4a3424; }
+.ask-kind.urgent { color: #c8301c; }
 .ask-icon { width: 16px; height: 16px; image-rendering: pixelated; }
-.ask-style { color: #fff; background: #2c6a3a; }
-.ask-quality { color: #f2c14e; background: #1b1424; letter-spacing: -1px; }
-/* ce qui partira : une ligne de texte franche */
-.letter-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: 18px; line-height: 1.1; }
+.ask-quality { margin-left: auto; color: #a8742a; letter-spacing: -1px; }
+/* ce qui partira : une ligne, à l'encre */
+.letter-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: 18px; line-height: 1.1; color: #4a3424; }
 .letter-status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.letter-status.ok { color: #1e5a2a; }
-.letter-status.short { color: #8a4a1c; }
-.letter-status.none { color: #8a2a1c; }
+.letter-status.ok { color: #2a1a12; }
+.letter-status.none, .letter-status.short { color: #8a6a50; }
 .letter .chips .chip { color: var(--text); }
 .letter .row { display: flex; flex-wrap: nowrap; gap: 6px; }
 .order-send-label { min-width: 0; text-align: left; line-height: 1; }
+.btn.letter-decline { background: transparent; color: #6a5440; border: 2px solid #b8a888; box-shadow: none; }
 /* livraison : tampon « LIVRÉ » */
 .letter.delivered { animation: letter-out .35s steps(3) 1s forwards; }
 .letter-delivered {
