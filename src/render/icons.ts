@@ -385,6 +385,25 @@ const GRIDS = {
     '................',
     '................',
   ],
+  // capsule dorée (la monnaie premium), dentelée, un cercle en relief
+  cap: [
+    '................',
+    '.....k.kk.k.....',
+    '...kkyykkyykk...',
+    '..kyyyyyyyyyyk..',
+    '.kkyyYYYYYYyykk.',
+    '..kyYwwyyyyYyk..',
+    '.kyyYwyyyyyYyyk.',
+    '.kyyYyyyyyyYyyk.',
+    '.kyyYyyyyyyYyyk.',
+    '.kyyYyyyyyyYyyk.',
+    '..kyYyyyyyyYYk..',
+    '.kkYyYYYYYYYYkk.',
+    '..kYYYYYYYYYYk..',
+    '...kkYYkkYYkk...',
+    '.....k.kk.k.....',
+    '................',
+  ],
   // boost : éclair doré sur un chrono
   bolt: [
     '......kkkk......',

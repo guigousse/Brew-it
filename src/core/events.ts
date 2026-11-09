@@ -11,7 +11,8 @@ export type GameEvent =
   | { type: 'breweryLevel'; level: number }
   | { type: 'batchRuined'; beerId: number }
   | { type: 'autoSent'; client: string; amount: number }
-  | { type: 'apprenticePlanned'; beerId: number };
+  | { type: 'apprenticePlanned'; beerId: number }
+  | { type: 'caps'; amount: number; why: 'order' | 'level' };
 
 type Listener = (e: GameEvent) => void;
 

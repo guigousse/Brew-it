@@ -15,7 +15,8 @@ import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
-import { BOOST_GROUPS, BOOSTS, DECOR_ORDER, type DecorId, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type UnlockKind } from '../core/shop';
+import { BOOST_POSTS, BOOSTS, CAPS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type LabelUnlock, type UnlockKind } from '../core/shop';
+import { shopAdvice, type ShopTab } from '../core/advice';
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
@@ -67,8 +68,44 @@ const DECOR_ICON: Record<DecorId, IconId> = {
   plants: 'plant', darts: 'darts', posters: 'poster', tv: 'tv', neon: 'neon', disco: 'disco', benches: 'bench', jukebox: 'jukebox',
 };
 
-/** Rayons du magasin, dans l'ordre du menu. */
-type ShopSection = 'decor' | 'boosts' | 'labels';
+/** Onglets du magasin, de gauche à droite. */
+const SHOP_TABS: readonly { id: ShopTab; name: string; icon: IconId }[] = [
+  { id: 'bar', name: 'Bar', icon: 'plant' },
+  { id: 'boosts', name: 'Boosts', icon: 'bolt' },
+  { id: 'labels', name: 'Étiquettes', icon: 'labels' },
+];
+/** Icône de chaque poste de boost (null : les coups ponctuels). */
+const POST_ICON: Record<BoostChannel | 'none', IconId> = { brew: 'brew', yeast: 'bubble', bar: 'mug', wholesale: 'truck', none: 'envelope' };
+/** L'événement qu'ouvre chaque objet d'événement de la décoration. */
+const DECOR_EVENT: Partial<Record<DecorId, 'darts' | 'foot' | 'party'>> = { darts: 'darts', tv: 'foot', disco: 'party' };
+/** Hauteur de la vitrine du bar, en px. */
+const SHOWCASE_H = 132;
+
+/** Effets d'un meuble, en petites étiquettes chiffrées. */
+function furnitureEffects(id: DecorId): string[] {
+  const f = FURNITURE.find((x) => x.id === id);
+  if (!f) return [];
+  const pct = (m: number) => `+${Math.round((m - 1) * 100)} %`;
+  const out: string[] = [];
+  if (f.clients) out.push(`clients ${pct(f.clients)}`);
+  if (f.seats) out.push(`+${f.seats} places`);
+  if (f.price) out.push(`verres ${pct(f.price)}`);
+  if (f.pop) out.push(`gamme connue ${pct(f.pop)}`);
+  return out;
+}
+
+/** Effet d'un boost en quelques mots : multiplicateur et durée. */
+function boostShort(b: BoostDef): string {
+  const n = (v: number) => String(v).replace('.', ',');
+  const dur = b.minutes >= 60 ? `${b.minutes / 60} h` : `${b.minutes} min`;
+  if (!b.channel) return 'immédiat';
+  if (b.channel === 'bar') return `clients ×${n(b.mult)}${b.priceMult ? ` · verres −${Math.round((1 - b.priceMult) * 100)} %` : ''} · ${dur}`;
+  if (b.channel === 'wholesale') return `prix ×${n(b.mult)} · ${dur}`;
+  return `×${n(b.mult)} · ${dur}`;
+}
+
+/** Un nombre de capsules, en toutes lettres. */
+const capsText = (n: number) => `${n} capsule${n > 1 ? 's' : ''}`;
 
 /** Nom de la pièce en haut à gauche. */
 function roomTitle(plaque: HTMLElement): HTMLElement {
@@ -219,10 +256,23 @@ export class App {
   private rangeBtn = fab('range', 'Ma gamme');
   private eventsBtn = fab('events', 'Événements');
   private barmanBtn = fab('barman', 'Barman en renfort');
-  /** Le magasin : un menu de rayons (un grand bouton par catégorie), pas une pièce dessinée. */
-  private shopMenu = h('div', 'shop-menu');
-  /** Boutons des rayons : leur sous-titre (prochain meuble, boost en cours…) suit la partie. */
-  private shopBtns = new Map<ShopSection, { btn: HTMLButtonElement; sub: HTMLElement; icon: HTMLElement }>();
+  /** Le magasin : le comptoir de Gaston (son conseil), trois onglets, et le rayon affiché dessous. */
+  private shopPane = h('div', 'shop');
+  private shopBubble = h('p', 'shop-bubble');
+  private shopBody = h('div', 'shop-body');
+  private shopTabs = new Map<ShopTab, { btn: HTMLButtonElement; mark: HTMLElement }>();
+  private shopTab: ShopTab = 'bar';
+  /** Case choisie sur la piste de la décoration (null : la prochaine en vente). */
+  private decorPick: DecorId | null = null;
+  private shopKey = '';
+  /** Ce qui est devenu abordable et que le joueur a déjà vu au magasin (la pastille de l'onglet s'éteint). */
+  private shopSeen = new Set<string>();
+  /** Le bar, redessiné dans la vitrine avec l'objet en vente déjà installé. */
+  readonly showcase = new BarRoom();
+  private showcaseScene: HTMLElement | null = null;
+  /** Capsules dorées, à côté de l'argent. */
+  private capsEl = h('span', 'caps-value');
+  private capsPill = h('button', 'caps');
   private computerHit?: HTMLButtonElement;
   // --- les pièces
   readonly officeRoom = new OfficeRoom();
@@ -288,7 +338,10 @@ export class App {
     const opts = h('button', 'icon-btn', '⚙');
     opts.setAttribute('aria-label', 'Options');
     opts.onclick = () => this.openOptions();
-    this.header.append(logo, pill, opts);
+    this.capsPill.append(iconCanvas('cap', 1, 'caps-icon'), this.capsEl);
+    this.capsPill.setAttribute('aria-label', 'Capsules dorées : voir les boosts');
+    this.capsPill.onclick = () => this.openShop('boosts');
+    this.header.append(logo, this.capsPill, pill, opts);
     for (const t of TABS) {
       const btn = h('button', 'nav-tab');
       btn.setAttribute('aria-label', t.name);
@@ -363,33 +416,14 @@ export class App {
     this.roomHits.push({ el: signEl, rect: this.signRect });
     this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
     this.barWrap.append(roomTitle(this.barPlaque));
-    // magasin : un grand bouton par rayon, l'icône à gauche, le titre à droite
-    const SECTIONS: { id: ShopSection; name: string; icon: IconId; run: () => void }[] = [
-      { id: 'decor', name: 'Décoration du bar', icon: 'plant', run: () => this.openFurniture() },
-      { id: 'boosts', name: 'Boosts', icon: 'bolt', run: () => this.openBoosts() },
-      { id: 'labels', name: 'Étiquettes et bouteilles', icon: 'labels', run: () => this.openLabelShop() },
-    ];
-    const list = h('div', 'shop-list');
-    for (const sec of SECTIONS) {
-      const btn = h('button', 'shop-cat');
-      const icon = h('span', 'shop-cat-icon');
-      icon.append(iconCanvas(sec.icon, 3));
-      const text = h('span', 'shop-cat-text');
-      const sub = h('span', 'shop-cat-sub');
-      text.append(h('span', 'shop-cat-name', sec.name), sub);
-      btn.append(icon, text, h('span', 'shop-cat-arrow', '›'));
-      btn.onclick = sec.run;
-      list.append(btn);
-      this.shopBtns.set(sec.id, { btn, sub, icon });
-    }
-    this.shopMenu.append(h('h2', 'shop-menu-title', 'Magasin'), list);
+    this.buildShop();
     // Le défilé des écrans suit l'ordre des onglets : bureau, atelier, stockage, bar, magasin.
     const wraps: Record<RoomId, HTMLElement> = { office: this.officeWrap, workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap };
     for (const t of TABS) {
       const pane = h('div', 'room');
       if (!isRoom(t.id)) {
         pane.classList.add('shop-pane');
-        pane.append(this.shopMenu);
+        pane.append(this.shopPane);
         this.track.append(pane);
         continue;
       }
@@ -491,6 +525,7 @@ export class App {
     const all = !!this.swipe?.on || performance.now() < this.roomsDrawUntil;
     if (all || this.view === 'storage') this.storageRoom.draw(g, t);
     if (all || this.view === 'bar') this.barRoom.draw(g, t);
+    if ((all || this.view === 'shop') && this.shopTab === 'bar') this.drawShowcase(g, t);
     // l'atelier se voit aussi par la fenêtre du bureau
     if (!all && this.view !== 'workshop' && this.view !== 'office') return;
     this.scene.draw(g, t);
@@ -563,6 +598,8 @@ export class App {
   update(): void {
     const g = this.game();
     if (!this.moneyAnim) this.moneyEl.textContent = moneyInt(g.money);
+    const caps = String(g.caps);
+    if (this.capsEl.textContent !== caps) this.capsEl.textContent = caps;
     const off = g.offline;
     if (off && off.earned <= 0) g.collectOffline(); // rien à récolter : on n'en parle pas
     const earned = g.offline?.earned ?? 0;
@@ -617,14 +654,15 @@ export class App {
       storage: g.storageFull ? '!' : '',
       bar: g.partying ? '🎉' : emptyTap && kegsReady ? '!' : '', // un fût à changer, et de quoi le remplacer
     };
+    const shopNew = this.view !== 'shop' && this.shopNews(g).length > 0;
     for (const [id, tab] of this.navTabs) {
-      const badge = isRoom(id) ? badges[id] : '';
+      const badge = isRoom(id) ? badges[id] : shopNew ? '!' : '';
       tab.btn.classList.toggle('active', id === this.view);
       tab.badge.textContent = badge;
       tab.badge.classList.toggle('hidden', !badge);
       tab.badge.classList.toggle('hot', id === 'office' ? ready > 0 : !!badge);
     }
-    this.renderPage();
+    this.renderShop();
     this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen || this.view !== 'workshop');
     this.placeTaste();
     if (trial && trial.id !== this.announcedTaste) {
@@ -1466,7 +1504,7 @@ export class App {
         const next = g.nextDecor;
         el.append(this.btn('btn small', next?.id === item.id ? `🔒 Achète « ${item.name} » au magasin` : `🔒 Au magasin, après « ${next?.name} »`, () => {
           this.closeModal();
-          this.goView('shop');
+          this.openShop('bar', item.id);
         }));
       } else {
         const cost = g.eventCost(ev.id);
@@ -2063,8 +2101,12 @@ export class App {
     }));
   }
 
-  /** Éditeur d'étiquette : forme, fond, motif, couleurs, emblème, police ; aperçu en direct. */
-  openLabelEditor(name: string, initial: Label, onDone: (name: string, label: Label) => void): void {
+  /**
+   * Éditeur d'étiquette : forme, fond, motif, couleurs, emblème, police ; aperçu en direct.
+   * Ce qui n'est pas débloqué s'essaie aussi : le bouton du bas propose alors de le débloquer avant de valider.
+   * `base` est l'étiquette d'origine : ce qu'elle porte déjà reste utilisable.
+   */
+  openLabelEditor(name: string, initial: Label, onDone: (name: string, label: Label) => void, base: Label = initial): void {
     const label: Label = { ...initial };
     const card = this.modalCard('Ton étiquette');
     const preview = h('div', 'label-preview');
@@ -2088,17 +2130,26 @@ export class App {
     const g = this.game();
     input.oninput = redraw;
     card.append(preview, h('div', 'section-title', 'Nom'), input);
+    const isOpen = (kind: UnlockKind, value: string) => g.isUnlocked(kind, value) || String(base[kind]) === value;
+    /** Ce que l'étiquette porte sans l'avoir débloqué (essai). */
+    const pending = () => LABEL_UNLOCKS.filter((x) => String(label[x.kind] ?? 'classic') === x.value && !isOpen(x.kind, x.value));
+    const relabel: (() => void)[] = [];
     const chooser = <K extends keyof Label>(title: string, key: K, options: { id: Label[K]; name: string }[], kind?: UnlockKind) => {
       const row = h('div', 'chips');
       for (const o of options) {
-        const open = !kind || g.isUnlocked(kind, String(o.id)) || initial[key] === o.id;
-        const price = LABEL_UNLOCKS.find((x) => x.kind === kind && x.value === o.id)?.cost ?? 0;
-        const c = this.btn(`chip${(label[key] ?? 'classic') === o.id ? ' active' : ''}${open ? '' : ' locked'}`, open ? o.name : `🔒 ${o.name}`, () => {
-          if (!open) return this.toast(`« ${o.name} » se débloque au magasin, rayon Étiquettes · ${moneyShort(price)}`, 'info');
+        const c = this.btn(`chip${(label[key] ?? 'classic') === o.id ? ' active' : ''}`, o.name, () => {
           label[key] = o.id;
           row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('active', x === c));
           redraw();
+          refresh();
         });
+        const paint = () => {
+          const open = !kind || isOpen(kind, String(o.id));
+          c.textContent = open ? o.name : `🔒 ${o.name}`;
+          c.classList.toggle('locked', !open);
+        };
+        paint();
+        relabel.push(paint);
         row.append(c);
       }
       card.append(h('div', 'section-title', title), row);
@@ -2125,7 +2176,40 @@ export class App {
     chooser('Emblème', 'emblem', EMBLEMS, 'emblem');
     chooser('Police du nom', 'font', FONTS);
     colors('Couleur du texte et du contour', 'textColor');
-    card.append(this.btn('btn primary big', 'Valider l\'étiquette', () => onDone(input.value, label)));
+    const tryNote = h('p', 'hint try-note');
+    const done = h('button', 'btn primary big');
+    const refresh = () => {
+      const x = pending()[0];
+      relabel.forEach((f) => f());
+      done.replaceChildren();
+      done.classList.remove('short');
+      delete done.dataset.cost;
+      tryNote.textContent = x ? `Essai : « ${x.name} » n'est pas encore débloqué.` : '';
+      if (!x) {
+        done.textContent = 'Valider l\'étiquette';
+        done.onclick = () => onDone(input.value, label);
+        return;
+      }
+      done.append(h('span', '', `Débloquer « ${x.name} » · `));
+      if (x.caps) {
+        done.append(iconCanvas('cap', 1, 'caps-icon'), h('span', '', String(x.caps)));
+        done.classList.toggle('short', g.caps < x.caps);
+      } else {
+        done.append(h('span', '', moneyShort(x.cost)));
+        this.costGate(done, x.cost);
+      }
+      done.onclick = () => {
+        if (x.caps && g.caps < x.caps) return this.toast(`Il te manque ${capsText(x.caps - g.caps)}`, 'bad');
+        const r = g.buyUnlock(x.id);
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.toast(`${x.name} : débloqué !`, 'good');
+        this.onSent?.();
+        this.shopKey = '';
+        refresh();
+      };
+    };
+    card.append(tryNote, done);
+    refresh();
     redraw();
     void document.fonts?.ready.then(redraw);
   }
@@ -2283,34 +2367,6 @@ export class App {
   }
 
   // ------------------------------------------------------------------ pages
-
-  /** Sous-titres des rayons du magasin : la décoration en vente, le boost en cours, les étiquettes débloquées. */
-  private renderPage(): void {
-    const g0 = this.game();
-    const item = g0.nextDecor;
-    const live = (['brew', 'yeast', 'bar', 'wholesale'] as BoostChannel[]).map((c) => g0.boostOf(c)).filter((b) => !!b);
-    const soonest = live.length ? Math.min(...live.map((b) => b!.until)) - g0.time : g0.advertising ? g0.adUntil - g0.time : 0;
-    const owned = LABEL_UNLOCKS.filter((x) => g0.unlocked.includes(x.id)).length;
-    const subs: Record<ShopSection, { text: string; hot?: boolean; on?: boolean }> = {
-      decor: item ? { text: `${item.name} · ${moneyShort(item.cost)}`, hot: g0.money >= item.cost } : { text: 'Tout est installé ✓' },
-      boosts: soonest > 0 ? { text: `⚡ En cours · ${clock(soonest)}`, on: true } : { text: 'Machines, clients et commandes' },
-      labels: { text: owned < LABEL_UNLOCKS.length ? `${owned} / ${LABEL_UNLOCKS.length} débloqués` : 'Tout est débloqué ✓' },
-    };
-    for (const [id, { btn, sub, icon }] of this.shopBtns) {
-      const st = subs[id];
-      if (sub.textContent !== st.text) sub.textContent = st.text;
-      btn.classList.toggle('afford', !!st.hot);
-      btn.classList.toggle('on', !!st.on);
-      // l'icône de la décoration montre la pièce en vente
-      if (id === 'decor') {
-        const want = item ? DECOR_ICON[item.id] : 'plant';
-        if (icon.dataset.icon !== want) {
-          icon.dataset.icon = want;
-          icon.replaceChildren(iconCanvas(want, 3));
-        }
-      }
-    }
-  }
 
   /** Tableau de bord (application de l'ordinateur) : un aperçu en direct des ventes et de la brasserie. */
   private dashboardPage(g: Game, page: HTMLElement): void {
@@ -2490,99 +2546,258 @@ export class App {
     }
   }
 
-  // ------------------------------------------------------------------ rayons du magasin
+  // ------------------------------------------------------------------ magasin
 
-  /** Les boosts : brasserie, bar et généraux ; prix selon ce qu'ils rapportent aujourd'hui. */
-  openBoosts(): void {
-    const g = this.game();
-    const card = this.modalCard('Boosts');
-    card.classList.add('catalog');
-    for (const grp of BOOST_GROUPS) {
-      card.append(h('div', 'section-title', grp.name), h('p', 'hint', grp.text));
-      for (const def of BOOSTS.filter((b) => b.group === grp.id)) {
-        const cur = def.channel ? g.boostOf(def.channel) : def.id === 'ad' && g.advertising ? { id: 'ad' as const, until: g.adUntil } : null;
-        const mine = cur?.id === def.id;
-        const row = h('div', `card shop-row${mine ? ' banner' : ''}`);
-        const head = h('div', 'beer-head');
-        head.append(h('span', 'beer-name', def.name), h('span', 'order-time', mine ? `⚡ ${clock(cur!.until - g.time)}` : def.minutes ? duration(def.minutes * 60) : 'immédiat'));
-        row.append(head, h('p', 'hint', def.text));
-        const cost = g.boostCost(def.id);
-        const busy = !!cur && !mine;
-        const b = this.btn('btn primary', busy ? `Attends la fin de « ${BOOSTS.find((x) => x.id === cur!.id)?.name} »` : `${mine && def.id !== 'ad' ? 'Prolonger' : 'Acheter'} · ${moneyShort(cost)}`, () => {
-          const r = g.buyBoost(def.id);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`${def.name} !`, 'good');
-          this.onSent?.();
-          this.openBoosts();
-        });
-        b.disabled = busy || (def.id === 'ad' && g.advertising);
-        if (!b.disabled) this.costGate(b, cost);
-        row.append(b);
-        card.append(row);
-      }
+  /** Le comptoir de Gaston (étagère, portrait, bulle) et les trois onglets ; le rayon s'affiche dessous. */
+  private buildShop(): void {
+    const counter = h('div', 'shop-counter');
+    const shelf = h('div', 'shop-shelf');
+    for (const id of ['tv', 'disco', 'labels', 'bolt', 'jukebox'] as const) shelf.append(iconCanvas(id, 1, 'shop-good'));
+    const face = h('div', 'shop-gaston');
+    const av = h('canvas', 'shop-gaston-face');
+    drawGaston(av);
+    face.append(av);
+    counter.append(shelf, face, this.shopBubble);
+    const tabs = h('div', 'shop-tabs');
+    for (const t of SHOP_TABS) {
+      const btn = h('button', 'shop-tab');
+      const mark = h('span', 'shop-tab-mark hidden');
+      btn.append(iconCanvas(t.icon, 2, 'shop-tab-icon'), h('span', 'shop-tab-name', t.name), mark);
+      btn.onclick = () => this.openShop(t.id);
+      tabs.append(btn);
+      this.shopTabs.set(t.id, { btn, mark });
     }
-    if (!g.batches.length && !g.planned) card.append(h('p', 'note bad', 'Rien ne brasse en ce moment : un boost de brasserie n\'aurait aucun effet.'));
-    card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
+    this.shopPane.append(counter, tabs, this.shopBody);
   }
 
-  /**
-   * La décoration du bar : les meubles alternent avec les objets qui débloquent un événement ;
-   * chaque pièce débloque la suivante, et s'installe dans le bar à tous ses niveaux.
-   */
-  openFurniture(): void {
-    const g = this.game();
-    const card = this.modalCard('Décoration du bar');
-    card.classList.add('catalog');
-    card.append(h('p', 'hint', 'Meubles et objets d\'événement, l\'un après l\'autre. Tout garde sa place quand tu agrandis le bar.'));
+  /** Ouvre le magasin sur un onglet (et, au bar, sur une pièce de la décoration). */
+  openShop(tab: ShopTab = this.shopTab, pick?: DecorId): void {
+    this.shopTab = tab;
+    if (pick) this.decorPick = pick;
+    this.shopKey = '';
+    this.closeModal();
+    if (this.view !== 'shop') this.goView('shop');
+    else this.renderShop();
+  }
+
+  /** Ce qui est devenu abordable depuis la dernière visite : la prochaine décoration, les étiquettes. */
+  private shopNews(g: Game): string[] {
+    const out: string[] = [];
     const next = g.nextDecor;
-    for (const id of DECOR_ORDER) {
-      const d = g.decorDef(id);
-      const owned = g.ownsDecor(id);
-      const ev = d.event ? BAR_EVENTS.find((e) => e.needs === id) : undefined;
-      const row = h('div', `card shop-row${owned ? ' banner' : ''}${!owned && next?.id !== id ? ' locked' : ''}`);
-      const head = h('div', 'event-head');
-      const title = h('div', 'event-title');
-      const name = h('span', 'beer-name', d.name);
-      title.append(name, h('span', `kind-tag ${d.event ? 'kind-prestige' : 'kind-style'}`, d.event ? 'Événement' : 'Mobilier'));
-      head.append(iconCanvas(DECOR_ICON[id], 2), title, h('span', 'order-time', owned ? '✓' : next?.id === id ? '' : '🔒'));
-      row.append(head, h('p', 'hint', ev ? `${d.text} : ${ev.text}` : d.text));
-      if (!owned && next?.id === id) {
-        const b = this.btn('btn primary', `${d.event ? 'Acheter' : 'Installer'} · ${moneyShort(d.cost)}`, () => {
-          const r = g.buyDecor(id);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(d.event ? `${d.name} : nouvel événement au bar !` : `${d.name} : au bar !`, 'good');
-          this.onSent?.();
-          this.openFurniture();
-        });
-        this.costGate(b, d.cost);
-        row.append(b);
-      } else if (!owned) row.append(h('p', 'note', `Après « ${next?.name} » · ${moneyShort(d.cost)}`));
-      card.append(row);
+    if (next && g.money >= next.cost) out.push(`decor:${next.id}`);
+    for (const x of LABEL_UNLOCKS) {
+      if (!g.unlocked.includes(x.id) && (x.caps ? g.caps >= x.caps : g.money >= x.cost)) out.push(`label:${x.id}`);
     }
-    card.append(this.btn('btn', 'Voir le bar', () => {
-      this.closeModal();
-      this.goView('bar');
-    }), this.btn('btn', 'Fermer', () => this.closeModal()));
+    return out.filter((k) => !this.shopSeen.has(k));
   }
 
-  /** Étiquettes : nouvelles bouteilles, formes, logos et motifs pour l'éditeur. */
-  private labelTab: UnlockKind = 'bottle';
-  openLabelShop(kind: UnlockKind = this.labelTab): void {
+  /** Redessine le rayon quand ce qu'il montre change ; la bulle de Gaston et les minuteurs, à chaque appel. */
+  private renderShop(): void {
     const g = this.game();
-    this.labelTab = kind;
-    const card = this.modalCard('Étiquettes et bouteilles');
-    card.classList.add('catalog');
+    const tab = this.shopTab;
+    // ce que le joueur voit est « vu » : la pastille de l'onglet Magasin s'éteint
+    if (this.view === 'shop') {
+      for (const k of this.shopNews(g)) if ((tab === 'bar') === k.startsWith('decor:')) this.shopSeen.add(k);
+    }
+    const advice = shopAdvice(g, tab);
+    if (this.shopBubble.textContent !== advice.text) this.shopBubble.textContent = advice.text;
+    // marques des onglets : décoration abordable, boost en cours (temps restant), étiquette abordable
+    const live = BOOST_POSTS.flatMap((p) => (p.id ? [g.boostOf(p.id)] : [])).filter((b) => !!b);
+    const soonest = live.length ? Math.min(...live.map((b) => b!.until)) - g.time : 0;
+    const next = g.nextDecor;
+    const marks: Record<ShopTab, { text: string; cls: string }> = {
+      bar: next && g.money >= next.cost ? { text: '', cls: 'dot' } : { text: '', cls: '' },
+      boosts: soonest > 0 ? { text: clock(soonest), cls: 'timer' } : { text: '', cls: '' },
+      labels: LABEL_UNLOCKS.some((x) => !g.unlocked.includes(x.id) && !x.caps && g.money >= x.cost) ? { text: '', cls: 'dot' } : { text: '', cls: '' },
+    };
+    for (const [id, { btn, mark }] of this.shopTabs) {
+      btn.classList.toggle('active', id === tab);
+      const m = marks[id];
+      if (mark.textContent !== m.text) mark.textContent = m.text;
+      mark.className = `shop-tab-mark ${m.cls}${m.cls ? '' : ' hidden'}`;
+    }
+    this.shopBody.querySelectorAll<HTMLElement>('[data-until]').forEach((el) => (el.textContent = clock(Math.max(0, Number(el.dataset.until) - g.time))));
+    const key = JSON.stringify([
+      tab, this.decorPick, this.labelTab, g.caps, g.owned, g.furniture, g.unlocked, g.barLevel, g.beers.length, advice.target,
+      tab === 'bar' ? DECOR_ORDER.map((id) => g.money >= g.decorDef(id).cost) : 0,
+      tab === 'boosts' ? [BOOSTS.map((b) => [b.channel ? g.boostOf(b.channel)?.id : 0, g.boostBlocked(b.id)]), g.batches.length > 0 || g.planned > 0] : 0,
+      tab === 'labels' ? LABEL_UNLOCKS.map((x) => g.money >= x.cost) : 0,
+    ]);
+    if (key === this.shopKey) return;
+    this.shopKey = key;
+    const scroll = this.shopBody.scrollTop;
+    this.shopBody.replaceChildren();
+    this.showcaseScene = null;
+    if (tab === 'bar') this.shopBar(g, advice.target);
+    if (tab === 'boosts') this.shopBoosts(g, advice.target);
+    if (tab === 'labels') this.shopLabels(g, advice.target);
+    this.shopBody.scrollTop = scroll;
+  }
+
+  /** Bouton de prix en capsules : doré si on peut payer, sinon grisé (il dit ce qui manque). */
+  private capsBtn(text: string, caps: number, run: () => void, cls = ''): HTMLButtonElement {
+    const b = h('button', `btn price caps-price ${cls}`);
+    b.append(h('span', '', text ? `${text} · ` : ''), iconCanvas('cap', 1, 'caps-icon'), h('span', '', String(caps)));
+    const short = this.game().caps < caps;
+    b.classList.toggle('primary', !short);
+    b.classList.toggle('short', short);
+    b.onclick = () => {
+      const missing = caps - this.game().caps;
+      if (missing > 0) return this.toast(`Il te manque ${capsText(missing)} : chaque commande livrée en rapporte ${CAPS.order}`, 'bad');
+      run();
+    };
+    return b;
+  }
+
+  /** Rayon Bar : la vitrine (la pièce choisie, montrée dans le bar), puis toute la piste de la décoration. */
+  private shopBar(g: Game, target?: string): void {
+    const next = g.nextDecor;
+    const pick = this.decorPick ?? (target as DecorId | undefined) ?? next?.id ?? DECOR_ORDER[DECOR_ORDER.length - 1]!;
+    const d = g.decorDef(pick);
+    const owned = g.ownsDecor(pick);
+    const isNext = next?.id === pick;
+    const idx = DECOR_ORDER.indexOf(pick);
+    const ev = d.event ? BAR_EVENTS.find((e) => e.needs === pick) : undefined;
+    // vitrine
+    const card = h('div', `vitrine${isNext ? ' next' : ''}`);
+    const scene = h('div', 'vitrine-scene');
+    scene.style.height = `${SHOWCASE_H}px`;
+    scene.append(this.showcase.canvas, h('span', 'vitrine-pin', owned ? 'Dans ton bar' : 'Aperçu dans ton bar'));
+    this.showcase.showcase = d.event ? { event: DECOR_EVENT[pick] } : { furniture: pick as (typeof FURNITURE)[number]['id'] };
+    this.showcaseScene = scene;
+    const body = h('div', 'vitrine-body');
+    const name = h('div', 'vitrine-name');
+    name.append(h('span', 'beer-name', d.name), h('span', `kind-tag ${d.event ? 'kind-prestige' : 'kind-style'}`, d.event ? 'Événement' : 'Mobilier'));
+    const fx = h('div', 'fx');
+    for (const t of d.event ? [ev!.name, `${ev!.mult} fois plus de clients`] : furnitureEffects(pick)) fx.append(h('span', 'fx-chip', t));
+    body.append(name, fx, h('p', 'hint', ev ? ev.text : d.text));
+    if (owned) {
+      body.append(this.btn('btn price own', '✓ Au bar · voir', () => this.goView('bar')));
+    } else if (isNext) {
+      const b = this.btn('btn primary price', `${d.event ? 'Acheter' : 'Installer'} · ${moneyShort(d.cost)}`, () => {
+        const r = g.buyDecor(pick);
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.decorPick = null;
+        this.onSent?.();
+        this.toast(d.event ? `${d.name} : nouvel événement au bar !` : `${d.name} : au bar !`, 'good', { label: 'Voir', run: () => this.goView('bar') });
+        this.shopKey = '';
+        this.renderShop();
+      });
+      this.costGate(b, d.cost);
+      body.append(b);
+    } else {
+      const before = g.decorDef(DECOR_ORDER[idx - 1]!);
+      body.append(this.btn('btn price lock', `🔒 Après « ${before.name} » · ${moneyShort(d.cost)}`, () => {
+        this.decorPick = null;
+        this.shopKey = '';
+        this.renderShop();
+      }));
+    }
+    card.append(scene, body);
+    // la piste
+    const count = DECOR_ORDER.filter((id) => g.ownsDecor(id)).length;
+    const head = h('div', 'shop-section');
+    head.append(h('span', '', 'La suite'), h('span', 'shop-section-n', `${count} / ${DECOR_ORDER.length} au bar`));
+    const track = h('div', 'decor-track');
+    for (const id of DECOR_ORDER) {
+      const dd = g.decorDef(id);
+      const own = g.ownsDecor(id);
+      const slot = h('button', `decor-slot${own ? ' owned' : next?.id === id ? ' next' : ' locked'}${id === pick ? ' picked' : ''}`);
+      slot.setAttribute('aria-label', `${dd.name}${own ? ' : au bar' : ` : ${moneyShort(dd.cost)}`}`);
+      if (dd.event) slot.append(h('i', 'decor-ev'));
+      slot.append(iconCanvas(DECOR_ICON[id], 2), h('span', 'decor-slot-price', own ? '✓' : moneyShort(dd.cost)));
+      slot.onclick = () => {
+        this.decorPick = id;
+        this.shopKey = '';
+        this.renderShop();
+      };
+      track.append(slot);
+    }
+    this.shopBody.append(card, head, track, h('p', 'hint', 'Le carré doré marque un objet d\'événement. Toucher une case la montre dans la vitrine.'));
+  }
+
+  /** Le bar de la vitrine : redessiné à chaque image, cadré sur l'objet en vente. */
+  private drawShowcase(g: Game, t: number): void {
+    const scene = this.showcaseScene;
+    if (!scene?.isConnected) return;
+    const w = scene.clientWidth;
+    if (!w) return;
+    const room = this.showcase;
+    room.draw(g, t);
+    const s = w / room.canvas.width;
+    const ch = room.canvas.height * s;
+    const top = Math.max(SHOWCASE_H - ch, Math.min(0, SHOWCASE_H / 2 - room.showcaseFocus(g) * s));
+    Object.assign(room.canvas.style, { width: `${w}px`, height: `${ch}px`, top: `${top}px` });
+  }
+
+  /** Rayon Boosts : un bloc par poste ; un poste occupé montre son temps restant et grise les autres effets. */
+  private shopBoosts(g: Game, target?: string): void {
+    this.shopBody.append(h('p', 'hint', 'Un effet à la fois par poste. Le même effet se prolonge, jusqu\'à 24 h d\'avance ; plus il dure, moins il coûte à la minute.'));
+    for (const post of BOOST_POSTS) {
+      const cur = post.id ? g.boostOf(post.id) : null;
+      const box = h('div', `post${cur ? ' live' : ''}`);
+      const head = h('div', 'post-head');
+      const state = h('span', `post-state${cur ? ' on' : ''}`);
+      if (cur) {
+        const left = h('span', '', clock(cur.until - g.time));
+        left.dataset.until = String(cur.until);
+        state.append(`⚡ ${BOOSTS.find((b) => b.id === cur.id)?.name} · `, left);
+      } else state.textContent = post.id ? 'libre' : '';
+      head.append(iconCanvas(POST_ICON[post.id ?? 'none'], 2), h('span', 'post-name', post.name), state);
+      box.append(head);
+      for (const def of BOOSTS.filter((b) => (b.channel ?? null) === post.id)) {
+        const row = h('div', `post-row${def.id === target ? ' advised' : ''}`);
+        const text = h('div', 'post-text');
+        text.append(h('span', 'post-boost', def.name), h('span', 'post-fx', boostShort(def)));
+        const blocked = g.boostBlocked(def.id);
+        const extend = !!cur && !blocked;
+        let b: HTMLButtonElement;
+        if (blocked && cur) {
+          b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
+        } else {
+          b = this.capsBtn(extend ? `+${def.minutes >= 60 ? `${def.minutes / 60} h` : `${def.minutes} min`}` : '', def.caps, () => {
+            const r = g.buyBoost(def.id);
+            if (!r.ok) return this.toast(r.reason!, 'bad');
+            this.toast(extend ? `${def.name} : prolongé !` : `${def.name} !`, 'good');
+            this.onSent?.();
+            this.renderShop();
+          });
+          if (blocked) b.classList.add('short');
+        }
+        row.append(text, b);
+        box.append(row);
+      }
+      this.shopBody.append(box);
+    }
+    if (!g.batches.length && !g.planned) this.shopBody.append(h('p', 'note bad', 'Rien ne brasse en ce moment : un boost des machines n\'aurait aucun effet.'));
+    this.shopBody.append(h('p', 'hint caps-note', `Tu as ${capsText(g.caps)}. Chaque commande livrée en rapporte ${CAPS.order}, chaque niveau de la brasserie bien plus.`));
+  }
+
+  /** Rayon Étiquettes : bouteilles, formes, logos et motifs ; toucher un objet l'essaie sur ta bière. */
+  private labelTab: UnlockKind = 'bottle';
+  private shopLabels(g: Game, target?: string): void {
+    const kind = this.labelTab;
     const tabs = h('div', 'chips');
-    for (const k of UNLOCK_KINDS) tabs.append(this.btn(`chip${k.id === kind ? ' active' : ''}`, k.name, () => this.openLabelShop(k.id)));
-    card.append(tabs);
-    const sample = g.beers[0]?.label ?? DEFAULT_LABEL;
-    const name = g.beers[0]?.name ?? 'Ma bière';
-    const grid = h('div', 'unlock-grid');
+    for (const k of UNLOCK_KINDS) {
+      const all = LABEL_UNLOCKS.filter((x) => x.kind === k.id);
+      const own = all.filter((x) => g.unlocked.includes(x.id)).length;
+      const c = this.btn(`chip${k.id === kind ? ' active' : ''}`, `${k.name} ${own}/${all.length}`, () => {
+        this.labelTab = k.id;
+        this.shopKey = '';
+        this.renderShop();
+      });
+      tabs.append(c);
+    }
+    const beer = g.beers[0];
+    const sample = beer?.label ?? DEFAULT_LABEL;
+    const name = beer?.name ?? 'Ma bière';
+    const grid = h('div', `unlock-grid${kind === 'bottle' ? ' bottles' : ''}`);
     for (const x of LABEL_UNLOCKS.filter((y) => y.kind === kind)) {
       const owned = g.unlocked.includes(x.id);
-      const cell = h('div', `unlock${owned ? ' owned' : ''}`);
+      const cell = h('button', `unlock${owned ? ' owned' : ''}${x.id === target ? ' advised' : ''}${x.caps ? ' premium' : ''}`);
+      cell.setAttribute('aria-label', `${x.name} : ${owned ? 'débloqué' : x.caps ? capsText(x.caps) : moneyShort(x.cost)}, essayer`);
       const preview = h('div', 'unlock-preview');
-      const l = { ...sample, [x.kind === 'bottle' ? 'bottle' : x.kind]: x.value } as Label;
+      const l = { ...sample, [x.kind]: x.value } as Label;
       if (x.kind === 'bottle') {
         const bottle = h('div', 'shelf-bottle');
         const c = h('canvas', 'shelf-glass');
@@ -2598,22 +2813,32 @@ export class App {
         drawLabel(c, l, name);
         preview.append(c);
       }
-      cell.append(preview, h('span', 'unlock-name', x.name));
-      if (owned) cell.append(h('span', 'note', '✓ débloqué'));
-      else {
-        const b = this.btn('btn small primary', moneyShort(x.cost), () => {
-          const r = g.buyUnlock(x.id);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          this.toast(`${x.name} : dans l'éditeur d'étiquettes !`, 'good');
-          this.onSent?.();
-          this.openLabelShop(kind);
-        });
-        this.costGate(b, x.cost);
-        cell.append(b);
-      }
+      const price = h('span', `unlock-price${owned ? ' own' : ''}`);
+      if (owned) price.textContent = '✓ débloqué';
+      else if (x.caps) price.append(iconCanvas('cap', 1, 'caps-icon'), String(x.caps));
+      else price.textContent = moneyShort(x.cost);
+      if (!owned) price.classList.toggle('ok', x.caps ? g.caps >= x.caps : g.money >= x.cost);
+      cell.append(preview, h('span', 'unlock-name', x.name), price);
+      cell.onclick = () => this.tryUnlock(x);
       grid.append(cell);
     }
-    card.append(grid, h('p', 'hint', 'Ce que tu débloques apparaît dans l\'éditeur d\'étiquettes (Ma gamme → Étiquette).'), this.btn('btn', 'Fermer', () => this.closeModal()));
+    this.shopBody.append(tabs, grid, h('p', 'hint', beer
+      ? `Toucher un objet l'essaie sur « ${beer.name} », dans l'éditeur d'étiquette. On l'achète depuis l'éditeur.`
+      : 'Crée ta première bière pour essayer ces objets sur son étiquette.'));
+  }
+
+  /** Essayer un déblocage : l'éditeur d'étiquette s'ouvre sur la première bière, l'objet déjà appliqué. */
+  private tryUnlock(x: LabelUnlock): void {
+    const g = this.game();
+    const b = g.beers[0];
+    if (!b) return this.toast('Crée d\'abord une bière : tu pourras essayer ses étiquettes ici.', 'info');
+    this.openLabelEditor(b.name, { ...b.label, [x.kind]: x.value } as Label, (name, label) => {
+      b.name = name.trim() || b.name;
+      g.setLabel(b.id, label);
+      this.sheetKey = '';
+      this.shopKey = '';
+      this.closeModal();
+    }, b.label);
   }
 
   // ------------------------------------------------------------------ Gaston

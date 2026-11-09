@@ -14,7 +14,8 @@ import type { Rect } from './sprites';
 import { boxShadow, dropShadow, ellipseShadow, floor, floorLight, from, mix, rgb, seam, shade, dim, trap, wallLight, type Bounds } from './space';
 import { BAR } from '../core/market';
 import { barLayout } from './barLayout';
-import { clearDecorCache, decorLights, drawDecor, paintDecor } from './decor';
+import { clearDecorCache, decorLights, drawDecor, furnitureBox, paintDecor } from './decor';
+import type { FurnitureId } from '../core/shop';
 import { drawBeltBand, drawBeltBottle, drawBeltKeg, LINE, lineArrived, lineItems, lineState, paintBelt } from './scene';
 import type { RoomKey } from './decorLayout';
 
@@ -72,6 +73,8 @@ export abstract class Room {
   abstract readonly key: RoomKey;
   /** Aperçu (captures de contrôle) : le niveau affiché, et tout le mobilier. */
   preview: { level: number; event?: 'party' | 'foot' | 'darts' } | null = null;
+  /** Vitrine du magasin : la pièce telle qu'elle est, plus le meuble ou l'objet d'événement en vente. */
+  showcase: { furniture?: FurnitureId; event?: 'party' | 'foot' | 'darts' } | null = null;
 
   constructor() {
     this.canvas.width = ROOM_W;
@@ -101,7 +104,7 @@ export abstract class Room {
 
   /** Les décors redessinés à chaque image : derrière le reste (après begin) ou devant tout (à la fin). */
   protected decor(game: Game, lv: number, t: number, front: boolean): void {
-    drawDecor(this.g, { room: this.key, lv, t, game, preview: !!this.preview, top: this.b.T }, front);
+    drawDecor(this.g, { room: this.key, lv, t, game, preview: !!this.preview, top: this.b.T, extra: this.showcase?.furniture }, front);
   }
 
   /** Lumières des lampes posées dans la pièce. */
@@ -833,15 +836,24 @@ export class BarRoom extends Room {
     return out;
   }
 
+  /** Hauteur (dans le plan) à centrer dans la vitrine du magasin : là où l'objet en vente se pose. */
+  showcaseFocus(game: Game): number {
+    const sc = this.showcase;
+    if (sc?.event) return barLayout.event.y + barLayout.event.h / 2;
+    if (sc?.furniture === 'benches') return barLayout.tables.y + barLayout.tables.h / 2;
+    const box = sc?.furniture ? furnitureBox('bar', this.lv(game), sc.furniture) : null;
+    return box ? box.y + box.h / 2 : barLayout.counter.y;
+  }
+
   /** L'objet de l'événement en cours, dans le coin en haut à droite : il n'est là que le temps de l'événement. */
   private drawEventItem(game: Game, lv: number, t: number): void {
     // il descend du plafond quand l'événement commence, et remonte quand il se termine
-    const on = game.partying || !!this.preview;
+    const on = !!this.showcase?.event || (!this.showcase && game.partying) || !!this.preview;
     if (on !== this.evOn) {
       this.evOn = on;
       this.evAt = this.evAt < 0 && on ? t - EV_DROP : t; // déjà en cours à l'ouverture : pas d'animation
     }
-    if (on) this.evId = this.preview?.event ?? game.eventId; // en remontant, il garde l'objet de l'événement fini
+    if (on) this.evId = this.preview?.event ?? this.showcase?.event ?? game.eventId; // en remontant, il garde l'objet de l'événement fini
     if (this.evAt < 0) this.evAt = t - EV_DROP;
     const u = Math.min(1, (t - this.evAt) / EV_DROP);
     const k = on ? 1 - (1 - u) ** 3 : 1 - u * u; // arrivée qui ralentit, départ qui accélère
@@ -965,7 +977,7 @@ export class BarRoom extends Room {
   }
 
   private has(game: Game, id: Parameters<Game['hasFurniture']>[0]): boolean {
-    return !!this.preview || game.hasFurniture(id);
+    return !!this.preview || this.showcase?.furniture === id || game.hasFurniture(id);
   }
 
   draw(game: Game, t: number): void {

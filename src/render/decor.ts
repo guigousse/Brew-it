@@ -118,9 +118,27 @@ export interface DecorDraw {
   preview: boolean;
   /** Haut de l'écran, dans le plan (pour les fils de suspension). */
   top: number;
+  /** Meuble montré en plus de ceux achetés (la vitrine du magasin). */
+  extra?: FurnitureId;
 }
 
-const visible = (a: DecorAsset, d: DecorDraw) => d.preview || !a.furniture || !d.game || d.game.hasFurniture(a.furniture);
+const visible = (a: DecorAsset, d: DecorDraw) => d.preview || !a.furniture || a.furniture === d.extra || !d.game || d.game.hasFurniture(a.furniture);
+
+/** Boîte qui réunit les assets d'un meuble dans une pièce, à un niveau (null s'il n'y est pas posé). */
+export function furnitureBox(room: RoomKey, lv: number, id: FurnitureId): { x: number; y: number; w: number; h: number } | null {
+  let box: { x: number; y: number; w: number; h: number } | null = null;
+  for (const inst of decorLayout[room]?.[lv] ?? []) {
+    if (byId.get(inst.a)?.furniture !== id) continue;
+    const b = instBox(inst)!;
+    if (!box) box = b;
+    else {
+      const x = Math.min(box.x, b.x);
+      const y = Math.min(box.y, b.y);
+      box = { x, y, w: Math.max(box.x + box.w, b.x + b.w) - x, h: Math.max(box.y + box.h, b.y + b.h) - y };
+    }
+  }
+  return box;
+}
 
 /** Les assets fixes, peints dans le décor en cache de la pièce. */
 export function paintDecor(g: CanvasRenderingContext2D, d: DecorDraw): void {

@@ -8,7 +8,7 @@ import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
-import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, BOOST_MIN_COST, BOOST_PRICE_SHARE, boostById, COURIER_COST, COURIER_ROUND_S, FURNITURE, nicePrice, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
+import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, CAPS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -161,6 +161,8 @@ export const SALES_HISTORY_MIN = 60;
 export class Game {
   time = 0;
   money = STARTING_MONEY;
+  /** Capsules dorées : la monnaie premium (boosts, cosmétiques). */
+  caps: number = CAPS.start;
   rng = new Rng(0xbee12);
   readonly events = new EventBus();
   stations: Record<StationId, StationState> = Object.fromEntries(STATION_ORDER.map((id) => [id, { level: 1 }])) as Record<StationId, StationState>;
@@ -645,7 +647,10 @@ export class Game {
     this.money -= cost;
     this.stations[id].level = lv + 1;
     this.events.emit({ type: 'upgraded', station: id, level: lv + 1 });
-    if (this.breweryLevel > before) this.events.emit({ type: 'breweryLevel', level: this.breweryLevel });
+    if (this.breweryLevel > before) {
+      this.events.emit({ type: 'breweryLevel', level: this.breweryLevel });
+      this.earnCaps(CAPS.breweryLevel[this.breweryLevel] ?? 0, 'level');
+    }
     return { ok: true };
   }
 
@@ -962,53 +967,50 @@ export class Game {
     return (b ? boostById(b.id)?.priceMult ?? 1 : 1) * this.furnitureMult('price');
   }
 
-  /** Ce que vaut une bouteille au plus bas (prix du grossiste de la meilleure bière). */
-  private get unitValue(): number {
-    return Math.max(wholesalePrice({ quality: 0.5 }), ...this.beers.filter((b) => b.tasting.quality >= DRINKABLE_MIN).map((b) => wholesalePrice(b.tasting)));
+  /** Capsules gagnées (commande livrée, niveau de la brasserie). */
+  earnCaps(n: number, why: 'order' | 'level'): void {
+    if (n <= 0) return;
+    this.caps += n;
+    this.events.emit({ type: 'caps', amount: n, why });
   }
 
-  /** Prix d'un boost : une part de ce qu'il rapporte avec la production et le bar actuels, jamais sous un plancher. */
+  /** Prix d'un boost, en capsules : fixe, et dégressif avec la durée. */
   boostCost(id: BoostId): number {
-    const def = boostById(id);
-    if (!def) return Infinity;
-    if (id === 'ad') return this.adCost;
-    const min = BOOST_MIN_COST[this.breweryLevel - 1] ?? BOOST_MIN_COST[0];
-    const perMin = this.productionRate(); // bouteilles / min
-    let value = 0;
-    if (def.channel === 'brew') value = perMin * def.minutes * (def.mult - 1) * this.unitValue;
-    else if (def.channel === 'yeast') value = perMin * def.minutes * (def.mult - 1) * this.unitValue * 0.4;
-    else if (def.channel === 'bar') {
-      const best = [...this.beers].sort((a, c) => c.pop - a.pop)[0];
-      const glass = glassPrice(this.barLevel, best?.tasting ?? { quality: 0.5 } as Tasting, 0);
-      const rate = this.bar.rate * (BAR_BASE_SHARE + (1 - BAR_BASE_SHARE) * this.brand) * this.furnitureMult('clients');
-      value = rate * def.minutes * glass * Math.max(0.3, def.mult * (def.priceMult ?? 1) - 1);
-    } else if (def.channel === 'wholesale') value = perMin * def.minutes * this.unitValue * (def.mult - 1) * 0.5;
-    else if (id === 'prospect') value = this.adCost * 0.6;
-    return nicePrice(Math.max(min, BOOST_PRICE_SHARE * value));
+    return boostById(id)?.caps ?? Infinity;
   }
 
-  /** Achète un boost ; le même boost se prolonge (24 h d'avance au plus), un autre du même canal attend la fin. */
+  /** Pourquoi un boost ne peut pas partir maintenant (hors manque de capsules), ou null. */
+  boostBlocked(id: BoostId): string | null {
+    const def = boostById(id);
+    if (!def) return 'Boost introuvable';
+    if (!def.channel) return id === 'prospect' && this.orders.length >= this.boardSlots ? 'Le tableau des commandes est plein' : null;
+    const cur = this.boostOf(def.channel);
+    const curDef = cur ? boostById(cur.id) : undefined;
+    if (cur && curDef && !sameEffect(curDef, def)) return `« ${curDef.name} » est en cours`;
+    const from = cur ? cur.until : this.time;
+    if (from + def.minutes * 60 - this.time > BOOST_MAX_AHEAD) return 'Déjà prolongé au maximum (24 h)';
+    return null;
+  }
+
+  /**
+   * Achète un boost avec des capsules. Un boost au même effet que celui en cours le prolonge
+   * (24 h d'avance au plus) ; un effet différent sur le même poste attend la fin.
+   */
   buyBoost(id: BoostId): CommandResult {
     const def = boostById(id);
     if (!def) return { ok: false, reason: 'Boost introuvable' };
-    if (id === 'ad') return this.advertise();
-    const cost = this.boostCost(id);
-    if (id === 'prospect') {
-      if (this.orders.length >= this.boardSlots) return { ok: false, reason: 'Le tableau des commandes est plein' };
-      if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
-      this.money -= cost;
+    const blocked = this.boostBlocked(id);
+    if (blocked) return { ok: false, reason: blocked };
+    if (this.caps < def.caps) return { ok: false, reason: 'Pas assez de capsules' };
+    this.caps -= def.caps;
+    if (!def.channel) {
       this.orderTimer = 0;
       this.tickOrders(0);
       return { ok: true };
     }
-    const ch = def.channel!;
-    const cur = this.boostOf(ch);
-    if (cur && cur.id !== id) return { ok: false, reason: `« ${boostById(cur.id)?.name} » est déjà en cours` };
-    const from = cur ? cur.until : this.time;
-    if (from + def.minutes * 60 - this.time > BOOST_MAX_AHEAD) return { ok: false, reason: 'Déjà prolongé au maximum (24 h)' };
-    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= cost;
-    this.boosts[ch] = { id, until: from + def.minutes * 60 };
+    const cur = this.boostOf(def.channel);
+    // le poste garde le nom du boost en cours ; la durée s'ajoute
+    this.boosts[def.channel] = { id: cur?.id ?? id, until: (cur ? cur.until : this.time) + def.minutes * 60 };
     return { ok: true };
   }
 
@@ -1036,8 +1038,13 @@ export class Game {
     const x = unlockById(id);
     if (!x) return { ok: false, reason: 'Introuvable' };
     if (this.unlocked.includes(id)) return { ok: false, reason: 'Déjà débloqué' };
-    if (this.money < x.cost) return { ok: false, reason: 'Pas assez d\'argent' };
-    this.money -= x.cost;
+    if (x.caps) {
+      if (this.caps < x.caps) return { ok: false, reason: 'Pas assez de capsules' };
+      this.caps -= x.caps;
+    } else {
+      if (this.money < x.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+      this.money -= x.cost;
+    }
     this.unlocked.push(id);
     return { ok: true };
   }
@@ -1221,6 +1228,7 @@ export class Game {
     this.ordersDone++;
     this.orders = this.orders.filter((x) => x !== o);
     this.events.emit({ type: 'sale', amount: o.reward });
+    this.earnCaps(CAPS.order, 'order');
     return { ok: true, amount: o.reward };
   }
 
@@ -1609,7 +1617,7 @@ export class Game {
 
   toJSON() {
     return {
-      version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
+      version: 7, time: this.time, money: this.money, caps: this.caps, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
@@ -1687,6 +1695,9 @@ export class Game {
     if (g.partyReadyAt > 0 && !g.owned.includes('disco')) g.owned.push('disco');
     g.adUntil ??= 0;
     g.boosts ??= {};
+    g.caps ??= CAPS.start;
+    // la campagne de pub ne se vend plus au magasin (elle reste dans l'ordinateur)
+    delete (g.boosts as Record<string, unknown>).ad;
     g.staffUntil ??= { courier: 0, apprentice: 0 };
     g.furniture ??= [];
     g.unlocked ??= [];

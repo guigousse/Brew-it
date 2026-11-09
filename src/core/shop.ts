@@ -5,17 +5,30 @@
  */
 import type { StationId } from './stations';
 
+// ------------------------------------------------------------------ capsules (monnaie premium)
+
+/**
+ * Les capsules dorées : la monnaie premium. Elles paient les boosts et quelques cosmétiques d'étiquette.
+ * On en gagne en jouant (au départ, à chaque commande livrée, à chaque niveau de la brasserie) ;
+ * l'achat avec de l'argent réel viendra plus tard.
+ */
+export const CAPS = {
+  start: 25,
+  /** Par commande livrée. */
+  order: 1,
+  /** En atteignant chaque niveau de la brasserie (indice = niveau atteint). */
+  breweryLevel: [0, 0, 15, 25, 40, 60] as readonly number[],
+} as const;
+
 // ------------------------------------------------------------------ boosts
 
-/** Un boost occupe un « canal » : un seul boost actif par canal, que l'on peut prolonger. */
+/** Un boost occupe un « poste » : un seul effet actif par poste, que l'on peut prolonger. */
 export type BoostChannel = 'brew' | 'yeast' | 'bar' | 'wholesale';
-export type BoostGroup = 'brew' | 'bar' | 'general';
-export type BoostId = 'rush' | 'cadence' | 'fullSpeed' | 'nightShift' | 'yeast' | 'happyHour' | 'buzz' | 'ad' | 'prospect' | 'broker';
+export type BoostId = 'rush' | 'cadence' | 'fullSpeed' | 'nightShift' | 'yeast' | 'happyHour' | 'buzz' | 'prospect' | 'broker';
 
 export interface BoostDef {
   id: BoostId;
-  group: BoostGroup;
-  /** Canal occupé (aucun : effet immédiat ou géré à part, comme la campagne de pub). */
+  /** Poste occupé (aucun : effet immédiat, comme la prospection). */
   channel?: BoostChannel;
   name: string;
   text: string;
@@ -24,41 +37,37 @@ export interface BoostDef {
   minutes: number;
   /** Prix des verres pendant le boost (happy hour). */
   priceMult?: number;
+  /** Prix en capsules : fixe, et dégressif avec la durée (quatre fois 15 min coûtent plus qu'une heure). */
+  caps: number;
 }
 
-export const BOOST_GROUPS: readonly { id: BoostGroup; name: string; text: string }[] = [
-  { id: 'brew', name: 'Brasserie', text: 'Les machines tournent plus vite. Le temps du jeu, lui, ne change pas.' },
-  { id: 'bar', name: 'Bar', text: 'Plus de monde au comptoir.' },
-  { id: 'general', name: 'Généraux', text: 'Commandes, réputation et grossiste.' },
+/** Les postes, dans l'ordre du magasin ; « null » réunit les coups ponctuels. */
+export const BOOST_POSTS: readonly { id: BoostChannel | null; name: string; text: string }[] = [
+  { id: 'brew', name: 'Machines', text: 'Toutes les machines tournent plus vite. Le temps du jeu, lui, ne change pas.' },
+  { id: 'yeast', name: 'Fermentation', text: 'Fermentation et garde : là où les brassins attendent le plus.' },
+  { id: 'bar', name: 'Clients du bar', text: 'Plus de monde au comptoir.' },
+  { id: 'wholesale', name: 'Grossiste', text: 'Le grossiste paie plus cher.' },
+  { id: null, name: 'Coups ponctuels', text: 'Un effet immédiat.' },
 ];
 
 export const BOOSTS: readonly BoostDef[] = [
-  { id: 'rush', group: 'brew', channel: 'brew', name: 'Coup de feu', text: 'Toutes les machines ×2 pendant 15 min.', mult: 2, minutes: 15 },
-  { id: 'cadence', group: 'brew', channel: 'brew', name: 'Cadence ×2', text: 'Toutes les machines ×2 pendant 1 h.', mult: 2, minutes: 60 },
-  { id: 'fullSpeed', group: 'brew', channel: 'brew', name: 'Plein régime', text: 'Toutes les machines ×3 pendant 30 min.', mult: 3, minutes: 30 },
-  { id: 'nightShift', group: 'brew', channel: 'brew', name: 'Équipe de nuit', text: 'Toutes les machines ×2 pendant 4 h : idéal avant de partir.', mult: 2, minutes: 240 },
-  { id: 'yeast', group: 'brew', channel: 'yeast', name: 'Levure express', text: 'Fermentation et garde ×3 pendant 1 h : là où les brassins attendent le plus.', mult: 3, minutes: 60 },
-  { id: 'happyHour', group: 'bar', channel: 'bar', name: 'Happy hour', text: 'Deux fois plus de clients pendant 1 h, mais les verres 20 % moins chers : de quoi écouler des fûts.', mult: 2, minutes: 60, priceMult: 0.8 },
-  { id: 'buzz', group: 'bar', channel: 'bar', name: 'Bouche-à-oreille', text: '50 % de clients en plus pendant 4 h.', mult: 1.5, minutes: 240 },
-  { id: 'ad', group: 'general', name: 'Campagne de pub', text: 'Toute la gamme gagne en popularité, et les commandes arrivent deux fois plus souvent pendant 6 h.', mult: 2, minutes: 360 },
-  { id: 'prospect', group: 'general', name: 'Prospection', text: 'Une nouvelle commande arrive tout de suite (s\'il reste une place au tableau).', mult: 1, minutes: 0 },
-  { id: 'broker', group: 'general', channel: 'wholesale', name: 'Grossiste généreux', text: 'Le grossiste paie 50 % de plus pendant 2 h.', mult: 1.5, minutes: 120 },
+  { id: 'rush', channel: 'brew', name: 'Coup de feu', text: 'Machines ×2 pendant 15 min.', mult: 2, minutes: 15, caps: 4 },
+  { id: 'cadence', channel: 'brew', name: 'Cadence ×2', text: 'Machines ×2 pendant 1 h.', mult: 2, minutes: 60, caps: 12 },
+  { id: 'nightShift', channel: 'brew', name: 'Équipe de nuit', text: 'Machines ×2 pendant 4 h : idéal avant de partir.', mult: 2, minutes: 240, caps: 36 },
+  { id: 'fullSpeed', channel: 'brew', name: 'Plein régime', text: 'Machines ×3 pendant 30 min.', mult: 3, minutes: 30, caps: 14 },
+  { id: 'yeast', channel: 'yeast', name: 'Levure express', text: 'Fermentation et garde ×3 pendant 1 h.', mult: 3, minutes: 60, caps: 10 },
+  { id: 'happyHour', channel: 'bar', name: 'Happy hour', text: 'Deux fois plus de clients pendant 1 h, mais les verres 20 % moins chers : de quoi écouler des fûts.', mult: 2, minutes: 60, priceMult: 0.8, caps: 8 },
+  { id: 'buzz', channel: 'bar', name: 'Bouche-à-oreille', text: '50 % de clients en plus pendant 4 h.', mult: 1.5, minutes: 240, caps: 20 },
+  { id: 'broker', channel: 'wholesale', name: 'Grossiste généreux', text: 'Le grossiste paie 50 % de plus pendant 2 h.', mult: 1.5, minutes: 120, caps: 10 },
+  { id: 'prospect', name: 'Prospection', text: 'Une nouvelle commande arrive tout de suite (s\'il reste une place au tableau).', mult: 1, minutes: 0, caps: 5 },
 ];
 export const boostById = (id: string) => BOOSTS.find((b) => b.id === id);
 
+/** Deux boosts au même effet (même poste, même multiplicateur) se prolongent l'un l'autre. */
+export const sameEffect = (a: BoostDef, b: BoostDef) => a.channel === b.channel && a.mult === b.mult && (a.priceMult ?? 1) === (b.priceMult ?? 1);
+
 /** Un boost se prolonge jusqu'à 24 h d'avance. */
 export const BOOST_MAX_AHEAD = 24 * 3600;
-/** Part de ce que rapporte un boost qu'il coûte : toujours rentable, si l'on écoule ce qu'il produit. */
-export const BOOST_PRICE_SHARE = 0.4;
-/** Prix plancher d'un boost, selon le niveau de la brasserie. */
-export const BOOST_MIN_COST = [15, 60, 400, 2500, 15000] as const;
-
-/** Arrondi « commercial » : deux chiffres significatifs. */
-export function nicePrice(v: number): number {
-  if (v < 10) return Math.max(1, Math.round(v));
-  const p = 10 ** (Math.floor(Math.log10(v)) - 1);
-  return Math.round(v / p) * p;
-}
 
 /** Machines accélérées par chaque canal de brasserie. */
 export const YEAST_STAGES: readonly StationId[] = ['fermenter', 'conditioning'];
@@ -130,7 +139,10 @@ export interface LabelUnlock {
   kind: UnlockKind;
   value: string;
   name: string;
+  /** Prix en argent (0 pour un cosmétique premium). */
   cost: number;
+  /** Prix en capsules : les cosmétiques premium. */
+  caps?: number;
 }
 export const UNLOCK_KINDS: readonly { id: UnlockKind; name: string }[] = [
   { id: 'bottle', name: 'Bouteilles' },
@@ -139,12 +151,14 @@ export const UNLOCK_KINDS: readonly { id: UnlockKind; name: string }[] = [
   { id: 'pattern', name: 'Motifs' },
 ];
 const u = (kind: UnlockKind, value: string, name: string, cost: number): LabelUnlock => ({ id: `${kind}:${value}`, kind, value, name, cost });
-/** Tout ce que l'éditeur d'étiquettes peut gagner : formes de bouteille, d'étiquette, logos et motifs. */
+/** Un cosmétique premium : il ne s'achète qu'en capsules. */
+const p = (kind: UnlockKind, value: string, name: string, caps: number): LabelUnlock => ({ id: `${kind}:${value}`, kind, value, name, cost: 0, caps });
+/** Tout ce que l'éditeur d'étiquettes peut gagner : formes de bouteille, d'étiquette, logos et motifs (quelques-uns en capsules). */
 export const LABEL_UNLOCKS: readonly LabelUnlock[] = [
   u('bottle', 'longneck', 'Long col', 800),
   u('bottle', 'stubby', 'Trapue', 4000),
   u('bottle', 'swing', 'Bouchon mécanique', 20000),
-  u('bottle', 'champagne', 'Champenoise', 100000),
+  p('bottle', 'champagne', 'Champenoise', 40),
   u('shape', 'round', 'Arrondie', 500),
   u('shape', 'arch', 'Arche', 3000),
   u('shape', 'notched', 'Coins coupés', 15000),
@@ -152,12 +166,12 @@ export const LABEL_UNLOCKS: readonly LabelUnlock[] = [
   u('emblem', 'bee', 'Abeille', 1500),
   u('emblem', 'sun', 'Soleil', 6000),
   u('emblem', 'fish', 'Poisson', 25000),
-  u('emblem', 'castle', 'Château', 80000),
-  u('emblem', 'skull', 'Crâne', 250000),
+  p('emblem', 'castle', 'Château', 30),
+  p('emblem', 'skull', 'Crâne', 50),
   u('pattern', 'zigzag', 'Zigzag', 400),
   u('pattern', 'scales', 'Écailles', 2500),
   u('pattern', 'herringbone', 'Chevrons', 12000),
-  u('pattern', 'tartan', 'Tartan', 60000),
+  p('pattern', 'tartan', 'Tartan', 30),
 ];
 export const unlockById = (id: string) => LABEL_UNLOCKS.find((x) => x.id === id);
 /** Ce qui est libre dès le début est tout ce qui n'est pas dans la liste des déblocages. */
