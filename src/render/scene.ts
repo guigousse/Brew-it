@@ -5,7 +5,7 @@
 import type { Game } from '../core/game';
 import { STATION_ORDER, type StationId } from '../core/stations';
 import { PAL } from './painter';
-import { clearSpriteCache, SPRITES, stationCanvas, type Pt, type Rect } from './sprites';
+import { clearSpriteCache, SPRITES, stationCanvas, type Pt, type Rect, type SpriteDef } from './sprites';
 import { drawMiniLabel } from './labelArt';
 import { clearDecorCache, drawDecor, paintDecor } from './decor';
 import { dim, ellipseShadow, floor, floorLight, from, mix, rgb, seam, shade, silhouette, wallLight, type Bounds, type RGB } from './space';
@@ -51,12 +51,15 @@ export function nozzles(lv: number): number[] {
   return Array.from({ length: n }, (_, j) => (j - (n - 1) / 2) * NOZZLE_GAP);
 }
 /**
- * Écart entre deux cuves en parallèle : 40 % de leur largeur (leur jauge reste visible), resserré pour que
- * la rangée tienne dans sa moitié d'étage.
+ * Écart entre deux cuves en parallèle : 40 % de leur largeur, resserré pour que la rangée tienne dans sa moitié
+ * d'étage, mais jamais au point de cacher la jauge de liquide d'une cuve de derrière (à gauche de chaque cuve).
  */
-function tankGap(w: number, tanks: number): number {
+function tankGap(def: SpriteDef, tanks: number): number {
   if (tanks <= 1) return 0;
-  return Math.max(6, Math.min(Math.round(w * 0.4), Math.floor((78 - w) / (tanks - 1))));
+  const w = def.w;
+  const win = def.window;
+  const gauge = win ? win.x + Math.min(win.w, 4) + 1 : 6;
+  return Math.max(6, gauge, Math.min(Math.round(w * 0.4), Math.floor((78 - w) / (tanks - 1))));
 }
 
 /** Écart entre deux becs : une bouteille (11 px avec son contour) et un peu de jeu. */
@@ -268,12 +271,9 @@ export class Scene {
     const r = this.rect(id, level);
     const p = SPRITES[id][level - 1]![which];
     const row = this.rows[id];
-    // une rangée de cuves en série : on entre par la cuve du fond (à droite), on sort par celle de devant (à gauche)
-    if (row && row.n > 1) {
-      // la sortie, sous la cuve de devant (entièrement visible), au milieu : le tuyau descend sans passer derrière les autres
-      if (which === 'outlet') return { x: r.x - row.gap * (row.n - 1) + Math.round(r.w / 2), y: r.y + r.h - 1 };
-      return { x: this.tankPort(r, p.x, row, 0), y: r.y + p.y };
-    }
+    // une rangée de cuves en série : on entre par la cuve du fond (la plus à gauche), on sort par celle de devant (à droite)
+    if (row && row.n > 1 && which === 'inlet') return { x: this.tankPort(r, p.x, row, row.n - 1), y: r.y + p.y };
+
     return { x: r.x + p.x, y: r.y + p.y };
   }
 
@@ -281,13 +281,14 @@ export class Scene {
   private rows: Partial<Record<StationId, { n: number; gap: number }>> = {};
 
   /**
-   * Abscisse du piquage du haut de la cuve j d'une rangée (0 = celle du fond, à droite) : son entrée habituelle
-   * pour la cuve de devant, sinon le milieu de la bande que la cuve suivante laisse voir.
+   * Abscisse du piquage du haut de la cuve k d'une rangée (0 = celle de devant, à droite ; les suivantes, derrière,
+   * se décalent vers la gauche) : son entrée habituelle pour la cuve de devant, sinon le milieu de la bande
+   * que la cuve de devant laisse voir.
    */
-  private tankPort(r: Rect, inletX: number, row: { n: number; gap: number }, j: number): number {
-    const x = r.x - row.gap * j;
-    if (j === row.n - 1) return x + inletX;
-    return Math.round(x + r.w - row.gap / 2);
+  private tankPort(r: Rect, inletX: number, row: { n: number; gap: number }, k: number): number {
+    const x = r.x - row.gap * k;
+    if (k === 0) return x + inletX;
+    return Math.round(x + row.gap / 2);
   }
 
   /** Position (scène) du bouton « Goûter » : au-dessus du bec de remplissage. */
@@ -368,14 +369,16 @@ export class Scene {
     {
       // la fermentation se décale vers la droite pour que sa rangée de cuves tienne à gauche
       const n = game.tankCount('fermenter');
-      const fw = SPRITES.fermenter[game.level('fermenter') - 1]!.w;
+      const fd = SPRITES.fermenter[game.level('fermenter') - 1]!;
+      const fw = fd.w;
       const slotX = Math.round(SLOTS.fermenter.cx - fw / 2);
-      this.fermentShift = Math.max(0, 2 + (n - 1) * tankGap(fw, n) - slotX);
+      this.fermentShift = Math.max(0, 2 + (n - 1) * tankGap(fd, n) - slotX);
       const m = game.tankCount('conditioning');
-      const cw = SPRITES.conditioning[game.level('conditioning') - 1]!.w;
+      const cd = SPRITES.conditioning[game.level('conditioning') - 1]!;
+      const cw = cd.w;
       const cx = Math.round(SLOTS.conditioning.cx - cw / 2);
-      this.gardeShift = Math.max(0, Math.min(150 - cw - cx, 80 - (cx - (m - 1) * tankGap(cw, m))));
-      this.rows = { fermenter: { n, gap: tankGap(fw, n) }, conditioning: { n: m, gap: tankGap(cw, m) } };
+      this.gardeShift = Math.max(0, Math.min(150 - cw - cx, 80 - (cx - (m - 1) * tankGap(cd, m))));
+      this.rows = { fermenter: { n, gap: tankGap(fd, n) }, conditioning: { n: m, gap: tankGap(cd, m) } };
     }
     const decor = { room: this.key, lv, t, game, preview: !!this.preview, top: this.b.T };
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -653,6 +656,39 @@ export class Scene {
     const progress = batch ? Math.min(1, batch.elapsed / Math.max(0.01, batch.duration)) : 0;
     // ombres : la silhouette de l'appareil sur le mur (la lumière vient d'en haut à gauche), et son pied sur la passerelle
     const fl = SLOTS[id as Exclude<StationId, 'bottling'>].floor;
+    // cuves en parallèle : la cuve de devant reste à sa place, les autres se rangent derrière elle en se décalant
+    // vers la gauche, la plus éloignée le plus à gauche ; on voit toujours leur flanc gauche, et donc leur jauge
+    const tanks = game.tankCount(id);
+    const gap = tankGap(def, tanks);
+    if (tanks > 1) {
+      const all = game.batchesAt(id);
+      for (let k = tanks - 1; k >= 1; k--) {
+        const x = r.x - gap * k;
+        const es = ellipseShadow(Math.max(4, Math.round(r.w / 2)), 3, 0.8);
+        g.drawImage(es, Math.round(x + r.w / 2 - es.width / 2) + 1, fl - 4);
+        g.drawImage(this.shadedSprite(id, lv), x, r.y); // en retrait : un peu plus sombre
+        const tb = all[k];
+        if (def.window && tb) {
+          const w = def.window;
+          const p = Math.min(1, tb.elapsed / Math.max(0.01, tb.duration));
+          const h = Math.round(w.h * Math.min(1, 0.35 + p * 2));
+          const col = LIQUID[id];
+          g.fillStyle = col[3]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, w.w, h);
+          g.fillStyle = col[2]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, Math.max(1, w.w - 1), h);
+          g.fillStyle = col[0]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, w.w, 1);
+        }
+        // une cuve qui travaille : un voyant vert, au-dessus de sa jauge
+        if (tb) {
+          const vx = def.window ? x + def.window.x : x + Math.round(gap / 2);
+          const vy = def.window ? r.y + def.window.y - 4 : r.y + 3;
+          g.fillStyle = Math.floor(t * 2 + k) % 2 ? '#7cff9c' : '#3e9028';
+          g.fillRect(vx, vy, 2, 2);
+        }
+        // la cuve de devant fait son ombre sur celle de derrière
+        g.fillStyle = 'rgba(16,10,24,0.25)';
+        g.fillRect(x + gap - 2, r.y + 2, 2, r.h - 4);
+      }
+    }
     g.drawImage(this.wallShadow(id, lv), r.x + 4, r.y - 2);
     const sh = ellipseShadow(Math.max(4, Math.round(r.w / 2)), 3, 0.8);
     g.drawImage(sh, Math.round(r.x + r.w / 2 - sh.width / 2) + 1, fl - 4);
@@ -708,42 +744,16 @@ export class Scene {
         g.fillRect(r.x + 6 + i * 7, r.y + 8 + ((i * 5) % 12), 1, 1);
       }
     }
-    // cuves en parallèle, en éventail : chaque cuve en plus se place à gauche de la précédente et passe devant elle,
-    // si bien que le côté droit de chacune (sa jauge) reste visible
-    const tanks = game.tankCount(id);
     if (tanks > 1) {
-      const gap = tankGap(def.w, tanks);
-      const all = game.batchesAt(id);
-      for (let k = 1; k < tanks; k++) {
-        const x = r.x - gap * k;
-        const es = ellipseShadow(Math.max(4, Math.round(r.w / 2)), 3, 0.8);
-        g.drawImage(es, Math.round(x + r.w / 2 - es.width / 2) + 1, fl - 4);
-        g.drawImage(stationCanvas(id, lv), x, r.y);
-        const tb = all[k];
-        if (def.window && tb) {
-          const w = def.window;
-          const p = Math.min(1, tb.elapsed / Math.max(0.01, tb.duration));
-          const h = Math.round(w.h * Math.min(1, 0.35 + p * 2));
-          const col = LIQUID[id];
-          g.fillStyle = col[3]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, w.w, h);
-          g.fillStyle = col[2]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, Math.max(1, w.w - 1), h);
-          g.fillStyle = col[0]!; g.fillRect(x + w.x, r.y + w.y + w.h - h, w.w, 1);
-        }
-        // une cuve qui travaille : un voyant vert
-        if (tb) {
-          g.fillStyle = Math.floor(t * 2 + k) % 2 ? '#7cff9c' : '#3e9028';
-          g.fillRect(x + Math.floor(r.w / 2), r.y + 3, 2, 2);
-        }
-      }
-      // les cuves sont reliées en série : un court tuyau sort de chaque cuve et entre dans celle de devant
+      // les cuves sont reliées en série : un court tuyau sort de chaque cuve et entre dans celle qui est devant elle
       const cy = r.y + Math.round(def.h * 0.72);
       const since = t - (this.seriesFlow.get(id) ?? -99);
-      for (let j = 0; j < tanks - 1; j++) {
-        const xr = r.x - gap * j + r.w - Math.max(2, Math.round(gap / 2)); // sur la bande visible de la cuve j
-        const xl = r.x - gap * (j + 1) + r.w - 2; // le flanc droit de la cuve de devant
-        const path = [{ x: xr, y: cy }, { x: xl, y: cy }];
+      for (let k = tanks - 1; k >= 1; k--) {
+        const xl = r.x - gap * k + Math.max(2, Math.round(gap / 2)); // sur la bande visible de la cuve k
+        const xr = r.x - gap * (k - 1) + 1; // le flanc gauche de la cuve qui est devant
+        const path = [{ x: xl, y: cy }, { x: xr, y: cy }];
         this.pipe(path, false, false);
-        g.fillStyle = PAL.st[4]!; g.fillRect(xl - 1, cy - 2, 2, 5); g.fillRect(xr, cy - 2, 2, 5); // brides
+        g.fillStyle = PAL.st[4]!; g.fillRect(xr - 1, cy - 2, 2, 5); g.fillRect(xl, cy - 2, 2, 5); // brides
         if (since < 2.5) this.flow(path, t, since, 2.5, false, LIQUID[id]);
       }
     }
