@@ -527,7 +527,7 @@ export class App {
       o.text.textContent = batch
         ? id === 'bottling' && g.bottlingBlocked ? 'Stockage plein ⏸'
         : id === 'bottling' && g.tastable === batch ? 'À goûter ⏸'
-        : many > 1 ? `${STATIONS[id].step} · ${many} cuves${running.length ? ` · ${clock(left)}` : ''}`
+        : many > 1 ? `${STATIONS[id].step}${running.length ? ` · ${clock(left)}` : ' ⏸'}`
         : batch.waiting ? `${STATIONS[id].step} ⏸` : `${STATIONS[id].step} · ${clock(left)}`
         : STATIONS[id].step;
       o.label.classList.toggle('blocked', id === 'bottling' && g.bottlingBlocked);
