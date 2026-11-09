@@ -3,11 +3,11 @@
  * (position du coin haut-gauche dans le plan de 160 × 300, échelle, retourné, devant le reste).
  * Pour changer le rendu d'une pièce : ajouter, retirer ou déplacer des lignes ici.
  */
-export type RoomKey = 'workshop' | 'office' | 'storage' | 'bar' | 'shop';
+export type RoomKey = 'workshop' | 'office' | 'storage' | 'bar';
 
-export const ROOM_NAMES: Record<RoomKey, string> = { workshop: 'Atelier', office: 'Bureau', storage: 'Stockage', bar: 'Bar', shop: 'Magasin' };
+export const ROOM_NAMES: Record<RoomKey, string> = { workshop: 'Atelier', office: 'Bureau', storage: 'Stockage', bar: 'Bar' };
 /** Nombre de niveaux (de décors) de chaque pièce. */
-export const ROOM_LEVELS: Record<RoomKey, number> = { workshop: 5, office: 5, storage: 5, bar: 5, shop: 1 };
+export const ROOM_LEVELS: Record<RoomKey, number> = { workshop: 5, office: 5, storage: 5, bar: 5 };
 
 export interface DecorInst {
   /** Identifiant unique dans la pièce et le niveau. */
@@ -86,9 +86,6 @@ export const DECOR_DEFAULT: DecorLayout = {
     3: list([['coldUnit', 78, 4], ['thermometer', 134, 6], ['coolBoxes', 117, 242, { s: 1.3 }]]),
     4: list([['extinguisher', 146, 214, { s: 1.3 }], ['palletJack', 112, 252, { s: 1.1 }]]),
     5: list([['robotArm', 20, 6], ['deliveryBot', 116, 250, { s: 1.1 }]]),
-  },
-  shop: {
-    1: list([['shopSign', 34, 8], ['shopPendant', 73, 34], ['lightRay', 56, 40, { s: 1.75 }], ['register', 103, 233]]),
   },
   office: Object.fromEntries(OFFICE_DESK.map((desk, i) => [i + 1, list([...OFFICE, ...desk])])),
   workshop: {

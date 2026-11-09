@@ -102,14 +102,6 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     draw(g) { const px = P(g); px(0, 0, 13, 5, '#2c283a'); px(1, 5, 11, 1, '#fff4b0'); },
   },
   {
-    id: 'shopPendant', name: 'Suspension du magasin', room: 'shop', w: 15, h: 7, hang: { xs: [7], color: '#1b1424' }, light: [7, 10, 80, 0.3],
-    draw(g) {
-      const px = P(g);
-      trap(g, 0, 6, 3, 12, 0, 15, '#2c5a3a');
-      px(0, 5, 15, 1, '#1c3a26'); px(3, 6, 9, 1, '#fff4b0');
-    },
-  },
-  {
     id: 'lantern', name: 'Lanterne', room: 'storage', w: 5, h: 7, pad: 2, light: [2, 3, 40, 0.35],
     draw(g) { const px = P(g); wallShadow(g, 0, 0, 5, 7, 0.3); px(0, 0, 5, 7, '#2a1a10'); px(1, 1, 3, 5, '#ffb050'); },
   },
@@ -172,15 +164,6 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       g.fillStyle = 'rgba(255,90,208,0.10)'; g.fillRect(-4, -4, 80, 24);
       px(0, 0, 72, 16, '#1b1424');
       g.fillStyle = '#ff5ad0'; g.font = '11px monospace'; g.textBaseline = 'alphabetic'; g.fillText('BREW IT', 10, 12);
-    },
-  },
-  {
-    id: 'shopSign', name: 'Enseigne MAGASIN', room: 'shop', w: 92, h: 18, pad: 3, hang: { xs: [12, 79], color: '#1b1424' },
-    draw(g) {
-      const px = P(g);
-      wallShadow(g, 0, 0, 92, 18, 0.35);
-      px(0, 0, 92, 18, '#1b1424'); px(1, 1, 90, 16, '#3a2418'); px(1, 1, 90, 1, '#6a4422');
-      g.fillStyle = '#f2c14e'; g.font = '9px monospace'; g.textBaseline = 'alphabetic'; g.fillText('MAGASIN', 27, 13);
     },
   },
   {
@@ -645,15 +628,6 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
         px(tx + 12, cy + 10, 9, 3, crate[2]!);
       }
       shade(g, c.b, { x: tx + 4, y: ty + 2, w: 25, h: 50 }, (x) => 1.05 - ((x - tx - 4) / 25) * 0.25);
-    },
-  },
-  {
-    id: 'register', name: 'Caisse enregistreuse', room: 'shop', w: 26, h: 19,
-    draw(g) {
-      const px = P(g);
-      px(1, 6, 24, 12, '#3e3a50'); px(1, 6, 24, 1, '#8c88a0'); px(5, 0, 16, 6, '#2c283a');
-      px(0, 18, 26, 1, 'rgba(0,0,0,0.4)');
-      px(7, 2, 12, 2, '#7ee081'); for (let i = 0; i < 4; i++) px(4 + i * 5, 10, 3, 2, '#c4d0dc');
     },
   },
   // ------------------------------------------------------------------ bureau : objets sur le plateau, corbeille

@@ -502,14 +502,25 @@ button:disabled { cursor: default; opacity: .5; }
 .toast.bump { animation: bump .25s steps(3); }
 @keyframes bump { 50% { transform: scale(1.12); } }
 
-/* --- Magasin : étiquettes posées sur les étagères ------------------------------------------ */
-.shop-tag {
-  position: absolute; z-index: 2; transform: translateX(-50%); white-space: nowrap; padding: 1px 6px;
-  font-size: 15px; line-height: 1.1; color: var(--ink); background: #e8dcc0; border: 2px solid var(--ink); box-shadow: 0 2px 0 #0008; cursor: pointer;
+/* --- Magasin : un menu de rayons ------------------------------------------------------------ */
+.room.shop-pane { display: block; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.shop-menu { width: 100%; max-width: 520px; margin: 0 auto; padding: 14px 16px 24px; display: grid; gap: 12px; }
+.shop-menu-title { margin: 0; font-family: var(--font-title); font-size: 20px; font-weight: normal; color: var(--accent); text-shadow: 2px 2px 0 var(--ink); }
+.shop-list { display: grid; gap: 10px; }
+.shop-cat {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; width: 100%; min-height: 84px; padding: 10px 14px 10px 10px; text-align: left;
+  background: var(--panel-2); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 var(--border-hi), inset -2px -2px 0 #1b142480;
 }
-.shop-tag.afford { background: var(--accent); animation: pulse 1.2s steps(4) infinite; }
-.shop-tag.section { cursor: pointer; }
-.shop-tag.on { background: var(--good); color: var(--ink); }
+.shop-cat:active { box-shadow: inset 2px 2px 0 #1b142480; transform: translateY(1px); }
+.shop-cat-icon { display: grid; place-items: center; width: 64px; height: 64px; background: var(--ink); border: 2px solid #5c4a6e; }
+.shop-cat-icon canvas { display: block; image-rendering: pixelated; }
+.shop-cat-text { display: grid; gap: 4px; min-width: 0; }
+.shop-cat-name { font-family: var(--font-title); font-size: 15px; line-height: 1.15; color: var(--text); }
+.shop-cat-sub { font-size: 17px; line-height: 1; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shop-cat-arrow { font-size: 30px; line-height: 1; color: var(--dim); }
+.shop-cat.afford { box-shadow: inset 0 0 0 2px var(--accent); }
+.shop-cat.afford .shop-cat-sub { color: var(--accent); }
+.shop-cat.on .shop-cat-sub { color: var(--good); }
 .catalog .shop-row { display: grid; gap: 6px; }
 .catalog .event-title .kind-tag { justify-self: start; }
 .catalog .shop-row .hint { margin: 0; }
@@ -520,8 +531,6 @@ button:disabled { cursor: default; opacity: .5; }
 .chip.locked { opacity: .6; }
 .unlock-preview .label-thumb.big { width: 96px; height: auto; image-rendering: pixelated; }
 .unlock-name { font-size: 16px; text-align: center; line-height: 1; }
-.shop-tag.soon { font-size: 14px; color: var(--dim); background: #2a2035e0; border-color: #5c4a6e; cursor: default; pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .shop-tag.afford { animation: none; } }
 
 /* --- File des brassins : une carte par groupe ------------------------------------------- */
 .plan-card { position: relative; padding: 6px 8px 8px; }

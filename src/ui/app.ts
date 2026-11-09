@@ -13,10 +13,9 @@ import { instBox } from '../render/decor';
 import { decorLayout } from '../render/decorLayout';
 import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
-import { DECOR_ICON, SHOP_SPOTS, ShopRoom } from '../render/shopRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
-import { BOOST_GROUPS, BOOSTS, DECOR_ORDER, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type UnlockKind } from '../core/shop';
+import { BOOST_GROUPS, BOOSTS, DECOR_ORDER, type DecorId, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type UnlockKind } from '../core/shop';
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
@@ -62,6 +61,14 @@ function setPlaque(b: HTMLButtonElement, text: string, canUp: boolean, upLabel: 
   const aria = canUp ? `${text} : ${upLabel} possible` : text;
   if (b.getAttribute('aria-label') !== aria) b.setAttribute('aria-label', aria);
 }
+
+/** Icône de chaque pièce de décoration du bar (meubles et objets d'événement). */
+const DECOR_ICON: Record<DecorId, IconId> = {
+  plants: 'plant', darts: 'darts', posters: 'poster', tv: 'tv', neon: 'neon', disco: 'disco', benches: 'bench', jukebox: 'jukebox',
+};
+
+/** Rayons du magasin, dans l'ordre du menu. */
+type ShopSection = 'decor' | 'boosts' | 'labels';
 
 /** Nom de la pièce en haut à gauche. */
 function roomTitle(plaque: HTMLElement): HTMLElement {
@@ -212,13 +219,10 @@ export class App {
   private rangeBtn = fab('range', 'Ma gamme');
   private eventsBtn = fab('events', 'Événements');
   private barmanBtn = fab('barman', 'Barman en renfort');
-  readonly shopRoom = new ShopRoom();
-  private shopWrap = h('div', 'scene-wrap');
-  /** Étiquettes posées sur le décor (prix de l'objet en vente, « bientôt »…), en coordonnées de la pièce. */
-  private roomTags: { el: HTMLElement; x: number; y: number }[] = [];
-  private saleTag = h('div', 'shop-tag');
-  /** Étiquettes des rayons du magasin (boosts en cours, prochain meuble…). */
-  private sectionTags = new Map<string, HTMLElement>();
+  /** Le magasin : un menu de rayons (un grand bouton par catégorie), pas une pièce dessinée. */
+  private shopMenu = h('div', 'shop-menu');
+  /** Boutons des rayons : leur sous-titre (prochain meuble, boost en cours…) suit la partie. */
+  private shopBtns = new Map<ShopSection, { btn: HTMLButtonElement; sub: HTMLElement; icon: HTMLElement }>();
   private computerHit?: HTMLButtonElement;
   // --- les pièces
   readonly officeRoom = new OfficeRoom();
@@ -359,47 +363,36 @@ export class App {
     this.roomHits.push({ el: signEl, rect: this.signRect });
     this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
     this.barWrap.append(roomTitle(this.barPlaque));
-    // magasin : les étagères et leurs objets
-    this.shopWrap.append(this.shopRoom.canvas);
-    const SECTION: Record<string, { label: string; run: () => void }> = {
-      boosts: { label: 'Boosts', run: () => this.openBoosts() },
-      labels: { label: 'Étiquettes et bouteilles', run: () => this.openLabelShop() },
-    };
-    for (const hit of this.shopRoom.hits()) {
-      const el = h('button', 'station-hit');
-      if (hit.id === 'sale') {
-        el.setAttribute('aria-label', 'Décoration du bar');
-        el.onclick = () => this.openFurniture();
-      } else if (hit.id === 'mystery') {
-        el.setAttribute('aria-label', 'Décoration suivante');
-        el.onclick = () => this.toast(this.game().afterDecor ? 'Une surprise : elle se débloque avec la décoration en vente' : 'Rien de plus pour l\'instant', 'info');
-      } else if (hit.id === 'soon') {
-        el.setAttribute('aria-label', 'Bientôt');
-        el.onclick = () => this.toast('Nouveautés bientôt en rayon', 'info');
-        const tag = h('div', 'shop-tag soon', 'Bientôt');
-        this.roomTags.push({ el: tag, x: hit.rect.x + hit.rect.w / 2, y: hit.rect.y + hit.rect.h + 6 });
-        this.shopWrap.append(tag);
-      } else {
-        const sec = SECTION[hit.id]!;
-        el.setAttribute('aria-label', sec.label);
-        el.onclick = sec.run;
-        const tag = h('button', 'shop-tag section', hit.id === 'boosts' ? 'Boosts' : 'Étiquettes');
-        tag.onclick = sec.run;
-        this.sectionTags.set(hit.id, tag);
-        this.roomTags.push({ el: tag, x: hit.rect.x + hit.rect.w / 2, y: hit.rect.y + hit.rect.h + 6 });
-        this.shopWrap.append(tag);
-      }
-      this.shopWrap.append(el);
-      this.roomHits.push({ el, rect: hit.rect });
+    // magasin : un grand bouton par rayon, l'icône à gauche, le titre à droite
+    const SECTIONS: { id: ShopSection; name: string; icon: IconId; run: () => void }[] = [
+      { id: 'decor', name: 'Décoration du bar', icon: 'plant', run: () => this.openFurniture() },
+      { id: 'boosts', name: 'Boosts', icon: 'bolt', run: () => this.openBoosts() },
+      { id: 'labels', name: 'Étiquettes et bouteilles', icon: 'labels', run: () => this.openLabelShop() },
+    ];
+    const list = h('div', 'shop-list');
+    for (const sec of SECTIONS) {
+      const btn = h('button', 'shop-cat');
+      const icon = h('span', 'shop-cat-icon');
+      icon.append(iconCanvas(sec.icon, 3));
+      const text = h('span', 'shop-cat-text');
+      const sub = h('span', 'shop-cat-sub');
+      text.append(h('span', 'shop-cat-name', sec.name), sub);
+      btn.append(icon, text, h('span', 'shop-cat-arrow', '›'));
+      btn.onclick = sec.run;
+      list.append(btn);
+      this.shopBtns.set(sec.id, { btn, sub, icon });
     }
-    const sale = SHOP_SPOTS.sale;
-    this.roomTags.push({ el: this.saleTag, x: sale.x + sale.w / 2, y: sale.y + sale.h + 6 });
-    this.saleTag.onclick = () => this.openFurniture();
-    this.shopWrap.append(this.saleTag);
+    this.shopMenu.append(h('h2', 'shop-menu-title', 'Magasin'), list);
     // Le défilé des écrans suit l'ordre des onglets : bureau, atelier, stockage, bar, magasin.
-    const wraps: Record<View, HTMLElement> = { office: this.officeWrap, workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap, shop: this.shopWrap };
+    const wraps: Record<RoomId, HTMLElement> = { office: this.officeWrap, workshop: this.sceneWrap, storage: this.storageWrap, bar: this.barWrap };
     for (const t of TABS) {
       const pane = h('div', 'room');
+      if (!isRoom(t.id)) {
+        pane.classList.add('shop-pane');
+        pane.append(this.shopMenu);
+        this.track.append(pane);
+        continue;
+      }
       const view = h('div', 'room-view');
       view.append(wraps[t.id]);
       // le nom de la pièce, dans le coin de l'écran (à égale distance du haut et de la gauche), pas dans le plan
@@ -464,12 +457,11 @@ export class App {
     for (const v of this.views) Object.assign(v.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px` });
     for (const wrap of this.wraps) Object.assign(wrap.style, { width: `${w}px`, height: `${hh}px`, left: `${ox * this.scale}px`, top: `${oy * this.scale}px` });
     this.scene.resize(vw, vh, b);
-    for (const r of [this.officeRoom, this.storageRoom, this.barRoom, this.shopRoom]) r.resize(vw, vh);
-    for (const c of [this.officeRoom.canvas, this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas, this.shopRoom.canvas]) {
+    for (const r of [this.officeRoom, this.storageRoom, this.barRoom]) r.resize(vw, vh);
+    for (const c of [this.officeRoom.canvas, this.scene.canvas, this.storageRoom.canvas, this.barRoom.canvas]) {
       Object.assign(c.style, { width: `${vw * this.scale}px`, height: `${vh * this.scale}px`, left: `${-ox * this.scale}px`, top: `${-oy * this.scale}px` });
     }
     const s = this.scale;
-    for (const { el, x, y } of this.roomTags) Object.assign(el.style, { left: `${x * s}px`, top: `${y * s}px` });
     for (const { el, rect } of this.roomHits) Object.assign(el.style, { left: `${rect.x * s}px`, top: `${rect.y * s}px`, width: `${rect.w * s}px`, height: `${rect.h * s}px` });
     this.syncKegHits(true);
     this.placeTrack();
@@ -499,7 +491,6 @@ export class App {
     const all = !!this.swipe?.on || performance.now() < this.roomsDrawUntil;
     if (all || this.view === 'storage') this.storageRoom.draw(g, t);
     if (all || this.view === 'bar') this.barRoom.draw(g, t);
-    if (all || this.view === 'shop') this.shopRoom.draw(g, t);
     // l'atelier se voit aussi par la fenêtre du bureau
     if (!all && this.view !== 'workshop' && this.view !== 'office') return;
     this.scene.draw(g, t);
@@ -2270,21 +2261,32 @@ export class App {
 
   // ------------------------------------------------------------------ pages
 
-  /** Étiquette de l'objet en vente au magasin. */
+  /** Sous-titres des rayons du magasin : la décoration en vente, le boost en cours, les étiquettes débloquées. */
   private renderPage(): void {
     const g0 = this.game();
     const item = g0.nextDecor;
-    const tag = item ? `${item.name} · ${moneyShort(item.cost)}` : 'Décoration ✓';
-    if (this.saleTag.textContent !== tag) this.saleTag.textContent = tag;
-    this.saleTag.classList.toggle('afford', !!item && g0.money >= item.cost);
     const live = (['brew', 'yeast', 'bar', 'wholesale'] as BoostChannel[]).map((c) => g0.boostOf(c)).filter((b) => !!b);
     const soonest = live.length ? Math.min(...live.map((b) => b!.until)) - g0.time : g0.advertising ? g0.adUntil - g0.time : 0;
-    const texts: Record<string, string> = {
-      boosts: soonest > 0 ? `⚡ Boosts · ${clock(soonest)}` : 'Boosts',
-      labels: 'Étiquettes',
+    const owned = LABEL_UNLOCKS.filter((x) => g0.unlocked.includes(x.id)).length;
+    const subs: Record<ShopSection, { text: string; hot?: boolean; on?: boolean }> = {
+      decor: item ? { text: `${item.name} · ${moneyShort(item.cost)}`, hot: g0.money >= item.cost } : { text: 'Tout est installé ✓' },
+      boosts: soonest > 0 ? { text: `⚡ En cours · ${clock(soonest)}`, on: true } : { text: 'Machines, clients et commandes' },
+      labels: { text: owned < LABEL_UNLOCKS.length ? `${owned} / ${LABEL_UNLOCKS.length} débloqués` : 'Tout est débloqué ✓' },
     };
-    for (const [id, el] of this.sectionTags) if (el.textContent !== texts[id]) el.textContent = texts[id]!;
-    this.sectionTags.get('boosts')?.classList.toggle('on', soonest > 0);
+    for (const [id, { btn, sub, icon }] of this.shopBtns) {
+      const st = subs[id];
+      if (sub.textContent !== st.text) sub.textContent = st.text;
+      btn.classList.toggle('afford', !!st.hot);
+      btn.classList.toggle('on', !!st.on);
+      // l'icône de la décoration montre la pièce en vente
+      if (id === 'decor') {
+        const want = item ? DECOR_ICON[item.id] : 'plant';
+        if (icon.dataset.icon !== want) {
+          icon.dataset.icon = want;
+          icon.replaceChildren(iconCanvas(want, 3));
+        }
+      }
+    }
   }
 
   /** Tableau de bord (application de l'ordinateur) : un aperçu en direct des ventes et de la brasserie. */

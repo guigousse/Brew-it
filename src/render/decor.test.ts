@@ -26,9 +26,9 @@ describe('décors des pièces', () => {
   });
 
   it('une disposition gardée est reprise, sans ce qui est mal formé', () => {
-    applyDecor({ shop: { 1: [{ id: 'mug-1', a: 'mug', x: 10.4, y: 20, s: 2, f: true }, { id: 'x', a: 'mug' }, null] } });
-    expect(decorLayout.shop[1]).toEqual([{ id: 'mug-1', a: 'mug', x: 10, y: 20, s: 2, f: true }]);
-    resetDecor('shop');
-    expect(decorLayout.shop[1]).toEqual(DECOR_DEFAULT.shop[1]);
+    applyDecor({ office: { 1: [{ id: 'mug-1', a: 'mug', x: 10.4, y: 20, s: 2, f: true }, { id: 'x', a: 'mug' }, null] } });
+    expect(decorLayout.office[1]).toEqual([{ id: 'mug-1', a: 'mug', x: 10, y: 20, s: 2, f: true }]);
+    resetDecor('office');
+    expect(decorLayout.office[1]).toEqual(DECOR_DEFAULT.office[1]);
   });
 });
