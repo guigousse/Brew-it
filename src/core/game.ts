@@ -12,6 +12,10 @@ import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, BOOST_MIN_COST, B
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
+/** Message par défaut du panneau lumineux du bar, et sa longueur maximale. */
+export const BAR_MESSAGE = 'Bienvenue ! Santé et bonne dégustation';
+export const BAR_MESSAGE_MAX = 40;
+
 export interface Forecast {
   ends: number[];
   total: number;
@@ -197,6 +201,8 @@ export class Game {
   owned: ShopItemId[] = [];
   /** Fin du contrat du barman en renfort (s de jeu). */
   barmanUntil = 0;
+  /** Message qui défile sur le panneau lumineux du comptoir (personnalisable). */
+  barMessage = BAR_MESSAGE;
   /** Fin de la campagne de pub en cours. */
   adUntil = 0;
   /** Boosts en cours, un par canal (brasserie, levure, bar, grossiste). */
@@ -843,6 +849,11 @@ export class Game {
   }
 
   /** Une fête bat son plein. */
+  /** Change le message du panneau lumineux (vide : le message par défaut). */
+  setBarMessage(text: string): void {
+    this.barMessage = text.replace(/\s+/g, ' ').trim().slice(0, BAR_MESSAGE_MAX) || BAR_MESSAGE;
+  }
+
   get partying(): boolean {
     return this.time < this.partyUntil;
   }
@@ -1601,7 +1612,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1671,6 +1682,7 @@ export class Game {
     g.eventId ??= 'party';
     g.owned ??= [];
     g.barmanUntil ??= 0;
+    g.barMessage ??= BAR_MESSAGE;
     // la fête demande désormais une boule à facettes : qui en a déjà organisé une la garde
     if (g.partyReadyAt > 0 && !g.owned.includes('disco')) g.owned.push('disco');
     g.adUntil ??= 0;

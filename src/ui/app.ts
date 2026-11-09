@@ -1,6 +1,6 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
+import { BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
@@ -349,6 +349,12 @@ export class App {
     counterEl.onclick = () => this.open({ kind: 'bar' });
     this.barWrap.append(counterEl);
     this.roomHits.push({ el: counterEl, rect: counter.rect });
+    // le panneau lumineux de la façade : on y écrit son message (sans panneau, c'est le comptoir)
+    const signEl = h('button', 'station-hit');
+    signEl.setAttribute('aria-label', 'Panneau lumineux : changer le message');
+    signEl.onclick = () => (this.game().hasFurniture('neon') ? this.openBarMessage() : this.open({ kind: 'bar' }));
+    this.barWrap.append(signEl);
+    this.roomHits.push({ el: signEl, rect: { x: 52, y: 115, w: 56, h: 16 } });
     this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
     this.barWrap.append(roomTitle(this.barPlaque));
     // magasin : les étagères et leurs objets
@@ -2209,6 +2215,27 @@ export class App {
     speed.append(h('div', 'section-title', 'Mode test : vitesse'), chips);
     if (import.meta.env.DEV) card.append(speed);
     card.append(fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
+  }
+
+  /** Le message qui défile sur le panneau lumineux du comptoir. */
+  private openBarMessage(): void {
+    const g = this.game();
+    const card = this.modalCard('Panneau lumineux');
+    const input = h('input', 'name-input');
+    input.maxLength = BAR_MESSAGE_MAX;
+    input.placeholder = BAR_MESSAGE;
+    input.value = g.barMessage;
+    const save = () => {
+      g.setBarMessage(input.value);
+      this.closeModal();
+    };
+    input.onkeydown = (e) => { if (e.key === 'Enter') save(); };
+    card.append(
+      h('div', 'stats-line', `Le message qui défile sur la façade du comptoir (${BAR_MESSAGE_MAX} caractères au plus).`),
+      input,
+      this.btn('btn primary', 'Afficher ce message', save),
+    );
+    input.focus();
   }
 
   private modalCard(title: string): HTMLElement {

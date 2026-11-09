@@ -4,6 +4,7 @@
  */
 import type { DecorAsset, DecorCtx } from './decor';
 import { drawMiniLabel } from './labelArt';
+import { BAR_MESSAGE } from '../core/game';
 import { ellipseShadow, shade, trap } from './space';
 
 const P = (g: CanvasRenderingContext2D) => (x: number, y: number, w: number, h: number, c: string) => {
@@ -459,18 +460,29 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'neonSign', name: 'Néon BIÈRES', room: 'bar', w: 48, h: 10, pad: 4, anim: true, furniture: 'neon',
+    id: 'neonSign', name: 'Panneau à message', room: 'bar', w: 48, h: 10, pad: 4, anim: true, furniture: 'neon',
     draw(g, c) {
       const px = P(g);
+      // panneau lumineux sur la façade du comptoir : le message choisi défile de droite à gauche
       const col = ['#ff9a3a', '#7ee081', '#f2c14e', '#ff5ad0', '#5ef0ff'][c.lv - 1] ?? '#f2c14e';
-      const on = Math.floor(c.t * 8) % 37 !== 0;
+      const on = Math.floor(c.t * 8) % 37 !== 0; // il grésille de temps en temps
       px(0, 0, 48, 10, '#1b1424');
-      if (on) { g.fillStyle = col + '30'; g.fillRect(-4, -3, 56, 16); }
-      g.fillStyle = on ? col : '#3a3048';
+      px(1, 1, 46, 8, '#0c0a10');
+      if (on) { g.fillStyle = col + '24'; g.fillRect(-4, -3, 56, 16); }
+      const text = c.game?.barMessage ?? BAR_MESSAGE;
+      g.save();
+      g.beginPath(); g.rect(2, 1, 44, 8); g.clip();
       g.font = '8px monospace';
       g.textBaseline = 'alphabetic';
-      g.fillText('BIÈRES', 8, 10);
-      if (on) { g.fillStyle = '#ffffff60'; g.fillText('BIÈRES', 8, 9); }
+      const w = Math.ceil(g.measureText(text).width);
+      const x = Math.round(46 - ((c.t * 14) % (w + 48)));
+      g.fillStyle = on ? col : '#3a3048';
+      g.fillText(text, x, 8);
+      if (on) { g.fillStyle = '#ffffff50'; g.fillText(text, x, 7); }
+      g.restore();
+      // la trame des LED
+      g.fillStyle = 'rgba(12,10,16,0.45)';
+      for (let y = 2; y < 9; y += 2) g.fillRect(2, y, 44, 1);
     },
   },
   {

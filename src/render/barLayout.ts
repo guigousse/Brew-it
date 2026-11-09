@@ -15,7 +15,7 @@ export const RESIZABLE: readonly BarItem[] = ['counter'];
 
 export const BAR_LAYOUT_DEFAULT: Readonly<Record<BarItem, BarSpot>> = {
   counter: { x: 30, y: 112, w: 100, h: 22 },
-  event: { x: 46, y: 0, w: 68, h: 66 },
+  event: { x: 52, y: 0, w: 56, h: 50 },
   tables: { x: 79, y: 154, w: 68, h: 40 },
 };
 

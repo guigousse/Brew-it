@@ -1,5 +1,5 @@
 import { GASTON_RECIPE } from './brewing/model';
-import { Game, simulateOffline } from './game';
+import { BAR_MESSAGE, BAR_MESSAGE_MAX, Game, simulateOffline } from './game';
 import { DEFAULT_LABEL } from './label';
 import { BAR, kegSpace, PARTY } from './market';
 import { COMPUTERS, WHOLESALE_PRICE, drawOrder, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, type Order } from './orders';
@@ -782,5 +782,20 @@ describe('mobilier et étiquettes', () => {
     expect(back.isUnlocked('emblem', 'bee')).toBe(true);
     expect(back.boostMult('brew')).toBe(2);
     expect(back.staffOn('courier')).toBe(true);
+  });
+});
+
+describe('panneau lumineux du bar', () => {
+  it('garde le message choisi (nettoyé, limité), le message par défaut si vide, et le sauvegarde', () => {
+    const g = new Game();
+    expect(g.barMessage).toBe(BAR_MESSAGE);
+    g.setBarMessage('  Happy   hour à 18 h  ');
+    expect(g.barMessage).toBe('Happy hour à 18 h');
+    g.setBarMessage('x'.repeat(80));
+    expect(g.barMessage).toHaveLength(BAR_MESSAGE_MAX);
+    g.setBarMessage('   ');
+    expect(g.barMessage).toBe(BAR_MESSAGE);
+    g.setBarMessage('Santé !');
+    expect(Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON()))).barMessage).toBe('Santé !');
   });
 });
