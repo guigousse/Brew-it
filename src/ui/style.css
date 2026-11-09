@@ -462,6 +462,7 @@ button:disabled { cursor: default; opacity: .5; }
 }
 .act.ready .fab-badge, .act.alert .fab-badge { background: var(--accent); }
 .fab-badge.hidden { display: none; }
+.act .fab-badge.stop { background: var(--bad); color: #fff; }
 
 /* --- Temps de production restant ---------------------------------------------------------- */
 .eta { color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -647,6 +648,10 @@ button:disabled { cursor: default; opacity: .5; }
 .btn.armed { background: var(--bad); color: #fff; box-shadow: inset 0 0 0 2px #ffd0c4; }
 /* le tutoriel désigne le bouton dont il parle */
 .act.tuto { box-shadow: 0 0 0 3px var(--accent), 0 0 12px 2px #f2c14e; animation: pulse .8s steps(4) infinite; }
+/* « touche une machine » : les noms des machines brillent */
+.station-label.tuto .label-text { color: var(--ink); background: var(--accent); box-shadow: 0 0 10px 2px #f2c14e; animation: pulse .8s steps(4) infinite; }
+/* quand Gaston parle du haut de l'atelier, sa bulle descend pour ne pas le cacher */
+.mentor.low { top: auto; bottom: calc(var(--bottom-h, 70px) + 8px); }
 /* notification avec action (Annuler) */
 .toast.with-action { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
 .toast-action { padding: 2px 8px; font: inherit; font-size: 16px; color: var(--ink); background: var(--accent); border: 2px solid var(--ink); }
@@ -667,7 +672,7 @@ button:disabled { cursor: default; opacity: .5; }
 .letter-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .letter-client { flex: 1; min-width: 0; font-size: 21px; line-height: 1.05; color: #2a1a12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* minuteur : horloge et temps, à l'encre ; rouge seulement quand il presse */
-.timer { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 19px; color: #2a1a12; font-variant-numeric: tabular-nums; }
+.timer { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; font-size: 19px; color: #2a1a12; font-variant-numeric: tabular-nums; }
 .timer-icon { width: 16px; height: 16px; image-rendering: pixelated; }
 .timer.low { color: #c8301c; }
 .kind-urgent .timer.low { animation: pulse 1s steps(2) infinite; }

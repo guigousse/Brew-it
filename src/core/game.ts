@@ -3,7 +3,7 @@ import { EventBus } from './events';
 import type { Label } from './label';
 import { PARTY } from './market';
 import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type BarEventId, type ShopItemId } from './market';
-import { orderGems, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, wholesalePrice, type Order } from './orders';
+import { orderGems, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
@@ -554,6 +554,11 @@ export class Game {
   /** Brassins programmés au total. */
   get planned(): number {
     return this.plan.reduce((s, p) => s + p.count, 0);
+  }
+
+  /** La brasserie est à l'arrêt : aucun brassin sur la ligne ni dans la file. */
+  get stopped(): boolean {
+    return this.batches.length === 0 && this.planned === 0;
   }
 
   /** Brassins qu'on peut programmer d'avance : la file s'allonge avec le niveau de la brasserie. */
@@ -1637,6 +1642,7 @@ export class Game {
       const o = drawOrder(this.nextId++, {
         rng: this.rng, time: this.time, breweryLevel: this.breweryLevel, brand: this.brand, beers: this.beers.length,
         storageCap: this.storageCap, kegLiters: kegLiters(this.batchLiters), trends: this.trends,
+        starter: this.ordersDone + this.orders.length < STARTER_ORDERS,
       });
       this.orders.push(o);
       this.events.emit({ type: 'order', client: o.client });

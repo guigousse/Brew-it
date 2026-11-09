@@ -2,7 +2,7 @@ import { GASTON_RECIPE } from './brewing/model';
 import { BAR_MESSAGE, BAR_MESSAGE_MAX, Game, simulateOffline } from './game';
 import { DEFAULT_LABEL } from './label';
 import { BAR, kegSpace, PARTY } from './market';
-import { COMPUTERS, WHOLESALE_PRICE, drawOrder, orderGems, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, type Order } from './orders';
+import { COMPUTERS, WHOLESALE_PRICE, drawOrder, orderGems, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, STARTER_MAX_BOTTLES, fits, type Order } from './orders';
 import { Rng } from './rng';
 import { popTarget, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
@@ -282,6 +282,25 @@ describe('jeu', () => {
       if (o5.kind !== 'keg') expect(o5.qty).toBeLessThanOrEqual(4000 * 12 * 0.75);
       expect(o5.reward).toBeGreaterThan(0);
     }
+  });
+
+  it('le premier brassin, guidé par Gaston, n\'a aucun défaut (pas même l\'oxydation du matériel de départ)', () => {
+    const g = withBeer();
+    expect(g.beers[0]!.tasting.defects).toEqual([]);
+  });
+
+  it('les 3 premières commandes se livrent avec la blonde du tutoriel', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const rng = new Rng(seed);
+      const o = drawOrder(seed, { rng, time: 0, breweryLevel: 1, brand: 0, beers: 1, storageCap: 120, kegLiters: 5, trends: [], starter: true });
+      expect(o.kind).toBe('classic');
+      expect(o.want).toBeUndefined();
+      expect(o.qty).toBeLessThanOrEqual(STARTER_MAX_BOTTLES);
+      expect(o.minQuality).toBeLessThanOrEqual(0.45);
+    }
+    const g = withBeer();
+    runUntil(g, () => g.orders.length >= 2, 4 * 3600);
+    for (const o of g.orders) expect(g.beers.some((b) => fits(o, b.tasting))).toBe(true);
   });
 
   it('le grossiste reprend bouteilles et fûts, à petit prix, dans la limite d\'un quota par bière en litres', () => {

@@ -17,3 +17,15 @@ export function compact(v: number): string {
   if (n < 1e9) return unit(1e6, 'M');
   return unit(1e9, 'Md');
 }
+
+/**
+ * Délai avant un événement, qu'on ne puisse pas confondre avec l'heure du jeu : « dans 45 s », « dans 19 min »,
+ * « dans 1 h 05 ». Arrondi vers le haut : on n'annonce jamais l'événement plus tôt qu'il n'arrive.
+ */
+export function countdown(s: number): string {
+  const t = Math.max(0, Math.ceil(s));
+  if (t < 60) return `dans ${t} s`;
+  const m = Math.ceil(t / 60);
+  if (m < 60) return `dans ${m} min`;
+  return `dans ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+}

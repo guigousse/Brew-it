@@ -113,8 +113,9 @@ function shop() {
       if (lv >= MAX_LEVEL) continue;
       options.push({ cost: g.upgradeCost(id), label: `${id} → ${lv + 1}`, act: () => g.upgrade(id).ok });
     }
-    const item = g.nextItem;
-    if (item) options.push({ cost: item.cost, label: item.name, act: () => g.buyItem(item.id).ok });
+    // la décoration du bar s'achète dans l'ordre de sa piste
+    const decor = g.nextDecor;
+    if (decor) options.push({ cost: decor.cost, label: decor.name, act: () => g.buyDecor(decor.id).ok });
     for (const id of ['fermenter', 'conditioning'] as const) {
       const c = g.tankCost(id);
       if (c != null) options.push({ cost: c, label: `Cuve ${id} ${g.tankCount(id) + 1}`, act: () => g.addTank(id).ok });
@@ -128,13 +129,15 @@ function shop() {
     const slot = g.nextSlotCost;
     if (slot != null) options.push({ cost: slot, label: `Place gamme ${g.rangeSlots + 1}`, act: () => g.buySlot().ok });
     options.sort((a, b) => a.cost - b.cost);
-    const o = options[0];
-    if (!o || o.cost > g.money) {
+    // le moins cher qui passe ; un achat refusé ne bloque pas les suivants
+    const o = options.find((x) => x.cost <= g.money && x.act());
+    if (!o) {
       // de l'argent en trop par rapport au prochain achat : une campagne de pub
-      if (!g.advertising && g.beers.length && g.money >= g.adCost * 4 && g.advertise().ok) buy('Campagne de pub', g.adCost);
+      // (une campagne ne doit pas retarder le prochain achat de plus d'un dixième de son prix)
+      const nextCost = options.at(0)?.cost ?? 0;
+      if (!g.advertising && g.beers.length && g.money >= g.adCost * 4 && g.adCost <= nextCost * 0.1 && g.advertise().ok) buy('Campagne de pub', g.adCost);
       return;
     }
-    if (!o.act()) return;
     buy(o.label, o.cost);
   }
 }

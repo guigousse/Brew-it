@@ -27,6 +27,7 @@ export function executeStep(id: StationId, r: Recipe, level: number, rand: () =>
   const d = exact ? 0 : DOSE_SPREAD[level] ?? 0;
   // « Bon ou mauvais jour » : tiré une fois par brassin, il rend les petits défauts plus ou moins marqués partout.
   if (a.luck == null) a.luck = rand();
+  if (exact) a.guided = true;
   a.rough = (a.rough ?? 0) + (exact ? 0 : (ROUGH[level] ?? 0) * 2 * a.luck * (0.75 + 0.5 * rand()));
   switch (id) {
     case 'mill':

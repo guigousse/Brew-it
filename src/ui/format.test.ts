@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compact } from './format';
+import { compact, countdown } from './format';
 
 describe('montants courts du header', () => {
   it('raccourcit sans jamais arrondir vers le haut', () => {
@@ -11,5 +11,14 @@ describe('montants courts du header', () => {
     expect(compact(250_400)).toBe('250k');
     expect(compact(1_250_000)).toBe('1,2M');
     expect(compact(3_000_000_000)).toBe('3Md');
+  });
+});
+
+describe('délais', () => {
+  it('se lisent comme un délai, jamais comme une heure', () => {
+    expect(countdown(45)).toBe('dans 45 s');
+    expect(countdown(19 * 60 + 39)).toBe('dans 20 min');
+    expect(countdown(65 * 60)).toBe('dans 1 h 05');
+    expect(countdown(-3)).toBe('dans 0 s');
   });
 });

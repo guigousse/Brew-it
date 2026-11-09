@@ -46,6 +46,8 @@ export interface Levels {
 
 /** Ce que les appareils ont réellement fait (températures avec leur imprécision, tirage au sort de l'infection). */
 export interface Actual {
+  /** Premier brassin guidé par Gaston : il surveille aussi l'embouteillage (pas d'oxydation). */
+  guided?: boolean;
   mashTemp: number;
   pitchTemp: number;
   fermentTemp: number;
@@ -223,7 +225,7 @@ export function brew(r: Recipe, lv: Levels, a: Actual): Tasting {
     defects.push(defect('bombs', 'Bouteilles qui explosent : bien trop de sucre', 0.35));
     lost = 0.4;
   } else if (co2 > 3.2) defects.push(defect('gushing', 'Mousse qui déborde : trop de sucre', 0.15));
-  const oxidation = OXIDATION[lv.bottling] ?? 0;
+  const oxidation = a.guided ? 0 : OXIDATION[lv.bottling] ?? 0;
   if (oxidation > 0) defects.push(defect('oxidation', 'Goût de carton : oxydation', oxidation));
 
   // --- Finesse : ce qui sépare une bonne bière d'une grande bière (au-delà de 18/20, tout doit être juste)

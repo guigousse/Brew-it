@@ -19,7 +19,7 @@ import { BOOST_POSTS, BOOSTS, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
-import { compact } from './format';
+import { compact, countdown } from './format';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const el = document.createElement(tag);
@@ -261,6 +261,8 @@ export class App {
   private fabs = h('div', 'fabs');
   private tabbar = h('nav', 'tabbar');
   private brewBtn = fab('brew', 'Brasser');
+  /** La brasserie était-elle déjà à l'arrêt au rendu précédent ? (la notification ne part qu'au moment où elle s'arrête) */
+  private wasStopped = false;
   private rangeBtn = fab('range', 'Ma gamme');
   private eventsBtn = fab('events', 'Événements');
   private barmanBtn = fab('barman', 'Barman en renfort');
@@ -631,8 +633,20 @@ export class App {
     const can = g.canBrew();
     const trial = g.tastable;
     // pastilles des boutons d'action : l'essentiel en un coup d'œil ; « ready » = il y a quelque chose à faire
-    setFab(this.brewBtn, g.planned ? String(g.planned) : '', can.ok && !g.planned ? 'ready' : '',
-      g.planned ? `Brasser : ${g.planned} programmé${g.planned > 1 ? 's' : ''}` : 'Brasser');
+    // la brasserie à l'arrêt se voit partout (après le tutoriel) : « 0 » en rouge sur Brasser, « ! » sur l'onglet Atelier, et une notification
+    const stopped = g.stopped && g.tips >= 4;
+    setFab(this.brewBtn, g.planned ? String(g.planned) : stopped ? '0' : '', can.ok && !g.planned ? 'ready' : '',
+      g.planned ? `Brasser : ${g.planned} programmé${g.planned > 1 ? 's' : ''}` : stopped ? 'Brasser : la brasserie est à l\'arrêt' : 'Brasser');
+    this.brewBtn.querySelector('.fab-badge')!.classList.toggle('stop', stopped);
+    if (stopped && !this.wasStopped) {
+      this.toast('La brasserie est à l\'arrêt : programme des brassins', 'bad', {
+        label: 'Brasser', run: () => {
+          this.goView('workshop');
+          this.open({ kind: 'brew' });
+        },
+      }, 8000);
+    }
+    this.wasStopped = stopped;
     setFab(this.rangeBtn, trial ? '!' : '', trial ? 'alert' : '', `Ma gamme : ${g.beers.length}/${g.rangeSlots}`);
     const ready = g.readyOrders.length;
     const emptyTap = g.taps.some((t) => t.glasses <= 0);
@@ -666,7 +680,7 @@ export class App {
     // pastilles des onglets de pièces
     const badges: Record<RoomId, string> = {
       office: this.unreadLetters ? '✉' : g.orders.length ? String(g.orders.length) : '',
-      workshop: trial ? '🍺' : '',
+      workshop: trial ? '🍺' : stopped ? '!' : '',
       storage: g.storageFull ? '!' : '',
       bar: g.partying ? '🎉' : emptyTap && kegsReady ? '!' : '', // un fût à changer, et de quoi le remplacer
     };
@@ -824,6 +838,8 @@ export class App {
       knobs.append(createKnob({ label: k.label, min: k.min, max: k.max, step: k.step, unit: k.unit, value: g.recipe[k.key] as number, onChange: (v) => g.setParam(k.key, v) }));
     }
     body.append(knobs);
+    // pendant le tutoriel, la fiche ne parle que des réglages : les achats viennent après la première bière
+    if (g.tips < 4) return;
     // cuves en parallèle (fermentation, garde)
     const tankCost = g.tankCost(id);
     if (TANK_STAGES.includes(id)) {
@@ -1624,7 +1640,7 @@ export class App {
       else el.textContent = `⏳ ${duration(Number(el.dataset.expires) - g.time)}`;
     });
     const waits = g.slotWaits;
-    st.ui.querySelectorAll<HTMLElement>('[data-slot]').forEach((el) => (el.textContent = clock(waits[Number(el.dataset.slot)] ?? 0)));
+    st.ui.querySelectorAll<HTMLElement>('[data-slot]').forEach((el) => (el.textContent = countdown(waits[Number(el.dataset.slot)] ?? 0)));
   }
 
   private renderComputer(): void {
@@ -1824,7 +1840,7 @@ export class App {
   /** Un emplacement libre : le temps avant sa prochaine lettre ; le plus proche propose la prospection. */
   private emptySlot(g: Game, wait: number, i: number): HTMLElement {
     const el = h('div', 'slot-free');
-    const t = this.timer(clock(wait), 'wait');
+    const t = this.timer(countdown(wait), 'wait');
     t.querySelector<HTMLElement>('.timer-text')!.dataset.slot = String(i);
     const info = h('div', 'slot-free-info');
     info.append(h('span', 'slot-free-text', 'Prochaine lettre'), t);
@@ -2230,6 +2246,8 @@ export class App {
         card.append(buy);
       }
     }
+    // le premier essai, guidé par Gaston, ne se jette pas
+    if (!g.beers.length && g.tips < 4) return void card.append(keep);
     card.append(keep, this.confirmBtn('btn bad', 'Jeter', 'Jeter ce brassin ? Toucher pour confirmer', () => {
       g.discardTrial();
       this.closeModal();
@@ -2969,13 +2987,16 @@ export class App {
     const g = this.game();
     const tips: Record<number, { text: string; action?: string }> = {
       0: { text: 'Salut, moi c\'est Gaston ! Le malt entre en haut, la bière sort en bas. J\'ai réglé les machines pour ma blonde.', action: 'Continuer' },
-      1: { text: 'Touche une machine pour la régler.' },
+      1: { text: 'Touche une machine pour la régler : leurs noms brillent.' },
       2: { text: 'Touche la cuve de cuivre, en bas à droite, pour lancer ton premier brassin.' },
       3: { text: 'Je t\'aide pour celui-ci : ça ira vite. On goûte à la première bouteille !' },
       4: { text: 'Glisse l\'écran : au bureau, touche l\'ordinateur pour les commandes et les nouvelles ; au bar, touche les fûts pour les brancher. Bonne brasse !', action: 'Compris' },
     };
     const tip = this.modalOpen || this.openSheet?.kind === 'brew' || !isRoom(this.view) ? undefined : tips[g.tips];
     this.mentor.classList.toggle('hidden', !tip);
+    // la bulle ne cache pas ce dont elle parle : en bas quand elle montre le haut de l'atelier (étapes 0 et 1)
+    this.mentor.classList.toggle('low', !!tip && this.view === 'workshop' && g.tips <= 1);
+    for (const o of this.overlays.values()) o.label.classList.toggle('tuto', !!tip && g.tips === 1);
     if (!tip) return;
     const key = `${g.tips}`;
     if (key === this.mentorKey) return;

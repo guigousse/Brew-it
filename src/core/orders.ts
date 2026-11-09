@@ -158,7 +158,14 @@ export interface OrderContext {
   storageCap: number;
   kegLiters: number;
   trends: readonly Trend[];
+  /** Commande de démarrage : classique, chez un particulier ou un bistrot, et livrable avec le premier brassin. */
+  starter?: boolean;
 }
+
+/** Les premières commandes de la partie sont des commandes de démarrage, livrables avec la blonde du tutoriel. */
+export const STARTER_ORDERS = 3;
+/** Bouteilles d'une commande de démarrage au plus : le premier brassin en donne 15. */
+export const STARTER_MAX_BOTTLES = 12;
 
 /** Profils de clients qui passent commande aujourd'hui. */
 export const openTypes = (level: number, brand: number) => CLIENT_TYPES.filter((c) => c.level <= level && c.pop <= brand + 1e-9);
@@ -173,14 +180,16 @@ function pickWeighted<T extends string>(rng: Rng, weights: Partial<Record<T, num
 /** Tire une nouvelle commande. */
 export function drawOrder(id: number, ctx: OrderContext): Order {
   const { rng } = ctx;
-  const types = openTypes(ctx.breweryLevel, ctx.brand);
-  const type = types[Math.floor(rng.next() * types.length)]!;
-  let kind = pickWeighted(rng, type.kinds);
+  const open = openTypes(ctx.breweryLevel, ctx.brand);
+  const types = ctx.starter ? open.filter((c) => c.kinds.classic && c.minQuality <= 0.45) : open;
+  const type = (types.length ? types : open)[Math.floor(rng.next() * (types.length || open.length))]!;
+  let kind = ctx.starter ? 'classic' : pickWeighted(rng, type.kinds);
   if (kind === 'mix' && ctx.beers < 2) kind = 'classic';
   let bottles = (ORDER_BASE[ctx.breweryLevel - 1] ?? 15) * type.size * (0.6 + 0.8 * rng.next());
   if (kind === 'urgent') bottles *= 0.6;
   if (kind === 'prestige') bottles *= 0.5;
   bottles = Math.max(6, Math.round(Math.min(bottles, ctx.storageCap * 0.75) / 6) * 6);
+  if (ctx.starter) bottles = Math.min(bottles, STARTER_MAX_BOTTLES);
   const order: Order = {
     id, type: type.id, client: type.names[Math.floor(rng.next() * type.names.length)]!, kind, qty: bottles,
     minQuality: kind === 'prestige' ? 0.85 : type.minQuality, reward: 0, received: ctx.time,

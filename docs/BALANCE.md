@@ -2,16 +2,18 @@
 
 ## Le rythme visé
 
-| Critère | Cible | Résultat |
+| Critère | Cible | Résultat (novembre 2026, joueur simulé réparé) |
 |---|---|---|
-| Durée pour tout débloquer (4 visites/jour) | 4 semaines environ | **28 jours** |
-| Durée pour un joueur occasionnel (2 visites/jour) | 5 à 6 semaines | **38 jours** |
-| Visites où l'on peut acheter quelque chose | au moins 1 sur 2 | **52 %** (69 % à 2 visites/jour) |
-| Plus longue période sans rien acheter | 1 journée au plus | **4 visites** (3 à 2 visites/jour) |
-| Premier jour | beaucoup de récompenses | ~20 achats, 1er contrat dès la 2e visite |
-| Revenir plus souvent | aide, sans obliger | 9 visites/jour : 26 jours au lieu de 28 |
+| Durée pour tout débloquer (4 visites/jour) | 4 semaines environ | **plus de 120 jours** : 7 machines au niveau 5 vers J96, il reste encore des cuves, l'ordinateur 5 et 2 places de gamme |
+| Durée pour un joueur occasionnel (2 visites/jour) | 5 à 6 semaines | **plus de 150 jours** |
+| Visites où l'on peut acheter quelque chose | au moins 1 sur 2 | **61 %** (82 % à 2 visites/jour) |
+| Plus longue période sans rien acheter | 1 journée au plus | **5 visites** (4 à 2 visites/jour) |
+| Premier jour | beaucoup de récompenses | ~20 achats, niveau 2 en 4 h 30 de jeu |
+| Niveau 3 des machines | — | les 7 entre J9 et J18 ; niveau 4 de J33 à J54 |
 
-Le jeu ne se termine pas en une semaine, mais on n'est jamais bloqué plus d'une journée. Revenir plusieurs fois par jour fait avancer, sans qu'il faille « farmer » : la brasserie tourne seule jusqu'à 8 h.
+**Le jeu est aujourd'hui 4 fois plus long que l'objectif.** Les chiffres « 28 jours » des sections plus bas datent d'avant le mobilier du bar : depuis, le joueur simulé n'achetait plus rien après le premier jour (voir « Joueur simulé réparé », en fin de document), et l'écart est passé inaperçu. Le rééquilibrage reste à faire ; le premier suspect est le saut de prix des machines entre les niveaux 2 et 3 (×250, `TIER_COST`).
+
+Le jeu ne doit pas se terminer en une semaine, mais on ne doit jamais être bloqué plus d'une journée. Revenir plusieurs fois par jour fait avancer, sans qu'il faille « farmer » : la brasserie tourne seule jusqu'à 8 h.
 
 ## Méthode : un joueur simulé
 
@@ -186,3 +188,14 @@ Mesure sur l'état réel d'une partie juste après chaque agrandissement du bar,
 Les boosts se paient en diamants, à **prix fixes et dégressifs**. Pour ×2 sur les machines : 3 diamants les 30 min (Coup de feu), 10 les 2 h (Cadence ×2), 30 les 8 h (Équipe de nuit). Quatre Coups de feu coûtent donc plus qu'une Cadence, et quatre Cadences plus qu'une Équipe de nuit. Les durées ont doublé par rapport à la première version, pour des prix plus bas : un boost doit se sentir.
 
 Gains sans payer : 25 au départ, des diamants à chaque commande livrée selon sa difficulté (1 à 6 : classique 1, style ou assortiment 2, urgente 3, prestige 5, +1 si le client est exigeant, +1 pour une urgente avec un style imposé), 15 / 25 / 40 / 60 aux niveaux 2 à 5 de la brasserie. Le simulateur (`npm run balance`, ligne « Diamants gagnés ») en compte 27 le premier jour, 45 le deuxième (niveau 2), puis 7 à 15 par jour (environ 9 en moyenne, contre 6 avec 1 diamant par commande) : de quoi lancer environ trois Coups de feu, ou presque une Cadence ×2, chaque jour. Le simulateur ne dépense pas ses diamants.
+
+## Joueur simulé réparé (novembre 2026)
+
+Depuis l'arrivée de la piste de décoration du bar (meubles et objets d'événement dans un ordre imposé), `npm run balance` n'achetait plus rien après le premier jour : il visait l'objet d'événement le moins cher (la cible de fléchettes) alors que les Plantes vertes devaient passer avant. L'achat échouait et le script cessait d'acheter pour le reste de la partie.
+
+Corrections du script :
+- il achète la **prochaine pièce de la piste** (`nextDecor`), comme le joueur ;
+- un achat refusé ne bloque plus les suivants : il passe à l'option suivante ;
+- il ne lance une **campagne de pub** que si elle coûte au plus un dixième du prochain achat. Avant, il la relançait dès qu'il avait 4 fois son prix, et la pub mangeait l'épargne des machines (30 000 € la campagne au niveau 3).
+
+Mesures (`npm run balance 120`, puis `SESSIONS=8,20 npm run balance 150`) : voir le tableau en tête de document. Le revenu passe d'environ 10 k€ par jour (J3) à 80 k€ (J31), 325 k€ (J61) et 1,4 M€ (J106).
