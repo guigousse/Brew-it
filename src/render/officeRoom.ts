@@ -31,13 +31,13 @@ const SHOWCASE = { x: DISPLAY.x + 3, y: DISPLAY.y + 14, w: DISPLAY.w - 6, h: DIS
 const SHELF_Y = [SHOWCASE.y + Math.floor(SHOWCASE.h / 2) - 1, SHOWCASE.y + SHOWCASE.h - 2];
 /**
  * Bureau et ordinateur, au premier plan ; DESK_TOP : là où se posent les objets (milieu du plateau), DESK_FEET : le pied
- * des meubles. Le bureau est dessiné à l'échelle DESK_S (ses mesures d'origine, ×0,8), un peu en retrait vers le mur.
+ * des meubles. Le bureau est dessiné à l'échelle DESK_S (ses mesures d'origine, ×0,9), un peu en retrait vers le mur.
  */
-const DESK_S = 0.8;
+const DESK_S = 0.9;
 const ds = (v: number) => Math.round(v * DESK_S);
-const DESK: Rect = { x: 12, y: 182, w: 96, h: 88 };
-const DESK_TOP = 216;
-const DESK_FEET = 270;
+const DESK: Rect = { x: 6, y: 186, w: 108, h: 96 };
+const DESK_TOP = 221;
+const DESK_FEET = 282;
 
 export type OfficeHit = 'window' | 'board' | 'display' | 'computer';
 
@@ -393,9 +393,9 @@ export class OfficeRoom extends Room {
       // caisson à tiroirs à gauche, pied à droite
       px(dk.x + 2, front + 4, ds(36), DESK_FEET - front - 5, face);
       px(dk.x + 2, front + 4, 1, DESK_FEET - front - 5, hi);
-      for (let k = 0; k < Math.floor((DESK_FEET - front - 8) / 10); k++) {
-        const ty = front + 7 + k * 10;
-        px(dk.x + 4, ty, ds(30), 8, top); px(dk.x + 4, ty, ds(30), 1, hi); px(dk.x + 4, ty + 7, ds(30), 1, edge);
+      for (let k = 0; k < Math.floor((DESK_FEET - front - 8) / ds(12)); k++) {
+        const ty = front + 7 + k * ds(12);
+        px(dk.x + 4, ty, ds(30), ds(12) - 2, top); px(dk.x + 4, ty, ds(30), 1, hi); px(dk.x + 4, ty + ds(12) - 3, ds(30), 1, edge);
         px(dk.x + ds(17), ty + 3, 5, 2, '#c8a860');
       }
       px(dk.x + dk.w - 6, front + 4, 4, DESK_FEET - front - 5, face);
@@ -404,7 +404,7 @@ export class OfficeRoom extends Room {
       // piétement : un caisson fin et un pied
       px(dk.x + 3, front + 4, ds(32), DESK_FEET - front - 5, top);
       px(dk.x + 3, front + 4, 1, DESK_FEET - front - 5, hi);
-      for (let k = 0; k < Math.floor((DESK_FEET - front - 12) / 10); k++) px(dk.x + 6, front + 10 + k * 10, ds(22), 1, edge);
+      for (let k = 0; k < Math.floor((DESK_FEET - front - 12) / ds(12)); k++) px(dk.x + 6, front + 10 + k * ds(12), ds(22), 1, edge);
       px(dk.x + dk.w - 6, front + 4, 3, DESK_FEET - front - 5, edge);
     }
     shade(g, b, { x: dk.x, y: front + 4, w: dk.w, h: DESK_FEET - front - 5 }, (_, y) => 1 - ((y - front - 5) / (DESK_FEET - front - 5)) * 0.3);
