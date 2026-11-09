@@ -503,7 +503,12 @@ export class App {
       Object.assign(o.btn.style, { left: `${r.x * s}px`, top: `${r.y * s}px`, width: `${r.w * s}px`, height: `${r.h * s}px` });
       const batch = g.batchAt(id);
       o.label.classList.toggle('busy', !!batch);
-      o.label.style.left = `${(r.x + r.w / 2) * s}px`;
+      // au-dessus de toute la rangée de cuves, sans sortir de l'écran
+      const row = this.scene.rowRect(id, g.level(id));
+      const half = o.label.offsetWidth / 2;
+      const minX = -this.viewBox.ox * s + 4 + half;
+      const maxX = (this.viewBox.w - this.viewBox.ox) * s - 4 - half;
+      o.label.style.left = `${Math.max(minX, Math.min(maxX, (row.x + row.w / 2) * s))}px`;
       o.label.style.top = `${Math.max(0, r.y * s - 18)}px`;
       // le nom de la pièce est dans le coin : l'étiquette de l'appareil d'en dessous passe sous lui
       if (id === 'mill') {
@@ -527,6 +532,24 @@ export class App {
         : STATIONS[id].step;
       o.label.classList.toggle('blocked', id === 'bottling' && g.bottlingBlocked);
       (o.bar.firstElementChild as HTMLElement).style.width = `${pct * 100}%`;
+    }
+    // les étiquettes de la fermentation et de la garde, sur le même étage, ne se chevauchent pas :
+    // celle de la garde s'écarte vers la droite autant que l'écran le permet, puis passe en dessous
+    {
+      const fl = this.overlays.get('fermenter')!.label;
+      const gl = this.overlays.get('conditioning')!.label;
+      const fx = parseFloat(fl.style.left);
+      const gx = parseFloat(gl.style.left);
+      const fy = parseFloat(fl.style.top);
+      const gy = parseFloat(gl.style.top);
+      const lh = Math.max(fl.offsetHeight, gl.offsetHeight);
+      const over = fx + fl.offsetWidth / 2 + 4 - (gx - gl.offsetWidth / 2);
+      if (over > 0 && Math.abs(fy - gy) < lh + 2) {
+        const maxX = (this.viewBox.w - this.viewBox.ox) * this.scale - 4 - gl.offsetWidth / 2;
+        const move = Math.min(over, Math.max(0, maxX - gx));
+        gl.style.left = `${gx + move}px`;
+        if (move < over) gl.style.top = `${Math.max(gy, fy + lh + 2)}px`;
+      }
     }
   }
 

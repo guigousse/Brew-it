@@ -51,15 +51,48 @@ export function nozzles(lv: number): number[] {
   return Array.from({ length: n }, (_, j) => (j - (n - 1) / 2) * NOZZLE_GAP);
 }
 /**
- * Écart entre deux cuves en parallèle : 40 % de leur largeur, resserré pour que la rangée tienne dans sa moitié
- * d'étage, mais jamais au point de cacher la jauge de liquide d'une cuve de derrière (à gauche de chaque cuve).
+ * Écart voulu entre deux cuves en parallèle : 40 % de leur largeur, et jamais moins que ce qu'il faut pour voir
+ * la jauge de liquide d'une cuve de derrière (à gauche de chaque cuve).
  */
 function tankGap(def: SpriteDef, tanks: number): number {
   if (tanks <= 1) return 0;
-  const w = def.w;
   const win = def.window;
   const gauge = win ? win.x + Math.min(win.w, 4) + 1 : 6;
-  return Math.max(6, gauge, Math.min(Math.round(w * 0.4), Math.floor((78 - w) / (tanks - 1))));
+  return Math.max(6, gauge, Math.round(def.w * 0.4));
+}
+
+/** Écart minimal entre la rangée de fermentation et celle de garde (elles ne se chevauchent jamais). */
+const ROWS_MARGIN = 3;
+
+/**
+ * Place les rangées de fermentation (à gauche) et de garde (à droite) sur leur étage, entre lo et hi :
+ * chacune garde sa place habituelle tant que possible, puis elles s'écartent l'une de l'autre ; si la largeur
+ * manque, les cuves de chaque rangée se resserrent. Rend le coin gauche de la cuve de devant et l'écart de chaque rangée.
+ */
+export function layoutTankRows(
+  fd: SpriteDef, n: number, cd: SpriteDef, m: number, lo: number, hi: number,
+): { fx: number; gf: number; cx: number; gc: number } {
+  let gf = tankGap(fd, n);
+  let gc = tankGap(cd, m);
+  const fixed = fd.w + cd.w + ROWS_MARGIN;
+  const gaps = (n - 1) * gf + (m - 1) * gc;
+  if (fixed + gaps > hi - lo && gaps > 0) {
+    const k = Math.max(0, hi - lo - fixed) / gaps;
+    gf = Math.max(4, Math.floor(gf * k));
+    gc = Math.max(4, Math.floor(gc * k));
+  }
+  // places habituelles, puis dans les limites de l'étage
+  let fx = Math.max(Math.round(SLOTS.fermenter.cx - fd.w / 2), lo + (n - 1) * gf);
+  let cx = Math.min(Math.round(SLOTS.conditioning.cx - cd.w / 2), hi - cd.w);
+  // chevauchement : la garde s'écarte vers la droite, puis la fermentation vers la gauche
+  let over = fx + fd.w + ROWS_MARGIN - (cx - (m - 1) * gc);
+  if (over > 0) {
+    const d = Math.min(over, hi - cd.w - cx);
+    cx += Math.max(0, d);
+    over -= Math.max(0, d);
+  }
+  if (over > 0) fx -= Math.min(over, fx - (lo + (n - 1) * gf));
+  return { fx, gf, cx, gc };
 }
 
 /** Écart entre deux becs : une bouteille (11 px avec son contour) et un peu de jeu. */
@@ -258,6 +291,14 @@ export class Scene {
   private seriesFlow = new Map<StationId, number>();
 
   /** Rectangle occupé par un appareil (coordonnées de la scène). L'embouteillage = la remplisseuse au premier plan. */
+  /** Rectangle occupé par toute la rangée de cuves d'un appareil (la cuve de devant et celles de derrière, à sa gauche). */
+  rowRect(id: StationId, level: number): Rect {
+    const r = this.rect(id, level);
+    const row = this.rows[id];
+    const extra = row && row.n > 1 ? row.gap * (row.n - 1) : 0;
+    return { x: r.x - extra, y: r.y, w: r.w + extra, h: r.h };
+  }
+
   rect(id: StationId, level: number): Rect {
     if (id === 'bottling') return { x: LINE.fillX - 32, y: LINE.top, w: 78, h: LINE.belt - LINE.top };
     const def = SPRITES[id][level - 1]!;
@@ -295,9 +336,8 @@ export class Scene {
   get tastePoint(): Pt {
     return { x: LINE.fillX + this.tasteDx, y: LINE.top - 6 };
   }
-  /** Décalage de la fermentation vers la droite : ses cuves supplémentaires se rangent à sa gauche. */
+  /** Décalage de la fermentation et de la garde par rapport à leur place habituelle, pour loger leurs rangées de cuves. */
   private fermentShift = 0;
-  /** … et la garde vers la droite, pour que la sienne ne déborde pas sur la moitié gauche. */
   private gardeShift = 0;
   /** Décalage du bec qui remplit la bouteille d'essai. */
   private tasteDx = 0;
@@ -367,18 +407,18 @@ export class Scene {
     }
     const lv = this.preview?.level ?? game.breweryLevel;
     {
-      // la fermentation se décale vers la droite pour que sa rangée de cuves tienne à gauche
+      // les deux rangées de cuves se partagent l'étage, sans jamais se chevaucher ; elles peuvent déborder du plan
+      // jusqu'aux bords de l'écran (la garde laisse à sa droite la place du tuyau qui l'alimente)
       const n = game.tankCount('fermenter');
       const fd = SPRITES.fermenter[game.level('fermenter') - 1]!;
-      const fw = fd.w;
-      const slotX = Math.round(SLOTS.fermenter.cx - fw / 2);
-      this.fermentShift = Math.max(0, 2 + (n - 1) * tankGap(fd, n) - slotX);
       const m = game.tankCount('conditioning');
       const cd = SPRITES.conditioning[game.level('conditioning') - 1]!;
-      const cw = cd.w;
-      const cx = Math.round(SLOTS.conditioning.cx - cw / 2);
-      this.gardeShift = Math.max(0, Math.min(150 - cw - cx, 80 - (cx - (m - 1) * tankGap(cd, m))));
-      this.rows = { fermenter: { n, gap: tankGap(fd, n) }, conditioning: { n: m, gap: tankGap(cd, m) } };
+      const lo = Math.max(this.b.L + 2, -24);
+      const hi = Math.min(this.b.R - 7, 184);
+      const { fx, gf, cx, gc } = layoutTankRows(fd, n, cd, m, lo, hi);
+      this.fermentShift = fx - Math.round(SLOTS.fermenter.cx - fd.w / 2);
+      this.gardeShift = cx - Math.round(SLOTS.conditioning.cx - cd.w / 2);
+      this.rows = { fermenter: { n, gap: gf }, conditioning: { n: m, gap: gc } };
     }
     const decor = { room: this.key, lv, t, game, preview: !!this.preview, top: this.b.T };
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -540,7 +580,7 @@ export class Scene {
       // par la droite de la rangée et on redescend sur la cuve du fond
       const floorY = SLOTS.fermenter.floor - 3;
       const gr = this.rect('conditioning', game.level('conditioning'));
-      const xr = Math.min(157, gr.x + gr.w + 4);
+      const xr = gr.x + gr.w + 4;
       const path: Pt[] = garde
         ? [a, { x: a.x, y: floorY }, { x: xr, y: floorY }, { x: xr, y: b.y - 6 }, { x: b.x, y: b.y - 6 }, b]
         : top
@@ -659,7 +699,7 @@ export class Scene {
     // cuves en parallèle : la cuve de devant reste à sa place, les autres se rangent derrière elle en se décalant
     // vers la gauche, la plus éloignée le plus à gauche ; on voit toujours leur flanc gauche, et donc leur jauge
     const tanks = game.tankCount(id);
-    const gap = tankGap(def, tanks);
+    const gap = this.rows[id]?.gap ?? 0;
     if (tanks > 1) {
       const all = game.batchesAt(id);
       for (let k = tanks - 1; k >= 1; k--) {
