@@ -44,7 +44,7 @@ const list = (specs: Spec[]): DecorInst[] => {
  */
 const BAR_FURNITURE: Spec[] = [
   ['posterBottle', 8, 57], ['posterMug', 140, 57], ['smallPlant', 18, 89], ['smallPlant', 112, 89, { f: true }],
-  ['neonSign', 56, 118], ['jukebox', 140, 78],
+  ['jukebox', 140, 78],
 ];
 /** Étagères à bouteilles derrière le comptoir, de sa largeur. */
 const shelves = (...ys: number[]): Spec[] => ys.map((y): Spec => ['barShelf', 30, y - 14]);
@@ -61,23 +61,23 @@ const OFFICE_DESK: Spec[][] = [
 export const DECOR_DEFAULT: DecorLayout = {
   bar: {
     1: list([
-      ['cobweb', 0, 0], ['cobweb', 141, 0, { f: true }], ['crack', 79, 30], ['bulb', 78, 14], ['lightRayWide', 43, 18],
+      ['cobweb', 0, 0], ['cobweb', 141, 0, { f: true }], ['crack', 79, 30], ['bulb', 78, 14], ['lightRayWide', 43, 18], ['neonSign', 56, 40],
       ...shelves(70), ['barrel', 115, 164], ['emptyCrate', 10, 170], ['cellarVent', 66, 210], ...BAR_FURNITURE,
     ]),
     2: list([
-      ['greenPendant', 42, 14], ['greenPendant', 107, 14], ['lightRay', 23, 18], ['lightRay', 89, 18],
+      ['greenPendant', 42, 14], ['greenPendant', 107, 14], ['lightRay', 23, 18], ['lightRay', 89, 18], ['neonSign', 56, 36],
       ...shelves(66, 90), ['cellarVent', 66, 210], ...BAR_FURNITURE,
     ]),
     3: list([
-      ['brassSconce', 35, 8], ['brassSconce', 76, 8], ['brassSconce', 116, 8],
+      ['brassSconce', 35, 8], ['brassSconce', 76, 8], ['brassSconce', 116, 8], ['neonSign', 56, 36],
       ...shelves(66, 90), ...BAR_FURNITURE,
     ]),
     4: list([
-      ['factoryLamp', 33, 22], ['factoryLamp', 114, 22],
+      ['factoryLamp', 33, 22], ['factoryLamp', 114, 22], ['neonSign', 56, 28],
       ...shelves(58, 78, 98), ...BAR_FURNITURE,
     ]),
     5: list([
-      ['cityView', 30, -1], ...shelves(58, 78, 98), ...BAR_FURNITURE,
+      ['cityView', 30, -1], ['neonSign', 56, 29], ...shelves(58, 78, 98), ...BAR_FURNITURE,
     ]),
   },
   storage: {

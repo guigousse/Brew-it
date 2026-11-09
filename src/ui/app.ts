@@ -9,6 +9,8 @@ import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, labelSpot, type ShelfBottleKind } from '../render/bottleArt';
+import { instBox } from '../render/decor';
+import { decorLayout } from '../render/decorLayout';
 import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { DECOR_ICON, SHOP_SPOTS, ShopRoom } from '../render/shopRoom';
@@ -349,12 +351,12 @@ export class App {
     counterEl.onclick = () => this.open({ kind: 'bar' });
     this.barWrap.append(counterEl);
     this.roomHits.push({ el: counterEl, rect: counter.rect });
-    // le panneau lumineux de la façade : on y écrit son message (sans panneau, c'est le comptoir)
+    // le panneau lumineux au-dessus des bouteilles : on y écrit son message (sans panneau, c'est le comptoir)
     const signEl = h('button', 'station-hit');
     signEl.setAttribute('aria-label', 'Panneau lumineux : changer le message');
     signEl.onclick = () => (this.game().hasFurniture('neon') ? this.openBarMessage() : this.open({ kind: 'bar' }));
     this.barWrap.append(signEl);
-    this.roomHits.push({ el: signEl, rect: { x: 52, y: 115, w: 56, h: 16 } });
+    this.roomHits.push({ el: signEl, rect: this.signRect });
     this.barPlaque.onclick = () => this.open({ kind: 'barUp' });
     this.barWrap.append(roomTitle(this.barPlaque));
     // magasin : les étagères et leurs objets
@@ -1904,12 +1906,18 @@ export class App {
 
   /** Une zone tactile par fût de la cave : toucher un fût permet de le changer. */
   private kegKey = '';
+  /** Zone tactile du panneau lumineux : sa place change avec le niveau du bar (voir decorLayout). */
+  private signRect = { x: 52, y: 32, w: 56, h: 16 };
+
   private syncKegHits(force = false): void {
     const g = this.game();
     const n = g.taps.length;
-    const key = `${n}|${g.partying}`;
+    const key = `${n}|${g.partying}|${g.barLevel}`;
     if (!force && this.kegKey === key) return;
     this.kegKey = key;
+    const sign = decorLayout.bar[g.barLevel]?.find((i) => i.a === 'neonSign');
+    const box = sign && instBox(sign);
+    if (box) Object.assign(this.signRect, { x: box.x - 4, y: box.y - 3, w: box.w + 8, h: box.h + 6 });
     for (const el of this.kegHits) {
       el.remove();
       this.roomHits = this.roomHits.filter((r) => r.el !== el);

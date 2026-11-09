@@ -460,10 +460,10 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'neonSign', name: 'Panneau à message', room: 'bar', w: 48, h: 10, pad: 4, anim: true, furniture: 'neon',
+    id: 'neonSign', name: 'Panneau à message', room: 'bar', w: 48, h: 10, pad: 4, anim: true, furniture: 'neon', hang: { xs: [4, 43], color: '#1b1424' },
     draw(g, c) {
       const px = P(g);
-      // panneau lumineux sur la façade du comptoir : le message choisi défile de droite à gauche
+      // panneau lumineux suspendu au-dessus des bouteilles : le message choisi défile de droite à gauche
       const col = ['#ff9a3a', '#7ee081', '#f2c14e', '#ff5ad0', '#5ef0ff'][c.lv - 1] ?? '#f2c14e';
       const on = Math.floor(c.t * 8) % 37 !== 0; // il grésille de temps en temps
       px(0, 0, 48, 10, '#1b1424');
