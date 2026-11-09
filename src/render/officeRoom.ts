@@ -373,16 +373,6 @@ export class OfficeRoom extends Room {
       const k = (y - front - 4) / (DESK_FEET + 4 - front - 2);
       return inside ? 0.42 + 0.3 * k : 0.8 + 0.2 * Math.min(1, Math.abs(x < dk.x ? dk.x - x : x - dk.x - dk.w) / 4);
     });
-    if (lv >= 2 && lv <= 4) {
-      // les câbles de l'ordinateur pendent derrière le bureau jusqu'à la prise, au pied du mur
-      const cols = lv === 2 ? ['#6a604c', '#4a4038'] : ['#1b1424', '#2c283a'];
-      [ds(62), ds(66), ds(70)].forEach((cx0, k) => {
-        const col = cols[k % 2]!;
-        for (let y = front + 4; y < DESK_FEET - 8 - k * 2; y++) px(dk.x + cx0 + Math.round(Math.sin((y - front) / (9 + k * 3)) * 1.5), y, 1, 1, col);
-        px(dk.x + cx0, DESK_FEET - 8 - k * 2, dk.w - cx0 - ds(8), 1, col);
-      });
-      px(dk.x + dk.w - ds(9), DESK_FEET - 13, 4, 6, '#e8e4dc'); px(dk.x + dk.w - ds(8), DESK_FEET - 11, 2, 1, '#8a8070'); // la multiprise
-    }
     trap(g, back, front, bl, br, dk.x, dk.x + dk.w, top);
     px(Math.round(bl), back, Math.round(br - bl), 1, hi);
     shade(g, b, { x: dk.x, y: back, w: dk.w, h: front - back }, (_, y) => 0.88 + ((y - back) / (front - back)) * 0.2);

@@ -50,11 +50,11 @@ const BAR_FURNITURE: Spec[] = [
 const shelves = (...ys: number[]): Spec[] => ys.map((y): Spec => ['barShelf', 30, y - 14]);
 /**
  * Le bureau est dessiné à l'échelle 0,95, un peu en retrait vers le mur (voir officeRoom) : ce qui l'accompagne
- * (lampe, chaise, corbeille, objets du plateau) suit, placé ici aux mesures d'origine.
+ * (lampe, chaise, objets du plateau) suit, placé ici aux mesures d'origine.
  */
 const desk = ([a, x, y, extra]: Spec): Spec => [a, Math.round(2 + (x - 4) * 0.95), Math.round(221 + (y - 228) * 0.95), { s: 0.95, ...extra }];
 /** Le bureau : ce qui est commun à tous les niveaux, puis les objets posés sur le plateau, qui changent avec l'ordinateur. */
-const OFFICE: Spec[] = [['clock', 72, 126], ...([['deskLamp', 0, 207], ['wasteBin', 98, 280], ['chair', 28, 245]] as Spec[]).map(desk), ['bigPlant', 118, 240]];
+const OFFICE: Spec[] = [['clock', 72, 126], ...([['deskLamp', 0, 207], ['chair', 28, 245]] as Spec[]).map(desk), ['bigPlant', 118, 240]];
 const OFFICE_DESK: Spec[][] = ([
   [['rotaryPhone', 105, 218]],
   [['orderPile', 107, 220]],

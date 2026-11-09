@@ -699,29 +699,6 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
       g.fillStyle = `rgba(94,240,255,${0.5 + 0.5 * k})`; g.fillRect(1, 0, 6, 1);
     },
   },
-  {
-    id: 'wasteBin', name: 'Corbeille à papier', room: 'office', w: 14, h: 16, pad: 4, anim: true,
-    draw(g, c) {
-      const px = P(g);
-      const lv = c.lv;
-      const [body, hi, lo] = lv === 5 ? ['#dce6f0', '#ffffff', '#8a9ab0'] : lv === 4 ? ['#5a6878', '#8a96a6', '#3a4250'] : lv === 1 ? ['#8a6a3c', '#b08a50', '#5a3a1c'] : ['#3e3a50', '#6c6884', '#2c283a'];
-      floorShadow(g, 7, 15, 8, 2);
-      // les boulettes des commandes expirées ces dernières 24 h, qui débordent
-      const game = c.game;
-      const n = c.preview ? 4 : game ? Math.min(7, game.expiredAt.filter((x) => x > game.time - 86400).length) : 0;
-      trap(g, 4, 15, 0, 14, 2, 12, body);
-      px(0, 4, 14, 1, hi);
-      for (let x = 3; x < 12; x += 3) px(x, 6, 1, 8, lo); // le treillis
-      // les boulettes dépassent du bord
-      const balls = [[3, 2], [8, 2], [11, 3], [5, 0], [9, -1], [2, 0], [6, -2]] as const;
-      for (let i = 0; i < n; i++) {
-        const [bx, by] = balls[i]!;
-        g.fillStyle = '#f6ecd6'; g.beginPath(); g.arc(bx + 0.5, by + 1.5, 2, 0, Math.PI * 2); g.fill();
-        px(bx, by + 1, 1, 1, '#c8bca4'); px(bx + 1, by + 2, 1, 1, '#c8bca4');
-      }
-      px(2, 14, 10, 1, lo);
-    },
-  },
 ];
 
 /** Les deux affiches encadrées du bar : une bouteille, une chope. */
