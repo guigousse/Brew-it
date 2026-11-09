@@ -44,8 +44,8 @@ export function shopAdvice(g: Game, tab: ShopTab): Advice {
 
   const beer = g.beers[0]?.name;
   const cheap = LABEL_UNLOCKS.filter((x) => !g.unlocked.includes(x.id) && !x.gems && g.money >= x.cost).sort((a, b) => a.cost - b.cost)[0];
-  if (cheap) return { text: `${cheap.name} irait bien à ${beer ? `ta ${beer}` : 'ta prochaine bière'}. Tu peux l'essayer dans l'éditeur d'étiquette.`, target: cheap.id };
+  if (cheap) return { text: `${cheap.name} irait bien à ${beer ? `ta ${beer}` : 'ta prochaine bière'}. Elle se voit sur la bouteille, ici même.`, target: cheap.id };
   const premium = LABEL_UNLOCKS.find((x) => !g.unlocked.includes(x.id) && x.gems && g.gems >= x.gems);
   if (premium) return { text: `${premium.name}, c'est une pièce rare : elle se paie en diamants.`, target: premium.id };
-  return { text: 'Touche un objet pour l\'essayer sur ta bière avant de l\'acheter.' };
+  return { text: 'Chaque objet est montré avec l\'étiquette de ta bière.' };
 }

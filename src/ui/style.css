@@ -609,8 +609,12 @@ button:disabled { cursor: default; opacity: .5; }
 .unlock-kind { font-size: 15px; color: var(--dim); }
 .unlock-row.premium .unlock-kind { color: #8cd0ff; }
 .unlock-row .btn.price { width: auto; min-width: 92px; min-height: 36px; padding: 3px 8px; font-size: 17px; }
-/* diamants que rapporte une commande */
-.order-gems { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; padding: 0 6px; font-size: 16px; color: #8cd0ff; background: var(--ink); border: 1px solid #3f88d4; }
+/* bouton d'envoi d'une commande : son libellé, puis ce qu'elle rapporte (euros + diamants) */
+.btn.order-send { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; }
+.btn.order-send:disabled { background: #3a3046; color: var(--dim); box-shadow: inset 2px 2px 0 #5c4a6e; opacity: 1; }
+.order-gain { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; background: #1b142422; white-space: nowrap; }
+.btn.order-send:disabled .order-gain { background: var(--ink); color: var(--text); }
+.order-gain-sep { opacity: .6; }
 
 /* diamants dans le header */
 .gems { display: flex; align-items: center; gap: 4px; background: var(--ink); border: 2px solid #5c4a6e; padding: 3px 8px; font-family: var(--font-title); font-size: 16px; color: #8cd0ff; white-space: nowrap; min-height: 32px; }

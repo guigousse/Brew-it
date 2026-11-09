@@ -1804,11 +1804,6 @@ export class App {
     const ask = h('div', 'order-ask');
     if (o.kind !== 'classic') ask.append(h('span', `kind-tag kind-${o.kind}`, KIND_LABEL[o.kind]));
     ask.append(h('span', '', orderAsk(o)));
-    const gems = orderGems(o);
-    const gemTag = h('span', 'order-gems');
-    gemTag.append(iconCanvas('gem', 1, 'gems-icon'), `+${gems}`);
-    gemTag.setAttribute('aria-label', `Rapporte ${gemsText(gems)}`);
-    ask.append(gemTag);
     card.append(ask);
     const ok = g.suitable(o);
     const avail = (b: Beer) => (o.kind === 'keg' ? b.kegs.length : b.stock);
@@ -1841,7 +1836,9 @@ export class App {
       card.append(chips);
     }
     const row = h('div', 'row');
-    const send = this.btn('btn primary', q.ok ? `Envoyer · ${moneyInt(o.reward)}` : `${moneyInt(o.reward)} · stock insuffisant`, () => {
+    // le bouton dit ce que rapporte la commande, comme les boutons de prix du magasin : euros, puis diamants
+    const gems = orderGems(o);
+    const send = this.btn('btn primary order-send', '', () => {
       const r = g.fulfill(o.id, pick);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       this.picks.delete(o.id);
@@ -1851,6 +1848,10 @@ export class App {
       this.refreshComputer();
     });
     send.disabled = !q.ok;
+    const gain = h('span', 'order-gain');
+    gain.append(h('span', '', moneyInt(o.reward)), h('span', 'order-gain-sep', '+'), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(gems)));
+    send.append(h('span', 'order-send-label', q.ok ? 'Envoyer' : 'Stock insuffisant'), gain);
+    send.setAttribute('aria-label', `${q.ok ? 'Envoyer' : 'Stock insuffisant'} : ${moneyInt(o.reward)} et ${gemsText(gems)}`);
     row.append(send, this.confirmBtn('btn small bad', 'Refuser', 'Refuser ?', () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
@@ -2116,8 +2117,8 @@ export class App {
 
   /**
    * Éditeur d'étiquette : forme, fond, motif, couleurs, emblème, police ; aperçu en direct.
-   * Ce qui n'est pas débloqué s'essaie aussi : le bouton du bas propose alors de le débloquer avant de valider.
-   * `base` est l'étiquette d'origine : ce qu'elle porte déjà reste utilisable.
+   * Ce qui n'est pas débloqué porte un cadenas et renvoie au magasin. `base` est l'étiquette d'origine :
+   * ce qu'elle porte déjà reste utilisable.
    */
   openLabelEditor(name: string, initial: Label, onDone: (name: string, label: Label) => void, base: Label = initial): void {
     const label: Label = { ...initial };
@@ -2144,25 +2145,17 @@ export class App {
     input.oninput = redraw;
     card.append(preview, h('div', 'section-title', 'Nom'), input);
     const isOpen = (kind: UnlockKind, value: string) => g.isUnlocked(kind, value) || String(base[kind]) === value;
-    /** Ce que l'étiquette porte sans l'avoir débloqué (essai). */
-    const pending = () => LABEL_UNLOCKS.filter((x) => String(label[x.kind] ?? 'classic') === x.value && !isOpen(x.kind, x.value));
-    const relabel: (() => void)[] = [];
     const chooser = <K extends keyof Label>(title: string, key: K, options: { id: Label[K]; name: string }[], kind?: UnlockKind) => {
       const row = h('div', 'chips');
       for (const o of options) {
-        const c = this.btn(`chip${(label[key] ?? 'classic') === o.id ? ' active' : ''}`, o.name, () => {
+        const open = !kind || isOpen(kind, String(o.id));
+        const x = LABEL_UNLOCKS.find((u) => u.kind === kind && u.value === o.id);
+        const c = this.btn(`chip${(label[key] ?? 'classic') === o.id ? ' active' : ''}${open ? '' : ' locked'}`, open ? o.name : `🔒 ${o.name}`, () => {
+          if (!open) return this.toast(`« ${o.name} » se débloque au magasin, rayon Étiquettes · ${x?.gems ? gemsText(x.gems) : moneyShort(x?.cost ?? 0)}`, 'info');
           label[key] = o.id;
-          row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('active', x === c));
+          row.querySelectorAll('.chip').forEach((y) => y.classList.toggle('active', y === c));
           redraw();
-          refresh();
         });
-        const paint = () => {
-          const open = !kind || isOpen(kind, String(o.id));
-          c.textContent = open ? o.name : `🔒 ${o.name}`;
-          c.classList.toggle('locked', !open);
-        };
-        paint();
-        relabel.push(paint);
         row.append(c);
       }
       card.append(h('div', 'section-title', title), row);
@@ -2189,41 +2182,7 @@ export class App {
     chooser('Emblème', 'emblem', EMBLEMS, 'emblem');
     chooser('Police du nom', 'font', FONTS);
     colors('Couleur du texte et du contour', 'textColor');
-    const tryNote = h('p', 'hint try-note');
-    const done = h('button', 'btn primary big');
-    const refresh = () => {
-      const x = pending()[0];
-      relabel.forEach((f) => f());
-      done.replaceChildren();
-      done.classList.remove('short');
-      delete done.dataset.cost;
-      tryNote.textContent = x ? `Essai : « ${x.name} » n'est pas encore débloqué.` : '';
-      if (!x) {
-        done.textContent = 'Valider l\'étiquette';
-        done.onclick = () => onDone(input.value, label);
-        return;
-      }
-      done.append(h('span', '', `Débloquer « ${x.name} » · `));
-      done.classList.toggle('gems-price', !!x.gems);
-      if (x.gems) {
-        done.append(iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(x.gems)));
-        done.classList.toggle('short', g.gems < x.gems);
-      } else {
-        done.append(h('span', '', moneyShort(x.cost)));
-        this.costGate(done, x.cost);
-      }
-      done.onclick = () => {
-        if (x.gems && g.gems < x.gems) return this.toast(`Il te manque ${gemsText(x.gems - g.gems)}`, 'bad');
-        const r = g.buyUnlock(x.id);
-        if (!r.ok) return this.toast(r.reason!, 'bad');
-        this.toast(`${x.name} : débloqué !`, 'good');
-        this.onSent?.();
-        this.shopKey = '';
-        refresh();
-      };
-    };
-    card.append(tryNote, done);
-    refresh();
+    card.append(this.btn('btn primary big', 'Valider l\'étiquette', () => onDone(input.value, label)));
     redraw();
     void document.fonts?.ready.then(redraw);
   }
@@ -2802,12 +2761,32 @@ export class App {
       });
       tabs.append(c);
     }
-    const list = h('div', 'unlock-list');
+    const beer = g.beers[0];
+    const sample = beer?.label ?? DEFAULT_LABEL;
+    const name = beer?.name ?? 'Ma bière';
+    const grid = h('div', `unlock-grid${kind === 'bottle' ? ' bottles' : ''}`);
     for (const x of LABEL_UNLOCKS.filter((y) => y.kind === kind)) {
       const owned = g.unlocked.includes(x.id);
-      const row = h('div', `unlock-row${owned ? ' owned' : ''}${x.id === target ? ' advised' : ''}${x.gems ? ' premium' : ''}`);
-      const text = h('div', 'unlock-text');
-      text.append(h('span', 'unlock-name', x.name), h('span', 'unlock-kind', x.gems ? 'Pièce rare' : UNLOCK_KINDS.find((k) => k.id === x.kind)!.name));
+      const cell = h('div', `unlock${owned ? ' owned' : ''}${x.id === target ? ' advised' : ''}${x.gems ? ' premium' : ''}`);
+      // l'objet, montré avec l'étiquette de ta première bière
+      const preview = h('div', 'unlock-preview');
+      const l = { ...sample, [x.kind]: x.value } as Label;
+      if (x.kind === 'bottle') {
+        const bottle = h('div', 'shelf-bottle');
+        const c = h('canvas', 'shelf-glass');
+        drawShelfBottle(c, 'beer', l.bottle);
+        const lab = h('canvas', 'shelf-label');
+        drawLabel(lab, l, name);
+        const spot = labelSpot(l.bottle);
+        Object.assign(lab.style, { left: `${spot.x * BOTTLE_SCALE}px`, top: `${spot.y * BOTTLE_SCALE}px` });
+        bottle.append(c, lab);
+        preview.append(bottle);
+      } else {
+        const c = h('canvas', 'label-thumb big');
+        drawLabel(c, l, name);
+        preview.append(c);
+      }
+      cell.append(preview, h('span', 'unlock-name', x.name));
       let b: HTMLButtonElement;
       if (owned) b = this.btn('btn price own', '✓ Débloqué', () => this.toast(`${x.name} est dans l'éditeur d'étiquette (Ma gamme → Étiquette)`, 'info'));
       else {
@@ -2826,10 +2805,10 @@ export class App {
         }
         b.setAttribute('aria-label', `Débloquer ${x.name}`);
       }
-      row.append(text, b);
-      list.append(row);
+      cell.append(b);
+      grid.append(cell);
     }
-    this.shopBody.append(tabs, list, h('p', 'hint', 'Ce que tu débloques apparaît dans l\'éditeur d\'étiquette (Ma gamme → Étiquette). Là-bas, tu peux aussi essayer un objet avant de l\'acheter.'));
+    this.shopBody.append(tabs, grid, h('p', 'hint', 'Ce que tu débloques apparaît dans l\'éditeur d\'étiquette (Ma gamme → Étiquette).'));
   }
 
   // ------------------------------------------------------------------ Gaston
