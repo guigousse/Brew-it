@@ -235,11 +235,11 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     draw(g) { const px = P(g); px(0, 0, 1, 10, '#3a2c20'); px(1, 9, 1, 8, '#3a2c20'); },
   },
   {
-    id: 'posterBottle', name: 'Cadre : bouteille', room: 'bar', w: 12, h: 15, pad: 2, furniture: 'posters',
+    id: 'posterBottle', name: 'Cadre : bouteille', room: 'bar', w: 18, h: 24, pad: 2, furniture: 'posters',
     draw(g, c) { poster(g, c, 0); },
   },
   {
-    id: 'posterMug', name: 'Cadre : chope', room: 'bar', w: 12, h: 15, pad: 2, furniture: 'posters',
+    id: 'posterMug', name: 'Cadre : chope', room: 'bar', w: 18, h: 24, pad: 2, furniture: 'posters',
     draw(g, c) { poster(g, c, 1); },
   },
   {
@@ -707,10 +707,27 @@ function poster(g: CanvasRenderingContext2D, c: DecorCtx, i: number): void {
   const lv = c.lv;
   const frame = lv === 5 ? ['#dce6f0', '#ffffff'] : lv === 4 ? ['#2c283a', '#545068'] : ['#5a3a1c', '#8a5a2c'];
   const [bg, a, b] = [['#e8553a', '#f2c14e', '#7a4a24'], ['#2c6a3a', '#f6ecd6', '#f2c14e']][i]!;
-  wallShadow(g, 0, 0, 12, 15);
-  px(0, 0, 12, 15, frame[0]!); px(0, 0, 12, 1, frame[1]!);
-  px(2, 2, 8, 11, lv === 1 ? '#c8b894' : bg!);
-  if (i === 0) { px(5, 3, 2, 3, b!); px(4, 6, 4, 6, b!); px(4, 8, 4, 2, a!); }
-  else { px(3, 5, 5, 6, a!); px(3, 4, 5, 2, '#ffffff'); px(8, 6, 1, 3, a!); }
-  if (lv === 1) { g.fillStyle = 'rgba(90,80,70,0.35)'; g.fillRect(2, 2, 8, 11); }
+  // un grand cadre (18 × 24) : la moulure, une marie-louise claire, puis l'affiche
+  wallShadow(g, 0, 0, 18, 24);
+  px(0, 0, 18, 24, frame[0]!); px(0, 0, 18, 1, frame[1]!); px(0, 0, 1, 24, frame[1]!);
+  px(2, 2, 14, 20, '#e8dcc0');
+  px(3, 3, 12, 18, lv === 1 ? '#c8b894' : bg!);
+  if (i === 0) {
+    // une bouteille étiquetée
+    px(8, 4, 2, 1, '#c8c0b0');
+    px(8, 5, 2, 4, b!);
+    px(7, 9, 4, 2, b!);
+    px(6, 11, 6, 9, b!);
+    px(6, 13, 6, 4, a!);
+    px(7, 14, 4, 2, bg!);
+    px(7, 11, 1, 2, '#ffffff55');
+  } else {
+    // une chope qui mousse
+    px(5, 6, 2, 1, '#ffffff'); px(9, 5, 2, 1, '#ffffff');
+    px(4, 7, 8, 3, '#ffffff');
+    px(4, 10, 8, 9, a!);
+    px(5, 11, 1, 6, '#ffffffaa');
+    px(12, 11, 2, 1, a!); px(13, 11, 1, 5, a!); px(12, 15, 2, 1, a!);
+  }
+  if (lv === 1) { g.fillStyle = 'rgba(90,80,70,0.35)'; g.fillRect(3, 3, 12, 18); }
 }

@@ -988,10 +988,11 @@ export class BarRoom extends Room {
     this.decor(game, lv, t, false);
     this.drawEventItem(game, lv, t);
     const labels = game.taps.map((tp) => (tp.glasses > 0 ? game.beer(tp.beerId)?.label ?? null : null));
-    // le barman en renfort, derrière le comptoir, au bout gauche : les tireuses passent devant lui
-    if (game.barmanOn) this.drawHelper(game, lv === 1 ? 44 : CT().x0 + 8, t);
-    this.drawTaps(labels, this.preview ? BAR[lv - 1]!.taps : game.taps.length, lv);
+    // derrière le comptoir : le barman en renfort (entre les deux premières tireuses, bien visible) et Gaston ;
+    // les tireuses passent devant eux
+    if (game.barmanOn) this.drawHelper(game, lv === 1 ? 44 : CT().x0 + 19, t);
     this.drawBartender(game, lv, t);
+    this.drawTaps(labels, this.preview ? BAR[lv - 1]!.taps : game.taps.length, lv);
     this.drawGuests(game, lv, t);
     if (lv === 1) this.dust(t);
     if (lv === 5) {

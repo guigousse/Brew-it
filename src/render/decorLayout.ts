@@ -43,7 +43,7 @@ const list = (specs: Spec[]): DecorInst[] => {
  * un peu au-dessus du juke-box.
  */
 const BAR_FURNITURE: Spec[] = [
-  ['posterBottle', 8, 57], ['posterMug', 140, 57], ['smallPlant', 18, 89], ['smallPlant', 112, 89, { f: true }],
+  ['posterBottle', 6, 48], ['posterMug', 136, 48], ['smallPlant', 18, 89], ['smallPlant', 112, 89, { f: true }],
   ['jukebox', 140, 78],
 ];
 /** Étagères à bouteilles derrière le comptoir, de sa largeur. */
