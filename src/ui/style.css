@@ -481,7 +481,7 @@ button:disabled { cursor: default; opacity: .5; }
 .act.dim canvas { opacity: .55; }
 .fabs { gap: 8px; }
 /* nom de la pièce : clignote avec une flèche verte juste après le texte quand l'amélioration est payable */
-.room-title { position: absolute; z-index: 3; left: 8px; top: 8px; display: flex; align-items: stretch; gap: 3px; }
+.room-title { position: absolute; z-index: 3; left: 4px; top: 4px; display: flex; align-items: stretch; gap: 3px; }
 .room-title .map-btn { position: static; }
 .plaque { display: inline-flex; align-items: center; gap: 5px; }
 .plaque .plaque-up { display: none; image-rendering: pixelated; }
