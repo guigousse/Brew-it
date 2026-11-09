@@ -76,7 +76,11 @@ const SHOP_TABS: readonly { id: ShopTab; name: string; icon: IconId }[] = [
   { id: 'boosts', name: 'Boosts', icon: 'bolt' },
   { id: 'labels', name: 'Étiquettes', icon: 'labels' },
 ];
-/** Icône de chaque boost : dans le magasin, et en haut à droite de l'écran quand il est actif. */
+/** Icône de chaque effet (poste de boost), en haut à droite de l'écran quand il est actif : la marmite des machines… */
+const EFFECT_ICON: Record<BoostChannel, IconId> = { brew: 'brew', yeast: 'flask', bar: 'mug', wholesale: 'truck' };
+/** Le nom de chaque effet, pour la lecture d'écran. */
+const EFFECT_NAME: Record<BoostChannel, string> = { brew: 'Machines', yeast: 'Fermentation et garde', bar: 'Clients du bar', wholesale: 'Prix du grossiste' };
+/** Icône de chaque boost, dans le magasin. */
 const BOOST_ICON: Record<BoostId, IconId> = {
   rush: 'flame', cadence: 'fast2', nightShift: 'moon', fullSpeed: 'fast3', yeast: 'yeast', happyHour: 'mug', buzz: 'bubble', broker: 'truck', prospect: 'envelope',
 };
@@ -2679,20 +2683,23 @@ export class App {
   private renderBoostHud(g: Game): void {
     const live = BOOST_POSTS.flatMap((p) => {
       const b = p.id ? g.boostOf(p.id) : null;
-      return b ? [b] : [];
+      return b && p.id ? [{ ch: p.id, ...b }] : [];
     });
     const hide = !live.length || this.view === 'shop' || this.modalOpen;
     this.boostHud.classList.toggle('hidden', hide);
     this.boostHud.classList.toggle('below-harvest', !this.harvest.classList.contains('hidden'));
     if (hide) return;
-    const key = live.map((b) => b.id).join('|');
+    const mult = (id: string) => BOOSTS.find((x) => x.id === id)?.mult ?? 1;
+    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|');
     if (key !== this.boostHudKey) {
       this.boostHudKey = key;
       this.boostHud.replaceChildren();
       for (const b of live) {
-        const el = h('button', 'boost-chip');
-        el.dataset.until = String(b.until);
-        el.append(iconCanvas(BOOST_ICON[b.id], 1, 'boost-chip-icon'), h('span', 'boost-chip-time'));
+        // l'effet : l'icône du poste, le multiplicateur posé dessus, puis le temps qui reste
+        const el = h('button', `boost-chip effect-${b.ch}`);
+        const icon = h('span', 'boost-chip-icon');
+        icon.append(iconCanvas(EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-mult', `×${String(mult(b.id)).replace('.', ',')}`));
+        el.append(icon, h('span', 'boost-chip-time'));
         el.onclick = () => this.openShop('boosts');
         this.boostHud.append(el);
       }
@@ -2703,7 +2710,7 @@ export class App {
       const t = left >= 3600 ? `${Math.floor(left / 3600)} h ${String(Math.floor((left % 3600) / 60)).padStart(2, '0')}` : clock(left);
       const span = el.lastElementChild!;
       if (span.textContent !== t) span.textContent = t;
-      el.setAttribute('aria-label', `${BOOSTS.find((x) => x.id === b.id)?.name} : encore ${duration(left)}`);
+      el.setAttribute('aria-label', `${EFFECT_NAME[b.ch]} ×${String(mult(b.id)).replace('.', ',')} : encore ${duration(left)}`);
     });
   }
 
