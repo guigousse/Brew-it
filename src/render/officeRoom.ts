@@ -524,15 +524,21 @@ function paintFloor(g: CanvasRenderingContext2D, b: Bounds, lv: number): void {
     const navy2 = rgb('#2c3a6a');
     const gold = rgb('#c8963c');
     const red = rgb('#8a2a32');
+    // le tapis est centré sur le bureau : son axe passe par le milieu du bureau à hauteur de ses pieds,
+    // et il le déborde d'autant de chaque côté (en carreaux de 20 px au bas de la scène)
+    const sc = (300 - EYE) / 20;
+    const uc = ((DESK.x + DESK.w / 2 - VX) * sc) / (DESK_FEET - EYE);
+    const half = ((DESK.w / 2 + 10) * sc) / (DESK_FEET - EYE);
+    const [u0, u1] = [uc - half, uc + half];
     floor(g, b, FLOOR, VX, EYE, 20, (u, v) => {
       const n = hash(Math.floor(u * 10), Math.floor(v * 10));
-      const inRug = u > -4.2 && u < 2.4 && v > 5.8 && v < 9.4;
+      const inRug = u > u0 && u < u1 && v > 5.8 && v < 9.4;
       if (!inRug) return carpet[n < 0.25 ? 1 : n > 0.8 ? 2 : 0]!;
-      const e = Math.min(u + 4.2, 2.4 - u, v - 5.8, 9.4 - v);
+      const e = Math.min(u - u0, u1 - u, v - 5.8, 9.4 - v);
       if (e < 0.12) return rgb('#e8d8a8'); // frange
       if (e < 0.45) return (Math.floor((u + v) * 6) & 1) ? gold : dim(gold, 0.8);
       if (e < 0.55) return red;
-      const m = ((u + 0.9) / 2.2) ** 2 + ((v - 7.6) / 1.1) ** 2; // médaillon
+      const m = ((u - uc) / 2.2) ** 2 + ((v - 7.6) / 1.1) ** 2; // médaillon
       if (m < 0.5) return n < 0.5 ? red : dim(red, 0.85);
       if (m < 0.62) return gold;
       return n < 0.5 ? navy : navy2;
