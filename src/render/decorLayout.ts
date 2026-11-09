@@ -38,15 +38,16 @@ const list = (specs: Spec[]): DecorInst[] => {
 };
 
 /**
- * Mobilier du bar (affiché quand il est acheté), le même à tous les niveaux : le comptoir au centre, un peu raccourci
- * pour que le juke-box tienne à sa droite contre le mur ; les tableaux de part et d'autre de l'objet d'événement.
+ * Mobilier du bar (affiché quand il est acheté), le même à tous les niveaux : le comptoir au centre, avec la même
+ * marge de chaque côté ; le juke-box contre le mur à sa droite ; les deux tableaux symétriques, un dans chaque marge,
+ * un peu au-dessus du juke-box.
  */
 const BAR_FURNITURE: Spec[] = [
-  ['posterBottle', 22, 34], ['posterMug', 126, 34], ['smallPlant', -4, 89], ['smallPlant', 112, 89, { f: true }],
-  ['neonSign', 45, 118], ['jukebox', 140, 78],
+  ['posterBottle', 9, 57], ['posterMug', 141, 57], ['smallPlant', 18, 89], ['smallPlant', 112, 89, { f: true }],
+  ['neonSign', 56, 118], ['jukebox', 140, 78],
 ];
-/** Étagères à bouteilles derrière le comptoir, sur toute sa largeur (deux étagères côte à côte par rangée). */
-const shelves = (...ys: number[]): Spec[] => ys.flatMap((y): Spec[] => [['bottleShelf', 8, y - 14], ['bottleShelf', 60, y - 14]]);
+/** Étagères à bouteilles derrière le comptoir, de sa largeur. */
+const shelves = (...ys: number[]): Spec[] => ys.map((y): Spec => ['barShelf', 30, y - 14]);
 /** Le bureau : ce qui est commun à tous les niveaux, puis les objets posés sur le plateau, qui changent avec l'ordinateur. */
 const OFFICE: Spec[] = [['clock', 72, 126], ['deskLamp', 0, 207], ['wasteBin', 98, 280], ['chair', 28, 245], ['bigPlant', 118, 240]];
 const OFFICE_DESK: Spec[][] = [
@@ -60,7 +61,7 @@ const OFFICE_DESK: Spec[][] = [
 export const DECOR_DEFAULT: DecorLayout = {
   bar: {
     1: list([
-      ['cobweb', 0, 0], ['cobweb', 141, 0, { f: true }], ['crack', 104, 26], ['bulb', 78, 14], ['lightRayWide', 44, 18], ['openSign', 112, 46],
+      ['cobweb', 0, 0], ['cobweb', 141, 0, { f: true }], ['crack', 104, 26], ['bulb', 78, 14], ['lightRayWide', 44, 18], ['openSign', 36, 40],
       ...shelves(70), ['barrel', 115, 164], ['emptyCrate', 10, 170], ['cellarVent', 66, 210], ...BAR_FURNITURE,
     ]),
     2: list([

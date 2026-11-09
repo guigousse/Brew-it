@@ -314,6 +314,23 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
+    id: 'barShelf', name: 'Étagère à bouteilles du comptoir', room: 'bar', w: 100, h: 16,
+    draw(g, c) {
+      const px = P(g);
+      const lv = c.lv;
+      px(0, 14, 100, 2, lv === 5 ? '#dce6f0' : '#5a3a1c'); px(0, 14, 100, 1, lv === 5 ? '#ffffff' : '#8a5a2c');
+      const n = lv === 1 ? 4 : 9;
+      for (let i = 0; i < n; i++) {
+        if (lv === 1 && i === 1) continue;
+        const bx = 4 + Math.floor((88 * i) / (n - 1)) + (lv === 1 ? Math.floor(hash(i, 5) * 10) : 0);
+        const hgt = 8 + Math.floor(hash(i, 6) * 4);
+        const col = lv === 1 ? '#6a6458' : ['#2c5a3a', '#6e3a08', '#a85c26', '#245c56', '#842416'][Math.floor(hash(i, 7) * 5)]!;
+        px(bx, 14 - hgt, 5, hgt, col); px(bx + 1, 11 - hgt, 3, 3, col); px(bx + 1, 16 - hgt, 1, hgt - 4, '#ffffff40');
+        if (lv === 1) px(bx, 11 - hgt, 5, 1, '#a89e8e');
+      }
+    },
+  },
+  {
     id: 'clock', name: 'Horloge', room: 'office', w: 21, h: 21, pad: 4, anim: true,
     draw(g, c) {
       const r = 9;
