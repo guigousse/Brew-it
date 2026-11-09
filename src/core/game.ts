@@ -3,7 +3,7 @@ import { EventBus } from './events';
 import type { Label } from './label';
 import { PARTY } from './market';
 import { AD, AD_COST, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type BarEventId, type ShopItemId } from './market';
-import { CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, wholesalePrice, type Order } from './orders';
+import { orderGems, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
@@ -1228,7 +1228,7 @@ export class Game {
     this.ordersDone++;
     this.orders = this.orders.filter((x) => x !== o);
     this.events.emit({ type: 'sale', amount: o.reward });
-    this.earnGems(GEMS.order, 'order');
+    this.earnGems(orderGems(o), 'order');
     return { ok: true, amount: o.reward };
   }
 

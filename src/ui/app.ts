@@ -2,7 +2,7 @@ import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type BarEventId, type ShopItemId } from '../core/market';
-import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, wholesalePrice } from '../core/orders';
+import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
@@ -652,7 +652,7 @@ export class App {
     setPlaque(this.barPlaque, `★ ${g.barLevel} · ${g.bar.name}`, !!nextBar && g.money >= nextBar.cost, 'agrandissement');
     // pastilles des onglets de pièces
     const badges: Record<RoomId, string> = {
-      office: g.orders.length ? String(g.orders.length) : unread ? '✉' : '',
+      office: this.unreadLetters ? '✉' : g.orders.length ? String(g.orders.length) : '',
       workshop: trial ? '🍺' : '',
       storage: g.storageFull ? '!' : '',
       bar: g.partying ? '🎉' : emptyTap && kegsReady ? '!' : '', // un fût à changer, et de quoi le remplacer
@@ -663,7 +663,7 @@ export class App {
       tab.btn.classList.toggle('active', id === this.view);
       tab.badge.textContent = badge;
       tab.badge.classList.toggle('hidden', !badge);
-      tab.badge.classList.toggle('hot', id === 'office' ? ready > 0 : !!badge);
+      tab.badge.classList.toggle('hot', id === 'office' ? ready > 0 || this.unreadLetters > 0 : !!badge);
     }
     this.renderShop();
     this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen || this.view !== 'workshop');
@@ -1564,6 +1564,11 @@ export class App {
     return this.messages.filter((m) => !m.read).length;
   }
 
+  /** Lettres reçues et pas encore lues : les nouvelles commandes (les autres nouvelles ne mettent pas d'enveloppe). */
+  private get unreadLetters(): number {
+    return this.messages.filter((m) => !m.read && m.icon === 'envelope').length;
+  }
+
   /** Une nouvelle dans la boîte de réception du bureau. */
   log(text: string, kind: Message['kind'] = 'info', icon: IconId = 'bubble'): void {
     this.messages.unshift({ at: this.game().time, text, kind, icon, read: false });
@@ -1799,6 +1804,11 @@ export class App {
     const ask = h('div', 'order-ask');
     if (o.kind !== 'classic') ask.append(h('span', `kind-tag kind-${o.kind}`, KIND_LABEL[o.kind]));
     ask.append(h('span', '', orderAsk(o)));
+    const gems = orderGems(o);
+    const gemTag = h('span', 'order-gems');
+    gemTag.append(iconCanvas('gem', 1, 'gems-icon'), `+${gems}`);
+    gemTag.setAttribute('aria-label', `Rapporte ${gemsText(gems)}`);
+    ask.append(gemTag);
     card.append(ask);
     const ok = g.suitable(o);
     const avail = (b: Beer) => (o.kind === 'keg' ? b.kegs.length : b.stock);
@@ -2647,7 +2657,7 @@ export class App {
     b.classList.toggle('short', short);
     b.onclick = () => {
       const missing = gems - this.game().gems;
-      if (missing > 0) return this.toast(`Il te manque ${gemsText(missing)} : chaque commande livrée en rapporte ${GEMS.order}`, 'bad');
+      if (missing > 0) return this.toast(`Il te manque ${gemsText(missing)} : les commandes livrées en rapportent`, 'bad');
       run();
     };
     return b;
@@ -2774,7 +2784,7 @@ export class App {
       this.shopBody.append(box);
     }
     if (!g.batches.length && !g.planned) this.shopBody.append(h('p', 'note bad', 'Rien ne brasse en ce moment : un boost des machines n\'aurait aucun effet.'));
-    this.shopBody.append(h('p', 'hint gems-note', `Tu as ${gemsText(g.gems)}. Chaque commande livrée en rapporte ${GEMS.order}, chaque niveau de la brasserie bien plus.`));
+    this.shopBody.append(h('p', 'hint gems-note', `Tu as ${gemsText(g.gems)}. Chaque commande livrée en rapporte, d'autant plus qu'elle est difficile ; chaque niveau de la brasserie aussi.`));
   }
 
   /** Rayon Étiquettes : bouteilles, formes, logos et motifs ; toucher un objet l'essaie sur ta bière. */
@@ -2792,57 +2802,34 @@ export class App {
       });
       tabs.append(c);
     }
-    const beer = g.beers[0];
-    const sample = beer?.label ?? DEFAULT_LABEL;
-    const name = beer?.name ?? 'Ma bière';
-    const grid = h('div', `unlock-grid${kind === 'bottle' ? ' bottles' : ''}`);
+    const list = h('div', 'unlock-list');
     for (const x of LABEL_UNLOCKS.filter((y) => y.kind === kind)) {
       const owned = g.unlocked.includes(x.id);
-      const cell = h('button', `unlock${owned ? ' owned' : ''}${x.id === target ? ' advised' : ''}${x.gems ? ' premium' : ''}`);
-      cell.setAttribute('aria-label', `${x.name} : ${owned ? 'débloqué' : x.gems ? gemsText(x.gems) : moneyShort(x.cost)}, essayer`);
-      const preview = h('div', 'unlock-preview');
-      const l = { ...sample, [x.kind]: x.value } as Label;
-      if (x.kind === 'bottle') {
-        const bottle = h('div', 'shelf-bottle');
-        const c = h('canvas', 'shelf-glass');
-        drawShelfBottle(c, 'beer', l.bottle);
-        const lab = h('canvas', 'shelf-label');
-        drawLabel(lab, l, name);
-        const spot = labelSpot(l.bottle);
-        Object.assign(lab.style, { left: `${spot.x * BOTTLE_SCALE}px`, top: `${spot.y * BOTTLE_SCALE}px` });
-        bottle.append(c, lab);
-        preview.append(bottle);
-      } else {
-        const c = h('canvas', 'label-thumb big');
-        drawLabel(c, l, name);
-        preview.append(c);
+      const row = h('div', `unlock-row${owned ? ' owned' : ''}${x.id === target ? ' advised' : ''}${x.gems ? ' premium' : ''}`);
+      const text = h('div', 'unlock-text');
+      text.append(h('span', 'unlock-name', x.name), h('span', 'unlock-kind', x.gems ? 'Pièce rare' : UNLOCK_KINDS.find((k) => k.id === x.kind)!.name));
+      let b: HTMLButtonElement;
+      if (owned) b = this.btn('btn price own', '✓ Débloqué', () => this.toast(`${x.name} est dans l'éditeur d'étiquette (Ma gamme → Étiquette)`, 'info'));
+      else {
+        const buy = () => {
+          const r = g.buyUnlock(x.id);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          this.toast(`${x.name} : dans l'éditeur d'étiquette !`, 'good');
+          this.onSent?.();
+          this.shopKey = '';
+          this.renderShop();
+        };
+        if (x.gems) b = this.gemsBtn('', x.gems, buy);
+        else {
+          b = this.btn('btn primary price', moneyShort(x.cost), buy);
+          this.costGate(b, x.cost);
+        }
+        b.setAttribute('aria-label', `Débloquer ${x.name}`);
       }
-      const price = h('span', `unlock-price${owned ? ' own' : ''}`);
-      if (owned) price.textContent = '✓ débloqué';
-      else if (x.gems) price.append(iconCanvas('gem', 1, 'gems-icon'), String(x.gems));
-      else price.textContent = moneyShort(x.cost);
-      if (!owned) price.classList.toggle('ok', x.gems ? g.gems >= x.gems : g.money >= x.cost);
-      cell.append(preview, h('span', 'unlock-name', x.name), price);
-      cell.onclick = () => this.tryUnlock(x);
-      grid.append(cell);
+      row.append(text, b);
+      list.append(row);
     }
-    this.shopBody.append(tabs, grid, h('p', 'hint', beer
-      ? `Toucher un objet l'essaie sur « ${beer.name} », dans l'éditeur d'étiquette. On l'achète depuis l'éditeur.`
-      : 'Crée ta première bière pour essayer ces objets sur son étiquette.'));
-  }
-
-  /** Essayer un déblocage : l'éditeur d'étiquette s'ouvre sur la première bière, l'objet déjà appliqué. */
-  private tryUnlock(x: LabelUnlock): void {
-    const g = this.game();
-    const b = g.beers[0];
-    if (!b) return this.toast('Crée d\'abord une bière : tu pourras essayer ses étiquettes ici.', 'info');
-    this.openLabelEditor(b.name, { ...b.label, [x.kind]: x.value } as Label, (name, label) => {
-      b.name = name.trim() || b.name;
-      g.setLabel(b.id, label);
-      this.sheetKey = '';
-      this.shopKey = '';
-      this.closeModal();
-    }, b.label);
+    this.shopBody.append(tabs, list, h('p', 'hint', 'Ce que tu débloques apparaît dans l\'éditeur d\'étiquette (Ma gamme → Étiquette). Là-bas, tu peux aussi essayer un objet avant de l\'acheter.'));
   }
 
   // ------------------------------------------------------------------ Gaston

@@ -126,6 +126,19 @@ export const ORDER_LIFE_MAX_S = 12 * 3600;
 export const URGENT_LIFE_S = 2 * 3600;
 /** Multiplicateur de paiement par type de commande. */
 export const KIND_PAY: Record<OrderKind, number> = { classic: 1, style: 1.3, keg: 1.15, mix: 1.25, urgent: 1.5, prestige: 2.5 };
+/** Diamants d'une commande livrée, selon son type : plus elle est difficile, plus elle rapporte. */
+export const KIND_GEMS: Record<OrderKind, number> = { classic: 1, keg: 1, style: 2, mix: 2, urgent: 3, prestige: 5 };
+/** Qualité exigée à partir de laquelle une commande rapporte un diamant de plus. */
+export const DEMANDING_QUALITY = 0.65;
+
+/**
+ * Diamants que rapporte une commande : selon son type, +1 si le client est exigeant sur la qualité,
+ * +1 pour une commande urgente qui impose aussi un style. Calculé, pas tiré au sort : il s'affiche sur la commande.
+ */
+export function orderGems(o: Pick<Order, 'kind' | 'minQuality' | 'want'>): number {
+  return KIND_GEMS[o.kind] + (o.kind !== 'prestige' && o.minQuality >= DEMANDING_QUALITY ? 1 : 0) + (o.kind === 'urgent' && o.want ? 1 : 0);
+}
+
 /** Libellés des types de commandes. */
 export const KIND_LABEL: Record<OrderKind, string> = {
   classic: 'Commande', style: 'Style recherché', keg: 'Fûts', mix: 'Assortiment', urgent: 'Urgent', prestige: 'Prestige',

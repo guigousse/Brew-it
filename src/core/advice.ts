@@ -38,13 +38,13 @@ export function shopAdvice(g: Game, tab: ShopTab): Advice {
     if (!g.batches.length && !g.planned) return { text: 'Rien ne brasse : programme des brassins avant d\'accélérer les machines.' };
     if (g.planned >= PLAN_BUSY && !g.boostOf('brew') && can('cadence')) return { text: `${g.planned} brassins en file : une Cadence ×2 les sortirait deux fois plus vite.`, target: 'cadence' };
     if (g.orders.length < g.boardSlots && g.orders.length === 0 && can('prospect')) return { text: 'Ton tableau de commandes est vide. Une Prospection fait venir un client tout de suite.', target: 'prospect' };
-    if (g.gems < (boostById('rush')?.gems ?? 0)) return { text: 'Plus assez de diamants : chaque commande livrée t\'en rapporte un.' };
-    return { text: `Tu as ${g.gems} diamant${g.gems > 1 ? 's' : ''}. Chaque commande livrée t'en rapporte un de plus.` };
+    if (g.gems < (boostById('rush')?.gems ?? 0)) return { text: 'Plus assez de diamants : livre des commandes, les plus difficiles en rapportent le plus.' };
+    return { text: `Tu as ${g.gems} diamant${g.gems > 1 ? 's' : ''}. Les commandes difficiles en rapportent le plus.` };
   }
 
   const beer = g.beers[0]?.name;
   const cheap = LABEL_UNLOCKS.filter((x) => !g.unlocked.includes(x.id) && !x.gems && g.money >= x.cost).sort((a, b) => a.cost - b.cost)[0];
-  if (cheap) return { text: `${cheap.name} irait bien à ${beer ? `ta ${beer}` : 'ta prochaine bière'}. Touche son aperçu pour l'essayer !`, target: cheap.id };
+  if (cheap) return { text: `${cheap.name} irait bien à ${beer ? `ta ${beer}` : 'ta prochaine bière'}. Tu peux l'essayer dans l'éditeur d'étiquette.`, target: cheap.id };
   const premium = LABEL_UNLOCKS.find((x) => !g.unlocked.includes(x.id) && x.gems && g.gems >= x.gems);
   if (premium) return { text: `${premium.name}, c'est une pièce rare : elle se paie en diamants.`, target: premium.id };
   return { text: 'Touche un objet pour l\'essayer sur ta bière avant de l\'acheter.' };

@@ -599,6 +599,18 @@ button:disabled { cursor: default; opacity: .5; }
 .unlock-price.ok { color: var(--accent); }
 .unlock-price.own { color: var(--good); background: none; }
 .try-note:empty { display: none; }
+.unlock-list { display: grid; gap: 6px; }
+.unlock-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panel); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 var(--border-hi); }
+.unlock-row.owned { background: #24402a55; }
+.unlock-row.advised { border-color: var(--accent); }
+.unlock-row.premium:not(.owned) { background: #232c48; }
+.unlock-text { display: grid; min-width: 0; line-height: 1.05; }
+.unlock-text .unlock-name { font-size: 19px; text-align: left; }
+.unlock-kind { font-size: 15px; color: var(--dim); }
+.unlock-row.premium .unlock-kind { color: #8cd0ff; }
+.unlock-row .btn.price { width: auto; min-width: 92px; min-height: 36px; padding: 3px 8px; font-size: 17px; }
+/* diamants que rapporte une commande */
+.order-gems { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; padding: 0 6px; font-size: 16px; color: #8cd0ff; background: var(--ink); border: 1px solid #3f88d4; }
 
 /* diamants dans le header */
 .gems { display: flex; align-items: center; gap: 4px; background: var(--ink); border: 2px solid #5c4a6e; padding: 3px 8px; font-family: var(--font-title); font-size: 16px; color: #8cd0ff; white-space: nowrap; min-height: 32px; }

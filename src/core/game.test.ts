@@ -2,7 +2,7 @@ import { GASTON_RECIPE } from './brewing/model';
 import { BAR_MESSAGE, BAR_MESSAGE_MAX, Game, simulateOffline } from './game';
 import { DEFAULT_LABEL } from './label';
 import { BAR, kegSpace, PARTY } from './market';
-import { COMPUTERS, WHOLESALE_PRICE, drawOrder, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, type Order } from './orders';
+import { COMPUTERS, WHOLESALE_PRICE, drawOrder, orderGems, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, type Order } from './orders';
 import { Rng } from './rng';
 import { popTarget, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
@@ -690,10 +690,10 @@ describe('boosts', () => {
     expect(g.buyBoost('rush').ok).toBe(true);
     const until = g.boostOf('brew')!.until;
     expect(g.buyBoost('rush').ok).toBe(true);
-    expect(g.boostOf('brew')!.until).toBe(until + 15 * 60);
+    expect(g.boostOf('brew')!.until).toBe(until + 30 * 60);
     // même effet (×2) : la cadence prolonge le coup de feu
     expect(g.buyBoost('cadence').ok).toBe(true);
-    expect(g.boostOf('brew')!.until).toBe(until + 75 * 60);
+    expect(g.boostOf('brew')!.until).toBe(until + 150 * 60);
     // effet différent (×3) : il attend
     expect(g.buyBoost('fullSpeed').ok).toBe(false);
     expect(g.boostBlocked('fullSpeed')).toContain('Coup de feu');
@@ -706,7 +706,7 @@ describe('boosts', () => {
   it('se paie en diamants, à prix fixe et dégressif avec la durée', () => {
     const g = withBeer(1e6);
     const money = g.money;
-    g.gems = 3;
+    g.gems = 2;
     expect(g.buyBoost('rush').ok).toBe(false);
     g.gems = 100;
     expect(g.buyBoost('rush').ok).toBe(true);
@@ -750,10 +750,19 @@ describe('diamants', () => {
     g.beers[0]!.stock = 500;
     g.orders = [{ ...drawOrder(998, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'classic', qty: 12, minQuality: 0 } as Order];
     expect(g.fulfill(998, [g.beers[0]!.id]).ok).toBe(true);
-    expect(g.gems).toBe(GEMS.start + GEMS.order);
+    expect(g.gems).toBe(GEMS.start + 1); // commande classique, client peu exigeant
     for (const id of STATION_ORDER) g.upgrade(id);
     expect(g.breweryLevel).toBe(2);
-    expect(g.gems).toBe(GEMS.start + GEMS.order + GEMS.breweryLevel[2]!);
+    expect(g.gems).toBe(GEMS.start + 1 + GEMS.breweryLevel[2]!);
+  });
+
+  it('les commandes difficiles rapportent plus de diamants', () => {
+    expect(orderGems({ kind: 'classic', minQuality: 0.3 })).toBe(1);
+    expect(orderGems({ kind: 'classic', minQuality: 0.7 })).toBe(2); // client exigeant
+    expect(orderGems({ kind: 'style', minQuality: 0.3, want: 'x' })).toBe(2);
+    expect(orderGems({ kind: 'urgent', minQuality: 0.3 })).toBe(3);
+    expect(orderGems({ kind: 'urgent', minQuality: 0.3, want: 'x' })).toBe(4);
+    expect(orderGems({ kind: 'prestige', minQuality: 0.85 })).toBe(5);
   });
 
   it('une ancienne sauvegarde reçoit les diamants du départ', () => {
@@ -849,7 +858,7 @@ describe('mobilier et étiquettes', () => {
     g.hire('courier');
     const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
     expect(back.isUnlocked('emblem', 'bee')).toBe(true);
-    expect(back.gems).toBe(38);
+    expect(back.gems).toBe(40);
     expect(back.boostMult('brew')).toBe(2);
     expect(back.staffOn('courier')).toBe(true);
   });
