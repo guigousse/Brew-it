@@ -11,7 +11,7 @@ src/
 │   ├── market.ts         niveaux du bar, fûts, prix
 │   ├── orders.ts         tableau de commandes : profils de clients, types de commandes, grossiste
 │   ├── trends.ts         tendances du moment et popularité (bières, marque)
-│   ├── shop.ts           catalogues : capsules (monnaie premium), boosts par poste, personnel, mobilier du bar, déblocages d'étiquettes
+│   ├── shop.ts           catalogues : diamants (monnaie premium), boosts par poste, personnel, mobilier du bar, déblocages d'étiquettes
 │   ├── advice.ts         le conseil de Gaston au comptoir du magasin, selon l'onglet
 │   ├── warehouse.ts      niveaux du stockage, places de la gamme
 │   ├── game.ts           état de la partie : lots dans la chaîne, gamme, bar, commandes, améliorations, hors-ligne
@@ -23,10 +23,10 @@ src/
 │   ├── rooms.ts          le stockage et le bar (salle en haut, cave à fûts en bas), 5 décors chacun
 │   ├── bottleArt.ts      bouteilles de l'étagère, caisses
 │   ├── officeRoom.ts     le bureau : fenêtre sur l'atelier (en direct), panneau des commandes, présentoir de la gamme, ordinateur ; 5 décors
-│   ├── icons.ts          icônes en pixel art (actions, enveloppe, objets du magasin, capsule)
+│   ├── icons.ts          icônes en pixel art (actions, enveloppe, objets du magasin, diamant)
 │   └── space.ts          profondeur : sols en perspective (point de fuite), ombrage tramé, ombres portées
 ├── ui/                   interface DOM : header, barre de navigation en bas (pièces, magasin), boutons d'action carrés et objets du décor à toucher, glissement, panneaux,
-│                         ordinateur du bureau (menu d'applications, tableau de bord, messages…), dégustation, Gaston
+│                         ordinateur du bureau (menu d'applications, tableau de bord, messages…), dégustation, Gaston ; format.ts : montants courts du header (2,5k)
 ├── platform/             Capacitor : stockage fichier, cycle de vie, haptique
 └── main.ts               boucle à pas fixe (20 ticks/s), sauvegarde auto, production hors-ligne
 ```

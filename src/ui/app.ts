@@ -15,11 +15,12 @@ import { BarRoom, boundsFor, drawKeg, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
-import { BOOST_POSTS, BOOSTS, CAPS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type LabelUnlock, type UnlockKind } from '../core/shop';
+import { BOOST_POSTS, BOOSTS, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { shopAdvice, type ShopTab } from '../core/advice';
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
+import { compact } from './format';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const el = document.createElement(tag);
@@ -104,8 +105,8 @@ function boostShort(b: BoostDef): string {
   return `×${n(b.mult)} · ${dur}`;
 }
 
-/** Un nombre de capsules, en toutes lettres. */
-const capsText = (n: number) => `${n} capsule${n > 1 ? 's' : ''}`;
+/** Un nombre de diamants, en toutes lettres. */
+const gemsText = (n: number) => `${n} diamant${n > 1 ? 's' : ''}`;
 
 /** Nom de la pièce en haut à gauche. */
 function roomTitle(plaque: HTMLElement): HTMLElement {
@@ -270,9 +271,9 @@ export class App {
   /** Le bar, redessiné dans la vitrine avec l'objet en vente déjà installé. */
   readonly showcase = new BarRoom();
   private showcaseScene: HTMLElement | null = null;
-  /** Capsules dorées, à côté de l'argent. */
-  private capsEl = h('span', 'caps-value');
-  private capsPill = h('button', 'caps');
+  /** Diamants, à côté de l'argent. */
+  private gemsEl = h('span', 'gems-value');
+  private gemsPill = h('button', 'gems');
   private computerHit?: HTMLButtonElement;
   // --- les pièces
   readonly officeRoom = new OfficeRoom();
@@ -338,10 +339,10 @@ export class App {
     const opts = h('button', 'icon-btn', '⚙');
     opts.setAttribute('aria-label', 'Options');
     opts.onclick = () => this.openOptions();
-    this.capsPill.append(iconCanvas('cap', 1, 'caps-icon'), this.capsEl);
-    this.capsPill.setAttribute('aria-label', 'Capsules dorées : voir les boosts');
-    this.capsPill.onclick = () => this.openShop('boosts');
-    this.header.append(logo, this.capsPill, pill, opts);
+    this.gemsPill.append(iconCanvas('gem', 1, 'gems-icon'), this.gemsEl);
+    this.gemsPill.setAttribute('aria-label', 'Diamants : voir les boosts');
+    this.gemsPill.onclick = () => this.openShop('boosts');
+    this.header.append(logo, this.gemsPill, pill, opts);
     for (const t of TABS) {
       const btn = h('button', 'nav-tab');
       btn.setAttribute('aria-label', t.name);
@@ -515,7 +516,7 @@ export class App {
       const a = this.moneyAnim;
       const k = Math.min(1, (performance.now() - a.start) / 900);
       const v = a.from + (a.to - a.from) * (1 - (1 - k) ** 3);
-      this.moneyEl.textContent = moneyInt(k >= 1 ? g.money : v);
+      this.moneyEl.textContent = compact(k >= 1 ? g.money : v);
       if (k >= 1) {
         this.moneyAnim = null;
         this.moneyPill.classList.remove('gain');
@@ -597,9 +598,11 @@ export class App {
   /** Rafraîchissement de l'interface DOM (≈ 4 Hz). */
   update(): void {
     const g = this.game();
-    if (!this.moneyAnim) this.moneyEl.textContent = moneyInt(g.money);
-    const caps = String(g.caps);
-    if (this.capsEl.textContent !== caps) this.capsEl.textContent = caps;
+    if (!this.moneyAnim) this.moneyEl.textContent = compact(g.money);
+    const moneyAria = `Argent : ${moneyInt(g.money)}`;
+    if (this.moneyPill.getAttribute('aria-label') !== moneyAria) this.moneyPill.setAttribute('aria-label', moneyAria);
+    const gems = compact(g.gems);
+    if (this.gemsEl.textContent !== gems) this.gemsEl.textContent = gems;
     const off = g.offline;
     if (off && off.earned <= 0) g.collectOffline(); // rien à récolter : on n'en parle pas
     const earned = g.offline?.earned ?? 0;
@@ -2191,15 +2194,16 @@ export class App {
         return;
       }
       done.append(h('span', '', `Débloquer « ${x.name} » · `));
-      if (x.caps) {
-        done.append(iconCanvas('cap', 1, 'caps-icon'), h('span', '', String(x.caps)));
-        done.classList.toggle('short', g.caps < x.caps);
+      done.classList.toggle('gems-price', !!x.gems);
+      if (x.gems) {
+        done.append(iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(x.gems)));
+        done.classList.toggle('short', g.gems < x.gems);
       } else {
         done.append(h('span', '', moneyShort(x.cost)));
         this.costGate(done, x.cost);
       }
       done.onclick = () => {
-        if (x.caps && g.caps < x.caps) return this.toast(`Il te manque ${capsText(x.caps - g.caps)}`, 'bad');
+        if (x.gems && g.gems < x.gems) return this.toast(`Il te manque ${gemsText(x.gems - g.gems)}`, 'bad');
         const r = g.buyUnlock(x.id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         this.toast(`${x.name} : débloqué !`, 'good');
@@ -2586,7 +2590,7 @@ export class App {
     const next = g.nextDecor;
     if (next && g.money >= next.cost) out.push(`decor:${next.id}`);
     for (const x of LABEL_UNLOCKS) {
-      if (!g.unlocked.includes(x.id) && (x.caps ? g.caps >= x.caps : g.money >= x.cost)) out.push(`label:${x.id}`);
+      if (!g.unlocked.includes(x.id) && (x.gems ? g.gems >= x.gems : g.money >= x.cost)) out.push(`label:${x.id}`);
     }
     return out.filter((k) => !this.shopSeen.has(k));
   }
@@ -2608,7 +2612,7 @@ export class App {
     const marks: Record<ShopTab, { text: string; cls: string }> = {
       bar: next && g.money >= next.cost ? { text: '', cls: 'dot' } : { text: '', cls: '' },
       boosts: soonest > 0 ? { text: clock(soonest), cls: 'timer' } : { text: '', cls: '' },
-      labels: LABEL_UNLOCKS.some((x) => !g.unlocked.includes(x.id) && !x.caps && g.money >= x.cost) ? { text: '', cls: 'dot' } : { text: '', cls: '' },
+      labels: LABEL_UNLOCKS.some((x) => !g.unlocked.includes(x.id) && !x.gems && g.money >= x.cost) ? { text: '', cls: 'dot' } : { text: '', cls: '' },
     };
     for (const [id, { btn, mark }] of this.shopTabs) {
       btn.classList.toggle('active', id === tab);
@@ -2618,7 +2622,7 @@ export class App {
     }
     this.shopBody.querySelectorAll<HTMLElement>('[data-until]').forEach((el) => (el.textContent = clock(Math.max(0, Number(el.dataset.until) - g.time))));
     const key = JSON.stringify([
-      tab, this.decorPick, this.labelTab, g.caps, g.owned, g.furniture, g.unlocked, g.barLevel, g.beers.length, advice.target,
+      tab, this.decorPick, this.labelTab, g.gems, g.owned, g.furniture, g.unlocked, g.barLevel, g.beers.length, advice.target,
       tab === 'bar' ? DECOR_ORDER.map((id) => g.money >= g.decorDef(id).cost) : 0,
       tab === 'boosts' ? [BOOSTS.map((b) => [b.channel ? g.boostOf(b.channel)?.id : 0, g.boostBlocked(b.id)]), g.batches.length > 0 || g.planned > 0] : 0,
       tab === 'labels' ? LABEL_UNLOCKS.map((x) => g.money >= x.cost) : 0,
@@ -2634,16 +2638,16 @@ export class App {
     this.shopBody.scrollTop = scroll;
   }
 
-  /** Bouton de prix en capsules : doré si on peut payer, sinon grisé (il dit ce qui manque). */
-  private capsBtn(text: string, caps: number, run: () => void, cls = ''): HTMLButtonElement {
-    const b = h('button', `btn price caps-price ${cls}`);
-    b.append(h('span', '', text ? `${text} · ` : ''), iconCanvas('cap', 1, 'caps-icon'), h('span', '', String(caps)));
-    const short = this.game().caps < caps;
+  /** Bouton de prix en diamants : doré si on peut payer, sinon grisé (il dit ce qui manque). */
+  private gemsBtn(text: string, gems: number, run: () => void, cls = ''): HTMLButtonElement {
+    const b = h('button', `btn price gems-price ${cls}`);
+    b.append(h('span', '', text ? `${text} · ` : ''), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(gems)));
+    const short = this.game().gems < gems;
     b.classList.toggle('primary', !short);
     b.classList.toggle('short', short);
     b.onclick = () => {
-      const missing = caps - this.game().caps;
-      if (missing > 0) return this.toast(`Il te manque ${capsText(missing)} : chaque commande livrée en rapporte ${CAPS.order}`, 'bad');
+      const missing = gems - this.game().gems;
+      if (missing > 0) return this.toast(`Il te manque ${gemsText(missing)} : chaque commande livrée en rapporte ${GEMS.order}`, 'bad');
       run();
     };
     return b;
@@ -2755,7 +2759,7 @@ export class App {
         if (blocked && cur) {
           b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
         } else {
-          b = this.capsBtn(extend ? `+${def.minutes >= 60 ? `${def.minutes / 60} h` : `${def.minutes} min`}` : '', def.caps, () => {
+          b = this.gemsBtn(extend ? `+${def.minutes >= 60 ? `${def.minutes / 60} h` : `${def.minutes} min`}` : '', def.gems, () => {
             const r = g.buyBoost(def.id);
             if (!r.ok) return this.toast(r.reason!, 'bad');
             this.toast(extend ? `${def.name} : prolongé !` : `${def.name} !`, 'good');
@@ -2770,7 +2774,7 @@ export class App {
       this.shopBody.append(box);
     }
     if (!g.batches.length && !g.planned) this.shopBody.append(h('p', 'note bad', 'Rien ne brasse en ce moment : un boost des machines n\'aurait aucun effet.'));
-    this.shopBody.append(h('p', 'hint caps-note', `Tu as ${capsText(g.caps)}. Chaque commande livrée en rapporte ${CAPS.order}, chaque niveau de la brasserie bien plus.`));
+    this.shopBody.append(h('p', 'hint gems-note', `Tu as ${gemsText(g.gems)}. Chaque commande livrée en rapporte ${GEMS.order}, chaque niveau de la brasserie bien plus.`));
   }
 
   /** Rayon Étiquettes : bouteilles, formes, logos et motifs ; toucher un objet l'essaie sur ta bière. */
@@ -2794,8 +2798,8 @@ export class App {
     const grid = h('div', `unlock-grid${kind === 'bottle' ? ' bottles' : ''}`);
     for (const x of LABEL_UNLOCKS.filter((y) => y.kind === kind)) {
       const owned = g.unlocked.includes(x.id);
-      const cell = h('button', `unlock${owned ? ' owned' : ''}${x.id === target ? ' advised' : ''}${x.caps ? ' premium' : ''}`);
-      cell.setAttribute('aria-label', `${x.name} : ${owned ? 'débloqué' : x.caps ? capsText(x.caps) : moneyShort(x.cost)}, essayer`);
+      const cell = h('button', `unlock${owned ? ' owned' : ''}${x.id === target ? ' advised' : ''}${x.gems ? ' premium' : ''}`);
+      cell.setAttribute('aria-label', `${x.name} : ${owned ? 'débloqué' : x.gems ? gemsText(x.gems) : moneyShort(x.cost)}, essayer`);
       const preview = h('div', 'unlock-preview');
       const l = { ...sample, [x.kind]: x.value } as Label;
       if (x.kind === 'bottle') {
@@ -2815,9 +2819,9 @@ export class App {
       }
       const price = h('span', `unlock-price${owned ? ' own' : ''}`);
       if (owned) price.textContent = '✓ débloqué';
-      else if (x.caps) price.append(iconCanvas('cap', 1, 'caps-icon'), String(x.caps));
+      else if (x.gems) price.append(iconCanvas('gem', 1, 'gems-icon'), String(x.gems));
       else price.textContent = moneyShort(x.cost);
-      if (!owned) price.classList.toggle('ok', x.caps ? g.caps >= x.caps : g.money >= x.cost);
+      if (!owned) price.classList.toggle('ok', x.gems ? g.gems >= x.gems : g.money >= x.cost);
       cell.append(preview, h('span', 'unlock-name', x.name), price);
       cell.onclick = () => this.tryUnlock(x);
       grid.append(cell);

@@ -8,7 +8,7 @@ import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
-import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, CAPS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
+import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -161,8 +161,8 @@ export const SALES_HISTORY_MIN = 60;
 export class Game {
   time = 0;
   money = STARTING_MONEY;
-  /** Capsules dorées : la monnaie premium (boosts, cosmétiques). */
-  caps: number = CAPS.start;
+  /** Diamants : la monnaie premium (boosts, cosmétiques). */
+  gems: number = GEMS.start;
   rng = new Rng(0xbee12);
   readonly events = new EventBus();
   stations: Record<StationId, StationState> = Object.fromEntries(STATION_ORDER.map((id) => [id, { level: 1 }])) as Record<StationId, StationState>;
@@ -649,7 +649,7 @@ export class Game {
     this.events.emit({ type: 'upgraded', station: id, level: lv + 1 });
     if (this.breweryLevel > before) {
       this.events.emit({ type: 'breweryLevel', level: this.breweryLevel });
-      this.earnCaps(CAPS.breweryLevel[this.breweryLevel] ?? 0, 'level');
+      this.earnGems(GEMS.breweryLevel[this.breweryLevel] ?? 0, 'level');
     }
     return { ok: true };
   }
@@ -967,19 +967,19 @@ export class Game {
     return (b ? boostById(b.id)?.priceMult ?? 1 : 1) * this.furnitureMult('price');
   }
 
-  /** Capsules gagnées (commande livrée, niveau de la brasserie). */
-  earnCaps(n: number, why: 'order' | 'level'): void {
+  /** Diamants gagnées (commande livrée, niveau de la brasserie). */
+  earnGems(n: number, why: 'order' | 'level'): void {
     if (n <= 0) return;
-    this.caps += n;
-    this.events.emit({ type: 'caps', amount: n, why });
+    this.gems += n;
+    this.events.emit({ type: 'gems', amount: n, why });
   }
 
-  /** Prix d'un boost, en capsules : fixe, et dégressif avec la durée. */
+  /** Prix d'un boost, en diamants : fixe, et dégressif avec la durée. */
   boostCost(id: BoostId): number {
-    return boostById(id)?.caps ?? Infinity;
+    return boostById(id)?.gems ?? Infinity;
   }
 
-  /** Pourquoi un boost ne peut pas partir maintenant (hors manque de capsules), ou null. */
+  /** Pourquoi un boost ne peut pas partir maintenant (hors manque de diamants), ou null. */
   boostBlocked(id: BoostId): string | null {
     const def = boostById(id);
     if (!def) return 'Boost introuvable';
@@ -993,7 +993,7 @@ export class Game {
   }
 
   /**
-   * Achète un boost avec des capsules. Un boost au même effet que celui en cours le prolonge
+   * Achète un boost avec des diamants. Un boost au même effet que celui en cours le prolonge
    * (24 h d'avance au plus) ; un effet différent sur le même poste attend la fin.
    */
   buyBoost(id: BoostId): CommandResult {
@@ -1001,8 +1001,8 @@ export class Game {
     if (!def) return { ok: false, reason: 'Boost introuvable' };
     const blocked = this.boostBlocked(id);
     if (blocked) return { ok: false, reason: blocked };
-    if (this.caps < def.caps) return { ok: false, reason: 'Pas assez de capsules' };
-    this.caps -= def.caps;
+    if (this.gems < def.gems) return { ok: false, reason: 'Pas assez de diamants' };
+    this.gems -= def.gems;
     if (!def.channel) {
       this.orderTimer = 0;
       this.tickOrders(0);
@@ -1038,9 +1038,9 @@ export class Game {
     const x = unlockById(id);
     if (!x) return { ok: false, reason: 'Introuvable' };
     if (this.unlocked.includes(id)) return { ok: false, reason: 'Déjà débloqué' };
-    if (x.caps) {
-      if (this.caps < x.caps) return { ok: false, reason: 'Pas assez de capsules' };
-      this.caps -= x.caps;
+    if (x.gems) {
+      if (this.gems < x.gems) return { ok: false, reason: 'Pas assez de diamants' };
+      this.gems -= x.gems;
     } else {
       if (this.money < x.cost) return { ok: false, reason: 'Pas assez d\'argent' };
       this.money -= x.cost;
@@ -1228,7 +1228,7 @@ export class Game {
     this.ordersDone++;
     this.orders = this.orders.filter((x) => x !== o);
     this.events.emit({ type: 'sale', amount: o.reward });
-    this.earnCaps(CAPS.order, 'order');
+    this.earnGems(GEMS.order, 'order');
     return { ok: true, amount: o.reward };
   }
 
@@ -1617,7 +1617,7 @@ export class Game {
 
   toJSON() {
     return {
-      version: 7, time: this.time, money: this.money, caps: this.caps, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
+      version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
@@ -1695,7 +1695,10 @@ export class Game {
     if (g.partyReadyAt > 0 && !g.owned.includes('disco')) g.owned.push('disco');
     g.adUntil ??= 0;
     g.boosts ??= {};
-    g.caps ??= CAPS.start;
+    // la monnaie premium s'appelait « capsules » : elles deviennent des diamants, à nombre égal
+    const oldCaps = (g as unknown as { caps?: number }).caps;
+    if ((s as { gems?: number }).gems == null) g.gems = oldCaps ?? GEMS.start;
+    delete (g as unknown as { caps?: unknown }).caps;
     // la campagne de pub ne se vend plus au magasin (elle reste dans l'ordinateur)
     delete (g.boosts as Record<string, unknown>).ad;
     g.staffUntil ??= { courier: 0, apprentice: 0 };

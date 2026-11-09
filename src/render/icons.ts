@@ -24,6 +24,7 @@ const PAL: Record<string, string> = {
   p: '#d45c8e', // rose
   e: '#e8dcc0', // papier
   E: '#b8a888', // papier ombré
+  D: '#1f4f8f', // bleu profond (diamant)
 };
 
 const GRIDS = {
@@ -385,23 +386,23 @@ const GRIDS = {
     '................',
     '................',
   ],
-  // capsule dorée (la monnaie premium), dentelée, un cercle en relief
-  cap: [
+  // diamant bleu (la monnaie premium) : la table claire en haut, la culasse qui s'assombrit vers la pointe, un éclat
+  gem: [
+    '.............w..',
+    '............www.',
+    '...kkkkkkkkkkw..',
+    '..kwwlllLLlDDk..',
+    '.kwwlllLLLllDDk.',
+    'klllLLLLLLLLDDDk',
+    '.kllLLLLLLLLDDk.',
+    '..klLLLLLLLDDk..',
+    '...klLLLLLDDk...',
+    '....klLLLDDk....',
+    '.....klLDDk.....',
+    '......kLDk......',
+    '.......kk.......',
     '................',
-    '.....k.kk.k.....',
-    '...kkyykkyykk...',
-    '..kyyyyyyyyyyk..',
-    '.kkyyYYYYYYyykk.',
-    '..kyYwwyyyyYyk..',
-    '.kyyYwyyyyyYyyk.',
-    '.kyyYyyyyyyYyyk.',
-    '.kyyYyyyyyyYyyk.',
-    '.kyyYyyyyyyYyyk.',
-    '..kyYyyyyyyYYk..',
-    '.kkYyYYYYYYYYkk.',
-    '..kYYYYYYYYYYk..',
-    '...kkYYkkYYkk...',
-    '.....k.kk.k.....',
+    '................',
     '................',
   ],
   // boost : éclair doré sur un chrono

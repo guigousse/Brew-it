@@ -6,7 +6,7 @@ import { COMPUTERS, WHOLESALE_PRICE, drawOrder, FIRST_ORDER_S, openTypes, ORDER_
 import { Rng } from './rng';
 import { popTarget, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
-import { CAPS } from './shop';
+import { GEMS } from './shop';
 import { shopAdvice } from './advice';
 import { STATION_ORDER } from './stations';
 import { STORAGE } from './warehouse';
@@ -672,7 +672,7 @@ describe('boosts', () => {
   it('cadence ×2 : les machines finissent leur étape deux fois plus vite', () => {
     const slow = withBeer(1e6);
     const fast = withBeer(1e6);
-    fast.caps = 100;
+    fast.gems = 100;
     expect(fast.buyBoost('cadence').ok).toBe(true);
     slow.planBrew(slow.beers[0]!.id, 'bottle', 1);
     fast.planBrew(fast.beers[0]!.id, 'bottle', 1);
@@ -686,7 +686,7 @@ describe('boosts', () => {
 
   it('un boost au même effet se prolonge, un autre effet du même poste attend', () => {
     const g = withBeer(1e7);
-    g.caps = 200;
+    g.gems = 200;
     expect(g.buyBoost('rush').ok).toBe(true);
     const until = g.boostOf('brew')!.until;
     expect(g.buyBoost('rush').ok).toBe(true);
@@ -703,14 +703,14 @@ describe('boosts', () => {
     expect(g.stageMult('mill')).toBe(2);
   });
 
-  it('se paie en capsules, à prix fixe et dégressif avec la durée', () => {
+  it('se paie en diamants, à prix fixe et dégressif avec la durée', () => {
     const g = withBeer(1e6);
     const money = g.money;
-    g.caps = 3;
+    g.gems = 3;
     expect(g.buyBoost('rush').ok).toBe(false);
-    g.caps = 100;
+    g.gems = 100;
     expect(g.buyBoost('rush').ok).toBe(true);
-    expect(g.caps).toBe(100 - g.boostCost('rush'));
+    expect(g.gems).toBe(100 - g.boostCost('rush'));
     expect(g.money).toBe(money);
     // quatre fois 15 min coûtent plus qu'une heure, quatre heures moins que quatre fois une heure
     expect(4 * g.boostCost('rush')).toBeGreaterThan(g.boostCost('cadence'));
@@ -719,7 +719,7 @@ describe('boosts', () => {
 
   it('happy hour : deux fois plus de clients, des verres moins chers ; le grossiste généreux paie plus', () => {
     const g = withBeer(1e6);
-    g.caps = 100;
+    g.gems = 100;
     const rate = g.barRate;
     g.buyBoost('happyHour');
     expect(g.barRate).toBeCloseTo(rate * 2);
@@ -737,30 +737,39 @@ describe('boosts', () => {
   it('prospection : une commande arrive tout de suite', () => {
     const g = withBeer(1e6);
     g.orders = [];
-    g.caps = 100;
+    g.gems = 100;
     expect(g.buyBoost('prospect').ok).toBe(true);
     expect(g.orders.length).toBe(1);
   });
 });
 
-describe('capsules', () => {
+describe('diamants', () => {
   it('on en gagne au départ, par commande livrée et par niveau de la brasserie', () => {
     const g = withBeer(1e7);
-    expect(g.caps).toBe(CAPS.start);
+    expect(g.gems).toBe(GEMS.start);
     g.beers[0]!.stock = 500;
     g.orders = [{ ...drawOrder(998, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'classic', qty: 12, minQuality: 0 } as Order];
     expect(g.fulfill(998, [g.beers[0]!.id]).ok).toBe(true);
-    expect(g.caps).toBe(CAPS.start + CAPS.order);
+    expect(g.gems).toBe(GEMS.start + GEMS.order);
     for (const id of STATION_ORDER) g.upgrade(id);
     expect(g.breweryLevel).toBe(2);
-    expect(g.caps).toBe(CAPS.start + CAPS.order + CAPS.breweryLevel[2]!);
+    expect(g.gems).toBe(GEMS.start + GEMS.order + GEMS.breweryLevel[2]!);
   });
 
-  it('une ancienne sauvegarde reçoit les capsules du départ', () => {
+  it('une ancienne sauvegarde reçoit les diamants du départ', () => {
     const g = withBeer(1e6);
     const raw = JSON.parse(JSON.stringify(g.toJSON()));
-    delete raw.caps;
-    expect(Game.fromJSON(raw).caps).toBe(CAPS.start);
+    delete raw.gems;
+    expect(Game.fromJSON(raw).gems).toBe(GEMS.start);
+  });
+
+  it('les capsules d\'une sauvegarde deviennent des diamants', () => {
+    const raw = JSON.parse(JSON.stringify(withBeer(1e6).toJSON()));
+    delete raw.gems;
+    raw.caps = 42;
+    const g = Game.fromJSON(raw);
+    expect(g.gems).toBe(42);
+    expect((g as unknown as { caps?: number }).caps).toBeUndefined();
   });
 });
 
@@ -830,17 +839,17 @@ describe('mobilier et étiquettes', () => {
     expect(g.isUnlocked('emblem', 'bee')).toBe(false);
     expect(g.buyUnlock('emblem:bee').ok).toBe(true);
     expect(g.isUnlocked('emblem', 'bee')).toBe(true);
-    // les cosmétiques premium se paient en capsules
-    g.caps = 10;
+    // les cosmétiques premium se paient en diamants
+    g.gems = 10;
     expect(g.buyUnlock('emblem:skull').ok).toBe(false);
-    g.caps = 100;
+    g.gems = 100;
     expect(g.buyUnlock('emblem:skull').ok).toBe(true);
-    expect(g.caps).toBe(50);
+    expect(g.gems).toBe(50);
     g.buyBoost('cadence');
     g.hire('courier');
     const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
     expect(back.isUnlocked('emblem', 'bee')).toBe(true);
-    expect(back.caps).toBe(38);
+    expect(back.gems).toBe(38);
     expect(back.boostMult('brew')).toBe(2);
     expect(back.staffOn('courier')).toBe(true);
   });

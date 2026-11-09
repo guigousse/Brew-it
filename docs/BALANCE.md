@@ -181,8 +181,8 @@ Aujourd'hui, le moulin lance un brassin dès qu'il est libre. Les brassins s'acc
 
 Mesure sur l'état réel d'une partie juste après chaque agrandissement du bar, 8 h de bar avec et sans barman. Avec 6 fûts prévus par tireuse, il rapporte 446 € (bistrot), 1 913 € (pub), 7 146 € (taproom), 14 126 € (bar du futur) ; avec les fûts que le joueur simulé avait réellement, presque rien. Les premiers prix (jusqu'à 150 000 €) ne remboursaient jamais le barman passé le bistrot. Nouvelle grille, pour environ 2,5 fois son prix quand on prépare des fûts : 30, 150, 700, 2 500, 5 000 €. Le joueur simulé finit toujours en J34.
 
-## Capsules dorées (monnaie premium)
+## Diamants (monnaie premium)
 
-Les boosts ne se paient plus en euros mais en capsules, à **prix fixes et dégressifs** : pour ×2 sur les machines, 4 capsules les 15 min, 12 l'heure, 36 les 4 h. Quatre fois 15 min coûtent donc plus qu'une heure, et quatre heures moins que quatre fois une heure. Avant, le prix suivait 40 % de ce que le boost rapportait, avec un plancher par niveau : à bas niveau, le plancher rendait le Coup de feu ×4 moins cher qu'une Cadence ×2 d'une heure.
+Les boosts ne se paient plus en euros mais en diamants, à **prix fixes et dégressifs** : pour ×2 sur les machines, 4 diamants les 15 min, 12 l'heure, 36 les 4 h. Quatre fois 15 min coûtent donc plus qu'une heure, et quatre heures moins que quatre fois une heure. Avant, le prix suivait 40 % de ce que le boost rapportait, avec un plancher par niveau : à bas niveau, le plancher rendait le Coup de feu ×4 moins cher qu'une Cadence ×2 d'une heure.
 
-Gains sans payer : 25 au départ, 1 par commande livrée, 15 / 25 / 40 / 60 aux niveaux 2 à 5 de la brasserie. Le simulateur (`npm run balance`, ligne « Capsules gagnées ») en compte environ 26 le premier jour, 44 le deuxième (niveau 2), puis 5 à 7 par jour : de quoi s'offrir une Cadence ×2 d'une heure tous les deux jours environ. Le simulateur ne dépense pas ses capsules.
+Gains sans payer : 25 au départ, 1 par commande livrée, 15 / 25 / 40 / 60 aux niveaux 2 à 5 de la brasserie. Le simulateur (`npm run balance`, ligne « Diamants gagnés ») en compte environ 26 le premier jour, 44 le deuxième (niveau 2), puis 5 à 7 par jour : de quoi s'offrir une Cadence ×2 d'une heure tous les deux jours environ. Le simulateur ne dépense pas ses diamants.

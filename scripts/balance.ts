@@ -68,8 +68,8 @@ function tendBar() {
   }
 }
 const brandByDay: number[] = [];
-/** Capsules gagnées (le joueur simulé ne les dépense pas : c'est ce qu'un joueur gratuit peut s'offrir). */
-const capsByDay: number[] = [];
+/** Diamants gagnés (le joueur simulé ne les dépense pas : c'est ce qu'un joueur gratuit peut s'offrir). */
+const gemsByDay: number[] = [];
 
 /** Le joueur garde toujours un brassin en file : la bière la moins en stock, en bouteilles. */
 let autoPlan = false;
@@ -174,7 +174,7 @@ let completed: number | null = null;
 for (let day = 0; day < DAYS && completed == null; day++) {
   revenueByDay[day] = g.totalRevenue;
   brandByDay[day] = g.brand;
-  capsByDay[day] = g.caps;
+  gemsByDay[day] = g.gems;
   for (let i = 0; i < SESSIONS.length; i++) {
     const target = day * 86400 + SESSIONS[i]! * 3600;
     if (target <= clock) continue;
@@ -214,7 +214,7 @@ console.log(revenueByDay.map((r, i) => `J${i + 1} ${Math.round(((revenueByDay[i 
 console.log('\n=== Résumé');
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
-console.log('Capsules gagnées (cumul) :', capsByDay.map((c, i) => `J${i + 1} ${c}`).join(' · '), '· fin', g.caps);
+console.log('Diamants gagnés (cumul) :', gemsByDay.map((c, i) => `J${i + 1} ${c}`).join(' · '), '· fin', g.gems);
 console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.round(b * 100)}`).join(' · '));
 console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', Math.round(g.wholesaleLiters), 'L,', Math.round(g.wholesaleRevenue), '€');
 console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots);
