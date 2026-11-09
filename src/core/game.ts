@@ -226,7 +226,11 @@ export class Game {
   /** Instants (s de jeu) des commandes expirées dans les dernières 24 h : des boulettes dans la corbeille du bureau. */
   expiredAt: number[] = [];
   /** Compte à rebours (s) avant la prochaine commande. */
-  orderTimer = FIRST_ORDER_S;
+  /**
+   * Emplacements libres du tableau des commandes : le délai (s de jeu) avant que chacun reçoive une lettre.
+   * Il y a toujours autant de commandes et d'emplacements libres que de places au tableau.
+   */
+  orderWaits: number[] = [FIRST_ORDER_S, FIRST_ORDER_S + ORDER_GAP_MIN_S];
   ordersDone = 0;
   /** Niveau de l'ordinateur des commandes (1 à COMPUTERS.length). */
   computerLevel = 1;
@@ -1004,7 +1008,9 @@ export class Game {
     if (this.gems < def.gems) return { ok: false, reason: 'Pas assez de diamants' };
     this.gems -= def.gems;
     if (!def.channel) {
-      this.orderTimer = 0;
+      this.syncSlots();
+      const i = this.orderWaits.indexOf(Math.min(...this.orderWaits));
+      if (i >= 0) this.orderWaits[i] = 0;
       this.tickOrders(0);
       return { ok: true };
     }
@@ -1095,7 +1101,9 @@ export class Game {
     this.money -= this.adCost;
     this.adUntil = this.time + AD.duration;
     for (const b of this.beers) b.pop = Math.max(b.pop, Math.min(this.popCap, b.pop + AD.pop));
-    this.orderTimer = Math.min(this.orderTimer, 60);
+    this.syncSlots();
+    const soon = this.orderWaits.indexOf(Math.min(...this.orderWaits));
+    if (soon >= 0) this.orderWaits[soon] = Math.min(this.orderWaits[soon]!, 60);
     return { ok: true };
   }
 
@@ -1227,6 +1235,7 @@ export class Game {
     this.money += o.reward;
     this.ordersDone++;
     this.orders = this.orders.filter((x) => x !== o);
+    this.freeSlot();
     this.events.emit({ type: 'sale', amount: o.reward });
     this.earnGems(orderGems(o), 'order');
     return { ok: true, amount: o.reward };
@@ -1236,7 +1245,9 @@ export class Game {
   declineOrder(orderId: number): CommandResult {
     const before = this.orders.length;
     this.orders = this.orders.filter((x) => x.id !== orderId);
-    return before === this.orders.length ? { ok: false, reason: 'Commande introuvable' } : { ok: true };
+    if (before === this.orders.length) return { ok: false, reason: 'Commande introuvable' };
+    this.freeSlot();
+    return { ok: true };
   }
 
   /** Commandes qu'on peut remplir tout de suite avec le stock. */
@@ -1579,29 +1590,57 @@ export class Game {
     }
   }
 
+  /** Délai avant la lettre suivante d'un emplacement qui se libère : 30 à 60 min (un peu moins pour une marque connue). */
+  private orderGap(): number {
+    return (ORDER_GAP_MIN_S + (ORDER_GAP_MAX_S - ORDER_GAP_MIN_S) * this.rng.next()) / (0.8 + 0.4 * this.brand);
+  }
+
+  /** Une commande quitte le tableau (envoyée, refusée, expirée) : son emplacement attend la lettre suivante. */
+  private freeSlot(): void {
+    this.orderWaits.push(this.orderGap());
+    this.syncSlots();
+  }
+
+  /** Autant d'emplacements que de places : une place gagnée (nouvel ordinateur) reçoit vite sa première lettre. */
+  private syncSlots(): void {
+    while (this.orders.length + this.orderWaits.length < this.boardSlots) this.orderWaits.push(FIRST_ORDER_S);
+    while (this.orders.length + this.orderWaits.length > this.boardSlots && this.orderWaits.length) {
+      this.orderWaits.splice(this.orderWaits.indexOf(Math.max(...this.orderWaits)), 1);
+    }
+  }
+
+  /** Temps réel restant (s de jeu) avant la lettre de chaque emplacement libre, du plus proche au plus lointain. */
+  get slotWaits(): number[] {
+    const speed = this.advertising ? AD.orderBoost : 1;
+    return [...this.orderWaits].sort((a, b) => a - b).map((w) => Math.max(0, w / speed));
+  }
+
   /**
-   * Une nouvelle commande arrive toutes les 30 à 60 minutes, tant que le tableau a de la place
-   * (un peu plus souvent pour une marque connue). Elles expirent si on ne les remplit pas.
+   * Chaque emplacement libre a son délai : une lettre y arrive quand il est écoulé (deux fois plus vite pendant
+   * une campagne de pub). Envoyer, refuser ou laisser expirer une commande relance le délai de son emplacement.
    */
   private tickOrders(dt: number): void {
     if (this.orders.some((o) => o.expires <= this.time)) {
       for (const o of this.orders) if (o.expires <= this.time) {
         this.expiredAt.push(this.time);
         this.events.emit({ type: 'orderExpired', client: o.client });
+        this.orderWaits.push(this.orderGap());
       }
       this.expiredAt = this.expiredAt.filter((x) => x > this.time - 86400).slice(-12);
       this.orders = this.orders.filter((o) => o.expires > this.time);
     }
-    if (this.orders.length >= this.boardSlots) return;
-    this.orderTimer -= dt;
-    if (this.orderTimer > 0) return;
-    this.orderTimer = (ORDER_GAP_MIN_S + (ORDER_GAP_MAX_S - ORDER_GAP_MIN_S) * this.rng.next()) / (0.8 + 0.4 * this.brand) / (this.advertising ? AD.orderBoost : 1);
-    const o = drawOrder(this.nextId++, {
-      rng: this.rng, time: this.time, breweryLevel: this.breweryLevel, brand: this.brand, beers: this.beers.length,
-      storageCap: this.storageCap, kegLiters: kegLiters(this.batchLiters), trends: this.trends,
-    });
-    this.orders.push(o);
-    this.events.emit({ type: 'order', client: o.client });
+    this.syncSlots();
+    const step = dt * (this.advertising ? AD.orderBoost : 1);
+    for (let i = 0; i < this.orderWaits.length; i++) this.orderWaits[i]! -= step;
+    while (this.orderWaits.some((w) => w <= 0)) {
+      this.orderWaits.splice(this.orderWaits.findIndex((w) => w <= 0), 1);
+      const o = drawOrder(this.nextId++, {
+        rng: this.rng, time: this.time, breweryLevel: this.breweryLevel, brand: this.brand, beers: this.beers.length,
+        storageCap: this.storageCap, kegLiters: kegLiters(this.batchLiters), trends: this.trends,
+      });
+      this.orders.push(o);
+      this.events.emit({ type: 'order', client: o.client });
+    }
   }
 
   /** Annonce les nouveaux profils de clients (la brasserie grandit, la marque se fait connaître). */
@@ -1620,7 +1659,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderTimer: this.orderTimer, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1643,7 +1682,7 @@ export class Game {
     // Avant la v7, les commandes venaient de clients sous contrat : place au tableau de commandes variées.
     if (s.version < 7) {
       g.orders = [];
-      g.orderTimer = FIRST_ORDER_S;
+      (g as unknown as { orderTimer?: number }).orderTimer = FIRST_ORDER_S;
       g.announced = new Set(CLIENT_TYPES.filter((c) => c.level <= g.breweryLevel && c.pop <= g.brand).map((c) => c.id));
     }
     // Avant la v6, le bar servait des bouteilles : il tire maintenant des fûts, et les bières ont une popularité.
@@ -1665,7 +1704,13 @@ export class Game {
     g.format ??= 'bottle';
     g.orders ??= [];
     g.expiredAt ??= [];
-    g.orderTimer ??= FIRST_ORDER_S;
+    // avant les emplacements, un seul minuteur pour tout le tableau : il devient le délai du premier emplacement libre
+    if ((s as { orderWaits?: unknown }).orderWaits == null) {
+      const old = (g as unknown as { orderTimer?: number }).orderTimer ?? FIRST_ORDER_S;
+      const free = Math.max(0, g.boardSlots - g.orders.length);
+      g.orderWaits = Array.from({ length: free }, (_, i) => (i === 0 ? old : old + i * ORDER_GAP_MIN_S));
+    }
+    delete (g as unknown as { orderTimer?: unknown }).orderTimer;
     // avant le quota du grossiste, les ventes se comptaient en bouteilles : on les convertit en litres
     const old = s as unknown as { wholesaleSold?: number };
     g.wholesaleLiters ??= (old.wholesaleSold ?? 0) * BOTTLE_L;

@@ -386,6 +386,25 @@ const GRIDS = {
     '................',
     '................',
   ],
+  // fût en inox, cerclé : les commandes de fûts
+  keg: [
+    '................',
+    '....kkkkkkkk....',
+    '...ksssssssSk...',
+    '...kSSSSSSSSk...',
+    '..kssssssssSSk..',
+    '..kssssssssSSk..',
+    '..kSSSSSSSSSSk..',
+    '..kssssssssSSk..',
+    '..kssssssssSSk..',
+    '..kSSSSSSSSSSk..',
+    '..kssssssssSSk..',
+    '...ksssssssSk...',
+    '...kSSSSSSSSk...',
+    '....kkkkkkkk....',
+    '................',
+    '................',
+  ],
   // diamant bleu (la monnaie premium) : la table claire en haut, la culasse qui s'assombrit vers la pointe, un éclat
   gem: [
     '.............w..',

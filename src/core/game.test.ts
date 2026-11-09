@@ -798,6 +798,45 @@ describe('conseil de Gaston au magasin', () => {
   });
 });
 
+describe('emplacements du tableau des commandes', () => {
+  it('chaque emplacement a son délai ; envoyer ou refuser relance celui de son emplacement', () => {
+    const g = withBeer(1e6);
+    run(g, 200); // la première lettre arrive après 3 min
+    expect(g.orders.length).toBe(1);
+    expect(g.orders.length + g.slotWaits.length).toBe(g.boardSlots);
+    const o = g.orders[0]!;
+    expect(g.declineOrder(o.id).ok).toBe(true);
+    expect(g.orders.length).toBe(0);
+    expect(g.slotWaits.length).toBe(g.boardSlots);
+    // l'emplacement libéré attend 30 à 60 min (un peu moins avec une marque connue)
+    expect(Math.max(...g.slotWaits)).toBeGreaterThan(20 * 60);
+    expect(Math.max(...g.slotWaits)).toBeLessThanOrEqual(75 * 60);
+  });
+
+  it('une place gagnée reçoit vite sa première lettre ; la prospection remplit tout de suite', () => {
+    const g = withBeer(1e7);
+    run(g, 200);
+    g.upgradeComputer();
+    run(g, 1);
+    expect(g.orders.length + g.slotWaits.length).toBe(g.boardSlots);
+    expect(Math.min(...g.slotWaits)).toBeLessThanOrEqual(3 * 60);
+    const n = g.orders.length;
+    g.gems = 100;
+    expect(g.buyBoost('prospect').ok).toBe(true);
+    expect(g.orders.length).toBe(n + 1);
+  });
+
+  it('une ancienne sauvegarde (un seul minuteur) reçoit ses emplacements', () => {
+    const raw = JSON.parse(JSON.stringify(withBeer(1e6).toJSON()));
+    delete raw.orderWaits;
+    raw.orderTimer = 90;
+    raw.orders = [];
+    const g = Game.fromJSON(raw);
+    expect(g.slotWaits[0]).toBe(90);
+    expect(g.slotWaits.length).toBe(g.boardSlots);
+  });
+});
+
 describe('personnel', () => {
   it('les postes dépendent du niveau de la brasserie', () => {
     const g = withBeer(1e6);

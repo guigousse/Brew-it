@@ -8,6 +8,8 @@ import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type St
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
+import { drawPortrait } from '../render/portraits';
+import { CLIENT_KIND_NAME, orderQuote, orderThanks } from '../core/letters';
 import { BOTTLE_SCALE, drawCrate, drawShelfBottle, labelSpot, type ShelfBottleKind } from '../render/bottleArt';
 import { instBox } from '../render/decor';
 import { decorLayout } from '../render/decorLayout';
@@ -1594,9 +1596,10 @@ export class App {
     if (!this.computer || !this.modalOpen) return;
     const g = this.game();
     const st = this.computer;
+    if (performance.now() < this.deliveringUntil) return; // la lettre livrée reste le temps de son tampon
     if (this.computerKey(g) !== st.key) return this.renderComputer();
-    const clock = st.ui.querySelector('.pc-clock');
-    if (clock) clock.textContent = gameClock(g.time);
+    const pcClock = st.ui.querySelector('.pc-clock');
+    if (pcClock) pcClock.textContent = gameClock(g.time);
     if (st.app === 'dashboard') {
       const now = Math.floor(performance.now() / 1000);
       const body = st.ui.querySelector<HTMLElement>('.pc-body');
@@ -1605,7 +1608,12 @@ export class App {
         this.dashboardPage(g, body);
       }
     }
-    st.ui.querySelectorAll<HTMLElement>('[data-expires]').forEach((el) => (el.textContent = `⏳ ${duration(Number(el.dataset.expires) - g.time)}`));
+    st.ui.querySelectorAll<HTMLElement>('[data-expires]').forEach((el) => {
+      if (el.classList.contains('letter-gauge')) this.paintGauge(el, g.time);
+      else el.textContent = `⏳ ${duration(Number(el.dataset.expires) - g.time)}`;
+    });
+    const waits = g.slotWaits;
+    st.ui.querySelectorAll<HTMLElement>('[data-slot]').forEach((el) => (el.textContent = clock(waits[Number(el.dataset.slot)] ?? 0)));
   }
 
   private renderComputer(): void {
@@ -1767,14 +1775,20 @@ export class App {
     card.append(this.btn('btn', 'Annuler', () => this.closeModal()));
   }
 
+  /**
+   * Le tableau des commandes : une lettre par commande (celles qu'on peut livrer en haut), puis les emplacements
+   * libres, chacun avec le temps avant sa prochaine lettre.
+   */
   private ordersTab(g: Game, card: HTMLElement): void {
     for (const id of this.picks.keys()) if (!g.orders.some((o) => o.id === id)) this.picks.delete(id);
-    if (!g.orders.length) card.append(h('p', 'hint', 'Aucune commande. La prochaine arrive bientôt.'));
-    for (const o of [...g.orders].sort((a, b) => a.expires - b.expires)) card.append(this.orderCard(g, o));
+    const ready = new Set(g.readyOrders.map((o) => o.id));
+    const sorted = [...g.orders].sort((a, b) => Number(ready.has(b.id)) - Number(ready.has(a.id)) || a.expires - b.expires);
+    for (const o of sorted) card.append(this.orderCard(g, o));
+    g.slotWaits.forEach((w, i) => card.append(this.emptySlot(g, w, i)));
     // l'ordinateur : une place de plus au tableau à chaque niveau
     const next = COMPUTERS[g.computerLevel];
     const foot = h('div', 'pc-foot');
-    foot.append(h('span', 'hint', `${COMPUTERS[g.computerLevel - 1]!.name} · ${g.orders.length}/${g.boardSlots} places`));
+    foot.append(h('span', 'hint', `${COMPUTERS[g.computerLevel - 1]!.name} · ${g.boardSlots} emplacements`));
     if (next) {
       const b = this.btn('btn small', `+1 place · ${moneyShort(next.cost)}`, () => {
         const r = g.upgradeComputer();
@@ -1789,29 +1803,75 @@ export class App {
     card.append(foot);
   }
 
-  /** Une commande : qui, quoi, combien elle paie ; on coche les bières, on envoie. */
+  /** Un emplacement libre : la prochaine lettre arrive dans… ; le plus proche propose la prospection. */
+  private emptySlot(g: Game, wait: number, i: number): HTMLElement {
+    const el = h('div', 'letter-slot');
+    const icon = iconCanvas('envelope', 2, 'letter-slot-icon');
+    const text = h('div', 'letter-slot-text');
+    const left = h('span', 'letter-slot-time', clock(wait));
+    left.dataset.slot = String(i);
+    text.append(h('span', 'letter-slot-title', 'Prochaine lettre'), left);
+    el.append(icon, text);
+    if (i === 0) {
+      const b = this.gemsBtn('Prospecter', g.boostCost('prospect'), () => {
+        const r = g.buyBoost('prospect');
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        this.toast('Une lettre arrive !', 'good');
+        this.computer!.key = '';
+        this.refreshComputer();
+      });
+      b.setAttribute('aria-label', `Prospecter : une lettre tout de suite, pour ${gemsText(g.boostCost('prospect'))}`);
+      el.append(b);
+    }
+    return el;
+  }
+
+  /**
+   * Une commande, présentée comme une lettre : le client (portrait, type, sa phrase), ce qu'il demande en images,
+   * les bières qui partiront, le temps qui reste, et le bouton d'envoi avec ce qu'elle rapporte.
+   */
   private orderCard(g: Game, o: Order): HTMLElement {
     if (!this.picks.has(o.id)) this.picks.set(o.id, g.autoPick(o));
     const pick = this.picks.get(o.id)!;
     const q = g.quote(o, pick);
-    const card = h('div', `card order kind-${o.kind}${q.ok ? ' banner' : ''}`);
-    const head = h('div', 'beer-head');
-    const left = h('span', 'order-time');
-    left.dataset.expires = String(o.expires);
-    left.textContent = `⏳ ${duration(o.expires - g.time)}`;
-    head.append(h('span', 'beer-name', o.client), left);
-    card.append(head);
-    const ask = h('div', 'order-ask');
-    if (o.kind !== 'classic') ask.append(h('span', `kind-tag kind-${o.kind}`, KIND_LABEL[o.kind]));
-    ask.append(h('span', '', orderAsk(o)));
+    const card = h('div', `letter kind-${o.kind}${q.ok ? ' ready' : ''}`);
+    card.dataset.order = String(o.id);
+    // en-tête : portrait, nom, type de client ; le tampon du type de commande
+    const head = h('div', 'letter-head');
+    const face = h('canvas', 'letter-face');
+    drawPortrait(face, o.type, o.client);
+    const who = h('div', 'letter-who');
+    who.append(h('span', 'letter-client', o.client), h('span', 'letter-type', CLIENT_KIND_NAME[o.type] ?? ''));
+    head.append(face, who);
+    if (o.kind !== 'classic') head.append(h('span', `letter-stamp stamp-${o.kind}`, o.kind === 'prestige' ? '★' : KIND_LABEL[o.kind]));
+    card.append(head, h('p', 'letter-quote', `« ${orderQuote(o)} »`));
+    // la demande, en images
+    const ask = h('div', 'letter-ask');
+    const qty = h('span', 'ask-chip');
+    qty.append(iconCanvas(o.kind === 'keg' ? 'keg' : 'range', 1, 'ask-icon'), `×${o.qty}`);
+    qty.setAttribute('aria-label', o.kind === 'keg' ? `${o.qty} fûts` : `${o.qty} bouteilles`);
+    ask.append(qty);
+    if (o.mix) ask.append(h('span', 'ask-chip', `${o.mix} bières différentes`));
+    const want = o.want ? trendById(o.want) : undefined;
+    if (want) ask.append(h('span', 'ask-chip ask-style', want.short));
+    const q5 = Math.round(o.minQuality * 5);
+    const quality = h('span', 'ask-chip ask-quality', '★'.repeat(q5) + '☆'.repeat(5 - q5));
+    quality.setAttribute('aria-label', `Qualité minimale : ${Math.round(o.minQuality * 100)} %`);
+    ask.append(quality);
     card.append(ask);
+    // les bières qui partiront
     const ok = g.suitable(o);
     const avail = (b: Beer) => (o.kind === 'keg' ? b.kegs.length : b.stock);
-    if (!ok.length) card.append(h('p', 'note bad', 'Aucune bière de ta gamme ne convient'));
-    else if (q.ok && !this.editing.has(o.id)) {
-      // les bières choisies d'office ; on peut changer
-      const line = h('div', 'order-pick');
-      line.append(h('span', 'hint', `→ ${q.take.map((t) => t.beer.name).join(', ')}`));
+    if (!ok.length) card.append(h('p', 'letter-none', 'Aucune bière de ta gamme ne convient pour l\'instant.'));
+    else if (!this.editing.has(o.id)) {
+      const line = h('div', 'letter-beers');
+      for (const t of q.take.length ? q.take : ok.slice(0, 3).map((beer) => ({ beer, n: 0 }))) {
+        const chip = h('span', `letter-beer${q.ok ? ' ok' : ''}`);
+        const thumb = h('canvas', 'label-thumb');
+        drawLabel(thumb, t.beer.label, t.beer.name);
+        chip.append(thumb, h('span', '', `${t.beer.name}${q.ok ? ' ✓' : ` · ${avail(t.beer)}`}`));
+        line.append(chip);
+      }
       if (ok.length > 1) line.append(this.btn('btn small', 'Changer', () => {
         this.editing.add(o.id);
         this.computer!.key = '';
@@ -1835,17 +1895,26 @@ export class App {
       }
       card.append(chips);
     }
+    // le temps qui reste : une jauge qui se vide
+    const gauge = h('div', 'letter-gauge');
+    const fill = h('i', 'letter-gauge-fill');
+    const left = h('span', 'letter-gauge-time');
+    gauge.dataset.expires = String(o.expires);
+    gauge.dataset.received = String(o.received);
+    gauge.append(fill, left);
+    this.paintGauge(gauge, g.time);
+    card.append(gauge);
+    // envoyer : le bouton dit ce que rapporte la commande (euros + diamants)
     const row = h('div', 'row');
-    // le bouton dit ce que rapporte la commande, comme les boutons de prix du magasin : euros, puis diamants
     const gems = orderGems(o);
     const send = this.btn('btn primary order-send', '', () => {
       const r = g.fulfill(o.id, pick);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       this.picks.delete(o.id);
-      this.gainToast(r.amount!);
+      this.editing.delete(o.id);
       this.onSent?.();
       this.sheetKey = '';
-      this.refreshComputer();
+      this.deliver(card, send, o, r.amount!, gems);
     });
     send.disabled = !q.ok;
     const gain = h('span', 'order-gain');
@@ -1855,10 +1924,68 @@ export class App {
     row.append(send, this.confirmBtn('btn small bad', 'Refuser', 'Refuser ?', () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
+      this.computer!.key = '';
       this.refreshComputer();
     }));
     card.append(row);
     return card;
+  }
+
+  /** Jauge du temps qui reste à une commande : verte, puis orange, puis rouge. */
+  private paintGauge(gauge: HTMLElement, now: number): void {
+    const end = Number(gauge.dataset.expires);
+    const start = Number(gauge.dataset.received);
+    const k = Math.max(0, Math.min(1, (end - now) / Math.max(1, end - start)));
+    const fill = gauge.firstElementChild as HTMLElement;
+    fill.style.width = `${Math.round(k * 100)}%`;
+    gauge.classList.toggle('mid', k <= 0.5 && k > 0.2);
+    gauge.classList.toggle('low', k <= 0.2);
+    const t = `⏳ ${duration(end - now)}`;
+    if (gauge.lastElementChild!.textContent !== t) gauge.lastElementChild!.textContent = t;
+  }
+
+  /** Livraison : le tampon « LIVRÉ » s'abat, le client remercie, les pièces et les diamants filent vers le haut. */
+  private deliveringUntil = 0;
+  private deliver(card: HTMLElement, from: HTMLElement, o: Order, amount: number, gems: number): void {
+    this.deliveringUntil = performance.now() + 1300;
+    card.classList.add('delivered');
+    const quote = card.querySelector('.letter-quote');
+    if (quote) quote.textContent = `« ${orderThanks(o)} »`;
+    card.append(h('div', 'letter-delivered', 'LIVRÉ'));
+    this.gainToast(amount);
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce) {
+      this.fly(from, this.moneyPill, 6, () => h('span', 'fly coin'));
+      this.fly(from, this.gemsPill, Math.min(6, gems), () => iconCanvas('gem', 1, 'fly fly-gem'));
+    }
+    window.setTimeout(() => {
+      this.deliveringUntil = 0;
+      if (this.computer) this.computer.key = '';
+      this.refreshComputer();
+    }, 1300);
+  }
+
+  /** Fait voler quelques pièces (ou diamants) d'un élément vers un autre. */
+  private fly(from: HTMLElement, to: HTMLElement, n: number, make: () => HTMLElement): void {
+    const a = from.getBoundingClientRect();
+    const b = to.getBoundingClientRect();
+    for (let i = 0; i < n; i++) {
+      const el = make();
+      const x0 = a.left + a.width * (0.5 + (Math.random() - 0.5) * 0.6);
+      const y0 = a.top + a.height / 2;
+      Object.assign(el.style, { left: `${x0}px`, top: `${y0}px`, transitionDelay: `${i * 70}ms` });
+      document.body.append(el);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.transform = `translate(${b.left + b.width / 2 - x0}px, ${b.top + b.height / 2 - y0}px) scale(.7)`;
+        el.style.opacity = '0.2';
+      }));
+      window.setTimeout(() => el.remove(), 900 + i * 70);
+    }
+    window.setTimeout(() => {
+      to.classList.remove('bump');
+      void to.offsetWidth;
+      to.classList.add('bump');
+    }, 700);
   }
 
   /** La popularité de la marque et les tendances du moment. */

@@ -9,7 +9,8 @@ src/
 │   ├── brewing/strains.ts levures
 │   ├── stations.ts       les 7 machines : réglages, niveaux, durées
 │   ├── market.ts         niveaux du bar, fûts, prix
-│   ├── orders.ts         tableau de commandes : profils de clients, types de commandes, grossiste
+│   ├── orders.ts         tableau de commandes : profils de clients, types de commandes, diamants, grossiste
+│   ├── letters.ts        les mots des lettres de commande : type de client, phrase, merci
 │   ├── trends.ts         tendances du moment et popularité (bières, marque)
 │   ├── shop.ts           catalogues : diamants (monnaie premium), boosts par poste, personnel, mobilier du bar, déblocages d'étiquettes
 │   ├── advice.ts         le conseil de Gaston au comptoir du magasin, selon l'onglet
@@ -23,6 +24,7 @@ src/
 │   ├── rooms.ts          le stockage et le bar (salle en haut, cave à fûts en bas), 5 décors chacun
 │   ├── bottleArt.ts      bouteilles de l'étagère, caisses
 │   ├── officeRoom.ts     le bureau : fenêtre sur l'atelier (en direct), panneau des commandes, présentoir de la gamme, ordinateur ; 5 décors
+│   ├── portraits.ts      portraits pixel des clients (une tenue par type, une tête par nom)
 │   ├── icons.ts          icônes en pixel art (actions, enveloppe, objets du magasin, diamant)
 │   └── space.ts          profondeur : sols en perspective (point de fuite), ombrage tramé, ombres portées
 ├── ui/                   interface DOM : header, barre de navigation en bas (pièces, magasin), boutons d'action carrés et objets du décor à toucher, glissement, panneaux,
