@@ -19,7 +19,7 @@ describe('décors des pièces', () => {
   it('les lampes posées éclairent la pièce, à leur place et à leur échelle', () => {
     resetDecor();
     const [x, y, r] = decorLights('bar', 1)[0]!;
-    expect([x, y, r]).toEqual([43, 18, 50]); // l'ampoule du comptoir poussiéreux
+    expect([x, y, r]).toEqual([80, 18, 50]); // l'ampoule du comptoir poussiéreux
     decorLayout.bar[1]!.find((i) => i.a === 'bulb')!.s = 2;
     expect(decorLights('bar', 1)[0]![2]).toBe(100);
     resetDecor();

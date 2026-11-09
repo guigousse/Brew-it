@@ -697,15 +697,12 @@ export function drawKeg(g: CanvasRenderingContext2D, x: number, y: number, s: nu
 
 /** Le bar occupe les 2/3 du haut, la cave et ses fûts le tiers du bas. */
 export const CELLAR_Y = 200;
-/** Bord gauche de l'écran du bar, dans son plan (le comptoir part de là). */
-let barEdge = 0;
-/**
- * Comptoir : dessus et façade. Il part du bord gauche de l'écran (son bout gauche reste hors champ, quelle que soit
- * la largeur de l'écran) et va jusqu'au milieu de la salle (sa fin et sa hauteur sont dans barLayout).
- */
+/** Durée de la descente (ou de la remontée) de l'objet d'événement, en secondes. */
+const EV_DROP = 1.2;
+/** Comptoir : dessus et façade (sa place est dans barLayout : la moitié gauche de la salle). */
 const CT = () => {
   const c = barLayout.counter;
-  return { top: c.y, front: c.y + c.h, x0: Math.min(c.x, barEdge - 3), x1: c.x + c.w };
+  return { top: c.y, front: c.y + c.h, x0: c.x, x1: c.x + c.w };
 };
 const BAR_HIT: Rect = { x: 0, y: 24, w: ROOM_W, h: CELLAR_Y - 24 };
 /** Sol de la cave, où reposent les fûts. */
@@ -772,8 +769,8 @@ function seatsFor(level: number, n: number, bench = 0): Seat[] {
   const out: Seat[] = [];
   const { x0, x1, front } = CT();
   const stools = Math.min(n - bench, level === 1 ? 2 : 6);
-  const span = level === 1 ? Math.min(30, x1 - x0 - 20) : x1 - x0 - 16;
-  const start = level === 1 ? Math.round((x0 + x1) / 2 - span / 2) : x0 + 8;
+  const span = level === 1 ? 50 : x1 - x0 - 24;
+  const start = level === 1 ? 48 : x0 + 12;
   for (let i = 0; i < stools; i++) out.push({ x: Math.round(start + (stools === 1 ? span / 2 : (span * i) / (stools - 1))), y: front + 14, kind: 'stool' });
   const rest = n - stools;
   for (let i = 0; i < rest; i++) {
@@ -788,10 +785,7 @@ function seatsFor(level: number, n: number, bench = 0): Seat[] {
  * (en bas), les suivants de plus en plus au fond.
  */
 function tableSpot(n: number): { x: number; y: number } {
-  const z = barLayout.tables;
-  const col = n % 2;
-  const row = Math.floor(n / 2);
-  return { x: z.x + 17 + col * 34, y: z.y + z.h - row * 26 };
+  return { x: 28 + (n % 3) * 52, y: 186 };
 }
 
 /** Couleurs des clients : peau, cheveux, haut. */
@@ -806,11 +800,6 @@ const WALK_S = 3.5;
 
 export class BarRoom extends Room {
   readonly key = 'bar' as const;
-
-  override resize(w: number, h: number): void {
-    super.resize(w, h);
-    barEdge = this.b.L;
-  }
   /** Emplacement du fût de chaque tireuse, dans la cave. */
   kegRect(i: number, taps: number): Rect {
     const slot = (ROOM_W - 12) / taps;
@@ -824,8 +813,8 @@ export class BarRoom extends Room {
   private tapX(i: number, taps: number, lv: number): number {
     const { x0, x1 } = CT();
     // les tireuses à gauche, le barman à droite du comptoir
-    const span = lv === 1 ? 0 : x1 - x0 - 34;
-    const start = lv === 1 ? Math.round(x0 + (x1 - x0 - 20) / 2) : x0 + 8;
+    const span = lv === 1 ? 30 : x1 - x0 - 30;
+    const start = lv === 1 ? 58 : x0 + 15;
     return Math.round(start + (taps === 1 ? span / 2 : (span * i) / (taps - 1)));
   }
 
@@ -841,21 +830,40 @@ export class BarRoom extends Room {
 
   /** L'objet de l'événement en cours, dans le coin en haut à droite : il n'est là que le temps de l'événement. */
   private drawEventItem(game: Game, lv: number, t: number): void {
-    if (!game.partying && !this.preview) return;
-    const ev = this.preview?.event ?? game.eventId;
+    // il descend du plafond quand l'événement commence, et remonte quand il se termine
+    const on = game.partying || !!this.preview;
+    if (on !== this.evOn) {
+      this.evOn = on;
+      this.evAt = this.evAt < 0 && on ? t - EV_DROP : t; // déjà en cours à l'ouverture : pas d'animation
+    }
+    if (on) this.evId = this.preview?.event ?? game.eventId; // en remontant, il garde l'objet de l'événement fini
+    if (this.evAt < 0) this.evAt = t - EV_DROP;
+    const u = Math.min(1, (t - this.evAt) / EV_DROP);
+    const k = on ? 1 - (1 - u) ** 3 : 1 - u * u; // arrivée qui ralentit, départ qui accélère
+    if (k <= 0) return;
+    const e = barLayout.event;
+    const dy = -Math.round((1 - k) * (e.y + e.h - this.b.T + 4));
+    const g = this.g;
+    g.save();
+    g.translate(0, dy);
+    const ev = this.evId ?? game.eventId;
     if (ev === 'foot') this.drawTv(lv, t);
     else if (ev === 'darts') this.drawDarts(lv, t);
     else this.drawDisco(t);
+    g.restore();
   }
+  private evOn = false;
+  private evAt = -1;
+  private evId: string | null = null;
 
   /** Grande télé suspendue : cathodique en bois au début, écran plat ensuite, verre et néon au dernier niveau. Le match défile. */
   private drawTv(lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
-    const W = 34;
-    const H = 24;
+    const W = 50;
+    const H = 34;
     const x = barLayout.event.x + Math.floor((barLayout.event.w - W) / 2);
-    const y = barLayout.event.y + 12;
+    const y = barLayout.event.y + 10;
     // suspentes
     px(x + 6, this.b.T, 1, y - this.b.T, '#1b1424'); px(x + W - 7, this.b.T, 1, y - this.b.T, '#1b1424');
     let sx: number, sy: number, sw: number, sh: number;
@@ -864,8 +872,8 @@ export class BarRoom extends Room {
       px(x + 1, y + 1, W - 2, H - 2, '#7a5228'); px(x + 1, y + 1, W - 2, 1, '#a8743c');
       [sx, sy, sw, sh] = [x + 3, y + 3, W - 12, H - 6];
       px(sx - 1, sy - 1, sw + 2, sh + 2, '#3a2c20');
-      px(x + W - 7, y + 5, 4, 4, '#c4b090'); px(x + W - 6, y + 6, 2, 2, '#5a4a3a');
-      px(x + W - 7, y + 12, 4, 4, '#c4b090'); px(x + W - 6, y + 13, 2, 2, '#5a4a3a');
+      px(x + W - 7, y + 6, 4, 4, '#c4b090'); px(x + W - 6, y + 7, 2, 2, '#5a4a3a');
+      px(x + W - 7, y + 14, 4, 4, '#c4b090'); px(x + W - 6, y + 15, 2, 2, '#5a4a3a');
     } else {
       const frame = lv === 5 ? '#dce6f0' : '#1b1424';
       px(x, y, W, H - 2, frame);
@@ -879,14 +887,14 @@ export class BarRoom extends Room {
     const mid = sx + Math.floor(sw / 2);
     px(mid, sy, 1, sh, '#c8f0d0');
     g.strokeStyle = '#c8f0d0'; g.lineWidth = 1;
-    g.strokeRect(mid - 2.5, sy + sh / 2 - 2.5, 5, 5);
+    g.strokeRect(mid - 3.5, sy + sh / 2 - 3.5, 7, 7);
     const bx = mid + Math.round(Math.sin(t * 1.3) * (sw / 2 - 3));
     const by = sy + Math.round(sh / 2 + Math.sin(t * 2.1) * (sh / 2 - 2));
     for (let i = 0; i < 3; i++) {
-      px(bx - 4 + Math.round(Math.sin(t * 1.7 + i * 2) * 3) - i * 3, sy + 2 + i * 4, 1, 2, '#e8553a');
-      px(bx + 3 + Math.round(Math.cos(t * 1.5 + i) * 3) + i * 2, sy + 3 + i * 4, 1, 2, '#3f88d4');
+      px(bx - 5 + Math.round(Math.sin(t * 1.7 + i * 2) * 4) - i * 4, sy + 3 + i * 7, 1, 3, '#e8553a');
+      px(bx + 4 + Math.round(Math.cos(t * 1.5 + i) * 4) + i * 3, sy + 5 + i * 7, 1, 3, '#3f88d4');
     }
-    px(bx, by, 1, 1, '#ffffff');
+    px(bx, by, 2, 2, '#ffffff');
     // reflet
     g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(sx, sy, sw, 2);
   }
@@ -895,27 +903,29 @@ export class BarRoom extends Room {
   private drawDarts(lv: number, t: number): void {
     const g = this.g;
     const px = painter(g);
-    const S = 28;
+    const S = 38;
     const x = barLayout.event.x + Math.floor((barLayout.event.w - S) / 2);
-    const y = barLayout.event.y + 10;
+    const y = barLayout.event.y + 8;
+    // suspente : la cible descend du plafond avec son panneau
+    px(x + Math.floor(S / 2), this.b.T, 1, y - this.b.T, '#1b1424');
     const panel = lv <= 2 ? ['#a8743c', '#7a5228'] : lv <= 4 ? ['#3a2418', '#241410'] : ['#f4f8fc', '#c4d0dc'];
     px(x, y, S, S, '#1b1424'); px(x + 1, y + 1, S - 2, S - 2, panel[0]!); px(x + 1, y + S - 3, S - 2, 2, panel[1]!);
     const cx = x + S / 2;
     const cy = y + S / 2;
-    for (const [r, c] of [[11, '#1b1424'], [10, '#b83a24'], [9, '#1b1424'], [8, '#e8dcc0'], [6, '#2c8a4a'], [5, '#e8dcc0'], [3, '#b83a24'], [1.5, '#2c8a4a']] as const) {
+    for (const [r, c] of [[15, '#1b1424'], [14, '#b83a24'], [12, '#1b1424'], [11, '#e8dcc0'], [8, '#2c8a4a'], [7, '#e8dcc0'], [4, '#b83a24'], [2, '#2c8a4a']] as const) {
       g.fillStyle = c; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
     }
     // secteurs
     g.strokeStyle = 'rgba(27,20,36,0.5)';
-    for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * 9, cy + Math.sin(a) * 9); g.stroke(); }
+    for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * 12, cy + Math.sin(a) * 12); g.stroke(); }
     // trois fléchettes, relancées à tour de rôle
     for (let i = 0; i < 3; i++) {
       const round = Math.floor(t * 0.7 + i / 3);
       const a = hash(round, i) * Math.PI * 2;
-      const d = hash(round, i + 7) * 8;
+      const d = hash(round, i + 7) * 11;
       const fx = Math.round(cx + Math.cos(a) * d);
       const fy = Math.round(cy + Math.sin(a) * d);
-      px(fx, fy, 1, 1, '#1b1424'); px(fx + 1, fy - 1, 1, 1, '#c4d0dc'); px(fx + 2, fy - 2, 2, 1, '#f2c14e'); px(fx + 3, fy - 3, 1, 1, '#e8553a');
+      px(fx, fy, 1, 1, '#1b1424'); px(fx + 1, fy - 1, 1, 1, '#c4d0dc'); px(fx + 2, fy - 2, 1, 1, '#c4d0dc'); px(fx + 3, fy - 3, 2, 2, '#f2c14e'); px(fx + 5, fy - 5, 1, 1, '#e8553a'); px(fx + 4, fy - 5, 1, 1, '#e8553a');
     }
   }
 
@@ -924,8 +934,8 @@ export class BarRoom extends Room {
     const g = this.g;
     const px = painter(g);
     const cx = barLayout.event.x + Math.floor(barLayout.event.w / 2);
-    const cy = barLayout.event.y + 24;
-    const r = 9;
+    const cy = barLayout.event.y + 26;
+    const r = 13;
     px(cx, this.b.T, 1, cy - r - this.b.T, '#c4d0dc');
     g.fillStyle = '#1b1424'; g.beginPath(); g.arc(cx + 0.5, cy + 0.5, r + 1, 0, Math.PI * 2); g.fill();
     const spin = Math.floor(t * 6);
@@ -939,8 +949,8 @@ export class BarRoom extends Room {
     for (let i = 0; i < 4; i++) {
       if (hash(spin, i) < 0.5) continue;
       const a = hash(spin, i + 3) * Math.PI * 2;
-      const sx = Math.round(cx + Math.cos(a) * (r + 4));
-      const sy = Math.round(cy + Math.sin(a) * (r + 4));
+      const sx = Math.round(cx + Math.cos(a) * (r + 5));
+      const sy = Math.round(cy + Math.sin(a) * (r + 5));
       px(sx, sy - 1, 1, 3, '#ffffff'); px(sx - 1, sy, 3, 1, '#ffffff');
     }
   }
@@ -1162,9 +1172,9 @@ export class BarRoom extends Room {
   private drawBartender(game: Game, lv: number, t: number): void {
     // le barman en renfort, gilet sombre et nœud papillon, de l'autre côté des tireuses
     const { x0, x1 } = CT();
-    if (game.barmanOn) this.drawHelper(game, lv === 1 ? x0 + 4 : Math.round((x0 + x1) / 2) - 10, t);
+    if (game.barmanOn) this.drawHelper(game, lv === 1 ? 26 : 16, t);
     const px = painter(this.g);
-    const x = x1 - 16;
+    const x = lv === 1 ? 106 : 128;
     const y = CT().top - 26;
     px(x, y, 10, 4, '#e8e4dc');
     px(x + 1, y + 3, 8, 7, '#e0a77f');
@@ -1208,24 +1218,17 @@ export class BarRoom extends Room {
     // un client reste ~20 min : la salle compte en moyenne affluence × 20 personnes
     const busy = this.preview ? 1 : serving ? Math.min(0.95, (game.barRate * 20) / seats.length) : 0;
     if (this.has(game, 'benches')) {
-      // banquettes capitonnées en U autour de chaque table, ouvertes vers l'avant de la salle
+      // banquettes capitonnées derrière chaque table
       const tone = lv === 5 ? ['#f4f8fc', '#dce6f0', '#8a9ab0'] : lv === 4 ? ['#3a6aa8', '#2e5a9a', '#1c3a6a'] : ['#8a2a32', '#a8343c', '#5a1a20'];
       const xs = [...new Set(seats.filter((st) => st.kind === 'table').map((st, i, all) => Math.round((st.x + (all[i % 2 ? i - 1 : i + 1] ?? st).x) / 2)))];
       const ys = new Map(seats.filter((st) => st.kind === 'table').map((st, i, all) => [Math.round((st.x + (all[i % 2 ? i - 1 : i + 1] ?? st).x) / 2), st.y]));
       for (const tx of xs) {
         const y = ys.get(tx) ?? 186;
-        // le dossier du fond
-        g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(tx - 18, y + 3, 38, 2);
-        px(tx - 19, y - 18, 38, 9, tone[2]!); px(tx - 18, y - 17, 36, 7, tone[0]!);
-        for (let k = 0; k < 4; k++) px(tx - 13 + k * 8, y - 14, 1, 1, tone[2]!); // capitons
-        px(tx - 19, y - 9, 38, 3, tone[1]!); px(tx - 19, y - 9, 38, 1, tone[0]!);
-        // les deux côtés du U, qui descendent vers l'avant
-        for (const sx of [tx - 19, tx + 14]) {
-          px(sx, y - 18, 5, 22, tone[2]!); px(sx + 1, y - 17, 3, 20, tone[0]!);
-          px(sx + 1, y - 6, 3, 1, tone[2]!);
-          px(sx, y + 4, 5, 1, tone[2]!);
-          px(sx + 1, y + 5, 1, 1, '#2c283a'); px(sx + 3, y + 5, 1, 1, '#2c283a');
-        }
+        g.fillStyle = 'rgba(16,10,24,0.35)'; g.fillRect(tx - 16, y - 1, 34, 2);
+        px(tx - 17, y - 17, 34, 13, tone[2]!); px(tx - 16, y - 16, 32, 11, tone[0]!);
+        for (let k = 0; k < 4; k++) px(tx - 13 + k * 8, y - 13, 1, 1, tone[2]!); // capitons
+        px(tx - 17, y - 5, 34, 4, tone[1]!); px(tx - 17, y - 5, 34, 1, tone[0]!);
+        px(tx - 17, y - 1, 2, 2, '#2c283a'); px(tx + 15, y - 1, 2, 2, '#2c283a');
       }
     }
     for (let i = 0; i < seats.length; i++) {
