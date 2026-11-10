@@ -2548,8 +2548,9 @@ export class App {
     card.append(h('div', 'reward-sub', `${hrs ? `${hrs} h ` : ''}${min} min · ${liters(o.liters ?? 0)} vendus`));
     const prize = h('div', 'reward-prize');
     const money = h('div', 'reward-money');
+    const value = h('span', 'reward-value', `+${moneyInt(o.earned)}`);
     if (o.earned > 0) {
-      money.append(h('span', 'reward-bag', '💰'), h('span', 'reward-value', `+${moneyInt(o.earned)}`));
+      money.append(h('span', 'reward-bag', '💰'), value);
       prize.append(money);
     }
     if (o.gems) {
@@ -2558,11 +2559,13 @@ export class App {
       prize.append(gem);
     }
     card.append(prize);
-    const collect = () => {
-      this.closeModal();
-      if (g.offline?.earned) this.collectOfflineMoney();
+    const collect = (coins = 8) => {
+      // les pièces partent du montant affiché au centre, avant que la fenêtre ne se ferme
+      if (g.offline?.earned) this.collectOfflineMoney(o.earned > 0 ? value : undefined, coins);
       if (g.offline?.gems) this.collectOfflineGems();
+      this.closeModal();
     };
+    const recover = this.btn(`btn big${o.earned > 0 && g.adLeft('double') > 0 ? '' : ' primary'}`, 'Récupérer', () => collect());
     const left = g.adLeft('double');
     if (o.earned > 0 && left > 0) {
       const dbl = h('button', 'btn primary big reward-double');
@@ -2572,24 +2575,72 @@ export class App {
         const seen = await showRewardedAd();
         dbl.disabled = false;
         if (!seen) return this.toast('Pub interrompue : rien de doublé', 'info');
+        const from = o.earned;
         const r = g.doubleOffline();
         if (!r.ok) return this.toast(r.reason!, 'bad');
-        sfx.play('levelUp');
-        collect();
+        dbl.remove();
+        recover.remove();
+        this.doubleCelebration(card, prize, value, from, g.offline?.earned ?? from * 2, () => collect(18));
       };
       card.append(dbl);
     }
-    card.append(this.btn(`btn big${o.earned > 0 && left > 0 ? '' : ' primary'}`, 'Récupérer', collect));
+    card.append(recover);
+  }
+
+  /**
+   * Le gain qui double, en grand : un soleil doré tourne derrière la bourse, le tampon « ×2 » s'abat, le montant
+   * grimpe jusqu'au double, une gerbe de pièces jaillit ; puis « Encaisser », et les pièces filent vers le compteur.
+   */
+  private doubleCelebration(card: HTMLElement, prize: HTMLElement, value: HTMLElement, from: number, to: number, done: () => void): void {
+    card.classList.add('doubling');
+    prize.classList.add('doubled');
+    const rays = h('div', 'reward-rays');
+    const stamp = h('div', 'reward-stamp', '×2');
+    prize.prepend(rays);
+    prize.append(stamp);
+    sfx.play('cash');
+    this.onSent?.();
+    // le montant grimpe (ralentit en arrivant), le tampon tombe au milieu de la montée
+    const start = performance.now();
+    const dur = 1300;
+    const step = (now: number) => {
+      const k = Math.min(1, (now - start) / dur);
+      const e = 1 - (1 - k) ** 3;
+      value.textContent = `+${moneyInt(Math.round(from + (to - from) * e))}`;
+      if (k < 1) requestAnimationFrame(step);
+      else {
+        value.classList.add('final');
+        sfx.play('levelUp');
+        this.onSent?.();
+        // la gerbe de pièces
+        for (let i = 0; i < 26; i++) {
+          const c = h('span', 'coin burst-coin');
+          const a = (i / 26) * Math.PI * 2 + Math.random() * 0.3;
+          const d = 70 + Math.random() * 70;
+          c.style.setProperty('--dx', `${Math.round(Math.cos(a) * d)}px`);
+          c.style.setProperty('--dy', `${Math.round(Math.sin(a) * d - 30)}px`);
+          c.style.animationDelay = `${Math.round(Math.random() * 120)}ms`;
+          prize.append(c);
+          window.setTimeout(() => c.remove(), 1400);
+        }
+        const go = this.btn('btn primary big reward-cash', `Encaisser +${moneyInt(to)}`, done);
+        card.append(go);
+      }
+    };
+    window.setTimeout(() => {
+      stamp.classList.add('down');
+      requestAnimationFrame(step);
+    }, 350);
   }
 
   /** Récolte l'argent de l'absence : les pièces filent vers le compteur, l'argent défile, un petit mot résume l'absence. */
-  collectOfflineMoney(): void {
+  collectOfflineMoney(origin: HTMLElement = this.harvest, coins = 8): void {
     const g = this.game();
     const o = g.offline;
     if (!o || o.earned <= 0) return;
     const from = g.money;
     const { seconds, liters: l } = o;
-    this.fly(this.harvest, this.moneyPill, 8, () => h('span', 'fly coin'));
+    this.fly(origin, this.moneyPill, coins, () => h('span', 'fly coin'));
     const earned = g.collectOffline('money');
     sfx.play('cash');
     this.moneyAnim = { from, to: g.money, start: performance.now() + 600 };
