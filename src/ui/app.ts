@@ -2964,8 +2964,7 @@ export class App {
         text.append(h('span', 'boost-name', def.name), h('span', 'boost-effect', def.text));
         const blocked = g.boostBlocked(def.id);
         let b: HTMLButtonElement;
-        if (blocked && def.daily && blocked.startsWith('Une fois par jour')) b = this.btn('btn price lock', 'demain', () => this.toast(blocked, 'info'));
-        else if (blocked && cur) b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
+        if (blocked && cur) b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
         else {
           const extend = !!cur;
           b = this.gemsBtn('', def.gems, () => {

@@ -37,8 +37,6 @@ export interface BoostDef {
   priceMult?: number;
   /** Prix en diamants : fixe, et dégressif avec la durée (quatre fois 15 min coûtent plus qu'une heure). */
   gems: number;
-  /** Une seule fois par jour (le jour du quota du grossiste, qui se recharge à minuit). */
-  daily?: boolean;
 }
 
 /** Les postes, dans l'ordre du magasin ; « null » réunit les coups ponctuels. */
@@ -59,7 +57,7 @@ export const BOOSTS: readonly BoostDef[] = [
   { id: 'happyHour', channel: 'bar', name: 'Happy hour', text: 'Clients ×2, verres −20 % · 2 h', mult: 2, minutes: 120, priceMult: 0.8, gems: 6 },
   { id: 'buzz', channel: 'bar', name: 'Bouche-à-oreille', text: '50 % de clients en plus · 8 h', mult: 1.5, minutes: 480, gems: 15 },
   { id: 'broker', channel: 'wholesale', name: 'Grossiste généreux', text: 'Le grossiste paie +50 % · 4 h', mult: 1.5, minutes: 240, gems: 8 },
-  { id: 'openGate', channel: 'wholesale', name: 'Grossiste sans limite', text: 'Reprend tout · 4 h · 1×/jour', mult: 1, minutes: 240, gems: 50, daily: true },
+  { id: 'openGate', channel: 'wholesale', name: 'Grossiste sans limite', text: 'Le grossiste reprend tout · 4 h', mult: 1, minutes: 240, gems: 50 },
   { id: 'prospect', name: 'Prospection', text: 'Une commande arrive tout de suite', mult: 1, minutes: 0, gems: 3 },
 ];
 export const boostById = (id: string) => BOOSTS.find((b) => b.id === id);

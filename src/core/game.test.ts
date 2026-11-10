@@ -315,7 +315,7 @@ describe('jeu', () => {
     expect(g.wholesaleQuota(beer)).toBe(Math.round(base * 1.5));
   });
 
-  it('le grossiste sans limite reprend tout pendant 4 h, une fois par jour', () => {
+  it('le grossiste sans limite reprend tout pendant 4 h, et se prolonge comme les autres boosts', () => {
     const g = withBeer(0);
     const beer = g.beers[0]!;
     g.gems = 200;
@@ -324,11 +324,10 @@ describe('jeu', () => {
     expect(g.wholesaleQuota(beer)).toBe(Infinity);
     beer.stock = 5000;
     expect(g.wholesaleSellable(beer, 'bottle')).toBe(5000);
-    expect(g.buyBoost('openGate').ok).toBe(false); // une fois par jour
     expect(g.boostBlocked('broker')).toMatch(/en cours/); // un seul effet au poste du grossiste
-    g.time += 4 * 3600 + 1;
+    expect(g.buyBoost('openGate').ok).toBe(true); // prolongé : 8 h
+    g.time += 8 * 3600 + 1;
     expect(Number.isFinite(g.wholesaleQuota(beer))).toBe(true);
-    expect(g.boostBlocked('openGate')).toMatch(/une fois par jour/i);
   });
 
   it('le grossiste reprend bouteilles et fûts, à petit prix, dans la limite d\'un quota par bière en litres', () => {
