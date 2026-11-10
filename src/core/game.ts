@@ -1302,7 +1302,9 @@ export class Game {
 
   /** Quota du grossiste pour une bière, en litres par jour : il grandit avec sa popularité (et avec le matériel). */
   wholesaleQuota(beer: Beer): number {
-    return Math.round(this.batchLiters * (WHOLESALE_QUOTA.base + WHOLESALE_QUOTA.pop * beer.pop));
+    // pendant un boost de production, le grossiste suit la cadence : sans ça, produire plus ne rapporterait rien
+    const boost = Math.max(this.boostMult('brew'), this.boostMult('yeast') > 1 ? 1.5 : 1);
+    return Math.round(this.batchLiters * (WHOLESALE_QUOTA.base + WHOLESALE_QUOTA.pop * beer.pop) * boost);
   }
 
   /** Litres que le grossiste reprend encore aujourd'hui pour cette bière. */
@@ -1792,6 +1794,8 @@ export class Game {
     g.adUntil ??= 0;
     g.adId ??= 'paper'; // les campagnes d'avant les types de pub ressemblaient à l'annonce dans le journal
     g.adPrestige ??= false;
+    // les lettres d'avant les pourboires : une commande simple gardait son diamant affiché
+    for (const o of g.orders) if (o.tip == null && (o.kind === 'classic' || o.kind === 'keg')) o.tip = true;
     g.boosts ??= {};
     // la monnaie premium s'appelait « capsules » : elles deviennent des diamants, à nombre égal
     const oldCaps = (g as unknown as { caps?: number }).caps;

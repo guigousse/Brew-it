@@ -303,6 +303,18 @@ describe('jeu', () => {
     for (const o of g.orders) expect(g.beers.some((b) => fits(o, b.tasting))).toBe(true);
   });
 
+  it('pendant un boost de production, le grossiste suit la cadence (sinon produire plus ne rapporterait rien)', () => {
+    const g = withBeer(0);
+    const beer = g.beers[0]!;
+    const base = g.wholesaleQuota(beer);
+    g.gems = 100;
+    expect(g.buyBoost('cadence').ok).toBe(true);
+    expect(g.wholesaleQuota(beer)).toBe(base * 2);
+    g.boosts = {};
+    expect(g.buyBoost('yeast').ok).toBe(true);
+    expect(g.wholesaleQuota(beer)).toBe(Math.round(base * 1.5));
+  });
+
   it('le grossiste reprend bouteilles et fûts, à petit prix, dans la limite d\'un quota par bière en litres', () => {
     const g = withBeer(0);
     g.autoWholesale = false;
@@ -799,21 +811,31 @@ describe('diamants', () => {
     const g = withBeer(1e7);
     expect(g.gems).toBe(GEMS.start);
     g.beers[0]!.stock = 500;
-    g.orders = [{ ...drawOrder(998, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'classic', qty: 12, minQuality: 0 } as Order];
+    g.orders = [{ ...drawOrder(998, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'classic', qty: 12, minQuality: 0, tip: true } as Order];
     expect(g.fulfill(998, [g.beers[0]!.id]).ok).toBe(true);
-    expect(g.gems).toBe(GEMS.start + 1); // commande classique, client peu exigeant
+    expect(g.gems).toBe(GEMS.start + 1); // commande classique avec pourboire
     for (const id of STATION_ORDER) g.upgrade(id);
     expect(g.breweryLevel).toBe(2);
     expect(g.gems).toBe(GEMS.start + 1 + GEMS.breweryLevel[2]!);
   });
 
-  it('les commandes difficiles rapportent plus de diamants', () => {
-    expect(orderGems({ kind: 'classic', minQuality: 0.3 })).toBe(1);
-    expect(orderGems({ kind: 'classic', minQuality: 0.7 })).toBe(2); // client exigeant
-    expect(orderGems({ kind: 'style', minQuality: 0.3, want: 'x' })).toBe(2);
-    expect(orderGems({ kind: 'urgent', minQuality: 0.3 })).toBe(3);
-    expect(orderGems({ kind: 'urgent', minQuality: 0.3, want: 'x' })).toBe(4);
-    expect(orderGems({ kind: 'prestige', minQuality: 0.85 })).toBe(5);
+  it('les commandes difficiles portent des diamants ; les simples, parfois un pourboire affiché dès l\'arrivée', () => {
+    expect(orderGems({ kind: 'classic', minQuality: 0.3 })).toBe(0);
+    expect(orderGems({ kind: 'classic', minQuality: 0.3, tip: true })).toBe(1);
+    expect(orderGems({ kind: 'classic', minQuality: 0.7 })).toBe(1); // client exigeant
+    expect(orderGems({ kind: 'style', minQuality: 0.3 })).toBe(1);
+    expect(orderGems({ kind: 'urgent', minQuality: 0.3 })).toBe(2);
+    expect(orderGems({ kind: 'prestige', minQuality: 0.85 })).toBe(3);
+    // environ une commande simple sur trois porte un pourboire ; les commandes de démarrage, toutes
+    const rng = new Rng(11);
+    let tips = 0, simple = 0;
+    for (let i = 0; i < 600; i++) {
+      const o = drawOrder(i, { rng, time: 0, breweryLevel: 1, brand: 0, beers: 1, storageCap: 120, kegLiters: 5, trends: [] });
+      if (o.kind === 'classic' || o.kind === 'keg') { simple++; if (o.tip) tips++; }
+    }
+    expect(tips / simple).toBeGreaterThan(0.22);
+    expect(tips / simple).toBeLessThan(0.38);
+    expect(drawOrder(1, { rng, time: 0, breweryLevel: 1, brand: 0, beers: 1, storageCap: 120, kegLiters: 5, trends: [], starter: true }).tip).toBe(true);
   });
 
   it('une ancienne sauvegarde reçoit les diamants du départ', () => {

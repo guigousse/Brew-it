@@ -4,6 +4,10 @@
  * du moins cher au plus cher, et crée une nouvelle bière quand il a une place libre.
  *
  *   npx vite-node scripts/balance.ts [jours]
+ *
+ * Variables : SESSIONS=8,20 (visites), ACTIVE=30 (minutes actives), SEED=7 (autre tirage),
+ * COURIER=1 (embauche le livreur en continu), GEMS=spend (dépense ses diamants en boosts), GEMS=whale (diamants
+ * illimités, boosts toujours actifs), BUY=1500 (diamants achetés en plus au départ, dépensés comme GEMS=spend).
  */
 import { writeFileSync } from 'node:fs';
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
@@ -12,6 +16,7 @@ import { Game, simulateOffline } from '../src/core/game';
 import { BAR, BAR_EVENTS } from '../src/core/market';
 import { COMPUTERS } from '../src/core/orders';
 import { MAX_LEVEL, STATION_ORDER, upgradeCost } from '../src/core/stations';
+import { boostById, type BoostChannel, type BoostId } from '../src/core/shop';
 import { STORAGE } from '../src/core/warehouse';
 import { BOT_RECIPES } from './recipes';
 
@@ -21,6 +26,13 @@ const ACTIVE_MIN = Number(process.env.ACTIVE ?? 10);
 const DT = 0.25;
 
 const g = new Game();
+if (process.env.SEED) g.rng.state = Number(process.env.SEED);
+const BUY = Number(process.env.BUY ?? 0);
+const GEMS_MODE = process.env.GEMS ?? (BUY ? 'spend' : '');
+g.gems += BUY;
+let gemsSpent = 0;
+let gift = 0;
+let courierPaid = 0;
 let clock = SESSIONS[0]! * 3600; // secondes depuis le jour 1 à minuit
 g.wall = clock * 1000 + new Date(0).getTimezoneOffset() * 60000; // minuit local = minuit du jour simulé (quota du grossiste)
 const log: { t: number; what: string; cost: number }[] = [];
@@ -89,7 +101,7 @@ function nextCost(): number {
   if (sl != null) c.push(sl);
   return c.length ? Math.min(...c) : Infinity;
 }
-/** Diamants gagnés (le joueur simulé ne les dépense pas : c'est ce qu'un joueur gratuit peut s'offrir). */
+/** Diamants gagnés en jouant (ni achetés ni offerts) : ce qu'un joueur gratuit peut s'offrir. */
 const gemsByDay: number[] = [];
 
 /** Le joueur garde toujours un brassin en file : la bière la moins en stock, en bouteilles. */
@@ -163,14 +175,43 @@ function shop() {
   }
 }
 
+/**
+ * Boosts : jusqu'à la prochaine visite, le meilleur boost des machines, la levure express et le grossiste généreux
+ * (les plus rentables d'après les mesures), avec ce qu'il a de diamants. GEMS=whale : sans limite.
+ */
+function spendGems() {
+  if (!GEMS_MODE) return;
+  if (GEMS_MODE === 'whale' && g.gems < 1e6) {
+    gift += 1e7 - g.gems; // les diamants offerts ne comptent pas comme gagnés
+    g.gems = 1e7;
+  }
+  const cover = g.time + 13 * 3600;
+  const plans: [BoostChannel, BoostId[]][] = [['wholesale', ['broker']], ['brew', ['nightShift', 'cadence', 'rush']], ['yeast', ['yeast']]];
+  for (const [ch, ids] of plans) {
+    for (let k = 0; k < 10; k++) {
+      const cur = g.boostOf(ch);
+      if (cur && cur.until >= cover) break;
+      const id = ids.find((x) => g.gems >= boostById(x)!.gems && !g.boostBlocked(x));
+      if (!id || !g.buyBoost(id).ok) break;
+      gemsSpent += boostById(id)!.gems;
+    }
+  }
+}
+
 function session(minutes: number) {
   if (g.offline) g.collectOffline();
+  if (process.env.COURIER) for (let i = 0; i < 3; i++) {
+    const c = g.staffCost('courier');
+    if (g.money < c * 3 || !g.hire('courier').ok) break;
+    courierPaid += c;
+  }
   // SNAP=dossier : garde le dernier état à chaque niveau de brasserie (bN) et de bar (rN), pour scripts/roi.ts
   if (process.env.SNAP && g.beers.length) for (const k of ['b' + g.breweryLevel, 'r' + g.barLevel]) writeFileSync(`${process.env.SNAP}/${k}.json`, JSON.stringify(g.toJSON()));
   deliver();
   wholesale();
   tendBar();
   shop();
+  spendGems();
   while (g.beers.length < g.rangeSlots && newBeer()) buy(`Nouvelle bière (${g.beers.length})`, 0);
   if (g.beers.length) {
     g.loadBeer(g.beers[0]!.id);
@@ -200,7 +241,7 @@ let completed: number | null = null;
 for (let day = 0; day < DAYS && completed == null; day++) {
   revenueByDay[day] = g.totalRevenue;
   brandByDay[day] = g.brand;
-  gemsByDay[day] = g.gems;
+  gemsByDay[day] = g.gems + gemsSpent - BUY - gift;
   for (let i = 0; i < SESSIONS.length; i++) {
     const target = day * 86400 + SESSIONS[i]! * 3600;
     if (target <= clock) continue;
@@ -240,7 +281,8 @@ console.log(revenueByDay.map((r, i) => `J${i + 1} ${Math.round(((revenueByDay[i 
 console.log('\n=== Résumé');
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
-console.log('Diamants gagnés (cumul) :', gemsByDay.map((c, i) => `J${i + 1} ${c}`).join(' · '), '· fin', g.gems);
+console.log('Diamants gagnés (cumul) :', gemsByDay.map((c, i) => `J${i + 1} ${c}`).join(' · '), '· fin', g.gems + gemsSpent - BUY - gift);
+console.log('Diamants dépensés en boosts :', gemsSpent, '· achetés :', BUY, process.env.COURIER ? `· livreur payé ${Math.round(courierPaid)} €` : '');
 console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.round(b * 100)}`).join(' · '));
 console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', Math.round(g.wholesaleLiters), 'L,', Math.round(g.wholesaleRevenue), '€');
 console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots);

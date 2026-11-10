@@ -99,6 +99,8 @@ export interface Order {
   /** Bières différentes demandées (assortiment). */
   mix?: number;
   minQuality: number;
+  /** Commande simple dont le client laisse un diamant en pourboire. */
+  tip?: boolean;
   /** Paiement à la livraison. */
   reward: number;
   received: number;
@@ -127,16 +129,20 @@ export const URGENT_LIFE_S = 2 * 3600;
 /** Multiplicateur de paiement par type de commande. */
 export const KIND_PAY: Record<OrderKind, number> = { classic: 1, style: 1.3, keg: 1.15, mix: 1.25, urgent: 1.5, prestige: 2.5 };
 /** Diamants d'une commande livrée, selon son type : plus elle est difficile, plus elle rapporte. */
-export const KIND_GEMS: Record<OrderKind, number> = { classic: 1, keg: 1, style: 2, mix: 2, urgent: 3, prestige: 5 };
+export const KIND_GEMS: Record<OrderKind, number> = { classic: 0, keg: 0, style: 1, mix: 1, urgent: 2, prestige: 3 };
+/** Une commande simple (classique ou fûts) porte parfois un diamant, comme un pourboire : tiré à l'arrivée de la lettre. */
+export const TIP_CHANCE = 0.3;
 /** Qualité exigée à partir de laquelle une commande rapporte un diamant de plus. */
 export const DEMANDING_QUALITY = 0.65;
 
 /**
- * Diamants que rapporte une commande : selon son type, +1 si le client est exigeant sur la qualité,
- * +1 pour une commande urgente qui impose aussi un style. Calculé, pas tiré au sort : il s'affiche sur la commande.
+ * Diamants que rapporte une commande : les commandes difficiles en portent toujours (style, assortiment 1, urgente 2,
+ * prestige 3), une commande simple seulement si son client laisse un pourboire (tip) ; +1 si le client est exigeant.
+ * Connu dès l'arrivée de la lettre : il s'affiche sur le bouton d'envoi.
  */
-export function orderGems(o: Pick<Order, 'kind' | 'minQuality' | 'want'>): number {
-  return KIND_GEMS[o.kind] + (o.kind !== 'prestige' && o.minQuality >= DEMANDING_QUALITY ? 1 : 0) + (o.kind === 'urgent' && o.want ? 1 : 0);
+export function orderGems(o: Pick<Order, 'kind' | 'minQuality' | 'tip'>): number {
+  const simple = o.kind === 'classic' || o.kind === 'keg';
+  return (simple ? (o.tip ? 1 : 0) : KIND_GEMS[o.kind]) + (o.kind !== 'prestige' && o.minQuality >= DEMANDING_QUALITY ? 1 : 0);
 }
 
 /** Libellés des types de commandes. */
@@ -210,6 +216,8 @@ export function drawOrder(id: number, ctx: OrderContext): Order {
     order.qty = Math.max(order.mix * 6, Math.round(order.qty / (order.mix * 6)) * order.mix * 6);
   }
   if (kind === 'keg') order.qty = Math.max(1, Math.round((bottles * 0.33) / ctx.kegLiters));
+  // les commandes de démarrage portent toutes un diamant : on découvre les diamants dès la première livraison
+  if (kind === 'classic' || kind === 'keg') order.tip = !!ctx.starter || rng.next() < TIP_CHANCE;
   // paiement fixe, annoncé : plus la marque est connue, mieux elle est payée
   const volume = kind === 'keg' ? (order.qty * ctx.kegLiters) / 0.33 : order.qty;
   order.reward = Math.round(volume * type.price * KIND_PAY[kind] * (0.8 + 0.4 * clamp01(ctx.brand)));

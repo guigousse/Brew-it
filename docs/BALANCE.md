@@ -4,10 +4,10 @@
 
 | Critère | Cible | Résultat (rééquilibrage de novembre 2026) |
 |---|---|---|
-| Durée pour tout débloquer (4 visites/jour) | 4 semaines environ | **29 jours** |
-| Durée pour un joueur occasionnel (2 visites/jour) | 5 à 6 semaines | **48 jours** (un peu long, voir plus bas) |
-| Visites où l'on peut acheter quelque chose | au moins 1 sur 2 | **82 %** (98 % à 2 visites/jour) |
-| Plus longue période sans rien acheter | 1 journée au plus | **2 visites** (1 à 2 visites/jour) |
+| Durée pour tout débloquer (4 visites/jour) | 4 semaines environ | **28 à 31 jours** selon le tirage |
+| Durée pour un joueur occasionnel (2 visites/jour) | 5 à 6 semaines | **45 jours** (un peu long, voir plus bas) |
+| Visites où l'on peut acheter quelque chose | au moins 1 sur 2 | **82 %** (94 % à 2 visites/jour) |
+| Plus longue période sans rien acheter | 1 journée au plus | **3 visites** (2 à 2 visites/jour) |
 | Premier jour | beaucoup de récompenses | ~20 achats, niveau 2 en 4 h 30 de jeu (inchangé) |
 | Machines (4 visites/jour) | des paliers réguliers | niveau 3 à J4, niveau 4 à J10, niveau 5 à J18 |
 
@@ -185,11 +185,49 @@ Aujourd'hui, le moulin lance un brassin dès qu'il est libre. Les brassins s'acc
 
 Mesure sur l'état réel d'une partie juste après chaque agrandissement du bar, 8 h de bar avec et sans barman. Avec 6 fûts prévus par tireuse, il rapporte 446 € (bistrot), 1 913 € (pub), 7 146 € (taproom), 14 126 € (bar du futur) ; avec les fûts que le joueur simulé avait réellement, presque rien. Les premiers prix (jusqu'à 150 000 €) ne remboursaient jamais le barman passé le bistrot. Nouvelle grille, pour environ 2,5 fois son prix quand on prépare des fûts : 30, 150, 700, 2 500, 5 000 €. Le joueur simulé finit toujours en J34.
 
-## Diamants (monnaie premium)
+## Économie des diamants
 
-Les boosts se paient en diamants, à **prix fixes et dégressifs**. Pour ×2 sur les machines : 3 diamants les 30 min (Coup de feu), 10 les 2 h (Cadence ×2), 30 les 8 h (Équipe de nuit). Quatre Coups de feu coûtent donc plus qu'une Cadence, et quatre Cadences plus qu'une Équipe de nuit. Les durées ont doublé par rapport à la première version, pour des prix plus bas : un boost doit se sentir.
+Les diamants seront vendus en packs. Le réglage cherche donc un équilibre : un joueur gratuit goûte aux boosts et avance un peu plus vite, mais **acheter fait clairement gagner du temps**, sans que dépenser sans fin fasse tout.
 
-Gains sans payer : 25 au départ, des diamants à chaque commande livrée selon sa difficulté (1 à 6 : classique 1, style ou assortiment 2, urgente 3, prestige 5, +1 si le client est exigeant, +1 pour une urgente avec un style imposé), 15 / 25 / 40 / 60 aux niveaux 2 à 5 de la brasserie. Le simulateur (`npm run balance`, ligne « Diamants gagnés ») en compte 27 le premier jour, 45 le deuxième (niveau 2), puis 7 à 15 par jour (environ 9 en moyenne, contre 6 avec 1 diamant par commande) : de quoi lancer environ trois Coups de feu, ou presque une Cadence ×2, chaque jour. Le simulateur ne dépense pas ses diamants.
+**Ce qu'un diamant fait gagner.** Mesuré avec des parties complètes (`npm run balance`, profils ci-dessous), après une correction indispensable : pendant un boost de production, le quota du grossiste suit la cadence. Avant, un joueur qui gardait « Machines ×2 » toute la partie ne gagnait que 2,7 jours pour 2 250 💎, et la Levure express 1 jour pour 2 550 💎 : le grossiste refusait le surplus, et les boosts de production ne servaient à rien.
+
+| Boost gardé actif toute la partie (avant la correction) | Diamants | Jours gagnés |
+|---|---|---|
+| Grossiste généreux | 1 048 | ~6 |
+| Bouche-à-oreille | 1 155 | ~2 |
+| Machines ×2 | 2 250 | ~2,7 |
+| Levure express | 2 552 | ~1 |
+
+Après la correction, machines ×2 en continu : 8 jours de moins pour 1 770 💎 ; tous les boosts : 15 jours de moins pour 3 000 💎. **Un jour gagné vaut environ 200 💎.** Les prix des boosts n'ont pas changé.
+
+**Gains sans payer.** 25 au départ ; les lettres portent leurs diamants (difficiles : 1 à 3 ; simples : 1 diamant une fois sur trois, toujours pour les 3 commandes de démarrage ; +1 client exigeant) ; 15 / 25 / 40 / 60 aux niveaux 2 à 5. Avant ce réglage, une partie en rapportait 634 (~22 par jour, et ~34 avec le livreur, qui livrait tout et faisait tourner le tableau) : de quoi garder des boosts presque en continu, donc aucune raison d'en acheter.
+
+**Profils mesurés** (4 visites par jour, moyenne de 2 à 3 tirages, `SEED`) :
+
+| Profil | Diamants gagnés | Diamants dépensés | Fin de partie |
+|---|---|---|---|
+| Gratuit, ne dépense rien | ~430 (~14,5 par jour, dont 165 de départ et de niveaux) | 0 | J28 à J31 (~J30) |
+| Gratuit avec livreur en continu | ~540 | 0 | ~J29 |
+| Gratuit, dépense tout en boosts (`GEMS=spend`) | ~420 | ~410 | **~J26** (−13 %) |
+| + 500 💎 achetés (`BUY=500`, ~5 €) | ~420 | ~880 | **~J23,5** (−21 %) |
+| + 1 500 💎 achetés (`BUY=1500`, ~15 €) | ~420 | ~1 850 | **~J17,5** (−41 %) |
+| Diamants illimités (`GEMS=whale`) | — | ~3 300 | **~J15,5** (plafond) |
+
+Le joueur simulé dépense ses diamants à chaque visite pour couvrir l'absence suivante : grossiste généreux, puis le meilleur boost des machines, puis la levure express.
+
+**Packs proposés** (environ 100 💎 par euro, soit environ 2 € le jour gagné) :
+
+| Pack | Diamants | Prix |
+|---|---|---|
+| Poignée | 80 | 0,99 € |
+| Bourse | 450 | 4,99 € |
+| Coffre | 1 000 | 9,99 € |
+| Malle | 2 200 | 19,99 € |
+| Pack de démarrage (une seule fois) | 500 | 1,99 € |
+
+Le pack de démarrage est volontairement généreux : le premier achat doit se sentir. La courbe fait que les petits achats rapportent moins, proportionnellement, que les gros (les boosts payent surtout quand ils couvrent toutes les absences).
+
+**À surveiller avec de vrais joueurs (TestFlight)** : la part des joueurs gratuits qui dépensent leurs diamants, l'écart réel entre un joueur gratuit et un acheteur à 5 €, et les cosmétiques premium (150 💎 pour les quatre), qui se paient en environ 10 jours de jeu gratuit.
 
 ## Joueur simulé réparé (novembre 2026)
 

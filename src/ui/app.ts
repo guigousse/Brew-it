@@ -1948,9 +1948,11 @@ export class App {
     });
     send.disabled = !q.ok;
     const gain = h('span', 'order-gain');
-    gain.append(h('span', '', moneyInt(o.reward)), h('span', 'order-gain-sep', '+'), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(gems)));
+    // les diamants n'apparaissent que si la lettre en porte (commande difficile, ou pourboire d'une commande simple)
+    gain.append(h('span', '', moneyInt(o.reward)));
+    if (gems > 0) gain.append(h('span', 'order-gain-sep', '+'), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(gems)));
     send.append(h('span', 'order-send-label', 'Envoyer'), gain);
-    send.setAttribute('aria-label', `Envoyer : ${moneyInt(o.reward)} et ${gemsText(gems)}`);
+    send.setAttribute('aria-label', `Envoyer : ${moneyInt(o.reward)}${gems > 0 ? ` et ${gemsText(gems)}` : ''}`);
     row.append(send, this.confirmBtn('btn small letter-decline', 'Refuser', 'Refuser ?', () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
