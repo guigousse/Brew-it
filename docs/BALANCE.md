@@ -200,24 +200,24 @@ Les diamants seront vendus en packs. Le réglage cherche donc un équilibre : un
 
 Après la correction, machines ×2 en continu : 8 jours de moins pour 1 770 💎 ; tous les boosts : 15 jours de moins pour 3 000 💎. **Un jour gagné vaut environ 200 💎.** Les prix des boosts n'ont pas changé.
 
-**Grossiste sans limite.** Le quota du grossiste est le principal frein de la partie. Le boost (8 h, 50 💎, au même poste que le Grossiste généreux) se prolonge sans autre limite : **un joueur qui veut finir vite et paie pour, c'est son choix.**
+**Grossiste sans limite.** Le quota du grossiste est le principal frein de la partie. Le boost (4 h, 50 💎, au même poste que le Grossiste généreux) se prolonge sans autre limite : **un joueur qui veut finir vite et paie pour, c'est son choix.**
 
 **Prix du grossiste.** 1,40 € de base (au lieu de 1,60 €) : 1,18 € à 1,96 € la bouteille selon la qualité, pour un coût de 0,46 € à 0,65 € : toujours rentable. La partie s'allonge d'environ 2 jours.
 
-Mesures (grossiste à 1,40 €, sans limite à 8 h pour 50 💎) :
+Mesures (grossiste à 1,40 €, sans limite à 4 h pour 50 💎) :
 
 | Profil | Diamants dépensés | Fin |
 |---|---|---|
 | Gratuit, ne dépense rien | 0 | J31,5 à J33 (~J32) |
 | Gratuit, dépense ses diamants (grossiste généreux, machines, levure) | ~420 | J29 à J31 (~J30) |
-| + 500 💎 achetés, grossiste sans limite + machines + levure | ~870 | J23 |
-| + 1 500 💎 achetés, idem | ~1 810 | **J10** |
-| Diamants illimités, idem | ~2 330 | **J8** (plafond) |
+| + 500 💎 achetés (grossiste généreux / sans limite, + machines et levure) | ~910 | J27,8 / J28,8 |
+| + 1 500 💎 achetés (idem) | ~1 870 | J20,8 / **J17,5** |
+| Diamants illimités, grossiste sans limite + machines + levure | ~3 330 | **J7,8** (plafond) |
 | 2 visites par jour, gratuit | 0 | J48 |
 
-**À surveiller** : à 8 h pour 50 💎, le grossiste sans limite est de loin le boost le plus rentable. Environ 1 800 diamants (≈ 18 € avec les packs proposés) suffisent à finir en 10 jours au lieu de 32. C'est un choix de design assumé (un joueur pressé peut payer pour finir vite) ; si l'on veut garder les gros achats plus longtemps, le levier est son prix (à 100 💎, il retrouverait le prix horaire de la version 4 h).
+Le grossiste sans limite paie surtout quand il est gardé en continu : un petit acheteur gagne plus avec le grossiste généreux, un gros acheteur avec le sans limite.
 
-Variantes essayées et écartées : une fois par jour (plafond J12,8 sur un poste à part, J16,5 au poste Grossiste) ; 4 h pour 50 💎 sans limite (plafond J7,5 pour ~3 200 💎).
+Variantes essayées et écartées : une fois par jour (plafond J12,8 sur un poste à part, J16,5 au poste Grossiste) ; 8 h pour 50 💎 (+1 500 💎 : fin en J10, beaucoup trop rentable).
 
 **Gains sans payer.** 25 au départ ; les lettres portent leurs diamants (difficiles : 1 à 3 ; simples : 1 diamant une fois sur trois, toujours pour les 3 commandes de démarrage ; +1 client exigeant) ; 15 / 25 / 40 / 60 aux niveaux 2 à 5. Avant ce réglage, une partie en rapportait 634 (~22 par jour, et ~34 avec le livreur, qui livrait tout et faisait tourner le tableau) : de quoi garder des boosts presque en continu, donc aucune raison d'en acheter.
 
