@@ -1867,6 +1867,9 @@ export class Game {
     g.staffUntil ??= { courier: 0, apprentice: 0 };
     g.furniture ??= [];
     g.unlocked ??= [];
+    // les fleurs de lys d'or (brièvement en test) sont devenues l'Art déco : même achat, même étiquettes
+    g.unlocked = g.unlocked.map((id) => (id === 'pattern:fleurdelis' ? 'pattern:artdeco' : id));
+    for (const b of g.beers) if ((b.label.pattern as string) === 'fleurdelis') b.label.pattern = 'artdeco';
     g.lastPlan ??= null;
     g.queued ??= false;
     g.trial ??= null;

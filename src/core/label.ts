@@ -10,7 +10,7 @@ export interface Label {
   bottle?: BottleShape;
   shape: 'rect' | 'oval' | 'shield' | 'ribbon' | 'round' | 'arch' | 'notched' | 'baroque';
   bg: string;
-  pattern: 'none' | 'stripes' | 'dots' | 'diamonds' | 'waves' | 'checks' | 'rays' | 'zigzag' | 'scales' | 'herringbone' | 'tartan' | 'fleurdelis';
+  pattern: 'none' | 'stripes' | 'dots' | 'diamonds' | 'waves' | 'checks' | 'rays' | 'zigzag' | 'scales' | 'herringbone' | 'tartan' | 'artdeco';
   patternColor: string;
   emblem: 'hop' | 'wheat' | 'barrel' | 'star' | 'crown' | 'anchor' | 'mountain' | 'leaf' | 'bee' | 'sun' | 'fish' | 'castle' | 'skull' | 'gem' | 'none';
   textColor: string;
@@ -33,7 +33,7 @@ export const PATTERNS: { id: Label['pattern']; name: string }[] = [
   { id: 'none', name: 'Uni' }, { id: 'stripes', name: 'Rayures' }, { id: 'dots', name: 'Pois' }, { id: 'diamonds', name: 'Losanges' },
   { id: 'waves', name: 'Vagues' }, { id: 'checks', name: 'Damier' }, { id: 'rays', name: 'Soleil' },
   { id: 'zigzag', name: 'Zigzag' }, { id: 'scales', name: 'Écailles' }, { id: 'herringbone', name: 'Chevrons' }, { id: 'tartan', name: 'Tartan' },
-  { id: 'fleurdelis', name: 'Fleurs de lys d\'or' },
+  { id: 'artdeco', name: 'Art déco' },
 ];
 export const EMBLEMS: { id: Label['emblem']; name: string }[] = [
   { id: 'hop', name: 'Houblon' }, { id: 'wheat', name: 'Épi' }, { id: 'barrel', name: 'Tonneau' }, { id: 'star', name: 'Étoile' },

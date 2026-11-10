@@ -206,7 +206,7 @@ export const LABEL_UNLOCKS: readonly LabelUnlock[] = [
   u('pattern', 'scales', 'Écailles', 2500),
   u('pattern', 'herringbone', 'Chevrons', 12000),
   p('pattern', 'tartan', 'Tartan', 30),
-  p('pattern', 'fleurdelis', 'Fleurs de lys d\'or', LUXURY_GEMS),
+  p('pattern', 'artdeco', 'Art déco', LUXURY_GEMS),
 ];
 export const unlockById = (id: string) => LABEL_UNLOCKS.find((x) => x.id === id);
 /** Ce qui est libre dès le début est tout ce qui n'est pas dans la liste des déblocages. */

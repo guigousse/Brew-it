@@ -58,51 +58,35 @@ const gemColors = (l: Label): Record<string, string> => {
   return { k: '#1b1424', w: '#ffffff', a: st.a, b: st.b, c: st.c, d: st.d, e: st.e };
 };
 
-/** Fleur de lys (motif de luxe) : la silhouette ; le contour et l'ombrage en relief sont calculés (fleurShaded). */
-const FLEUR_SHAPE = [
-  '.......#.......',
-  '......###......',
-  '......###......',
-  '.....#####.....',
-  '.....#####.....',
-  '....#######....',
-  '.##.#######.##.',
-  '###..#####..###',
-  '##.#..###..#.##',
-  '#..##.###.##..#',
-  '#...###.###...#',
-  '...#########...',
-  '...#########...',
-  '.....##.##.....',
-  '....##.#.##....',
-  '......###......',
-  '.......#.......',
-];
-/**
- * Ombrage d'or poli : bord gauche et haut clairs, bord droit et bas sombres, cœur doré ;
- * tout autour, un contour brun (o) qui détache la fleur du fond.
- */
-const FLEUR = ((rows: string[]) => {
-  const H = rows.length;
-  const W = rows[0]!.length;
-  const on = (x: number, y: number) => rows[y]?.[x] === '#';
-  const out: string[] = [];
-  for (let y = -1; y <= H; y++) {
-    let line = '';
-    for (let x = -1; x <= W; x++) {
-      if (on(x, y)) {
-        const r = !on(x + 1, y);
-        const b = !on(x, y + 1);
-        const l = !on(x - 1, y);
-        const t = !on(x, y - 1);
-        line += r || b ? (l || t ? 'g' : 'd') : l || t ? 'h' : 'g';
-      } else line += on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1) ? 'o' : '.';
-    }
-    out.push(line);
-  }
-  return out;
-})(FLEUR_SHAPE);
 const GOLD: Record<string, string> = { h: '#ffe7a0', g: '#f2c14e', d: '#b07a2a', o: '#4a2a08' };
+
+/**
+ * Un éventail Art déco (demi-disque tourné vers le haut, centre en bas) : bordure d'or claire,
+ * un filet intérieur, des rayons qui partent d'un petit soleil. Le fond du disque cache la rangée du dessus.
+ */
+function fan(g: CanvasRenderingContext2D, bg: string, cx: number, cy: number, R: number): void {
+  for (let y = cy - R; y < cy; y++) for (let x = cx - R; x <= cx + R; x++) {
+    const dx = x - cx + 0.5;
+    const dy = cy - y - 0.5;
+    const d = Math.hypot(dx, dy);
+    if (d > R) continue;
+    const a = Math.atan2(dy, dx); // 0 à droite, π à gauche
+    let c: string;
+    if (d > R - 1.2) c = dx < 0 ? GOLD.h! : GOLD.g!; // bordure : plus claire côté lumière
+    else if (d > R - 2.2) c = '#4a2a08'; // ombre sous la bordure
+    else if (d > R - 4.2 && d < R - 3.2) c = GOLD.d!; // filet intérieur
+    else if (d < 2.2) c = dx < 0 ? GOLD.h! : GOLD.g!; // petit soleil au pied
+    else {
+      // des rayons fins qui partent du soleil (8 secteurs, un rayon à chaque frontière)
+      const k = (a / Math.PI) * 8;
+      const off = Math.abs(k - Math.round(k)) * (Math.PI / 8) * d; // écart au rayon, en pixels
+      const ray = Math.round(k) > 0 && Math.round(k) < 8 && d > 3.2 && d < R - 4.2 && off < 0.5;
+      c = ray ? (dx < 0 ? GOLD.h! : GOLD.d!) : bg;
+    }
+    g.fillStyle = c;
+    g.fillRect(x, y, 1, 1);
+  }
+}
 
 function sprite(g: CanvasRenderingContext2D, rows: string[], colors: Record<string, string>, x: number, y: number, s: number): void {
   rows.forEach((row, j) => [...row].forEach((ch, i) => {
@@ -284,25 +268,13 @@ function pattern(g: CanvasRenderingContext2D, l: Label, w: number, h: number, un
       for (let x = u * 7; x < w; x += u * 10) g.fillRect(x, 0, u, h);
       for (let y = u * 7; y < h; y += u * 10) g.fillRect(0, y, w, u);
       break;
-    case 'fleurdelis': {
-      // semé de fleurs de lys d'or en quinconce, au pixel près, avec quelques éclats : le motif ignore la couleur choisie
-      const fw = FLEUR[0]!.length;
-      const fh = FLEUR.length;
-      const sx = fw + 5;
-      // pas de bandeau sous le nom pour ce motif : les fleurs couvrent toute l'étiquette (le nom est liseré, voir drawLabel)
-      // (cartouche : entre les dômes du cadre doré)
-      const top = l.shape === 'baroque' ? 7 : 0;
-      const bottom = l.shape === 'baroque' ? h - 7 : h;
-      const rows = Math.max(1, Math.floor((bottom - top + 1) / (fh + 1)));
-      const gap = (bottom - top - rows * fh) / (rows + 1);
-      for (let row = 0; row < rows; row++) {
-        const y = Math.round(top + gap + row * (fh + gap));
-        for (let x = (row % 2) * Math.round(sx / 2) - fw / 2; x < w; x += sx) {
-          // pas de fleur à moitié cachée sous le logo
-          if (l.emblem !== 'none' && x < w / 2 + 17 && x + fw > w / 2 - 17 && y < 40) continue;
-          sprite(g, FLEUR, GOLD, Math.round(x), y, 1);
-          if ((Math.round(x / sx) + row) % 3 === 0) glint(g, Math.round(x) + 6, y + 4, 1);
-        }
+    case 'artdeco': {
+      // éventails d'or en écailles, façon années 20 : chaque rangée recouvre le bas de la précédente.
+      // Le motif ignore la couleur choisie : il est toujours doré.
+      const R = 12;
+      const step = R * 2;
+      for (let row = 0, cy = R; cy < h + R * 2; row++, cy += R) {
+        for (let cx = (row % 2) * R - R; cx < w + R; cx += step) fan(g, l.bg, cx, cy, R);
       }
       break;
     }
@@ -353,10 +325,18 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
   g.fillStyle = l.bg;
   g.fillRect(0, 0, w, h);
   pattern(g, l, w, h, 2);
-  // bandeau clair derrière le nom pour la lisibilité (sauf sous les fleurs de lys, qui restent entières)
-  if (l.pattern !== 'fleurdelis') {
+  // bandeau clair derrière le nom pour la lisibilité (Art déco : souligné de deux filets d'or)
   g.fillStyle = l.bg;
   g.fillRect(8, h - 30, w - 16, 20);
+  if (l.pattern === 'artdeco') {
+    g.fillStyle = '#4a2a08';
+    g.fillRect(8, h - 31, w - 16, 1);
+    g.fillRect(8, h - 10, w - 16, 1);
+    g.fillStyle = GOLD.g!;
+    g.fillRect(8, h - 30, w - 16, 1);
+    g.fillRect(8, h - 11, w - 16, 1);
+    g.fillStyle = GOLD.h!;
+    g.fillRect(8, h - 30, 12, 1);
   }
   g.restore();
   if (l.shape === 'baroque') {
@@ -396,13 +376,6 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
   const tx = name || 'Ma bière';
   const maxW = l.shape === 'baroque' ? w - 36 : w - 20;
   const size = l.font === 'retro' ? 18 : 12;
-  if (l.pattern === 'fleurdelis') {
-    // sans bandeau : un liseré de la couleur du fond détache le nom des fleurs
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      if (!dx && !dy) continue;
-      crispText(g, tx, w / 2 + dx, h - 20 + dy, maxW, l.bg, l.font, size);
-    }
-  }
   crispText(g, tx, w / 2, h - 20, maxW, l.textColor, l.font, size);
 }
 
@@ -415,11 +388,12 @@ export function drawMiniLabel(g: CanvasRenderingContext2D, l: Label, x: number, 
   g.fillRect(x, y + 1, n, n - 2);
   g.fillStyle = l.patternColor;
   if (l.pattern === 'stripes' || l.pattern === 'rays') for (let i = 0; i < n; i += 2) g.fillRect(x + i, y + 1, 1, n - 2);
-  else if (l.pattern === 'fleurdelis') {
+  else if (l.pattern === 'artdeco') {
+    // deux petits arcs d'or
     g.fillStyle = '#f2c14e';
-    for (let i = 0; i < n; i += 2) g.fillRect(x + i, y + 1 + (i % 4 ? 1 : 0), 1, 1);
+    for (let i = 0; i < n; i++) g.fillRect(x + i, y + 1 + (i % 3 === 1 ? 0 : 1), 1, 1);
     g.fillStyle = '#ffe7a0';
-    g.fillRect(x + n - 1, y + 1, 1, 1);
+    g.fillRect(x, y + 2, 1, 1);
   } else if (l.pattern === 'checks' || l.pattern === 'diamonds') for (let i = 0; i < n; i += 2) g.fillRect(x + i, y + 1 + (i % 4 ? 1 : 0), 1, 1);
   else if (l.pattern !== 'none') g.fillRect(x, y + n - 2, n, 1);
   g.fillStyle = l.emblem === 'gem' ? gemStone(l.gem).c : l.textColor;

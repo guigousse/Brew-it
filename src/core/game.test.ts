@@ -1017,7 +1017,7 @@ describe('mobilier et étiquettes', () => {
     expect(g.buyUnlock('emblem:skull').ok).toBe(true);
     expect(g.gems).toBe(50);
     // les cosmétiques de luxe : 500 diamants pièce, payables en argent impossible
-    for (const id of ['bottle:gold', 'shape:baroque', 'emblem:gem', 'pattern:fleurdelis']) {
+    for (const id of ['bottle:gold', 'shape:baroque', 'emblem:gem', 'pattern:artdeco']) {
       g.gems = 499;
       expect(g.buyUnlock(id).ok).toBe(false);
       g.gems = 500;
