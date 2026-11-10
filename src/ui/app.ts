@@ -19,7 +19,7 @@ import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type D
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
-import { compact, countdown } from './format';
+import { compact, countdown, dialTime } from './format';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const el = document.createElement(tag);
@@ -2793,13 +2793,14 @@ export class App {
       this.boostHudKey = key;
       this.boostHud.replaceChildren();
       for (const b of live) {
-        // l'effet : l'icône du poste, le multiplicateur posé dessus, puis le temps qui reste
+        // l'effet : dans un cadre arc-en-ciel, l'icône du poste, le multiplicateur dans un coin,
+        // un cadran qui se vide en balayant au fil du boost, et le temps qui reste au centre
         const el = h('button', `boost-chip effect-${b.ch}`);
-        const icon = h('span', 'boost-chip-icon');
+        const face = h('span', 'boost-chip-face');
         // le grossiste sans limite : une caisse marquée « ∞ »
         const gate = b.id === 'openGate';
-        icon.append(iconCanvas(gate ? 'crate' : EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-mult', gate ? '∞' : `×${String(mult(b.id)).replace('.', ',')}`));
-        el.append(icon, h('span', 'boost-chip-time'));
+        face.append(h('span', 'boost-chip-dial'), iconCanvas(gate ? 'crate' : EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-time'));
+        el.append(face, h('span', 'boost-chip-mult', gate ? '∞' : `×${String(mult(b.id)).replace('.', ',')}`));
         el.onclick = () => this.openShop('boosts');
         this.boostHud.append(el);
       }
@@ -2807,8 +2808,9 @@ export class App {
     this.boostHud.querySelectorAll<HTMLElement>('.boost-chip').forEach((el, i) => {
       const b = live[i]!;
       const left = Math.max(0, b.until - g.time);
-      const t = left >= 3600 ? `${Math.floor(left / 3600)} h ${String(Math.floor((left % 3600) / 60)).padStart(2, '0')}` : clock(left);
-      const span = el.lastElementChild!;
+      el.style.setProperty('--left', g.boostLeftShare(b.ch).toFixed(4));
+      const t = dialTime(left);
+      const span = el.querySelector('.boost-chip-time')!;
       if (span.textContent !== t) span.textContent = t;
       el.setAttribute('aria-label', `${b.id === 'openGate' ? 'Grossiste sans limite' : `${EFFECT_NAME[b.ch]} ×${String(mult(b.id)).replace('.', ',')}`} : encore ${duration(left)}`);
     });

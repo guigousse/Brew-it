@@ -303,6 +303,19 @@ describe('jeu', () => {
     for (const o of g.orders) expect(g.beers.some((b) => fits(o, b.tasting))).toBe(true);
   });
 
+  it('le cadran d\'un boost se vide de 1 à 0, et repart plein quand on le prolonge', () => {
+    const g = withBeer(0);
+    g.gems = 100;
+    expect(g.buyBoost('cadence').ok).toBe(true); // 2 h
+    expect(g.boostLeftShare('brew')).toBeCloseTo(1);
+    g.time += 90 * 60;
+    expect(g.boostLeftShare('brew')).toBeCloseTo(0.25);
+    expect(g.buyBoost('cadence').ok).toBe(true); // +2 h : 2 h 30 sur 4 h
+    expect(g.boostLeftShare('brew')).toBeCloseTo(150 / 240);
+    g.time += 151 * 60;
+    expect(g.boostLeftShare('brew')).toBe(0);
+  });
+
   it('pendant un boost de production, le grossiste suit la cadence (sinon produire plus ne rapporterait rien)', () => {
     const g = withBeer(0);
     const beer = g.beers[0]!;

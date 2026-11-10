@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compact, countdown } from './format';
+import { compact, countdown, dialTime } from './format';
 
 describe('montants courts du header', () => {
   it('raccourcit sans jamais arrondir vers le haut', () => {
@@ -20,5 +20,14 @@ describe('délais', () => {
     expect(countdown(19 * 60 + 39)).toBe('dans 20 min');
     expect(countdown(65 * 60)).toBe('dans 1 h 05');
     expect(countdown(-3)).toBe('dans 0 s');
+  });
+});
+
+describe('cadran des boosts', () => {
+  it('heures, puis minutes, puis secondes', () => {
+    expect(dialTime(3 * 3600 + 5)).toBe('3h');
+    expect(dialTime(29 * 60 + 10)).toBe('30m');
+    expect(dialTime(59)).toBe('59s');
+    expect(dialTime(-1)).toBe('0s');
   });
 });

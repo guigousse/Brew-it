@@ -212,7 +212,8 @@ export class Game {
   /** La pub télé fait venir une commande de prestige : la prochaine lettre en sera une. */
   adPrestige = false;
   /** Boosts en cours, un par canal (brasserie, levure, bar, grossiste). */
-  boosts: Partial<Record<BoostChannel, { id: BoostId; until: number }>> = {};
+  /** Boost en cours par poste : son nom, sa fin, et son début (from, pour le cadran qui se vide ; repart d'un achat sur un poste libre). */
+  boosts: Partial<Record<BoostChannel, { id: BoostId; until: number; from?: number }>> = {};
   /** Achats de diamants déjà crédités (identifiants de transaction App Store) : un achat n'est jamais compté deux fois. */
   purchases: string[] = [];
   /** Packs « une seule fois » déjà achetés. */
@@ -962,9 +963,18 @@ export class Game {
   // ------------------------------------------------------------------ boosts
 
   /** Boost en cours sur un canal. */
-  boostOf(channel: BoostChannel): { id: BoostId; until: number } | null {
+  boostOf(channel: BoostChannel): { id: BoostId; until: number; from?: number } | null {
     const b = this.boosts[channel];
     return b && b.until > this.time ? b : null;
+  }
+
+  /** Part du boost en cours qui reste (1 au lancement, 0 à la fin) : le cadran des effets actifs. */
+  boostLeftShare(channel: BoostChannel): number {
+    const b = this.boostOf(channel);
+    if (!b) return 0;
+    // les boosts d'avant le cadran n'ont pas de début : on compte depuis sa durée de base
+    const from = b.from ?? b.until - (boostById(b.id)?.minutes ?? 0) * 60;
+    return Math.max(0, Math.min(1, (b.until - this.time) / Math.max(1, b.until - from)));
   }
 
   /** Multiplicateur d'un canal (1 sans boost). */
@@ -1050,7 +1060,7 @@ export class Game {
     }
     const cur = this.boostOf(def.channel);
     // le poste garde le nom du boost en cours ; la durée s'ajoute
-    this.boosts[def.channel] = { id: cur?.id ?? id, until: (cur ? cur.until : this.time) + def.minutes * 60 };
+    this.boosts[def.channel] = { id: cur?.id ?? id, until: (cur ? cur.until : this.time) + def.minutes * 60, from: cur ? cur.from ?? this.time : this.time };
     return { ok: true };
   }
 

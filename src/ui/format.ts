@@ -29,3 +29,11 @@ export function countdown(s: number): string {
   if (m < 60) return `dans ${m} min`;
   return `dans ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
 }
+
+/** Temps au centre du cadran d'un boost : les heures au-delà d'une heure, puis les minutes, puis les secondes. */
+export function dialTime(left: number): string {
+  const s = Math.max(0, Math.ceil(left));
+  if (s >= 3600) return `${Math.floor(s / 3600)}h`;
+  if (s >= 60) return `${Math.ceil(s / 60)}m`;
+  return `${s}s`;
+}
