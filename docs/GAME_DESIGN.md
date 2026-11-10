@@ -311,6 +311,13 @@ Les bouteilles embouteillées rejoignent le stockage en caisses de 12. Quand il 
 
 Les fûts pleins y sont rangés à côté des caisses : ce sont de petits fûts inox, cerclés à la couleur de l'étiquette.
 
+## Pubs vidéo récompensées
+Toujours au choix du joueur, jamais imposées. Chaque usage est limité à **3 pubs par jour** (jour local) ; ensuite son bouton disparaît jusqu'au lendemain.
+- **Au retour dans le jeu**, la bourse de l'absence s'ouvre en grand au centre de l'écran : la durée et les litres vendus, l'argent et les diamants gagnés, puis « ▶ Doubler » (une pub : l'argent double, pas les diamants) et « Récupérer ». Si on ferme la fenêtre, la bourse reste en haut de l'écran comme avant.
+- **Prospecter** : sous la prochaine lettre du tableau des commandes, « ▶ Gratuit » fait arriver une lettre tout de suite contre une pub, à côté de la prospection à 3 diamants.
+
+Aucune régie n'est encore branchée : `src/platform/ads.ts` montre une pub de test de 5 s. Brancher une vraie régie (AdMob par exemple) ne touchera que ce fichier.
+
 ## Équilibrage
 Voir [BALANCE.md](BALANCE.md) : l'audit, les objectifs de rythme et le joueur simulé (`npm run balance`).
 

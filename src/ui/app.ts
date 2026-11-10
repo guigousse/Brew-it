@@ -1,6 +1,6 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
+import { AD_DAILY, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
@@ -20,6 +20,7 @@ import { GEMSTONES, BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTER
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
 import { sfx } from '../platform/audio';
+import { showRewardedAd } from '../platform/ads';
 import { compact, countdown, dialTime } from './format';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
@@ -683,6 +684,11 @@ export class App {
     this.harvests.classList.remove('stack');
     if (roomPlaque && earned > 0 && offGems > 0 && this.harvests.getBoundingClientRect().left < roomPlaque.getBoundingClientRect().right + 2) this.harvests.classList.add('stack');
     this.boostHud.classList.toggle('below-harvest-stack', this.harvests.classList.contains('stack'));
+    // au retour : la bourse de l'absence s'ouvre en grand au centre de l'écran (une fois par absence)
+    if (g.offline && g.offline !== this.offlineShown && !this.modalOpen && !this.openSheet) {
+      this.offlineShown = g.offline;
+      this.openOfflineReward();
+    }
     const can = g.canBrew();
     const trial = g.tastable;
     // pastilles des boutons d'action : l'essentiel en un coup d'œil ; « ready » = il y a quelque chose à faire
@@ -1921,7 +1927,28 @@ export class App {
         this.refreshComputer();
       });
       b.setAttribute('aria-label', `Prospecter : une lettre tout de suite, pour ${gemsText(g.boostCost('prospect'))}`);
-      el.append(b);
+      // la même prospection contre une pub, 3 fois par jour au plus (le bouton disparaît ensuite jusqu'au lendemain)
+      const left = g.adLeft('prospect');
+      if (left > 0) {
+        const ad = h('button', 'btn small ad-btn');
+        ad.append(h('span', '', '▶ Gratuit'), h('span', 'ad-left', `${left}/${AD_DAILY}`));
+        ad.setAttribute('aria-label', `Prospecter gratuitement en regardant une pub (encore ${left} aujourd'hui)`);
+        ad.onclick = async () => {
+          ad.disabled = true;
+          const seen = await showRewardedAd();
+          ad.disabled = false;
+          if (!seen) return this.toast('Pub interrompue : pas de lettre', 'info');
+          const r = g.prospectWithAd();
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('paper');
+          this.toast('Une lettre arrive !', 'good');
+          this.computer!.key = '';
+          this.refreshComputer();
+        };
+        const pair = h('div', 'prospect-btns');
+        pair.append(ad, b);
+        el.append(pair);
+      } else el.append(b);
     }
     return el;
   }
@@ -2501,6 +2528,58 @@ export class App {
       for (const tip of t.tips.slice(0, 3)) ul.append(h('li', '', tip));
       card.append(ul);
     }
+  }
+
+  /** La bourse déjà présentée en grand (une nouvelle absence en crée une autre). */
+  private offlineShown: object | null = null;
+
+  /**
+   * La bourse de l'absence, en grand au centre de l'écran : ce qui a été gagné, « Récupérer », et « Doubler »
+   * contre une pub (3 fois par jour au plus ; le bouton disparaît ensuite jusqu'au lendemain).
+   */
+  private openOfflineReward(): void {
+    const g = this.game();
+    const o = g.offline;
+    if (!o) return;
+    const card = this.modalCard('Pendant ton absence');
+    card.classList.add('reward-card');
+    const hrs = Math.floor(o.seconds / 3600);
+    const min = Math.floor((o.seconds % 3600) / 60);
+    card.append(h('div', 'reward-sub', `${hrs ? `${hrs} h ` : ''}${min} min · ${liters(o.liters ?? 0)} vendus`));
+    const prize = h('div', 'reward-prize');
+    const money = h('div', 'reward-money');
+    if (o.earned > 0) {
+      money.append(h('span', 'reward-bag', '💰'), h('span', 'reward-value', `+${moneyInt(o.earned)}`));
+      prize.append(money);
+    }
+    if (o.gems) {
+      const gem = h('div', 'reward-gems');
+      gem.append(iconCanvas('gem', 2, 'reward-gem'), h('span', 'reward-value', `+${o.gems}`));
+      prize.append(gem);
+    }
+    card.append(prize);
+    const collect = () => {
+      this.closeModal();
+      if (g.offline?.earned) this.collectOfflineMoney();
+      if (g.offline?.gems) this.collectOfflineGems();
+    };
+    const left = g.adLeft('double');
+    if (o.earned > 0 && left > 0) {
+      const dbl = h('button', 'btn primary big reward-double');
+      dbl.append(h('span', 'reward-double-main', `▶ Doubler · +${moneyInt(o.earned * 2)}`), h('span', 'reward-double-sub', `Une courte pub · encore ${left} aujourd'hui`));
+      dbl.onclick = async () => {
+        dbl.disabled = true;
+        const seen = await showRewardedAd();
+        dbl.disabled = false;
+        if (!seen) return this.toast('Pub interrompue : rien de doublé', 'info');
+        const r = g.doubleOffline();
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('levelUp');
+        collect();
+      };
+      card.append(dbl);
+    }
+    card.append(this.btn(`btn big${o.earned > 0 && left > 0 ? '' : ' primary'}`, 'Récupérer', collect));
   }
 
   /** Récolte l'argent de l'absence : les pièces filent vers le compteur, l'argent défile, un petit mot résume l'absence. */

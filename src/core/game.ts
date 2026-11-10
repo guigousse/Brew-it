@@ -35,6 +35,9 @@ export const BOTTLE_L = 0.33;
 
 /** Quota du grossiste, par bière et par jour, en brassins : base + pop × popularité (0 à 1). */
 export const WHOLESALE_QUOTA = { base: 4, pop: 20 } as const;
+/** Pubs vidéo récompensées : chaque usage est limité à 3 par jour (jour local). */
+export type AdReward = 'double' | 'prospect';
+export const AD_DAILY = 3;
 
 /** Numéro du jour, à l'heure locale, d'un instant (ms depuis 1970). */
 export function localDay(ms: number): number {
@@ -254,6 +257,8 @@ export class Game {
   wall = 0;
   /** Jour (local) du dernier rechargement du quota. */
   quotaDay = 0;
+  /** Pubs récompensées regardées aujourd'hui, par usage ; `day` est le jour local du décompte. */
+  adViews: { day: number; double: number; prospect: number } = { day: 0, double: 0, prospect: 0 };
   totalSold = 0;
   /** Litres vendus au total (bar, commandes et grossiste). */
   totalLiters = 0;
@@ -1410,6 +1415,41 @@ export class Game {
    * Récolte la bourse de l'absence : l'argent, les diamants, ou les deux (par défaut). Le bilan de l'absence
    * reste tant qu'il y a encore quelque chose à récolter.
    */
+  /** Pubs récompensées encore possibles aujourd'hui pour cet usage (0 : le bouton disparaît jusqu'à demain). */
+  adLeft(kind: AdReward): number {
+    const day = localDay(this.wall);
+    if (this.adViews.day !== day) this.adViews = { day, double: 0, prospect: 0 };
+    return Math.max(0, AD_DAILY - this.adViews[kind]);
+  }
+
+  /** Une pub a été regardée jusqu'au bout pour cet usage : elle compte dans la limite du jour. */
+  private useAd(kind: AdReward): boolean {
+    if (this.adLeft(kind) <= 0) return false;
+    this.adViews[kind]++;
+    return true;
+  }
+
+  /** Double l'argent de la bourse de l'absence, après une pub (les diamants ne doublent pas) ; la récolte suit. */
+  doubleOffline(): CommandResult {
+    const o = this.offline;
+    if (!o || o.earned <= 0) return { ok: false, reason: 'Rien à doubler' };
+    if (!this.useAd('double')) return { ok: false, reason: 'Plus de doublement aujourd\'hui' };
+    o.earned *= 2;
+    return { ok: true };
+  }
+
+  /** Prospection offerte contre une pub : une lettre tout de suite, sans diamants. */
+  prospectWithAd(): CommandResult {
+    const blocked = this.boostBlocked('prospect');
+    if (blocked) return { ok: false, reason: blocked };
+    if (!this.useAd('prospect')) return { ok: false, reason: 'Plus de prospection offerte aujourd\'hui' };
+    this.syncSlots();
+    const i = this.orderWaits.indexOf(Math.min(...this.orderWaits));
+    if (i >= 0) this.orderWaits[i] = 0;
+    this.tickOrders(0);
+    return { ok: true };
+  }
+
   collectOffline(what: 'money' | 'gems' | 'all' = 'all'): number {
     const o = this.offline;
     if (!o) return 0;
@@ -1765,7 +1805,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1828,6 +1868,7 @@ export class Game {
     }
     g.wall ??= 0;
     g.quotaDay ??= localDay(g.wall);
+    g.adViews ??= { day: 0, double: 0, prospect: 0 };
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
     delete (g as unknown as { autoBrew?: unknown }).autoBrew; // le brassage continu a disparu : tout passe par la file

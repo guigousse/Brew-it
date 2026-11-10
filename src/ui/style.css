@@ -798,3 +798,31 @@ button:disabled { cursor: default; opacity: .5; }
 @keyframes rainbow-flow { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
 @keyframes rainbow-shine { 0%, 40% { background-position: 150% 0; } 100% { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .boost-chip, .boost-chip::after, .boost-row.mine .boost-icon { animation: none; } }
+
+/* ---- bourse de l'absence, en grand au retour ---- */
+.reward-card { justify-items: stretch; text-align: center; }
+.reward-sub { color: #a894bc; font-size: 17px; }
+.reward-prize { display: grid; justify-items: center; gap: 6px; padding: 14px 8px; background: var(--panel-2); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 var(--border-hi), inset 0 0 18px #f2c14e30; }
+.reward-money, .reward-gems { display: flex; align-items: center; gap: 10px; }
+.reward-bag { font-size: 40px; line-height: 1; }
+.reward-value { font-family: 'Silkscreen', monospace; font-size: 30px; color: var(--accent); text-shadow: 2px 2px 0 #0008; }
+.reward-gems .reward-value { font-size: 22px; color: #8cd0ff; }
+.reward-gem { image-rendering: pixelated; }
+.reward-money { animation: reward-pop .45s steps(5) both; }
+@keyframes reward-pop { from { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.12); opacity: 1; } to { transform: scale(1); } }
+.reward-double { display: grid; gap: 2px; justify-items: center; }
+.reward-double-main { font-size: 20px; }
+.reward-double-sub { font-size: 14px; opacity: .8; }
+
+/* ---- prospection contre une pub ---- */
+.slot-free:has(.prospect-btns) { flex-wrap: wrap; }
+.prospect-btns { flex: 1 0 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.prospect-btns .btn { width: 100%; min-height: 36px; }
+.ad-btn { display: flex; gap: 6px; justify-content: center; align-items: center; background: #3a6a2a; color: #f6ecd6; }
+.ad-btn .ad-left { font-size: 13px; opacity: .8; }
+
+/* ---- pub de test (en attendant une vraie régie) ---- */
+.ad-test { position: fixed; inset: 0; z-index: 100; background: #000e; display: grid; place-items: center; }
+.ad-test-box { display: grid; gap: 16px; justify-items: center; color: #f6ecd6; text-align: center; }
+.ad-test-tag { font-family: 'Silkscreen', monospace; font-size: 16px; padding: 4px 10px; border: 2px solid #f6ecd6; }
+.ad-test-count { font-family: 'Silkscreen', monospace; font-size: 64px; }

@@ -1049,3 +1049,42 @@ describe('panneau lumineux du bar', () => {
     expect(Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON()))).barMessage).toBe('Santé !');
   });
 });
+
+describe('pubs récompensées', () => {
+  it('doubler la bourse de l\'absence : l\'argent double, pas les diamants, 3 fois par jour au plus', () => {
+    const g = new Game();
+    g.wall = new Date(2026, 10, 10, 12).getTime();
+    for (let k = 0; k < 3; k++) {
+      g.offline = { seconds: 3600, earned: 100, sold: 0, liters: 0, batches: 0, gems: 2 };
+      const money = g.money;
+      const gems = g.gems;
+      expect(g.doubleOffline().ok).toBe(true);
+      g.collectOffline('all');
+      expect(g.money - money).toBe(200);
+      expect(g.gems - gems).toBe(2);
+    }
+    expect(g.adLeft('double')).toBe(0);
+    g.offline = { seconds: 3600, earned: 100, sold: 0, liters: 0, batches: 0 };
+    expect(g.doubleOffline().ok).toBe(false);
+    expect(g.offline.earned).toBe(100);
+    // le lendemain, le compteur repart à 3
+    g.wall += 24 * 3600 * 1000;
+    expect(g.adLeft('double')).toBe(3);
+    expect(g.doubleOffline().ok).toBe(true);
+  });
+
+  it('prospecter contre une pub : une lettre sans diamants, 3 fois par jour, compteur séparé du doublement', () => {
+    const g = new Game();
+    g.wall = new Date(2026, 10, 10, 12).getTime();
+    const gems = g.gems;
+    const r = g.prospectWithAd();
+    expect(r.ok).toBe(true);
+    expect(g.orders.length).toBe(1);
+    expect(g.gems).toBe(gems);
+    expect(g.adLeft('prospect')).toBe(2);
+    expect(g.adLeft('double')).toBe(3);
+    // le compteur du jour est sauvegardé
+    const back = Game.fromJSON(JSON.parse(JSON.stringify(g)));
+    expect(back.adLeft('prospect')).toBe(2);
+  });
+});
