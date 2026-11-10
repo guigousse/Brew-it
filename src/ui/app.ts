@@ -93,9 +93,9 @@ const SHOP_TABS: readonly { id: ShopTab; name: string; icon: IconId }[] = [
   { id: 'labels', name: 'Étiquettes', icon: 'labels' },
 ];
 /** Icône de chaque effet (poste de boost), en haut à droite de l'écran quand il est actif : la marmite des machines… */
-const EFFECT_ICON: Record<BoostChannel, IconId> = { brew: 'brew', yeast: 'flask', bar: 'mug', wholesale: 'truck', quota: 'crate' };
+const EFFECT_ICON: Record<BoostChannel, IconId> = { brew: 'brew', yeast: 'flask', bar: 'mug', wholesale: 'truck' };
 /** Le nom de chaque effet, pour la lecture d'écran. */
-const EFFECT_NAME: Record<BoostChannel, string> = { brew: 'Machines', yeast: 'Fermentation et garde', bar: 'Clients du bar', wholesale: 'Prix du grossiste', quota: 'Grossiste sans limite' };
+const EFFECT_NAME: Record<BoostChannel, string> = { brew: 'Machines', yeast: 'Fermentation et garde', bar: 'Clients du bar', wholesale: 'Grossiste' };
 /** Icône de chaque boost, dans le magasin. */
 const BOOST_ICON: Record<BoostId, IconId> = {
   rush: 'flame', cadence: 'fast2', nightShift: 'moon', fullSpeed: 'fast3', yeast: 'yeast', happyHour: 'mug', buzz: 'bubble', broker: 'truck', openGate: 'crate', prospect: 'envelope',
@@ -125,7 +125,7 @@ function boostShort(b: BoostDef): string {
   if (!b.channel) return 'immédiat';
   if (b.channel === 'bar') return `clients ×${n(b.mult)}${b.priceMult ? ` · verres −${Math.round((1 - b.priceMult) * 100)} %` : ''} · ${dur}`;
   if (b.channel === 'wholesale') return `prix ×${n(b.mult)} · ${dur}`;
-  if (b.channel === 'quota') return `sans limite · ${dur}`;
+  if (b.id === 'openGate') return `sans limite · ${dur}`;
   return `×${n(b.mult)} · ${dur}`;
 }
 
@@ -2785,7 +2785,9 @@ export class App {
         // l'effet : l'icône du poste, le multiplicateur posé dessus, puis le temps qui reste
         const el = h('button', `boost-chip effect-${b.ch}`);
         const icon = h('span', 'boost-chip-icon');
-        icon.append(iconCanvas(EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-mult', b.ch === 'quota' ? '∞' : `×${String(mult(b.id)).replace('.', ',')}`));
+        // le grossiste sans limite : une caisse marquée « ∞ »
+        const gate = b.id === 'openGate';
+        icon.append(iconCanvas(gate ? 'crate' : EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-mult', gate ? '∞' : `×${String(mult(b.id)).replace('.', ',')}`));
         el.append(icon, h('span', 'boost-chip-time'));
         el.onclick = () => this.openShop('boosts');
         this.boostHud.append(el);
@@ -2797,7 +2799,7 @@ export class App {
       const t = left >= 3600 ? `${Math.floor(left / 3600)} h ${String(Math.floor((left % 3600) / 60)).padStart(2, '0')}` : clock(left);
       const span = el.lastElementChild!;
       if (span.textContent !== t) span.textContent = t;
-      el.setAttribute('aria-label', `${EFFECT_NAME[b.ch]} ×${String(mult(b.id)).replace('.', ',')} : encore ${duration(left)}`);
+      el.setAttribute('aria-label', `${b.id === 'openGate' ? 'Grossiste sans limite' : `${EFFECT_NAME[b.ch]} ×${String(mult(b.id)).replace('.', ',')}`} : encore ${duration(left)}`);
     });
   }
 

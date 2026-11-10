@@ -8,7 +8,8 @@
  * Variables : SESSIONS=8,20 (visites), ACTIVE=30 (minutes actives), SEED=7 (autre tirage),
  * COURIER=1 (embauche le livreur en continu), GEMS=spend (dépense ses diamants en boosts), GEMS=whale (diamants
  * illimités, boosts toujours actifs), BUY=1500 (diamants achetés en plus au départ, dépensés comme GEMS=spend),
- * CH=quota,brew (postes de boosts utilisés ; par défaut grossiste, machines et levure).
+ * CH=gate,brew (postes de boosts utilisés : wholesale, brew, yeast, bar, gate = grossiste sans limite ;
+ * par défaut grossiste généreux, machines et levure).
  */
 import { writeFileSync } from 'node:fs';
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
@@ -187,11 +188,11 @@ function spendGems() {
     g.gems = 1e7;
   }
   const cover = g.time + 13 * 3600;
-  const all: [BoostChannel, BoostId[]][] = [['wholesale', ['broker']], ['brew', ['nightShift', 'cadence', 'rush']], ['yeast', ['yeast']], ['quota', ['openGate']], ['bar', ['buzz']]];
-  // CH=quota,brew : seulement ces postes (mesurer un boost) ; par défaut les trois plus rentables
+  const all: [string, BoostChannel, BoostId[]][] = [['wholesale', 'wholesale', ['broker']], ['brew', 'brew', ['nightShift', 'cadence', 'rush']], ['yeast', 'yeast', ['yeast']], ['gate', 'wholesale', ['openGate']], ['bar', 'bar', ['buzz']]];
+  // CH=gate,brew : seulement ces postes (mesurer un boost) ; par défaut les trois plus rentables
   const only = process.env.CH?.split(',');
   const plans = only ? all.filter(([c]) => only.includes(c)) : all.slice(0, 3);
-  for (const [ch, ids] of plans) {
+  for (const [, ch, ids] of plans) {
     for (let k = 0; k < 10; k++) {
       const cur = g.boostOf(ch);
       if (cur && cur.until >= cover) break;

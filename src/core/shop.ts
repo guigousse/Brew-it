@@ -21,7 +21,7 @@ export const GEMS = {
 // ------------------------------------------------------------------ boosts
 
 /** Un boost occupe un « poste » : un seul effet actif par poste, que l'on peut prolonger. */
-export type BoostChannel = 'brew' | 'yeast' | 'bar' | 'wholesale' | 'quota';
+export type BoostChannel = 'brew' | 'yeast' | 'bar' | 'wholesale';
 export type BoostId = 'rush' | 'cadence' | 'fullSpeed' | 'nightShift' | 'yeast' | 'happyHour' | 'buzz' | 'prospect' | 'broker' | 'openGate';
 
 export interface BoostDef {
@@ -46,8 +46,7 @@ export const BOOST_POSTS: readonly { id: BoostChannel | null; name: string; text
   { id: 'brew', name: 'Machines', text: 'Toutes les machines tournent plus vite. Le temps du jeu, lui, ne change pas.' },
   { id: 'yeast', name: 'Fermentation', text: 'Fermentation et garde : là où les brassins attendent le plus.' },
   { id: 'bar', name: 'Clients du bar', text: 'Plus de monde au comptoir.' },
-  { id: 'wholesale', name: 'Grossiste', text: 'Le grossiste paie plus cher.' },
-  { id: 'quota', name: 'Débit du grossiste', text: 'Le grossiste reprend tout, sans limite par bière.' },
+  { id: 'wholesale', name: 'Grossiste', text: 'Le grossiste paie plus cher, ou reprend tout sans limite.' },
   { id: null, name: 'Coups ponctuels', text: 'Un effet immédiat.' },
 ];
 
@@ -60,7 +59,7 @@ export const BOOSTS: readonly BoostDef[] = [
   { id: 'happyHour', channel: 'bar', name: 'Happy hour', text: 'Clients ×2, verres −20 % · 2 h', mult: 2, minutes: 120, priceMult: 0.8, gems: 6 },
   { id: 'buzz', channel: 'bar', name: 'Bouche-à-oreille', text: '50 % de clients en plus · 8 h', mult: 1.5, minutes: 480, gems: 15 },
   { id: 'broker', channel: 'wholesale', name: 'Grossiste généreux', text: 'Le grossiste paie +50 % · 4 h', mult: 1.5, minutes: 240, gems: 8 },
-  { id: 'openGate', channel: 'quota', name: 'Grossiste sans limite', text: 'Reprend tout · 4 h · 1×/jour', mult: 1, minutes: 240, gems: 50, daily: true },
+  { id: 'openGate', channel: 'wholesale', name: 'Grossiste sans limite', text: 'Reprend tout · 4 h · 1×/jour', mult: 1, minutes: 240, gems: 50, daily: true },
   { id: 'prospect', name: 'Prospection', text: 'Une commande arrive tout de suite', mult: 1, minutes: 0, gems: 3 },
 ];
 export const boostById = (id: string) => BOOSTS.find((b) => b.id === id);

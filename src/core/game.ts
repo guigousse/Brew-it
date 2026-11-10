@@ -1307,7 +1307,7 @@ export class Game {
   /** Quota du grossiste pour une bière, en litres par jour : il grandit avec sa popularité (et avec le matériel). */
   wholesaleQuota(beer: Beer): number {
     // pendant un boost de production, le grossiste suit la cadence : sans ça, produire plus ne rapporterait rien
-    if (this.boostOf('quota')) return Infinity; // grossiste sans limite
+    if (this.boostOf('wholesale')?.id === 'openGate') return Infinity; // grossiste sans limite
     const boost = Math.max(this.boostMult('brew'), this.boostMult('yeast') > 1 ? 1.5 : 1);
     return Math.round(this.batchLiters * (WHOLESALE_QUOTA.base + WHOLESALE_QUOTA.pop * beer.pop) * boost);
   }
@@ -1803,6 +1803,12 @@ export class Game {
     for (const o of g.orders) if (o.tip == null && (o.kind === 'classic' || o.kind === 'keg')) o.tip = true;
     g.boosts ??= {};
     g.boostDay ??= {};
+    // le grossiste sans limite avait son propre poste avant d'être rangé avec le grossiste
+    const gate = (g.boosts as Record<string, { id: BoostId; until: number } | undefined>).quota;
+    if (gate) {
+      if (!g.boosts.wholesale || g.boosts.wholesale.until < g.time) g.boosts.wholesale = gate;
+      delete (g.boosts as Record<string, unknown>).quota;
+    }
     // la monnaie premium s'appelait « capsules » : elles deviennent des diamants, à nombre égal
     const oldCaps = (g as unknown as { caps?: number }).caps;
     if ((s as { gems?: number }).gems == null) g.gems = oldCaps ?? GEMS.start;

@@ -325,6 +325,7 @@ describe('jeu', () => {
     beer.stock = 5000;
     expect(g.wholesaleSellable(beer, 'bottle')).toBe(5000);
     expect(g.buyBoost('openGate').ok).toBe(false); // une fois par jour
+    expect(g.boostBlocked('broker')).toMatch(/en cours/); // un seul effet au poste du grossiste
     g.time += 4 * 3600 + 1;
     expect(Number.isFinite(g.wholesaleQuota(beer))).toBe(true);
     expect(g.boostBlocked('openGate')).toMatch(/une fois par jour/i);
