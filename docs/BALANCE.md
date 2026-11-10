@@ -200,6 +200,16 @@ Les diamants seront vendus en packs. Le réglage cherche donc un équilibre : un
 
 Après la correction, machines ×2 en continu : 8 jours de moins pour 1 770 💎 ; tous les boosts : 15 jours de moins pour 3 000 💎. **Un jour gagné vaut environ 200 💎.** Les prix des boosts n'ont pas changé.
 
+**Grossiste sans limite.** Le quota du grossiste est le principal frein de la partie : sans limite, la partie s'effondre. Mesures (diamants illimités, boost gardé autant que permis) :
+
+| Version | Seul | Avec tous les boosts |
+|---|---|---|
+| Sans limite en continu | J10 (2 160 💎) | **J5** |
+| 8 h, une fois par jour | J21,5 (~1 230 💎) | **J8** |
+| **4 h, une fois par jour (retenu, 50 💎)** | J27,5 (~1 040 💎 à 40) | **J12,8** (au lieu de J15,5) |
+
+La durée et la fréquence bornent le boost, pas son prix : un gros acheteur paie de toute façon. Retenu : 4 h, une fois par jour, 50 💎. C'est le boost le plus cher au jour gagné (environ 500 💎 seul), utile surtout avec un boost des machines ; le joueur gratuit qui dépense ses diamants finit toujours vers J27.
+
 **Gains sans payer.** 25 au départ ; les lettres portent leurs diamants (difficiles : 1 à 3 ; simples : 1 diamant une fois sur trois, toujours pour les 3 commandes de démarrage ; +1 client exigeant) ; 15 / 25 / 40 / 60 aux niveaux 2 à 5. Avant ce réglage, une partie en rapportait 634 (~22 par jour, et ~34 avec le livreur, qui livrait tout et faisait tourner le tableau) : de quoi garder des boosts presque en continu, donc aucune raison d'en acheter.
 
 **Profils mesurés** (4 visites par jour, moyenne de 2 à 3 tirages, `SEED`) :
@@ -211,7 +221,7 @@ Après la correction, machines ×2 en continu : 8 jours de moins pour 1 770 💎
 | Gratuit, dépense tout en boosts (`GEMS=spend`) | ~420 | ~410 | **~J26** (−13 %) |
 | + 500 💎 achetés (`BUY=500`, ~5 €) | ~420 | ~880 | **~J23,5** (−21 %) |
 | + 1 500 💎 achetés (`BUY=1500`, ~15 €) | ~420 | ~1 850 | **~J17,5** (−41 %) |
-| Diamants illimités (`GEMS=whale`) | — | ~3 300 | **~J15,5** (plafond) |
+| Diamants illimités (`GEMS=whale`) | — | ~3 300 | **~J15,5** (plafond ; ~J13 avec le grossiste sans limite) |
 
 Le joueur simulé dépense ses diamants à chaque visite pour couvrir l'absence suivante : grossiste généreux, puis le meilleur boost des machines, puis la levure express.
 

@@ -213,6 +213,8 @@ export class Game {
   adPrestige = false;
   /** Boosts en cours, un par canal (brasserie, levure, bar, grossiste). */
   boosts: Partial<Record<BoostChannel, { id: BoostId; until: number }>> = {};
+  /** Jour (celui du quota du grossiste) du dernier achat de chaque boost « une fois par jour ». */
+  boostDay: Partial<Record<BoostId, number>> = {};
   /** Fin des contrats du livreur et de l'apprenti (le barman a le sien : barmanUntil). */
   staffUntil: { courier: number; apprentice: number } = { courier: 0, apprentice: 0 };
   /** Mobilier du bar, dans l'ordre d'achat. */
@@ -999,6 +1001,7 @@ export class Game {
     if (!def.channel) return id === 'prospect' && this.orders.length >= this.boardSlots ? 'Le tableau des commandes est plein' : null;
     const cur = this.boostOf(def.channel);
     const curDef = cur ? boostById(cur.id) : undefined;
+    if (def.daily && this.boostDay[id] === localDay(this.wall)) return 'Une fois par jour : revient après minuit';
     if (cur && curDef && !sameEffect(curDef, def)) return `« ${curDef.name} » est en cours`;
     const from = cur ? cur.until : this.time;
     if (from + def.minutes * 60 - this.time > BOOST_MAX_AHEAD) return 'Déjà prolongé au maximum (24 h)';
@@ -1023,6 +1026,7 @@ export class Game {
       this.tickOrders(0);
       return { ok: true };
     }
+    if (def.daily) this.boostDay[id] = localDay(this.wall);
     const cur = this.boostOf(def.channel);
     // le poste garde le nom du boost en cours ; la durée s'ajoute
     this.boosts[def.channel] = { id: cur?.id ?? id, until: (cur ? cur.until : this.time) + def.minutes * 60 };
@@ -1303,6 +1307,7 @@ export class Game {
   /** Quota du grossiste pour une bière, en litres par jour : il grandit avec sa popularité (et avec le matériel). */
   wholesaleQuota(beer: Beer): number {
     // pendant un boost de production, le grossiste suit la cadence : sans ça, produire plus ne rapporterait rien
+    if (this.boostOf('quota')) return Infinity; // grossiste sans limite
     const boost = Math.max(this.boostMult('brew'), this.boostMult('yeast') > 1 ? 1.5 : 1);
     return Math.round(this.batchLiters * (WHOLESALE_QUOTA.base + WHOLESALE_QUOTA.pop * beer.pop) * boost);
   }
@@ -1712,7 +1717,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, boostDay: this.boostDay, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1797,6 +1802,7 @@ export class Game {
     // les lettres d'avant les pourboires : une commande simple gardait son diamant affiché
     for (const o of g.orders) if (o.tip == null && (o.kind === 'classic' || o.kind === 'keg')) o.tip = true;
     g.boosts ??= {};
+    g.boostDay ??= {};
     // la monnaie premium s'appelait « capsules » : elles deviennent des diamants, à nombre égal
     const oldCaps = (g as unknown as { caps?: number }).caps;
     if ((s as { gems?: number }).gems == null) g.gems = oldCaps ?? GEMS.start;

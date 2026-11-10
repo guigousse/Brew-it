@@ -93,12 +93,12 @@ const SHOP_TABS: readonly { id: ShopTab; name: string; icon: IconId }[] = [
   { id: 'labels', name: 'Étiquettes', icon: 'labels' },
 ];
 /** Icône de chaque effet (poste de boost), en haut à droite de l'écran quand il est actif : la marmite des machines… */
-const EFFECT_ICON: Record<BoostChannel, IconId> = { brew: 'brew', yeast: 'flask', bar: 'mug', wholesale: 'truck' };
+const EFFECT_ICON: Record<BoostChannel, IconId> = { brew: 'brew', yeast: 'flask', bar: 'mug', wholesale: 'truck', quota: 'crate' };
 /** Le nom de chaque effet, pour la lecture d'écran. */
-const EFFECT_NAME: Record<BoostChannel, string> = { brew: 'Machines', yeast: 'Fermentation et garde', bar: 'Clients du bar', wholesale: 'Prix du grossiste' };
+const EFFECT_NAME: Record<BoostChannel, string> = { brew: 'Machines', yeast: 'Fermentation et garde', bar: 'Clients du bar', wholesale: 'Prix du grossiste', quota: 'Grossiste sans limite' };
 /** Icône de chaque boost, dans le magasin. */
 const BOOST_ICON: Record<BoostId, IconId> = {
-  rush: 'flame', cadence: 'fast2', nightShift: 'moon', fullSpeed: 'fast3', yeast: 'yeast', happyHour: 'mug', buzz: 'bubble', broker: 'truck', prospect: 'envelope',
+  rush: 'flame', cadence: 'fast2', nightShift: 'moon', fullSpeed: 'fast3', yeast: 'yeast', happyHour: 'mug', buzz: 'bubble', broker: 'truck', openGate: 'crate', prospect: 'envelope',
 };
 /** L'événement qu'ouvre chaque objet d'événement de la décoration. */
 const DECOR_EVENT: Partial<Record<DecorId, 'darts' | 'foot' | 'party'>> = { darts: 'darts', tv: 'foot', disco: 'party' };
@@ -125,6 +125,7 @@ function boostShort(b: BoostDef): string {
   if (!b.channel) return 'immédiat';
   if (b.channel === 'bar') return `clients ×${n(b.mult)}${b.priceMult ? ` · verres −${Math.round((1 - b.priceMult) * 100)} %` : ''} · ${dur}`;
   if (b.channel === 'wholesale') return `prix ×${n(b.mult)} · ${dur}`;
+  if (b.channel === 'quota') return `sans limite · ${dur}`;
   return `×${n(b.mult)} · ${dur}`;
 }
 
@@ -2117,10 +2118,11 @@ export class App {
       drawLabel(thumb, b.label, b.name);
       const quota = g.wholesaleQuota(b);
       const left = g.wholesaleLeft(b);
-      head.append(thumb, h('span', 'stock-name', b.name), h('span', `ws-quota${left <= 0 ? ' full' : ''}`, `${liters(quota - left)} / ${liters(quota)}`));
+      const open = !Number.isFinite(quota); // grossiste sans limite (boost)
+      head.append(thumb, h('span', 'stock-name', b.name), h('span', `ws-quota${left <= 0 ? ' full' : ''}`, open ? 'sans limite' : `${liters(quota - left)} / ${liters(quota)}`));
       const bar = h('div', 'ws-bar');
       const fill = h('div', 'ws-fill');
-      fill.style.width = `${Math.min(100, quota ? (100 * (quota - left)) / quota : 100)}%`;
+      fill.style.width = `${open ? 0 : Math.min(100, quota ? (100 * (quota - left)) / quota : 100)}%`;
       bar.append(fill);
       box.append(head, bar);
       const perL = wholesalePrice(b.tasting) / BOTTLE_L;
@@ -2783,7 +2785,7 @@ export class App {
         // l'effet : l'icône du poste, le multiplicateur posé dessus, puis le temps qui reste
         const el = h('button', `boost-chip effect-${b.ch}`);
         const icon = h('span', 'boost-chip-icon');
-        icon.append(iconCanvas(EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-mult', `×${String(mult(b.id)).replace('.', ',')}`));
+        icon.append(iconCanvas(EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-mult', b.ch === 'quota' ? '∞' : `×${String(mult(b.id)).replace('.', ',')}`));
         el.append(icon, h('span', 'boost-chip-time'));
         el.onclick = () => this.openShop('boosts');
         this.boostHud.append(el);
@@ -2960,7 +2962,8 @@ export class App {
         text.append(h('span', 'boost-name', def.name), h('span', 'boost-effect', def.text));
         const blocked = g.boostBlocked(def.id);
         let b: HTMLButtonElement;
-        if (blocked && cur) b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
+        if (blocked && def.daily && blocked.startsWith('Une fois par jour')) b = this.btn('btn price lock', 'demain', () => this.toast(blocked, 'info'));
+        else if (blocked && cur) b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
         else {
           const extend = !!cur;
           b = this.gemsBtn('', def.gems, () => {
