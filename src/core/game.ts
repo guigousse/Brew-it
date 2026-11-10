@@ -2,7 +2,7 @@ import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Level
 import { EventBus } from './events';
 import type { Label } from './label';
 import { PARTY } from './market';
-import { AD_EXTEND, adById, adCost, ADS, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type AdDef, type AdId, type BarEventId, type ShopItemId } from './market';
+import { AD_EXTEND, AD_REF, adById, adCost, ADS, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type AdDef, type AdId, type BarEventId, type ShopItemId } from './market';
 import { orderGems, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, PRESTIGE_QUALITY, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
@@ -42,7 +42,12 @@ export const AD_DAILY = 3;
  * Contre le spam de la proposition « Doubler tes gains ? » : il faut une absence d'au moins 15 min, et 30 min
  * depuis la dernière proposition (regardée, refusée ou fermée). Le plafond de 3 pubs par jour s'y ajoute.
  */
-export const DOUBLE_OFFER = { minAbsence: 15 * 60, gap: 30 * 60 } as const;
+export const DOUBLE_OFFER = { minAbsence: 15 * 60, gap: 30 * 60, minHours: 1 } as const;
+/**
+ * Somme minimale pour proposer le doublement : environ une heure de revenus typiques au niveau de la brasserie
+ * (AD_REF est une journée), soit ~63 €, 500 €, 3 750 €, 21 000 € puis 75 000 €. Doubler 5 € ne vaut pas une pub.
+ */
+export const doubleMinimum = (breweryLevel: number) => Math.round(((AD_REF[breweryLevel - 1] ?? AD_REF[0]) / 24) * DOUBLE_OFFER.minHours);
 
 /** Numéro du jour, à l'heure locale, d'un instant (ms depuis 1970). */
 export function localDay(ms: number): number {
@@ -1436,6 +1441,7 @@ export class Game {
     const o = this.offline;
     if (!o || o.earned <= 0 || o.doubled || this.adLeft('double') <= 0) return false;
     if (o.seconds < DOUBLE_OFFER.minAbsence) return false;
+    if (o.earned < doubleMinimum(this.breweryLevel)) return false;
     return this.wall - this.doubleOfferAt >= DOUBLE_OFFER.gap * 1000;
   }
 

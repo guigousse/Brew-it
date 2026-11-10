@@ -1,5 +1,5 @@
 import { GASTON_RECIPE } from './brewing/model';
-import { BAR_MESSAGE, BAR_MESSAGE_MAX, Game, simulateOffline } from './game';
+import { BAR_MESSAGE, BAR_MESSAGE_MAX, doubleMinimum, Game, simulateOffline } from './game';
 import { DEFAULT_LABEL } from './label';
 import { AD_EXTEND, adCost, ADS, BAR, kegSpace, PARTY } from './market';
 import { COMPUTERS, WHOLESALE_PRICE, drawOrder, orderGems, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, STARTER_MAX_BOTTLES, fits, type Order } from './orders';
@@ -1096,6 +1096,20 @@ describe('pubs récompensées', () => {
     expect(g.canOfferDouble()).toBe(true);
     g.adViews = { day: g.adViews.day, double: 3, prospect: 0 };
     expect(g.canOfferDouble()).toBe(false); // plus de pub aujourd'hui
+  });
+
+  it('la proposition de doubler attend une somme qui en vaut la peine, selon le niveau de la brasserie', () => {
+    const g = new Game();
+    g.wall = new Date(2026, 10, 10, 12).getTime();
+    const min = doubleMinimum(g.breweryLevel);
+    expect(min).toBeGreaterThan(20);
+    g.offline = { seconds: 3600, earned: 5, sold: 0, liters: 0, batches: 0 };
+    expect(g.canOfferDouble()).toBe(false); // 5 € : pas la peine
+    g.offline.earned = min;
+    expect(g.canOfferDouble()).toBe(true);
+    // le seuil grandit avec la brasserie
+    expect(doubleMinimum(3)).toBeGreaterThan(doubleMinimum(2));
+    expect(doubleMinimum(5)).toBeGreaterThan(doubleMinimum(4));
   });
 
   it('prospecter contre une pub : une lettre sans diamants, 3 fois par jour, compteur séparé du doublement', () => {
