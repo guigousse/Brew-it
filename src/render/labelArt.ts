@@ -1,5 +1,5 @@
 /** Dessin des étiquettes : aperçu de l'éditeur (grand format) et miniature sur les bouteilles. */
-import type { Label } from '../core/label';
+import { gemStone, type Label } from '../core/label';
 
 const EMBLEM_PIXELS: Record<Exclude<Label['emblem'], 'none' | 'gem'>, string[]> = {
   hop: ['....#....', '...###...', '..#####..', '.##.#.##.', '..#####..', '.##.#.##.', '..#####..', '...###...', '....#....'],
@@ -17,19 +17,46 @@ const EMBLEM_PIXELS: Record<Exclude<Label['emblem'], 'none' | 'gem'>, string[]> 
   skull: ['..#####..', '.#######.', '#########', '#..#.#..#', '#..#.#..#', '#########', '.###.###.', '..#.#.#..', '..#####..'],
 };
 
-/** Diamant en relief (cosmétique de luxe) : ses propres couleurs, quelle que soit l'étiquette. */
-const GEM_RELIEF = [
-  '..kkkkk..',
-  '.kwwlLDk.',
-  'kwllLLLDk',
-  'kDDDDDDDk',
-  '.klLLLDk.',
-  '.klLLDDk.',
-  '..klLDk..',
-  '...kLk...',
-  '....k....',
-];
-const GEM_COLORS: Record<string, string> = { k: '#1b1424', w: '#ffffff', l: '#8cd0ff', L: '#3f88d4', D: '#1f4f8f' };
+/**
+ * Diamant taillé vu de dessus (cosmétique de luxe) : la table au centre, les facettes en étoile autour,
+ * la lumière en haut à gauche. Les lettres a à e vont du plus clair au plus sombre de la pierre choisie.
+ */
+const GEM_TOP = gemTop(11);
+
+/**
+ * La taille brillant vue de dessus, calculée : un octogone, la table au centre, et autour huit secteurs
+ * coupés chacun en deux facettes (une claire, une sombre) éclairées depuis le haut à gauche.
+ */
+function gemTop(n: number): string[] {
+  const c = (n - 1) / 2;
+  const rows: string[] = [];
+  for (let y = 0; y < n; y++) {
+    let row = '';
+    for (let x = 0; x < n; x++) {
+      const dx = x - c;
+      const dy = y - c;
+      const oct = Math.max(Math.abs(dx), Math.abs(dy), (Math.abs(dx) + Math.abs(dy)) * 0.72);
+      if (oct > c + 0.4) { row += '.'; continue; }
+      if (oct > c - 0.6) { row += 'k'; continue; }
+      if (oct < 1.6) { // la table : claire, un éclat en haut à gauche
+        row += dx < 0 && dy < 0 ? 'w' : dx + dy <= 0 ? 'a' : 'b';
+        continue;
+      }
+      if (oct < 2.2) { row += dx + dy < 0 ? 'b' : 'd'; continue; } // l'arête de la table
+      const t = Math.atan2(dy, dx);
+      const light = Math.cos(t + (3 * Math.PI) / 4); // 1 en haut à gauche, -1 en bas à droite
+      const half = Math.floor(((t + Math.PI) / (Math.PI / 4)) * 2) % 2; // deux facettes par secteur
+      const v = light + (half ? 0.45 : -0.45);
+      row += v > 0.9 ? 'a' : v > 0.2 ? 'b' : v > -0.4 ? 'c' : v > -1 ? 'd' : 'e';
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+const gemColors = (l: Label): Record<string, string> => {
+  const st = gemStone(l.gem);
+  return { k: '#1b1424', w: '#ffffff', a: st.a, b: st.b, c: st.c, d: st.d, e: st.e };
+};
 
 /** Fleur de lys (motif de luxe) : h reflet, g or, d or sombre. */
 const FLEUR = [
@@ -286,8 +313,9 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
   g.fillStyle = l.bg;
   g.fillRect(8, h - 30, w - 16, 20);
   g.restore();
-  if (l.shape === 'baroque') baroqueFrame(g, l, w, h);
-  else {
+  if (l.shape === 'baroque') {
+    /* le cadre est posé après le fond du logo : voir plus bas */
+  } else {
     g.save();
     shapePath(g, l.shape, w, h);
     g.lineWidth = 3;
@@ -295,26 +323,30 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
     g.stroke();
     g.restore();
   }
-  if (l.emblem === 'gem') {
+  if (l.emblem !== 'none') {
+    const gem = l.emblem === 'gem';
+    const rows: string[] = l.emblem === 'gem' ? GEM_TOP : EMBLEM_PIXELS[l.emblem];
+    const n = rows[0]!.length;
     const s = 3;
-    const ox = Math.round(w / 2 - (9 * s) / 2);
-    const oy = l.shape === 'baroque' ? 10 : 7; // cartouche : sous le dôme, sans mordre le cadre
+    const ox = Math.round(w / 2 - (n * s) / 2);
+    const oy = l.shape === 'baroque' ? 10 - (n - 9) * 2 : 7 - (n - 9) * 2;
     g.fillStyle = l.bg;
-    g.fillRect(ox - 3, oy - 3, 9 * s + 6, 9 * s + 6);
-    // relief : ombre portée, puis le diamant facetté, puis un éclat
-    silhouette(g, GEM_RELIEF, ox + 2, oy + 2, s, 'rgba(0,0,0,0.4)');
-    sprite(g, GEM_RELIEF, GEM_COLORS, ox, oy, s);
-    glint(g, ox + 7 * s, oy + 1, 1);
-  } else if (l.emblem !== 'none') {
-    const px = EMBLEM_PIXELS[l.emblem];
-    const s = 3;
-    const ox = Math.round(w / 2 - (9 * s) / 2);
-    const oy = l.shape === 'baroque' ? 10 : 7; // cartouche : sous le dôme, sans mordre le cadre
-    g.fillStyle = l.bg;
-    g.fillRect(ox - 3, oy - 3, 9 * s + 6, 9 * s + 6);
-    g.fillStyle = l.textColor;
-    px.forEach((row, y) => [...row].forEach((ch, x) => ch === '#' && g.fillRect(ox + x * s, oy + y * s, s, s)));
+    if (l.shape === 'baroque') {
+      // cartouche : le fond épouse le logo, puis le cadre doré passe par-dessus (rien ne le coupe)
+      rows.forEach((row, y) => [...row].forEach((ch, x) => ch !== '.' && g.fillRect(ox + x * s - 3, oy + y * s - 3, s + 6, s + 6)));
+      baroqueFrame(g, l, w, h);
+    } else g.fillRect(ox - 3, oy - 3, n * s + 6, n * s + 6);
+    if (gem) {
+      // relief : ombre portée, puis la pierre facettée, puis un éclat
+      silhouette(g, rows, ox + 2, oy + 2, s, 'rgba(0,0,0,0.4)');
+      sprite(g, rows, gemColors(l), ox, oy, s);
+      glint(g, ox + 2 * s, oy + 2 * s, 1);
+    } else {
+      g.fillStyle = l.textColor;
+      rows.forEach((row, y) => [...row].forEach((ch, x) => ch === '#' && g.fillRect(ox + x * s, oy + y * s, s, s)));
+    }
   }
+  if (l.shape === 'baroque' && l.emblem === 'none') baroqueFrame(g, l, w, h);
   crispText(g, name || 'Ma bière', w / 2, h - 20, l.shape === 'baroque' ? w - 36 : w - 20, l.textColor, l.font, l.font === 'retro' ? 18 : 12);
 }
 
@@ -334,11 +366,11 @@ export function drawMiniLabel(g: CanvasRenderingContext2D, l: Label, x: number, 
     g.fillRect(x + n - 1, y + 1, 1, 1);
   } else if (l.pattern === 'checks' || l.pattern === 'diamonds') for (let i = 0; i < n; i += 2) g.fillRect(x + i, y + 1 + (i % 4 ? 1 : 0), 1, 1);
   else if (l.pattern !== 'none') g.fillRect(x, y + n - 2, n, 1);
-  g.fillStyle = l.emblem === 'gem' ? '#3f88d4' : l.textColor;
+  g.fillStyle = l.emblem === 'gem' ? gemStone(l.gem).c : l.textColor;
   const c = Math.floor(n / 2);
   g.fillRect(x + c - 1, y + 2, 2, Math.max(1, n - 4));
   if (l.emblem === 'gem') {
-    g.fillStyle = '#8cd0ff';
+    g.fillStyle = gemStone(l.gem).a;
     g.fillRect(x + c - 1, y + 2, 1, 1);
   }
 }

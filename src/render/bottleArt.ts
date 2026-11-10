@@ -13,7 +13,7 @@ export const BOTTLE_H = 72;
 export const BOTTLE_SCALE = 2;
 /** Zone de l'étiquette sur le corps de la bouteille (px natifs), selon sa forme. */
 export const LABEL_SPOT = { x: 2, y: 36, w: 30, h: 19 };
-const SPOTS: Record<BottleShape, number> = { classic: 36, longneck: 42, stubby: 44, swing: 38, champagne: 44, gold: 38 };
+const SPOTS: Record<BottleShape, number> = { classic: 36, longneck: 42, stubby: 44, swing: 38, champagne: 44, gold: 42 };
 export const labelSpot = (shape: BottleShape = 'classic') => ({ ...LABEL_SPOT, y: SPOTS[shape] ?? 36 });
 
 const CX = 17;
@@ -24,7 +24,7 @@ const PROFILE: Record<BottleShape, { top: number; neck: number; shoulder: number
   stubby: { top: 14, neck: 22, shoulder: 28, neckW: 6, body: 17 },
   swing: { top: 4, neck: 18, shoulder: 30, neckW: 6, body: 17 },
   champagne: { top: 0, neck: 14, shoulder: 38, neckW: 5, body: 17 },
-  gold: { top: 0, neck: 16, shoulder: 30, neckW: 5, body: 16 },
+  gold: { top: 12, neck: 22, shoulder: 34, neckW: 5, body: 16 },
 };
 /** Demi-largeur de la bouteille à la ligne y : capsule, col, épaule, corps arrondi en bas. */
 function halfWidth(y: number, shape: BottleShape = 'classic'): number {
@@ -118,19 +118,11 @@ function glassBottle(g: CanvasRenderingContext2D, shape: BottleShape): void {
     // reflet franc et éclats sur l'or ; capsule noire cerclée d'or
     g.fillStyle = '#ffffff';
     g.fillRect(CX - p.body + 5, p.shoulder + 3, 1, BOTTLE_H - p.shoulder - 10);
-    g.fillRect(CX - 3, t + 6, 1, Math.max(3, p.neck - t - 7));
-    for (const [x, y] of [[CX + 8, p.shoulder + 4], [CX - 9, BOTTLE_H - 9], [CX + 2, t + 9]] as const) {
+    for (const [x, y] of [[CX + 8, p.shoulder + 4], [CX - 9, BOTTLE_H - 9]] as const) {
       g.fillRect(x - 1, y, 3, 1);
       g.fillRect(x, y - 1, 1, 3);
     }
-    g.fillStyle = '#1a0c06';
-    g.fillRect(CX - p.neckW - 2, t, (p.neckW + 2) * 2, 5);
-    g.fillStyle = '#2a2234';
-    g.fillRect(CX - p.neckW - 1, t, (p.neckW + 1) * 2, 4);
-    g.fillStyle = '#f2c14e';
-    g.fillRect(CX - p.neckW - 1, t + 3, (p.neckW + 1) * 2, 1);
-    g.fillStyle = '#5a4a6e';
-    g.fillRect(CX - p.neckW, t, 2, 1);
+    goldStopper(g, p.neckW, t, p.neck);
     return;
   }
   if (shape === 'swing') {
@@ -168,6 +160,50 @@ function glassBottle(g: CanvasRenderingContext2D, shape: BottleShape): void {
       g.fillRect(CX - p.neckW + 1, t + 15, (p.neckW - 1) * 2, 1);
     }
   }
+}
+
+/**
+ * Bouchon de la bouteille d'or, façon grand cognac : un pommeau d'or serti d'un rubis,
+ * une bague d'or, et le col habillé de laque noire à filets d'or.
+ */
+function goldStopper(g: CanvasRenderingContext2D, neckW: number, t: number, neck: number): void {
+  const px = (x: number, y: number, w: number, h: number, c: string) => {
+    g.fillStyle = c;
+    g.fillRect(x, y, w, h);
+  };
+  // col : laque noire, filets d'or en haut et en bas, frise de points d'or
+  const foil = neck - t + 2;
+  px(CX - neckW - 1, t, (neckW + 1) * 2, foil, '#1a0c06');
+  px(CX - neckW, t, neckW * 2, foil - 1, '#2a2234');
+  px(CX - neckW, t, 1, foil - 1, '#4a3e5a');
+  px(CX - neckW, t + 1, neckW * 2, 1, '#f2c14e');
+  px(CX - neckW, t + foil - 3, neckW * 2, 1, '#f2c14e');
+  for (let x = CX - neckW + 1; x < CX + neckW; x += 2) px(x, t + Math.floor(foil / 2), 1, 1, '#f2c14e');
+  px(CX - neckW, t + 1, 2, 1, '#ffe7a0');
+  // bague d'or entre le col et le pommeau
+  px(CX - neckW - 2, t - 2, (neckW + 2) * 2, 3, '#1a0c06');
+  px(CX - neckW - 1, t - 2, (neckW + 1) * 2, 2, '#d8a038');
+  px(CX - neckW - 1, t - 2, (neckW + 1) * 2, 1, '#ffe7a0');
+  // pommeau : un dôme d'or ombré de gauche à droite
+  const rows = [3, 5, 6, 7, 7, 7, 6, 5, 3];
+  rows.forEach((hw, y) => {
+    px(CX - hw - 1, y, (hw + 1) * 2, 1, '#1a0c06');
+    for (let i = 0; i < hw * 2; i++) {
+      const k = i / (hw * 2);
+      px(CX - hw + i, y, 1, 1, k < 0.2 ? '#ffe7a0' : k < 0.55 ? '#f2c14e' : k < 0.8 ? '#d8a038' : '#a8742a');
+    }
+  });
+  px(CX - 4, 0, 8, 1, '#1a0c06');
+  px(CX - 7, 8, 14, 1, '#7a5418'); // dessous du pommeau, dans l'ombre
+  // le rubis serti au cœur du pommeau (griffes d'or sombre), et son éclat
+  px(CX - 3, 2, 6, 5, '#5a3a0c');
+  px(CX - 2, 2, 4, 5, '#c0182e');
+  px(CX - 3, 3, 6, 3, '#c0182e');
+  px(CX - 2, 3, 2, 1, '#ff9aa8');
+  px(CX - 2, 2, 1, 1, '#ffffff');
+  px(CX + 1, 5, 2, 1, '#80101e');
+  px(CX - 5, 1, 1, 1, '#ffffff');
+  px(CX + 4, 4, 1, 2, '#7a5418');
 }
 
 /** Couleur dominante d'une caisse : le fond de l'étiquette de la bière. */

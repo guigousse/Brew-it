@@ -581,6 +581,8 @@ function drawMiniBottle(px: Px, g: CanvasRenderingContext2D, x: number, y: numbe
   else px(nx, top, neckW, 2, '#f2c14e');
   if (shape === 'gold') {
     // bouteille d'or : capsule noire, or poli, un éclat
+    px(nx - 1, top - 2, neckW + 2, 2, '#f2c14e'); // pommeau d'or serti d'un rubis
+    px(nx + 1, top - 2, 1, 1, '#c0182e');
     px(nx, top, neckW, 2, '#2a2234');
     px(nx, top + 2, neckW, neckEnd - top - 2, '#d8a038');
     px(x + 1, neckEnd, 5, 2, '#d8a038');

@@ -16,7 +16,7 @@ import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
-import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
+import { GEMSTONES, BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
 import { sfx } from '../platform/audio';
@@ -2397,7 +2397,9 @@ export class App {
     input.maxLength = 22;
     input.placeholder = 'Nom de ta bière';
     input.value = name;
+    let stones: HTMLElement | null = null;
     const redraw = () => {
+      stones?.classList.toggle('hidden', label.emblem !== 'gem');
       drawLabel(big, label, input.value);
       drawLabel(small, label, input.value);
       drawShelfBottle(glass, 'beer', label.bottle);
@@ -2443,6 +2445,22 @@ export class App {
     chooser('Motif', 'pattern', PATTERNS, 'pattern');
     colors('Couleur du motif', 'patternColor');
     chooser('Emblème', 'emblem', EMBLEMS, 'emblem');
+    // logo diamant : le choix de la pierre
+    stones = h('div', 'gem-stones');
+    const stoneRow = h('div', 'swatches');
+    for (const st of GEMSTONES) {
+      const sw = this.btn(`swatch stone${(label.gem ?? 'diamond') === st.id ? ' active' : ''}`, '', () => {
+        label.gem = st.id;
+        stoneRow.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x === sw));
+        redraw();
+      });
+      sw.style.background = `linear-gradient(135deg, ${st.a} 0 22%, ${st.b} 22% 55%, ${st.d} 55%)`;
+      sw.setAttribute('aria-label', st.name);
+      sw.title = st.name;
+      stoneRow.append(sw);
+    }
+    stones.append(h('div', 'section-title', 'Pierre du diamant'), stoneRow);
+    card.append(stones);
     chooser('Police du nom', 'font', FONTS);
     colors('Couleur du texte et du contour', 'textColor');
     card.append(this.btn('btn primary big', 'Valider l\'étiquette', () => onDone(input.value, label)));

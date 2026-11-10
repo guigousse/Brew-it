@@ -138,6 +138,8 @@ button:disabled { cursor: default; opacity: .5; }
 .note.bad { color: #ffb4a4; }
 .section-title { font-family: var(--font-title); font-size: 12px; color: var(--dim); text-transform: uppercase; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gem-stones { display: grid; gap: 6px; }
+.swatch.stone { border-radius: 2px; }
 .volume-row { display: flex; align-items: center; gap: 10px; }
 .volume-range { flex: 1; min-width: 0; accent-color: var(--accent); }
 .volume-range:disabled { opacity: .4; }
