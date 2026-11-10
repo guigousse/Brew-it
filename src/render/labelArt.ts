@@ -58,19 +58,51 @@ const gemColors = (l: Label): Record<string, string> => {
   return { k: '#1b1424', w: '#ffffff', a: st.a, b: st.b, c: st.c, d: st.d, e: st.e };
 };
 
-/** Fleur de lys (motif de luxe) : h reflet, g or, d or sombre. */
-const FLEUR = [
-  '....h....',
-  '...hgd...',
-  '...hgd...',
-  '.h..g..d.',
-  'hgh.g.dgd',
-  'hg..g..gd',
-  '..hhggd..',
-  '...hgd...',
-  '..h.g.d..',
+/** Fleur de lys (motif de luxe) : la silhouette ; le contour et l'ombrage en relief sont calculés (fleurShaded). */
+const FLEUR_SHAPE = [
+  '.......#.......',
+  '......###......',
+  '......###......',
+  '.....#####.....',
+  '.....#####.....',
+  '....#######....',
+  '.##.#######.##.',
+  '###..#####..###',
+  '##.#..###..#.##',
+  '#..##.###.##..#',
+  '#...###.###...#',
+  '...#########...',
+  '...#########...',
+  '.....##.##.....',
+  '....##.#.##....',
+  '......###......',
+  '.......#.......',
 ];
-const GOLD: Record<string, string> = { h: '#ffe7a0', g: '#f2c14e', d: '#a8742a' };
+/**
+ * Ombrage d'or poli : bord gauche et haut clairs, bord droit et bas sombres, cœur doré ;
+ * tout autour, un contour brun (o) qui détache la fleur du fond.
+ */
+const FLEUR = ((rows: string[]) => {
+  const H = rows.length;
+  const W = rows[0]!.length;
+  const on = (x: number, y: number) => rows[y]?.[x] === '#';
+  const out: string[] = [];
+  for (let y = -1; y <= H; y++) {
+    let line = '';
+    for (let x = -1; x <= W; x++) {
+      if (on(x, y)) {
+        const r = !on(x + 1, y);
+        const b = !on(x, y + 1);
+        const l = !on(x - 1, y);
+        const t = !on(x, y - 1);
+        line += r || b ? (l || t ? 'g' : 'd') : l || t ? 'h' : 'g';
+      } else line += on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1) ? 'o' : '.';
+    }
+    out.push(line);
+  }
+  return out;
+})(FLEUR_SHAPE);
+const GOLD: Record<string, string> = { h: '#ffe7a0', g: '#f2c14e', d: '#b07a2a', o: '#4a2a08' };
 
 function sprite(g: CanvasRenderingContext2D, rows: string[], colors: Record<string, string>, x: number, y: number, s: number): void {
   rows.forEach((row, j) => [...row].forEach((ch, i) => {
@@ -253,12 +285,24 @@ function pattern(g: CanvasRenderingContext2D, l: Label, w: number, h: number, un
       for (let y = u * 7; y < h; y += u * 10) g.fillRect(0, y, w, u);
       break;
     case 'fleurdelis': {
-      // fleurs de lys d'or en quinconce, ombrées en relief, avec quelques éclats : le motif ignore la couleur choisie
-      const step = u * 11;
-      for (let y = -u * 2, row = 0; y < h; y += step, row++) for (let x = (row % 2) * (step / 2) - u * 3; x < w; x += step) {
-        silhouette(g, FLEUR, x + u / 2, y + u / 2, u, 'rgba(58,30,4,0.45)');
-        sprite(g, FLEUR, GOLD, x, y, u);
-        if ((Math.round(x / step) + row) % 3 === 0) glint(g, x + u * 3, y + u, Math.max(1, u / 2));
+      // semé de fleurs de lys d'or en quinconce, au pixel près, avec quelques éclats : le motif ignore la couleur choisie
+      const fw = FLEUR[0]!.length;
+      const fh = FLEUR.length;
+      const sx = fw + 5;
+      // les rangées s'arrêtent au-dessus du bandeau du nom (h - 30) : pas de fleur coupée en deux
+      // (cartouche : sous le cadre doré, qui mange le haut)
+      const band = h - 30;
+      const top = l.shape === 'baroque' ? 10 : 0;
+      const rows = Math.max(1, Math.floor((band - top - 2) / fh));
+      const gap = (band - top - rows * fh) / (rows + 1);
+      for (let row = 0; row < rows; row++) {
+        const y = Math.round(top + gap + row * (fh + gap));
+        for (let x = (row % 2) * Math.round(sx / 2) - fw / 2; x < w; x += sx) {
+          // pas de fleur à moitié cachée sous le logo
+          if (l.emblem !== 'none' && x < w / 2 + 17 && x + fw > w / 2 - 17 && y < 40) continue;
+          sprite(g, FLEUR, GOLD, Math.round(x), y, 1);
+          if ((Math.round(x / sx) + row) % 3 === 0) glint(g, Math.round(x) + 6, y + 4, 1);
+        }
       }
       break;
     }
