@@ -439,15 +439,17 @@ button:disabled { cursor: default; opacity: .5; }
 .plan-card { gap: 4px; }
 
 /* --- Gains de l'absence : une bourse discrète sous l'argent ------------------------------ */
-.harvests { position: absolute; z-index: 6; right: 10px; top: calc(var(--top-h, 60px) + 6px); display: flex; gap: 6px; align-items: center; }
+.harvests { position: absolute; z-index: 6; right: 4px; top: calc(var(--top-h, 60px) + 6px); display: flex; gap: 4px; align-items: stretch; }
 .harvest {
-  display: flex; align-items: center; gap: 4px;
-  padding: 3px 10px 3px 6px; font-family: var(--font-title); font-size: 13px; color: var(--ink);
+  display: flex; align-items: center; gap: 3px; box-sizing: border-box; height: 30px;
+  padding: 0 6px 0 4px; font-family: var(--font-title); font-size: 13px; line-height: 1; color: var(--ink);
   background: var(--accent); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #ffe7a0, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008;
   animation: harvest-bob 1.4s steps(2) infinite;
 }
 /* les diamants : le même bouton, aux couleurs des diamants */
-.harvest.harvest-gem { color: #fff; background: #3f8fe0; box-shadow: inset 2px 2px 0 #8fc8ff, inset -2px -2px 0 #1d4f8a, 0 3px 0 #0008; animation-delay: .7s; }
+.harvest.harvest-gem { color: #fff; background: #3f8fe0; box-shadow: inset 2px 2px 0 #8fc8ff, inset -2px -2px 0 #1d4f8a, 0 3px 0 #0008; }
+/* écran étroit : l'argent en haut, les diamants dessous, alignés à droite */
+.harvests.stack { flex-direction: column-reverse; align-items: flex-end; }
 .harvest.harvest-gem .gems-icon { width: 16px; height: 16px; image-rendering: pixelated; }
 .harvest.hidden { display: none; }
 .harvest:active { transform: translateY(1px); }
@@ -744,6 +746,7 @@ button:disabled { cursor: default; opacity: .5; }
 /* --- Boosts actifs, en haut à droite de l'écran --------------------------------------------- */
 .boost-hud { position: absolute; z-index: 5; right: 8px; top: calc(var(--top-h, 60px) + 6px); display: grid; gap: 6px; justify-items: end; }
 .boost-hud.below-harvest { top: calc(var(--top-h, 60px) + 44px); }
+.boost-hud.below-harvest.below-harvest-stack { top: calc(var(--top-h, 60px) + 78px); }
 .boost-hud.hidden { display: none; }
 /* Effets actifs : une petite case au cadre arc-en-ciel qui brille, l'icône de l'effet, un cadran qui se vide
    en balayant (--left : part qui reste, de 1 à 0) et le temps qui reste au centre. */

@@ -676,6 +676,12 @@ export class App {
         this.harvestGems.setAttribute('aria-label', `Récolter ${gemsText(offGems)} gagnés pendant ton absence`);
       }
     }
+    // les deux boutons côte à côte ne doivent pas mordre sur l'étiquette de la pièce : sur un écran étroit,
+    // les diamants passent sous l'argent
+    const roomPlaque = isRoom(this.view) ? { workshop: this.plaque, office: this.officePlaque, storage: this.storagePlaque, bar: this.barPlaque }[this.view] : undefined;
+    this.harvests.classList.remove('stack');
+    if (roomPlaque && earned > 0 && offGems > 0 && this.harvests.getBoundingClientRect().left < roomPlaque.getBoundingClientRect().right + 2) this.harvests.classList.add('stack');
+    this.boostHud.classList.toggle('below-harvest-stack', this.harvests.classList.contains('stack'));
     const can = g.canBrew();
     const trial = g.tastable;
     // pastilles des boutons d'action : l'essentiel en un coup d'œil ; « ready » = il y a quelque chose à faire
