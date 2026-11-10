@@ -1064,6 +1064,14 @@ describe('pubs récompensées', () => {
       expect(g.gems - gems).toBe(2);
     }
     expect(g.adLeft('double')).toBe(0);
+    // une bourse ne se double qu'une fois
+    g.adViews.double = 0;
+    g.offline = { seconds: 3600, earned: 100, sold: 0, liters: 0, batches: 0 };
+    expect(g.doubleOffline().ok).toBe(true);
+    expect(g.offline.doubled).toBe(true);
+    expect(g.doubleOffline().ok).toBe(false);
+    expect(g.offline.earned).toBe(200);
+    g.adViews.double = 3;
     g.offline = { seconds: 3600, earned: 100, sold: 0, liters: 0, batches: 0 };
     expect(g.doubleOffline().ok).toBe(false);
     expect(g.offline.earned).toBe(100);

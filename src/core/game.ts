@@ -141,6 +141,8 @@ export interface OfflineReport {
   batches: number;
   /** Diamants gagnés pendant l'absence (commandes livrées par le livreur, passages de niveau), récoltés avec l'argent. */
   gems?: number;
+  /** L'argent a été doublé par une pub : la bourse brille davantage jusqu'à la récolte. */
+  doubled?: boolean;
 }
 
 type StationState = { level: number };
@@ -1433,8 +1435,10 @@ export class Game {
   doubleOffline(): CommandResult {
     const o = this.offline;
     if (!o || o.earned <= 0) return { ok: false, reason: 'Rien à doubler' };
+    if (o.doubled) return { ok: false, reason: 'Déjà doublé' };
     if (!this.useAd('double')) return { ok: false, reason: 'Plus de doublement aujourd\'hui' };
     o.earned *= 2;
+    o.doubled = true;
     return { ok: true };
   }
 
@@ -1976,6 +1980,8 @@ export function simulateOffline(game: Game, seconds: number, max = MAX_OFFLINE_S
     liters: game.totalLiters - liters + (prev?.liters ?? 0),
     batches: game.batchesDone - done + (prev?.batches ?? 0),
     gems: gemsEarned + (prev?.gems ?? 0),
+    // une bourse déjà doublée et pas encore récoltée le reste (pas de nouvelle offre avant la récolte)
+    doubled: prev?.doubled,
   };
   // Le coût des brassins automatiques lancés pendant l'absence est déjà déduit des gains.
   if (earned < 0) game.money += earned;

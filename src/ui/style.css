@@ -847,3 +847,14 @@ button:disabled { cursor: default; opacity: .5; }
 @keyframes coin-burst { 0% { transform: translate(0, 0) scale(.4); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 60px)) scale(1); opacity: 0; } }
 .reward-card.doubling { box-shadow: inset 0 0 0 2px var(--accent), 0 0 30px #f2c14e80, 0 6px 0 #0008; }
 .reward-cash { animation: reward-pop .4s steps(5) both; }
+
+/* ---- bourse doublée par une pub : elle brille davantage jusqu'à la récolte ---- */
+.harvest.boosted { position: relative; overflow: visible; background: linear-gradient(100deg, #f2c14e 0 40%, #fff6c8 50%, #f2c14e 60% 100%) 0 0 / 300% 100%;
+  box-shadow: inset 2px 2px 0 #fff6c8, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008, 0 0 10px #ffe7a0, 0 0 18px #f2c14ea0;
+  animation: harvest-bob 1.4s steps(2) infinite, harvest-shine 1.6s linear infinite, harvest-glow 1.2s steps(3) infinite; }
+@keyframes harvest-shine { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+@keyframes harvest-glow { 50% { box-shadow: inset 2px 2px 0 #fff6c8, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008, 0 0 16px #fff2b0, 0 0 28px #f2c14ec0; } }
+.harvest-x2 { margin-left: 2px; padding: 1px 3px; font-size: 11px; color: #fff; background: #e8553a; border: 1px solid var(--ink); rotate: -8deg; }
+.harvest.boost-in { animation: harvest-boost-in .5s steps(5), harvest-shine 1.6s linear infinite, harvest-glow 1.2s steps(3) infinite; }
+@keyframes harvest-boost-in { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.harvests.over-modal { z-index: 11; }
