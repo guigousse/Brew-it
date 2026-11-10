@@ -289,12 +289,12 @@ function pattern(g: CanvasRenderingContext2D, l: Label, w: number, h: number, un
       const fw = FLEUR[0]!.length;
       const fh = FLEUR.length;
       const sx = fw + 5;
-      // les rangées s'arrêtent au-dessus du bandeau du nom (h - 30) : pas de fleur coupée en deux
-      // (cartouche : sous le cadre doré, qui mange le haut)
-      const band = h - 30;
-      const top = l.shape === 'baroque' ? 10 : 0;
-      const rows = Math.max(1, Math.floor((band - top - 2) / fh));
-      const gap = (band - top - rows * fh) / (rows + 1);
+      // pas de bandeau sous le nom pour ce motif : les fleurs couvrent toute l'étiquette (le nom est liseré, voir drawLabel)
+      // (cartouche : entre les dômes du cadre doré)
+      const top = l.shape === 'baroque' ? 7 : 0;
+      const bottom = l.shape === 'baroque' ? h - 7 : h;
+      const rows = Math.max(1, Math.floor((bottom - top + 1) / (fh + 1)));
+      const gap = (bottom - top - rows * fh) / (rows + 1);
       for (let row = 0; row < rows; row++) {
         const y = Math.round(top + gap + row * (fh + gap));
         for (let x = (row % 2) * Math.round(sx / 2) - fw / 2; x < w; x += sx) {
@@ -353,9 +353,11 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
   g.fillStyle = l.bg;
   g.fillRect(0, 0, w, h);
   pattern(g, l, w, h, 2);
-  // bandeau clair derrière le nom pour la lisibilité
+  // bandeau clair derrière le nom pour la lisibilité (sauf sous les fleurs de lys, qui restent entières)
+  if (l.pattern !== 'fleurdelis') {
   g.fillStyle = l.bg;
   g.fillRect(8, h - 30, w - 16, 20);
+  }
   g.restore();
   if (l.shape === 'baroque') {
     /* le cadre est posé après le fond du logo : voir plus bas */
@@ -391,7 +393,17 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
     }
   }
   if (l.shape === 'baroque' && l.emblem === 'none') baroqueFrame(g, l, w, h);
-  crispText(g, name || 'Ma bière', w / 2, h - 20, l.shape === 'baroque' ? w - 36 : w - 20, l.textColor, l.font, l.font === 'retro' ? 18 : 12);
+  const tx = name || 'Ma bière';
+  const maxW = l.shape === 'baroque' ? w - 36 : w - 20;
+  const size = l.font === 'retro' ? 18 : 12;
+  if (l.pattern === 'fleurdelis') {
+    // sans bandeau : un liseré de la couleur du fond détache le nom des fleurs
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      crispText(g, tx, w / 2 + dx, h - 20 + dy, maxW, l.bg, l.font, size);
+    }
+  }
+  crispText(g, tx, w / 2, h - 20, maxW, l.textColor, l.font, size);
 }
 
 /** Miniature sur la bouteille ou le carton (carré de `size` px). */
