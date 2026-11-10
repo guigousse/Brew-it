@@ -38,6 +38,11 @@ export const WHOLESALE_QUOTA = { base: 4, pop: 20 } as const;
 /** Pubs vidéo récompensées : chaque usage est limité à 3 par jour (jour local). */
 export type AdReward = 'double' | 'prospect';
 export const AD_DAILY = 3;
+/**
+ * Contre le spam de la proposition « Doubler tes gains ? » : il faut une absence d'au moins 15 min, et 30 min
+ * depuis la dernière proposition (regardée, refusée ou fermée). Le plafond de 3 pubs par jour s'y ajoute.
+ */
+export const DOUBLE_OFFER = { minAbsence: 15 * 60, gap: 30 * 60 } as const;
 
 /** Numéro du jour, à l'heure locale, d'un instant (ms depuis 1970). */
 export function localDay(ms: number): number {
@@ -261,6 +266,8 @@ export class Game {
   quotaDay = 0;
   /** Pubs récompensées regardées aujourd'hui, par usage ; `day` est le jour local du décompte. */
   adViews: { day: number; double: number; prospect: number } = { day: 0, double: 0, prospect: 0 };
+  /** Heure réelle (ms) de la dernière proposition de doublement. */
+  doubleOfferAt = 0;
   totalSold = 0;
   /** Litres vendus au total (bar, commandes et grossiste). */
   totalLiters = 0;
@@ -1424,6 +1431,19 @@ export class Game {
     return Math.max(0, AD_DAILY - this.adViews[kind]);
   }
 
+  /** La proposition de doubler la bourse peut-elle s'afficher maintenant ? (voir DOUBLE_OFFER) */
+  canOfferDouble(): boolean {
+    const o = this.offline;
+    if (!o || o.earned <= 0 || o.doubled || this.adLeft('double') <= 0) return false;
+    if (o.seconds < DOUBLE_OFFER.minAbsence) return false;
+    return this.wall - this.doubleOfferAt >= DOUBLE_OFFER.gap * 1000;
+  }
+
+  /** La proposition vient d'être faite : la suivante attendra DOUBLE_OFFER.gap. */
+  markDoubleOffered(): void {
+    this.doubleOfferAt = this.wall;
+  }
+
   /** Une pub a été regardée jusqu'au bout pour cet usage : elle compte dans la limite du jour. */
   private useAd(kind: AdReward): boolean {
     if (this.adLeft(kind) <= 0) return false;
@@ -1809,7 +1829,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1873,6 +1893,7 @@ export class Game {
     g.wall ??= 0;
     g.quotaDay ??= localDay(g.wall);
     g.adViews ??= { day: 0, double: 0, prospect: 0 };
+    g.doubleOfferAt ??= 0;
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
     delete (g as unknown as { autoBrew?: unknown }).autoBrew; // le brassage continu a disparu : tout passe par la file

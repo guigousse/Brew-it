@@ -694,7 +694,10 @@ export class App {
     // au retour : la bourse de l'absence s'ouvre en grand au centre de l'écran (une fois par absence)
     if (g.offline && g.offline !== this.offlineShown && !this.modalOpen && !this.openSheet) {
       this.offlineShown = g.offline;
-      this.openOfflineReward();
+      if (g.canOfferDouble()) {
+        g.markDoubleOffered();
+        this.openOfflineReward();
+      }
     }
     const can = g.canBrew();
     const trial = g.tastable;
@@ -2553,8 +2556,10 @@ export class App {
     if (!o || o.earned <= 0 || o.doubled || g.adLeft('double') <= 0) return;
     const card = this.modalCard('Doubler tes gains ?');
     card.classList.add('reward-card');
-    // une ligne : l'offre, et le bouton Play à côté (la croix du titre ferme la fenêtre)
+    // une ligne : la bourse, l'offre, et le bouton Play à côté (la croix du titre ferme la fenêtre)
     const row = h('div', 'reward-row');
+    const bag = h('span', 'reward-bag', '💰');
+    const note = h('p', 'reward-note hidden');
     const amount = h('strong', 'reward-amount', moneyInt(o.earned));
     const text = h('p', 'reward-text');
     text.append('Regardez une pub pour gagner ', amount, ' supplémentaires !');
@@ -2564,13 +2569,18 @@ export class App {
       play.disabled = true;
       const seen = await showRewardedAd();
       play.disabled = false;
-      if (!seen) return this.toast('Pub interrompue : rien de doublé', 'info');
+      if (!seen) {
+        // pub passée : la fenêtre reste, on peut réessayer (rien n'est compté)
+        note.textContent = 'La pub n\'a pas été vue jusqu\'au bout : tes gains ne sont pas doublés. Tu peux réessayer.';
+        note.classList.remove('hidden');
+        return;
+      }
       const r = g.doubleOffline();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       this.coinsToHarvest(amount);
     };
-    row.append(text, play);
-    card.append(row);
+    row.append(bag, text, play);
+    card.append(row, note);
   }
 
   /** Après la pub : les pièces filent de la fenêtre jusqu'à la bourse, qui prend le montant doublé à leur arrivée. */

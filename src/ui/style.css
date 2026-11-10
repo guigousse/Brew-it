@@ -806,7 +806,14 @@ button:disabled { cursor: default; opacity: .5; }
 .reward-amount { color: var(--accent); white-space: nowrap; }
 .reward-row { display: flex; align-items: center; gap: 12px; }
 .reward-row .reward-text { flex: 1; }
-.reward-play { flex: none; width: 56px; height: 56px; padding: 0; font-size: 24px; }
+.reward-play { flex: none; width: 56px; height: 56px; padding: 0; font-size: 24px; animation: play-pulse 1.6s steps(4) infinite; }
+@keyframes play-pulse { 50% { transform: scale(1.08); box-shadow: inset 2px 2px 0 #ffe7a0, 0 0 12px #f2c14ea0; } }
+.reward-card { box-shadow: inset 0 0 0 2px var(--accent), 0 0 18px #f2c14e50, 0 6px 0 #0008; }
+.reward-card .reward-bag { flex: none; font-size: 34px; line-height: 1; animation: harvest-bob 1.4s steps(2) infinite; }
+.reward-card .reward-amount { font-size: 21px; }
+.reward-note { margin: 0; font-size: 15px; color: #a894bc; }
+.reward-note.hidden { display: none; }
+@media (prefers-reduced-motion: reduce) { .reward-play, .reward-card .reward-bag { animation: none; } }
 
 /* ---- prospection contre une pub ---- */
 .slot-free:has(.prospect-btns) { flex-wrap: wrap; }

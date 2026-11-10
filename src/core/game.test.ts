@@ -1081,6 +1081,23 @@ describe('pubs récompensées', () => {
     expect(g.doubleOffline().ok).toBe(true);
   });
 
+  it('la proposition de doubler ne spamme pas : 15 min d\'absence au moins, 30 min entre deux propositions', () => {
+    const g = new Game();
+    g.wall = new Date(2026, 10, 10, 12).getTime();
+    g.offline = { seconds: 10 * 60, earned: 100, sold: 0, liters: 0, batches: 0 };
+    expect(g.canOfferDouble()).toBe(false); // absence trop courte
+    g.offline.seconds = 20 * 60;
+    expect(g.canOfferDouble()).toBe(true);
+    g.markDoubleOffered();
+    expect(g.canOfferDouble()).toBe(false); // vient d'être proposée
+    g.wall += 29 * 60 * 1000;
+    expect(g.canOfferDouble()).toBe(false);
+    g.wall += 2 * 60 * 1000;
+    expect(g.canOfferDouble()).toBe(true);
+    g.adViews = { day: g.adViews.day, double: 3, prospect: 0 };
+    expect(g.canOfferDouble()).toBe(false); // plus de pub aujourd'hui
+  });
+
   it('prospecter contre une pub : une lettre sans diamants, 3 fois par jour, compteur séparé du doublement', () => {
     const g = new Game();
     g.wall = new Date(2026, 10, 10, 12).getTime();
