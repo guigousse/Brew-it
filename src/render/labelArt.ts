@@ -73,9 +73,85 @@ const FONT_FAMILY: Record<Label['font'], string> = {
   classic: 'Georgia, "Times New Roman", serif',
 };
 
+/**
+ * Cartouche baroque : coins creusés, une volute en dôme au milieu du haut et du bas.
+ * `i` rentre le tracé dans le canevas pour que le cadre doré tienne entier.
+ */
+function baroquePath(g: CanvasRenderingContext2D, w: number, h: number, i = 0) {
+  const m = 6 + i;
+  const r = 10;
+  const c = w / 2;
+  const L = i;
+  const R = w - i;
+  g.moveTo(L + r, m);
+  g.lineTo(c - 20, m);
+  g.bezierCurveTo(c - 10, m, c - 9, i, c, i);
+  g.bezierCurveTo(c + 9, i, c + 10, m, c + 20, m);
+  g.lineTo(R - r, m);
+  g.arc(R, m, r, Math.PI, Math.PI / 2, true);
+  g.lineTo(R, h - m - r);
+  g.arc(R, h - m, r, -Math.PI / 2, Math.PI, true);
+  g.lineTo(c + 20, h - m);
+  g.bezierCurveTo(c + 10, h - m, c + 9, h - i, c, h - i);
+  g.bezierCurveTo(c - 9, h - i, c - 10, h - m, c - 20, h - m);
+  g.lineTo(L + r, h - m);
+  g.arc(L, h - m, r, 0, -Math.PI / 2, true);
+  g.lineTo(L, m + r);
+  g.arc(L, m, r, Math.PI / 2, 0, true);
+}
+
+/** Cadre doré biseauté du cartouche, avec ses volutes et un éclat. */
+function baroqueFrame(g: CanvasRenderingContext2D, l: Label, w: number, h: number) {
+  const stroke = (width: number, color: string, dx = 0, dy = 0, inset = 2) => {
+    g.save();
+    g.translate(dx, dy);
+    g.beginPath();
+    baroquePath(g, w, h, inset);
+    g.closePath();
+    g.lineWidth = width;
+    g.strokeStyle = color;
+    g.stroke();
+    g.restore();
+  };
+  stroke(5, '#5a3a0c');
+  stroke(3, '#f2c14e');
+  stroke(1, '#ffe7a0', -1, -1); // biseau : lumière en haut à gauche
+  stroke(1, '#a8742a', 1, 1); // ombre en bas à droite
+  // filet intérieur, à la couleur du texte
+  g.save();
+  g.translate(w * 0.06, h * 0.08);
+  g.scale(0.88, 0.84);
+  g.beginPath();
+  baroquePath(g, w, h, 2);
+  g.closePath();
+  g.lineWidth = 1.2;
+  g.strokeStyle = l.textColor;
+  g.stroke();
+  g.restore();
+  // volutes : une petite crosse dorée de chaque côté des dômes
+  const curl = (x: number, y: number, dir: 1 | -1, up: 1 | -1) => {
+    g.fillStyle = '#5a3a0c';
+    g.fillRect(x - 1, y - 1, 4, 3);
+    g.fillStyle = '#f2c14e';
+    g.fillRect(x, y, 2, 1);
+    g.fillRect(x + (dir > 0 ? 2 : -1), y - up, 1, 1);
+    g.fillStyle = '#ffe7a0';
+    g.fillRect(x, y, 1, 1);
+  };
+  for (const [x, dir] of [[w / 2 - 24, -1], [w / 2 + 22, 1]] as const) {
+    curl(x, 9, dir, 1);
+    curl(x, h - 10, dir, -1);
+  }
+  glint(g, 7, 7, 1);
+  glint(g, w - 9, h - 9, 1);
+}
+
 function shapePath(g: CanvasRenderingContext2D, shape: Label['shape'], w: number, h: number) {
   g.beginPath();
   switch (shape) {
+    case 'baroque':
+      baroquePath(g, w, h, 2);
+      break;
     case 'oval':
       g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
       break;
@@ -210,16 +286,19 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
   g.fillStyle = l.bg;
   g.fillRect(8, h - 30, w - 16, 20);
   g.restore();
-  g.save();
-  shapePath(g, l.shape, w, h);
-  g.lineWidth = 3;
-  g.strokeStyle = l.textColor;
-  g.stroke();
-  g.restore();
+  if (l.shape === 'baroque') baroqueFrame(g, l, w, h);
+  else {
+    g.save();
+    shapePath(g, l.shape, w, h);
+    g.lineWidth = 3;
+    g.strokeStyle = l.textColor;
+    g.stroke();
+    g.restore();
+  }
   if (l.emblem === 'gem') {
     const s = 3;
     const ox = Math.round(w / 2 - (9 * s) / 2);
-    const oy = 7;
+    const oy = l.shape === 'baroque' ? 10 : 7; // cartouche : sous le dôme, sans mordre le cadre
     g.fillStyle = l.bg;
     g.fillRect(ox - 3, oy - 3, 9 * s + 6, 9 * s + 6);
     // relief : ombre portée, puis le diamant facetté, puis un éclat
@@ -230,19 +309,19 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
     const px = EMBLEM_PIXELS[l.emblem];
     const s = 3;
     const ox = Math.round(w / 2 - (9 * s) / 2);
-    const oy = 7;
+    const oy = l.shape === 'baroque' ? 10 : 7; // cartouche : sous le dôme, sans mordre le cadre
     g.fillStyle = l.bg;
     g.fillRect(ox - 3, oy - 3, 9 * s + 6, 9 * s + 6);
     g.fillStyle = l.textColor;
     px.forEach((row, y) => [...row].forEach((ch, x) => ch === '#' && g.fillRect(ox + x * s, oy + y * s, s, s)));
   }
-  crispText(g, name || 'Ma bière', w / 2, h - 20, w - 20, l.textColor, l.font, l.font === 'retro' ? 18 : 12);
+  crispText(g, name || 'Ma bière', w / 2, h - 20, l.shape === 'baroque' ? w - 36 : w - 20, l.textColor, l.font, l.font === 'retro' ? 18 : 12);
 }
 
 /** Miniature sur la bouteille ou le carton (carré de `size` px). */
 export function drawMiniLabel(g: CanvasRenderingContext2D, l: Label, x: number, y: number, size = 5): void {
   const n = size;
-  g.fillStyle = l.textColor;
+  g.fillStyle = l.shape === 'baroque' ? '#f2c14e' : l.textColor; // cartouche : cadre doré
   g.fillRect(x - 0, y - 0, n, n);
   g.fillStyle = l.bg;
   g.fillRect(x, y + 1, n, n - 2);

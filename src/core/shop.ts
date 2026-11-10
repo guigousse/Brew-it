@@ -194,6 +194,7 @@ export const LABEL_UNLOCKS: readonly LabelUnlock[] = [
   u('shape', 'round', 'Arrondie', 500),
   u('shape', 'arch', 'Arche', 3000),
   u('shape', 'notched', 'Coins coupés', 15000),
+  p('shape', 'baroque', 'Cartouche baroque', LUXURY_GEMS),
   u('emblem', 'leaf', 'Feuille', 300),
   u('emblem', 'bee', 'Abeille', 1500),
   u('emblem', 'sun', 'Soleil', 6000),

@@ -5,7 +5,7 @@ export type BottleShape = 'classic' | 'longneck' | 'stubby' | 'swing' | 'champag
 export interface Label {
   /** Absente des anciennes sauvegardes : la bouteille classique. */
   bottle?: BottleShape;
-  shape: 'rect' | 'oval' | 'shield' | 'ribbon' | 'round' | 'arch' | 'notched';
+  shape: 'rect' | 'oval' | 'shield' | 'ribbon' | 'round' | 'arch' | 'notched' | 'baroque';
   bg: string;
   pattern: 'none' | 'stripes' | 'dots' | 'diamonds' | 'waves' | 'checks' | 'rays' | 'zigzag' | 'scales' | 'herringbone' | 'tartan' | 'fleurdelis';
   patternColor: string;
@@ -22,6 +22,7 @@ export const LABEL_COLORS = [
 export const SHAPES: { id: Label['shape']; name: string }[] = [
   { id: 'rect', name: 'Rectangle' }, { id: 'oval', name: 'Ovale' }, { id: 'shield', name: 'Écusson' }, { id: 'ribbon', name: 'Banderole' },
   { id: 'round', name: 'Arrondie' }, { id: 'arch', name: 'Arche' }, { id: 'notched', name: 'Coins coupés' },
+  { id: 'baroque', name: 'Cartouche baroque' },
 ];
 export const PATTERNS: { id: Label['pattern']; name: string }[] = [
   { id: 'none', name: 'Uni' }, { id: 'stripes', name: 'Rayures' }, { id: 'dots', name: 'Pois' }, { id: 'diamonds', name: 'Losanges' },
