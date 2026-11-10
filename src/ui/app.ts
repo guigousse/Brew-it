@@ -2550,29 +2550,27 @@ export class App {
   private openOfflineReward(): void {
     const g = this.game();
     const o = g.offline;
-    const left = g.adLeft('double');
-    if (!o || o.earned <= 0 || o.doubled || left <= 0) return;
+    if (!o || o.earned <= 0 || o.doubled || g.adLeft('double') <= 0) return;
     const card = this.modalCard('Doubler tes gains ?');
     card.classList.add('reward-card');
-    const hrs = Math.floor(o.seconds / 3600);
-    const min = Math.floor((o.seconds % 3600) / 60);
+    // une ligne : l'offre, et le bouton Play à côté (la croix du titre ferme la fenêtre)
+    const row = h('div', 'reward-row');
     const amount = h('strong', 'reward-amount', moneyInt(o.earned));
-    const p1 = h('p', 'reward-text');
-    p1.append(`Pendant ton absence (${hrs ? `${hrs} h ` : ''}${min} min), ta brasserie a gagné `, amount, '.');
-    const p2 = h('p', 'reward-text', `Regarde une courte pub pour recevoir ${moneyInt(o.earned * 2)} au lieu de ${moneyInt(o.earned)}.`);
-    const dbl = h('button', 'btn primary big reward-double');
-    dbl.append(h('span', 'reward-double-main', '▶ Regarder la pub · ×2'), h('span', 'reward-double-sub', `Encore ${left} fois aujourd'hui`));
-    const no = this.btn('btn', 'Non merci', () => this.closeModal());
-    dbl.onclick = async () => {
-      dbl.disabled = true;
+    const text = h('p', 'reward-text');
+    text.append('Regardez une pub pour gagner ', amount, ' supplémentaires !');
+    const play = h('button', 'btn primary reward-play', '▶');
+    play.setAttribute('aria-label', `Regarder une pub pour gagner ${moneyInt(o.earned)} supplémentaires`);
+    play.onclick = async () => {
+      play.disabled = true;
       const seen = await showRewardedAd();
-      dbl.disabled = false;
+      play.disabled = false;
       if (!seen) return this.toast('Pub interrompue : rien de doublé', 'info');
       const r = g.doubleOffline();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       this.coinsToHarvest(amount);
     };
-    card.append(p1, p2, dbl, no);
+    row.append(text, play);
+    card.append(row);
   }
 
   /** Après la pub : les pièces filent de la fenêtre jusqu'à la bourse, qui prend le montant doublé à leur arrivée. */

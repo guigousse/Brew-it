@@ -801,12 +801,12 @@ button:disabled { cursor: default; opacity: .5; }
 
 /* ---- bourse de l'absence, en grand au retour ---- */
 .reward-card { justify-items: stretch; }
-.reward-double { display: grid; gap: 2px; justify-items: center; }
-.reward-double-main { font-size: 20px; }
-.reward-double-sub { font-size: 14px; opacity: .8; }
 
 .reward-text { margin: 0; font-size: 18px; line-height: 1.35; }
 .reward-amount { color: var(--accent); white-space: nowrap; }
+.reward-row { display: flex; align-items: center; gap: 12px; }
+.reward-row .reward-text { flex: 1; }
+.reward-play { flex: none; width: 56px; height: 56px; padding: 0; font-size: 24px; }
 
 /* ---- prospection contre une pub ---- */
 .slot-free:has(.prospect-btns) { flex-wrap: wrap; }
