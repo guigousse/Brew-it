@@ -180,6 +180,8 @@ export const UNLOCK_KINDS: readonly { id: UnlockKind; name: string }[] = [
   { id: 'pattern', name: 'Motifs' },
 ];
 const u = (kind: UnlockKind, value: string, name: string, cost: number): LabelUnlock => ({ id: `${kind}:${value}`, kind, value, name, cost });
+/** Les cosmétiques de luxe (bouteille d'or, diamant en relief, fleurs de lys d'or) : 500 diamants pièce. */
+export const LUXURY_GEMS = 500;
 /** Un cosmétique premium : il ne s'achète qu'en diamants. */
 const p = (kind: UnlockKind, value: string, name: string, gems: number): LabelUnlock => ({ id: `${kind}:${value}`, kind, value, name, cost: 0, gems });
 /** Tout ce que l'éditeur d'étiquettes peut gagner : formes de bouteille, d'étiquette, logos et motifs (quelques-uns en diamants). */
@@ -188,6 +190,7 @@ export const LABEL_UNLOCKS: readonly LabelUnlock[] = [
   u('bottle', 'stubby', 'Trapue', 4000),
   u('bottle', 'swing', 'Bouchon mécanique', 20000),
   p('bottle', 'champagne', 'Champenoise', 40),
+  p('bottle', 'gold', 'Bouteille d\'or', LUXURY_GEMS),
   u('shape', 'round', 'Arrondie', 500),
   u('shape', 'arch', 'Arche', 3000),
   u('shape', 'notched', 'Coins coupés', 15000),
@@ -197,10 +200,12 @@ export const LABEL_UNLOCKS: readonly LabelUnlock[] = [
   u('emblem', 'fish', 'Poisson', 25000),
   p('emblem', 'castle', 'Château', 30),
   p('emblem', 'skull', 'Crâne', 50),
+  p('emblem', 'gem', 'Diamant', LUXURY_GEMS),
   u('pattern', 'zigzag', 'Zigzag', 400),
   u('pattern', 'scales', 'Écailles', 2500),
   u('pattern', 'herringbone', 'Chevrons', 12000),
   p('pattern', 'tartan', 'Tartan', 30),
+  p('pattern', 'fleurdelis', 'Fleurs de lys d\'or', LUXURY_GEMS),
 ];
 export const unlockById = (id: string) => LABEL_UNLOCKS.find((x) => x.id === id);
 /** Ce qui est libre dès le début est tout ce qui n'est pas dans la liste des déblocages. */

@@ -1,7 +1,7 @@
 /** Dessin des étiquettes : aperçu de l'éditeur (grand format) et miniature sur les bouteilles. */
 import type { Label } from '../core/label';
 
-const EMBLEM_PIXELS: Record<Exclude<Label['emblem'], 'none'>, string[]> = {
+const EMBLEM_PIXELS: Record<Exclude<Label['emblem'], 'none' | 'gem'>, string[]> = {
   hop: ['....#....', '...###...', '..#####..', '.##.#.##.', '..#####..', '.##.#.##.', '..#####..', '...###...', '....#....'],
   wheat: ['....#....', '...#.#...', '....#....', '...#.#...', '....#....', '...#.#...', '....#....', '....#....', '....#....'],
   barrel: ['..#####..', '.#.....#.', '#########', '#.......#', '#.......#', '#.......#', '#########', '.#.....#.', '..#####..'],
@@ -16,6 +16,56 @@ const EMBLEM_PIXELS: Record<Exclude<Label['emblem'], 'none'>, string[]> = {
   castle: ['#.#...#.#', '###...###', '###.#.###', '#########', '#########', '###...###', '###...###', '###...###', '#########'],
   skull: ['..#####..', '.#######.', '#########', '#..#.#..#', '#..#.#..#', '#########', '.###.###.', '..#.#.#..', '..#####..'],
 };
+
+/** Diamant en relief (cosmétique de luxe) : ses propres couleurs, quelle que soit l'étiquette. */
+const GEM_RELIEF = [
+  '..kkkkk..',
+  '.kwwlLDk.',
+  'kwllLLLDk',
+  'kDDDDDDDk',
+  '.klLLLDk.',
+  '.klLLDDk.',
+  '..klLDk..',
+  '...kLk...',
+  '....k....',
+];
+const GEM_COLORS: Record<string, string> = { k: '#1b1424', w: '#ffffff', l: '#8cd0ff', L: '#3f88d4', D: '#1f4f8f' };
+
+/** Fleur de lys (motif de luxe) : h reflet, g or, d or sombre. */
+const FLEUR = [
+  '....h....',
+  '...hgd...',
+  '...hgd...',
+  '.h..g..d.',
+  'hgh.g.dgd',
+  'hg..g..gd',
+  '..hhggd..',
+  '...hgd...',
+  '..h.g.d..',
+];
+const GOLD: Record<string, string> = { h: '#ffe7a0', g: '#f2c14e', d: '#a8742a' };
+
+function sprite(g: CanvasRenderingContext2D, rows: string[], colors: Record<string, string>, x: number, y: number, s: number): void {
+  rows.forEach((row, j) => [...row].forEach((ch, i) => {
+    const c = colors[ch];
+    if (!c) return;
+    g.fillStyle = c;
+    g.fillRect(x + i * s, y + j * s, s, s);
+  }));
+}
+
+/** Silhouette d'un sprite, d'une seule couleur (ombre portée du relief). */
+function silhouette(g: CanvasRenderingContext2D, rows: string[], x: number, y: number, s: number, color: string): void {
+  g.fillStyle = color;
+  rows.forEach((row, j) => [...row].forEach((ch, i) => ch !== '.' && g.fillRect(x + i * s, y + j * s, s, s)));
+}
+
+/** Un éclat de lumière en croix (3 px de bras). */
+function glint(g: CanvasRenderingContext2D, x: number, y: number, s = 1): void {
+  g.fillStyle = '#ffffff';
+  g.fillRect(x - s, y, s * 3, s);
+  g.fillRect(x, y - s, s, s * 3);
+}
 
 const FONT_FAMILY: Record<Label['font'], string> = {
   pixel: '"Silkscreen", monospace',
@@ -99,6 +149,16 @@ function pattern(g: CanvasRenderingContext2D, l: Label, w: number, h: number, un
       for (let x = u * 7; x < w; x += u * 10) g.fillRect(x, 0, u, h);
       for (let y = u * 7; y < h; y += u * 10) g.fillRect(0, y, w, u);
       break;
+    case 'fleurdelis': {
+      // fleurs de lys d'or en quinconce, ombrées en relief, avec quelques éclats : le motif ignore la couleur choisie
+      const step = u * 11;
+      for (let y = -u * 2, row = 0; y < h; y += step, row++) for (let x = (row % 2) * (step / 2) - u * 3; x < w; x += step) {
+        silhouette(g, FLEUR, x + u / 2, y + u / 2, u, 'rgba(58,30,4,0.45)');
+        sprite(g, FLEUR, GOLD, x, y, u);
+        if ((Math.round(x / step) + row) % 3 === 0) glint(g, x + u * 3, y + u, Math.max(1, u / 2));
+      }
+      break;
+    }
     case 'rays':
       g.save();
       g.translate(w / 2, h / 2);
@@ -156,7 +216,17 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
   g.strokeStyle = l.textColor;
   g.stroke();
   g.restore();
-  if (l.emblem !== 'none') {
+  if (l.emblem === 'gem') {
+    const s = 3;
+    const ox = Math.round(w / 2 - (9 * s) / 2);
+    const oy = 7;
+    g.fillStyle = l.bg;
+    g.fillRect(ox - 3, oy - 3, 9 * s + 6, 9 * s + 6);
+    // relief : ombre portée, puis le diamant facetté, puis un éclat
+    silhouette(g, GEM_RELIEF, ox + 2, oy + 2, s, 'rgba(0,0,0,0.4)');
+    sprite(g, GEM_RELIEF, GEM_COLORS, ox, oy, s);
+    glint(g, ox + 7 * s, oy + 1, 1);
+  } else if (l.emblem !== 'none') {
     const px = EMBLEM_PIXELS[l.emblem];
     const s = 3;
     const ox = Math.round(w / 2 - (9 * s) / 2);
@@ -178,9 +248,18 @@ export function drawMiniLabel(g: CanvasRenderingContext2D, l: Label, x: number, 
   g.fillRect(x, y + 1, n, n - 2);
   g.fillStyle = l.patternColor;
   if (l.pattern === 'stripes' || l.pattern === 'rays') for (let i = 0; i < n; i += 2) g.fillRect(x + i, y + 1, 1, n - 2);
-  else if (l.pattern === 'checks' || l.pattern === 'diamonds') for (let i = 0; i < n; i += 2) g.fillRect(x + i, y + 1 + (i % 4 ? 1 : 0), 1, 1);
+  else if (l.pattern === 'fleurdelis') {
+    g.fillStyle = '#f2c14e';
+    for (let i = 0; i < n; i += 2) g.fillRect(x + i, y + 1 + (i % 4 ? 1 : 0), 1, 1);
+    g.fillStyle = '#ffe7a0';
+    g.fillRect(x + n - 1, y + 1, 1, 1);
+  } else if (l.pattern === 'checks' || l.pattern === 'diamonds') for (let i = 0; i < n; i += 2) g.fillRect(x + i, y + 1 + (i % 4 ? 1 : 0), 1, 1);
   else if (l.pattern !== 'none') g.fillRect(x, y + n - 2, n, 1);
-  g.fillStyle = l.textColor;
+  g.fillStyle = l.emblem === 'gem' ? '#3f88d4' : l.textColor;
   const c = Math.floor(n / 2);
   g.fillRect(x + c - 1, y + 2, 2, Math.max(1, n - 4));
+  if (l.emblem === 'gem') {
+    g.fillStyle = '#8cd0ff';
+    g.fillRect(x + c - 1, y + 2, 1, 1);
+  }
 }

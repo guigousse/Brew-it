@@ -261,6 +261,9 @@ button:disabled { cursor: default; opacity: .5; }
 .shelf-item:disabled { opacity: .3; cursor: default; }
 .shelf-bottle { position: relative; width: 68px; height: 144px; }
 .shelf-glass { width: 68px; height: 144px; image-rendering: pixelated; display: block; }
+/* bouteille d'or : l'or s'illumine par à-coups, comme un reflet qui passe */
+.shelf-glass.gold { animation: gold-shine 3s steps(1) infinite; }
+@keyframes gold-shine { 0%, 70%, 100% { filter: none; } 76% { filter: brightness(1.18) drop-shadow(0 0 3px #ffe7a080); } 82% { filter: brightness(1.32) drop-shadow(0 0 5px #ffe7a0b0); } 88% { filter: brightness(1.12); } }
 .shelf-label { position: absolute; width: 60px; height: 38px; filter: drop-shadow(0 1px 0 #0006); }
 .shelf-item.selected .shelf-glass { filter: drop-shadow(0 0 0 var(--accent)) drop-shadow(0 0 4px #f2c14eb0); }
 .shelf-item:active:not(:disabled) .shelf-bottle { transform: translateY(-2px); }
@@ -584,6 +587,9 @@ button:disabled { cursor: default; opacity: .5; }
 .unlock.advised { border-color: var(--accent); }
 .unlock.premium:not(.owned) { background: #232c48; }
 .unlock.premium .unlock-price.ok { color: #8cd0ff; }
+/* luxe (500 diamants) : cadre doré */
+.unlock.luxury { border-color: #f2c14e; background: linear-gradient(180deg, #3a2e18, #232c48 70%); box-shadow: inset 2px 2px 0 #ffe7a060, 0 0 6px #f2c14e50; }
+.unlock.luxury.owned { box-shadow: inset 0 0 0 2px var(--good), 0 0 6px #f2c14e50; }
 .unlock-preview { min-height: 80px; display: grid; place-items: center; }
 .unlock-grid:not(.bottles) .unlock:not(.owned) .unlock-preview { opacity: .85; }
 .chip.locked { opacity: .6; }

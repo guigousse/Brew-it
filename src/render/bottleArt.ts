@@ -13,7 +13,7 @@ export const BOTTLE_H = 72;
 export const BOTTLE_SCALE = 2;
 /** Zone de l'étiquette sur le corps de la bouteille (px natifs), selon sa forme. */
 export const LABEL_SPOT = { x: 2, y: 36, w: 30, h: 19 };
-const SPOTS: Record<BottleShape, number> = { classic: 36, longneck: 42, stubby: 44, swing: 38, champagne: 44 };
+const SPOTS: Record<BottleShape, number> = { classic: 36, longneck: 42, stubby: 44, swing: 38, champagne: 44, gold: 38 };
 export const labelSpot = (shape: BottleShape = 'classic') => ({ ...LABEL_SPOT, y: SPOTS[shape] ?? 36 });
 
 const CX = 17;
@@ -24,6 +24,7 @@ const PROFILE: Record<BottleShape, { top: number; neck: number; shoulder: number
   stubby: { top: 14, neck: 22, shoulder: 28, neckW: 6, body: 17 },
   swing: { top: 4, neck: 18, shoulder: 30, neckW: 6, body: 17 },
   champagne: { top: 0, neck: 14, shoulder: 38, neckW: 5, body: 17 },
+  gold: { top: 0, neck: 16, shoulder: 30, neckW: 5, body: 16 },
 };
 /** Demi-largeur de la bouteille à la ligne y : capsule, col, épaule, corps arrondi en bas. */
 function halfWidth(y: number, shape: BottleShape = 'classic'): number {
@@ -48,6 +49,7 @@ export function drawShelfBottle(canvas: HTMLCanvasElement, kind: ShelfBottleKind
   canvas.height = BOTTLE_H;
   const g = canvas.getContext('2d')!;
   g.clearRect(0, 0, BOTTLE_W, BOTTLE_H);
+  canvas.classList.toggle('gold', kind === 'beer' && shape === 'gold'); // reflet qui passe (style.css)
   if (kind === 'beer') return glassBottle(g, shape);
   const halfWidth = (y: number) => halfWidthOf(y, shape);
   // silhouette : contour en pointillés, intérieur sombre
@@ -92,13 +94,16 @@ function glassBottle(g: CanvasRenderingContext2D, shape: BottleShape): void {
     const hw = halfWidth(y);
     g.fillRect(CX - hw, y, hw * 2, 1);
   }
-  // verre brun, ombré par colonne
+  // verre brun (ou or poli), ombré par colonne
+  const gold = shape === 'gold';
   for (let y = 1; y < BOTTLE_H - 1; y++) {
     const hw = Math.min(halfWidth(y - 1), halfWidth(y), halfWidth(y + 1)) - 1;
     if (hw <= 0) continue;
     for (let i = 0; i < hw * 2; i++) {
       const k = i / (hw * 2);
-      g.fillStyle = k < 0.12 ? '#4a2a12' : k < 0.3 ? '#8a5a2e' : k < 0.72 ? '#6a4220' : k < 0.88 ? '#55341a' : '#3a200c';
+      g.fillStyle = gold
+        ? k < 0.1 ? '#7a5418' : k < 0.22 ? '#ffe7a0' : k < 0.45 ? '#f2c14e' : k < 0.7 ? '#d8a038' : k < 0.88 ? '#a8742a' : '#6a4a14'
+        : k < 0.12 ? '#4a2a12' : k < 0.3 ? '#8a5a2e' : k < 0.72 ? '#6a4220' : k < 0.88 ? '#55341a' : '#3a200c';
       g.fillRect(CX - hw + i, y, 1, 1);
     }
   }
@@ -109,6 +114,25 @@ function glassBottle(g: CanvasRenderingContext2D, shape: BottleShape): void {
   g.fillStyle = 'rgba(255,240,210,0.25)';
   g.fillRect(CX - p.body + 8, p.shoulder + 2, 1, BOTTLE_H - p.shoulder - 12);
   const t = p.top;
+  if (gold) {
+    // reflet franc et éclats sur l'or ; capsule noire cerclée d'or
+    g.fillStyle = '#ffffff';
+    g.fillRect(CX - p.body + 5, p.shoulder + 3, 1, BOTTLE_H - p.shoulder - 10);
+    g.fillRect(CX - 3, t + 6, 1, Math.max(3, p.neck - t - 7));
+    for (const [x, y] of [[CX + 8, p.shoulder + 4], [CX - 9, BOTTLE_H - 9], [CX + 2, t + 9]] as const) {
+      g.fillRect(x - 1, y, 3, 1);
+      g.fillRect(x, y - 1, 1, 3);
+    }
+    g.fillStyle = '#1a0c06';
+    g.fillRect(CX - p.neckW - 2, t, (p.neckW + 2) * 2, 5);
+    g.fillStyle = '#2a2234';
+    g.fillRect(CX - p.neckW - 1, t, (p.neckW + 1) * 2, 4);
+    g.fillStyle = '#f2c14e';
+    g.fillRect(CX - p.neckW - 1, t + 3, (p.neckW + 1) * 2, 1);
+    g.fillStyle = '#5a4a6e';
+    g.fillRect(CX - p.neckW, t, 2, 1);
+    return;
+  }
   if (shape === 'swing') {
     // bouchon mécanique : porcelaine blanche, joint rouge, étrier de fil
     g.fillStyle = '#1a0c06'; g.fillRect(CX - 6, t - 4, 12, 6);

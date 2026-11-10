@@ -579,6 +579,20 @@ function drawMiniBottle(px: Px, g: CanvasRenderingContext2D, x: number, y: numbe
   if (shape === 'champagne') px(nx, top, neckW, 6, '#f2c14e');
   else if (shape === 'swing') { px(nx, top, neckW, 2, '#f6ecd6'); px(nx - 1, top + 2, 1, 3, '#98a6b6'); px(nx + neckW, top + 2, 1, 3, '#98a6b6'); }
   else px(nx, top, neckW, 2, '#f2c14e');
+  if (shape === 'gold') {
+    // bouteille d'or : capsule noire, or poli, un éclat
+    px(nx, top, neckW, 2, '#2a2234');
+    px(nx, top + 2, neckW, neckEnd - top - 2, '#d8a038');
+    px(x + 1, neckEnd, 5, 2, '#d8a038');
+    px(x, neckEnd + 2, 7, y + 22 - neckEnd - 2, '#f2c14e');
+    px(x + 1, neckEnd + 2, 1, y + 21 - neckEnd - 2, '#ffe7a0');
+    px(x + 6, neckEnd + 2, 1, y + 21 - neckEnd - 2, '#a8742a');
+    px(x + 5, neckEnd + 3, 1, 1, '#ffffff');
+    px(x, y + 12, 7, 7, label.bg);
+    drawMiniLabel(g, label, x + 1, y + 13, 5);
+    px(x, y + 21, 7, 1, '#7a5418');
+    return;
+  }
   if (shape !== 'champagne') px(nx, top + 2, neckW, neckEnd - top - 2, '#5a3418');
   else px(nx, top + 6, neckW, Math.max(0, neckEnd - top - 6), '#5a3418');
   px(x + 1, neckEnd, 5, 2, '#6a3c1c');

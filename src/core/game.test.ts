@@ -1016,6 +1016,15 @@ describe('mobilier et étiquettes', () => {
     g.gems = 100;
     expect(g.buyUnlock('emblem:skull').ok).toBe(true);
     expect(g.gems).toBe(50);
+    // les cosmétiques de luxe : 500 diamants pièce, payables en argent impossible
+    for (const id of ['bottle:gold', 'emblem:gem', 'pattern:fleurdelis']) {
+      g.gems = 499;
+      expect(g.buyUnlock(id).ok).toBe(false);
+      g.gems = 500;
+      expect(g.buyUnlock(id).ok).toBe(true);
+      expect(g.gems).toBe(0);
+    }
+    g.gems = 50;
     g.buyBoost('cadence');
     g.hire('courier');
     const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));

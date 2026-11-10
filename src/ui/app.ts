@@ -15,7 +15,7 @@ import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/room
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
-import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
+import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
@@ -3172,7 +3172,7 @@ export class App {
     const grid = h('div', `unlock-grid${kind === 'bottle' ? ' bottles' : ''}`);
     for (const x of LABEL_UNLOCKS.filter((y) => y.kind === kind)) {
       const owned = g.unlocked.includes(x.id);
-      const cell = h('div', `unlock${owned ? ' owned' : ''}${x.gems ? ' premium' : ''}`);
+      const cell = h('div', `unlock${owned ? ' owned' : ''}${x.gems ? ' premium' : ''}${x.gems === LUXURY_GEMS ? ' luxury' : ''}`);
       // l'objet, montré avec l'étiquette de ta première bière
       const preview = h('div', 'unlock-preview');
       const l = { ...sample, [x.kind]: x.value } as Label;
