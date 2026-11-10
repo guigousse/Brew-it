@@ -4,10 +4,10 @@
 
 | Critère | Cible | Résultat (rééquilibrage de novembre 2026) |
 |---|---|---|
-| Durée pour tout débloquer (4 visites/jour) | 4 semaines environ | **28 à 31 jours** selon le tirage |
-| Durée pour un joueur occasionnel (2 visites/jour) | 5 à 6 semaines | **45 jours** (un peu long, voir plus bas) |
+| Durée pour tout débloquer (4 visites/jour) | 4 semaines environ | **31 à 33 jours** selon le tirage (grossiste à 1,40 €) |
+| Durée pour un joueur occasionnel (2 visites/jour) | 5 à 6 semaines | **48 jours** (un peu long, voir plus bas) |
 | Visites où l'on peut acheter quelque chose | au moins 1 sur 2 | **82 %** (94 % à 2 visites/jour) |
-| Plus longue période sans rien acheter | 1 journée au plus | **3 visites** (2 à 2 visites/jour) |
+| Plus longue période sans rien acheter | 1 journée au plus | **3 visites** (1 à 2 visites/jour) |
 | Premier jour | beaucoup de récompenses | ~20 achats, niveau 2 en 4 h 30 de jeu (inchangé) |
 | Machines (4 visites/jour) | des paliers réguliers | niveau 3 à J4, niveau 4 à J10, niveau 5 à J18 |
 
@@ -200,21 +200,28 @@ Les diamants seront vendus en packs. Le réglage cherche donc un équilibre : un
 
 Après la correction, machines ×2 en continu : 8 jours de moins pour 1 770 💎 ; tous les boosts : 15 jours de moins pour 3 000 💎. **Un jour gagné vaut environ 200 💎.** Les prix des boosts n'ont pas changé.
 
-**Grossiste sans limite.** Le quota du grossiste est le principal frein de la partie. Le boost (4 h, 50 💎, au même poste que le Grossiste généreux) se prolonge sans autre limite : **un joueur qui veut finir vite et paie pour, c'est son choix.** Mesures (diamants illimités, boosts gardés en continu) :
+**Grossiste sans limite.** Le quota du grossiste est le principal frein de la partie. Le boost (8 h, 50 💎, au même poste que le Grossiste généreux) se prolonge sans autre limite : **un joueur qui veut finir vite et paie pour, c'est son choix.**
+
+**Prix du grossiste.** 1,40 € de base (au lieu de 1,60 €) : 1,18 € à 1,96 € la bouteille selon la qualité, pour un coût de 0,46 € à 0,65 € : toujours rentable. La partie s'allonge d'environ 2 jours.
+
+Mesures (grossiste à 1,40 €, sans limite à 8 h pour 50 💎) :
 
 | Profil | Diamants dépensés | Fin |
 |---|---|---|
-| Grossiste sans limite seul | ~2 700 | J10 |
-| Grossiste sans limite + machines + levure | ~3 170 | **J7,5** (nouveau plafond, ~32 € de diamants) |
-| Grossiste généreux + machines + levure (avant ce boost) | ~3 300 | J15,5 |
-| + 1 500 💎 achetés, dépensés en grossiste sans limite, machines et levure | ~1 860 | J16 (au lieu de J17,5) |
-| Gratuit, dépense ses diamants | ~410 | J27,8 (inchangé) |
+| Gratuit, ne dépense rien | 0 | J31,5 à J33 (~J32) |
+| Gratuit, dépense ses diamants (grossiste généreux, machines, levure) | ~420 | J29 à J31 (~J30) |
+| + 500 💎 achetés, grossiste sans limite + machines + levure | ~870 | J23 |
+| + 1 500 💎 achetés, idem | ~1 810 | **J10** |
+| Diamants illimités, idem | ~2 330 | **J8** (plafond) |
+| 2 visites par jour, gratuit | 0 | J48 |
 
-Le joueur gratuit n'est pas touché ; le petit et le moyen acheteur gagnent un peu ; le gros acheteur peut finir en une semaine. Variante essayée et écartée : une fois par jour (plafond J12,8 sur un poste à part, J16,5 au poste Grossiste).
+**À surveiller** : à 8 h pour 50 💎, le grossiste sans limite est de loin le boost le plus rentable. Environ 1 800 diamants (≈ 18 € avec les packs proposés) suffisent à finir en 10 jours au lieu de 32. C'est un choix de design assumé (un joueur pressé peut payer pour finir vite) ; si l'on veut garder les gros achats plus longtemps, le levier est son prix (à 100 💎, il retrouverait le prix horaire de la version 4 h).
+
+Variantes essayées et écartées : une fois par jour (plafond J12,8 sur un poste à part, J16,5 au poste Grossiste) ; 4 h pour 50 💎 sans limite (plafond J7,5 pour ~3 200 💎).
 
 **Gains sans payer.** 25 au départ ; les lettres portent leurs diamants (difficiles : 1 à 3 ; simples : 1 diamant une fois sur trois, toujours pour les 3 commandes de démarrage ; +1 client exigeant) ; 15 / 25 / 40 / 60 aux niveaux 2 à 5. Avant ce réglage, une partie en rapportait 634 (~22 par jour, et ~34 avec le livreur, qui livrait tout et faisait tourner le tableau) : de quoi garder des boosts presque en continu, donc aucune raison d'en acheter.
 
-**Profils mesurés** (4 visites par jour, moyenne de 2 à 3 tirages, `SEED`) :
+**Profils mesurés avant la baisse du grossiste à 1,40 €** (4 visites par jour, moyenne de 2 à 3 tirages, `SEED`) ; les chiffres à jour sont dans le tableau « Grossiste sans limite » ci-dessus :
 
 | Profil | Diamants gagnés | Diamants dépensés | Fin de partie |
 |---|---|---|---|
@@ -223,7 +230,7 @@ Le joueur gratuit n'est pas touché ; le petit et le moyen acheteur gagnent un p
 | Gratuit, dépense tout en boosts (`GEMS=spend`) | ~420 | ~410 | **~J26** (−13 %) |
 | + 500 💎 achetés (`BUY=500`, ~5 €) | ~420 | ~880 | **~J23,5** (−21 %) |
 | + 1 500 💎 achetés (`BUY=1500`, ~15 €) | ~420 | ~1 850 | **~J17,5** (−41 %) |
-| Diamants illimités (`GEMS=whale`) | — | ~3 300 | **~J15,5** (grossiste généreux) ; **~J7,5** avec le grossiste sans limite |
+| Diamants illimités (`GEMS=whale`) | — | ~3 300 | **~J15,5** (grossiste généreux) ; **~J8** avec le grossiste sans limite |
 
 Le joueur simulé dépense ses diamants à chaque visite pour couvrir l'absence suivante : grossiste généreux, puis le meilleur boost des machines, puis la levure express.
 

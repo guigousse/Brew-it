@@ -151,7 +151,7 @@ export const KIND_LABEL: Record<OrderKind, string> = {
 };
 
 /** Grossiste : il reprend n'importe quelle bière buvable (bouteilles ou fûts), à moitié prix environ d'une commande. Prix d'une bouteille de 33 cl. */
-export const WHOLESALE_PRICE = 1.6;
+export const WHOLESALE_PRICE = 1.4;
 export const wholesalePrice = (t: Pick<Tasting, 'quality'>) => WHOLESALE_PRICE * (0.6 + 0.8 * t.quality);
 
 /** Contexte de la brasserie pour tirer une commande. */
