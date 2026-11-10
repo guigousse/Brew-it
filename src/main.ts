@@ -7,11 +7,14 @@ import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { createGemStore, type Purchase } from './platform/purchases';
 import { createStorage } from './platform/storage';
+import { sfx } from './platform/audio';
 import { App } from './ui/app';
 
 const AUTOSAVE_SECONDS = 20;
 
 async function boot() {
+  sfx.install();
+  sfx.preload();
   const saves = new SaveManager(createStorage());
   let game: Game;
   try {
@@ -58,7 +61,10 @@ async function boot() {
     },
   });
 
-  app.onTasteReady = () => tapFeedback(true);
+  app.onTasteReady = () => {
+    tapFeedback(true);
+    sfx.play('notif');
+  };
   app.onSent = () => tapFeedback(true);
   let unsubscribe = () => {};
   let muted = false;
@@ -73,10 +79,12 @@ async function boot() {
       if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
       if (e.type === 'trend') {
         const tr = TRENDS.find((t) => t.id === e.id);
+        sfx.play('newspaper');
         app.toast(`Tendance : ${tr?.short}`, 'info');
         app.log(`Nouvelle tendance : ${tr?.text ?? tr?.short}`, 'info', 'trend');
       }
       if (e.type === 'batchRuined') {
+        sfx.play('break');
         app.toast(`Lot de « ${beerName(e.beerId)} » raté`, 'bad');
         app.log(`Lot de « ${beerName(e.beerId)} » raté : il part à l'égout`, 'bad', 'brew');
       }
@@ -84,16 +92,19 @@ async function boot() {
         app.log(`Brassin de « ${beerName(e.beerId)} » terminé : ${e.kegs ? `${e.kegs} fût${e.kegs > 1 ? 's' : ''}` : `${e.bottles} bouteilles`}`, 'good', 'crate');
       }
       if (e.type === 'breweryLevel') {
+        sfx.play('levelUp');
         app.scene.flash();
         app.openBrewery(true);
         tapFeedback(true);
         app.log(`La brasserie passe au niveau ${e.level} !`, 'good', 'up');
       }
       if (e.type === 'clientAvailable') {
+        sfx.play('carillon');
         app.toast(`Nouveaux clients : ${clientTypeById(e.id)?.label}`, 'good');
         app.log(`Nouveaux clients : ${clientTypeById(e.id)?.label}`, 'good', 'bubble');
       }
       if (e.type === 'order') {
+        sfx.play('paper');
         app.toast(`📨 ${e.client}`, 'good');
         app.log(`Nouvelle commande : ${e.client}`, 'good', 'envelope');
         tapFeedback(false);

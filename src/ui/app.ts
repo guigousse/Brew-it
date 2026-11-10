@@ -19,6 +19,7 @@ import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type D
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
+import { sfx } from '../platform/audio';
 import { compact, countdown, dialTime } from './format';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
@@ -901,6 +902,7 @@ export class App {
         const b = this.btn('btn small', `+ 1 cuve · ${moneyShort(tankCost)}`, () => {
           const r = g.addTank(id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('repair');
           this.toast('Nouvelle cuve installée', 'good');
           this.sheetKey = '';
         });
@@ -927,6 +929,7 @@ export class App {
       const b = this.btn('btn primary', `Améliorer · ${moneyInt(cost)}`, () => {
         const r = g.upgrade(id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('upgrade');
         this.toast(`${def.names[lv]} installé !`, 'good');
         this.sheetKey = '';
       });
@@ -1183,6 +1186,7 @@ export class App {
     const go = this.btn('btn primary big', room ? `Programmer ${n} brassin${n > 1 ? 's' : ''}` : g.planRoom ? 'Stockage plein' : 'File pleine', () => {
       const r = g.planBrew(beer.id, f, n);
       if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('pop');
       if (g.tips === 2 || g.tips === 1) g.tips = 3;
       this.toast(`${n} brassin${n > 1 ? 's' : ''} programmé${n > 1 ? 's' : ''}`, 'good');
       this.wizGo(null);
@@ -1209,6 +1213,7 @@ export class App {
     const go = this.btn('btn primary big', label, () => {
       const r = busy ? g.queueBrew() : g.brew();
       if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('pop');
       if (g.tips === 2 || g.tips === 1) g.tips = 3;
       if (busy) this.toast('En file d\'attente', 'good');
       this.close();
@@ -1353,6 +1358,7 @@ export class App {
     const buy = this.btn('btn primary big', `Créer une gamme · ${moneyInt(cost)}`, () => {
       const r = g.buySlot();
       if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('paper');
       this.closeModal();
       this.sheetKey = '';
       this.toast('Nouvelle place !', 'good');
@@ -1409,6 +1415,7 @@ export class App {
       const b = this.btn('btn primary', `Agrandir · ${moneyInt(next.cost)}`, () => {
         const r = g.upgradeStorage();
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('upgrade');
         this.toast(`${next.name} !`, 'good');
         this.sheetKey = '';
       });
@@ -1493,6 +1500,7 @@ export class App {
       line.onclick = () => {
         const r = g.swapKeg(i, b.id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('crate');
         this.toast(`Fût de ${b.name} branché`, 'good');
         this.barRoom.selected = null;
         this.sheetKey = '';
@@ -1525,6 +1533,7 @@ export class App {
       const b = this.btn('btn primary', `Agrandir · ${moneyInt(next.cost)}`, () => {
         const r = g.upgradeBar();
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('upgrade');
         this.toast(`${next.name} !`, 'good');
         this.barRoom.invalidate();
         this.syncKegHits();
@@ -1550,6 +1559,7 @@ export class App {
     const go = this.btn('btn primary big', tooLong ? 'Contrat déjà prolongé au maximum (24 h)' : `${g.barmanOn ? 'Prolonger de 8 h' : 'Embaucher pour 8 h'} · ${moneyInt(cost)}`, () => {
       const r = g.hireBarman();
       if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('doorOpen');
       this.toast(g.barmanUntil - g.time > BARMAN.duration + 1 ? 'Contrat prolongé' : 'Barman embauché !', 'good');
       this.onSent?.();
       this.closeModal();
@@ -1595,6 +1605,7 @@ export class App {
         const go = this.btn('btn primary', `Lancer · ${moneyInt(cost)}`, () => {
           const r = g.startEvent(ev.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('crowd');
           this.toast(`${ev.name} : c'est parti !`, 'good');
           this.onSent?.();
           this.closeModal();
@@ -1804,6 +1815,7 @@ export class App {
       const b = this.btn('btn primary', full ? 'Aucun poste libre' : tooLong ? 'Contrat au maximum (24 h)' : `${on ? 'Prolonger de 8 h' : 'Embaucher pour 8 h'} · ${moneyShort(cost)}`, () => {
         const r = g.hire(def.id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('doorOpen');
         this.toast(on ? 'Contrat prolongé' : `${def.name} embauché !`, 'good');
         this.computer!.key = '';
         this.refreshComputer();
@@ -1845,6 +1857,7 @@ export class App {
     const buy = this.btn('btn primary big', `Installer · ${moneyInt(next.cost)}`, () => {
       const r = g.upgradeComputer();
       if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('upgrade');
       this.toast(`${next.name} installé`, 'good');
       this.closeModal();
     });
@@ -1872,6 +1885,7 @@ export class App {
       const b = this.btn('btn small', `+1 place · ${moneyShort(next.cost)}`, () => {
         const r = g.upgradeComputer();
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('upgrade');
         this.toast(`${next.name} installé`, 'good');
         this.computer!.key = '';
         this.refreshComputer();
@@ -1901,6 +1915,7 @@ export class App {
       const b = this.gemsBtn('Prospecter', g.boostCost('prospect'), () => {
         const r = g.buyBoost('prospect');
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('paper');
         this.toast('Une lettre arrive !', 'good');
         this.computer!.key = '';
         this.refreshComputer();
@@ -1976,6 +1991,7 @@ export class App {
     const send = this.btn('btn primary order-send', '', () => {
       const r = g.fulfill(o.id, pick);
       if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('cash');
       this.picks.delete(o.id);
       this.editing.delete(o.id);
       this.onSent?.();
@@ -2083,6 +2099,7 @@ export class App {
         b = this.gemsBtn(`+${AD_EXTEND.hours} h`, AD_EXTEND.gems, () => {
           const r = g.extendAd();
           if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('newspaper');
           this.toast(`${ad.name} : prolongée de ${AD_EXTEND.hours} h`, 'good');
           this.onSent?.();
           this.computer!.key = '';
@@ -2095,6 +2112,7 @@ export class App {
         b = this.btn('btn primary price', moneyShort(cost), () => {
           const r = g.advertise(ad.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('newspaper');
           this.toast(`${ad.name} : ta gamme fait parler d'elle`, 'good');
           this.computer!.key = '';
           this.refreshComputer();
@@ -2170,6 +2188,7 @@ export class App {
           const btn = this.btn('btn small', label, () => {
             const r = g.sellWholesale(b.id, n, format);
             if (!r.ok) return this.toast(r.reason!, 'bad');
+            sfx.play('cash');
             this.gainToast(r.amount!);
             this.refreshComputer();
           });
@@ -2328,6 +2347,7 @@ export class App {
       this.openLabelEditor(g.beers.length ? '' : 'Blonde de Gaston', { ...DEFAULT_LABEL }, (name, label) => {
         const r = g.keepTrial(name, label);
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('pickup');
         if (g.tips <= 4) g.tips = 4;
         this.closeModal();
         this.toast('Nouvelle bière dans ta gamme !', 'good');
@@ -2340,6 +2360,7 @@ export class App {
         const buy = this.btn('btn', `Créer une gamme · ${moneyInt(slotCost)}`, () => {
           const r = g.buySlot();
           if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('paper');
           this.sheetKey = '';
           this.openTasting();
         });
@@ -2473,6 +2494,7 @@ export class App {
     const { seconds, liters: l } = o;
     this.fly(this.harvest, this.moneyPill, 8, () => h('span', 'fly coin'));
     const earned = g.collectOffline('money');
+    sfx.play('cash');
     this.moneyAnim = { from, to: g.money, start: performance.now() + 600 };
     this.moneyPill.classList.add('gain');
     this.harvest.classList.add('hidden');
@@ -2491,6 +2513,7 @@ export class App {
     this.gemsHold = { value: g.gems, until: performance.now() + 750 };
     this.fly(this.harvestGems, this.gemsPill, Math.min(6, n), () => iconCanvas('gem', 1, 'fly fly-gem'));
     g.collectOffline('gems');
+    sfx.play('gem');
     this.harvestGems.classList.add('hidden');
     this.toast(`+${gemsText(n)} gagnés pendant ton absence`, 'good');
     this.onSent?.();
@@ -2538,6 +2561,28 @@ export class App {
       fresh.dataset.confirm = '1';
       fresh.textContent = 'Sûr ? Ta brasserie sera effacée. Toucher pour confirmer';
     });
+    const sound = h('div', 'card');
+    const vol = h('input', 'volume-range');
+    vol.type = 'range';
+    vol.min = '0';
+    vol.max = '100';
+    vol.step = '5';
+    vol.value = String(sfx.prefs.volume);
+    vol.setAttribute('aria-label', 'Volume des bruitages');
+    vol.oninput = () => sfx.setVolume(Number(vol.value));
+    vol.onchange = () => sfx.play('pop');
+    const toggle = this.btn(`chip${sfx.prefs.effects ? ' active' : ''}`, sfx.prefs.effects ? 'Activés' : 'Coupés', () => {
+      sfx.setEffects(!sfx.prefs.effects);
+      toggle.classList.toggle('active', sfx.prefs.effects);
+      toggle.textContent = sfx.prefs.effects ? 'Activés' : 'Coupés';
+      vol.disabled = !sfx.prefs.effects;
+      sfx.play('pop');
+    });
+    vol.disabled = !sfx.prefs.effects;
+    const row = h('div', 'volume-row');
+    row.append(toggle, vol);
+    sound.append(h('div', 'section-title', 'Bruitages'), row);
+    card.append(sound);
     // Accélération du temps : réservée aux tests (elle fausserait l'équilibrage du jeu).
     const speed = h('div', 'card');
     const chips = h('div', 'chips');
@@ -2954,6 +2999,7 @@ export class App {
           this.gemBuying = null;
           this.shopKey = '';
           if (r.ok) {
+            sfx.play('gem');
             this.toast(`+${r.gems!.toLocaleString('fr-FR')} diamants, merci !`, 'good');
             // le bouton a été redessiné pendant l'achat : on part de celui qui est à l'écran
             const from = this.shopBody.querySelector<HTMLElement>(`[data-pack="${pack.id}"]`) ?? this.gemsPill;
@@ -3006,6 +3052,7 @@ export class App {
       const b = this.btn('btn primary price', `${d.event ? 'Acheter' : 'Installer'} · ${moneyShort(d.cost)}`, () => {
         const r = g.buyDecor(pick);
         if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('repair');
         this.decorPick = null;
         this.onSent?.();
         this.toast(d.event ? `${d.name} : nouvel événement au bar !` : `${d.name} : au bar !`, 'good', { label: 'Voir', run: () => this.goView('bar') });
@@ -3089,6 +3136,7 @@ export class App {
           b = this.gemsBtn('', def.gems, () => {
             const r = g.buyBoost(def.id);
             if (!r.ok) return this.toast(r.reason!, 'bad');
+            sfx.play('recharge');
             this.toast(extend ? `${def.name} : prolongé !` : `${def.name} !`, 'good');
             this.onSent?.();
             this.renderShop();
@@ -3150,6 +3198,7 @@ export class App {
         const buy = () => {
           const r = g.buyUnlock(x.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('pickup');
           this.toast(`${x.name} : dans l'éditeur d'étiquette !`, 'good');
           this.onSent?.();
           this.shopKey = '';
@@ -3201,6 +3250,7 @@ export class App {
 
   /** Notification : deux au plus à l'écran (la plus ancienne laisse sa place), avec un bouton d'action facultatif. */
   toast(text: string, kind: 'good' | 'bad' | 'info' = 'info', action?: { label: string; run: () => void }, ms = 3000): void {
+    if (kind === 'bad') sfx.play('error');
     const t = h('div', `toast ${kind}`);
     t.append(h('span', '', text));
     if (action) {
