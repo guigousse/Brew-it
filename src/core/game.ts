@@ -1406,12 +1406,26 @@ export class Game {
     for (const b of this.beers) b.wsToday = 0;
   }
 
-  collectOffline(): number {
-    const e = this.offline?.earned ?? 0;
-    this.money += e;
-    this.gems += this.offline?.gems ?? 0;
-    this.offline = null;
-    return e;
+  /**
+   * Récolte la bourse de l'absence : l'argent, les diamants, ou les deux (par défaut). Le bilan de l'absence
+   * reste tant qu'il y a encore quelque chose à récolter.
+   */
+  collectOffline(what: 'money' | 'gems' | 'all' = 'all'): number {
+    const o = this.offline;
+    if (!o) return 0;
+    let got = 0;
+    if (what !== 'gems') {
+      got = o.earned;
+      this.money += o.earned;
+      o.earned = 0;
+    }
+    if (what !== 'money') {
+      if (what === 'gems') got = o.gems ?? 0;
+      this.gems += o.gems ?? 0;
+      o.gems = 0;
+    }
+    if (o.earned <= 0 && !o.gems) this.offline = null;
+    return got;
   }
 
   // ------------------------------------------------------------------ simulation

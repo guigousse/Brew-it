@@ -439,18 +439,19 @@ button:disabled { cursor: default; opacity: .5; }
 .plan-card { gap: 4px; }
 
 /* --- Gains de l'absence : une bourse discrète sous l'argent ------------------------------ */
+.harvests { position: absolute; z-index: 6; right: 10px; top: calc(var(--top-h, 60px) + 6px); display: flex; gap: 6px; align-items: center; }
 .harvest {
-  position: absolute; z-index: 6; right: 10px; top: calc(var(--top-h, 60px) + 6px); display: flex; align-items: center; gap: 4px;
+  display: flex; align-items: center; gap: 4px;
   padding: 3px 10px 3px 6px; font-family: var(--font-title); font-size: 13px; color: var(--ink);
   background: var(--accent); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #ffe7a0, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008;
   animation: harvest-bob 1.4s steps(2) infinite;
 }
+/* les diamants : le même bouton, aux couleurs des diamants */
+.harvest.harvest-gem { color: #fff; background: #3f8fe0; box-shadow: inset 2px 2px 0 #8fc8ff, inset -2px -2px 0 #1d4f8a, 0 3px 0 #0008; animation-delay: .7s; }
+.harvest.harvest-gem .gems-icon { width: 16px; height: 16px; image-rendering: pixelated; }
 .harvest.hidden { display: none; }
 .harvest:active { transform: translateY(1px); }
 .harvest-bag { font-size: 16px; line-height: 1; }
-.harvest-sep { width: 2px; height: 14px; margin: 0 3px; background: var(--accent-dark); }
-.harvest .gems-icon { width: 16px; height: 16px; image-rendering: pixelated; }
-.harvest-gems { color: #1d4f8a; }
 @keyframes harvest-bob { 50% { transform: translateY(-2px); } }
 .money.gain { box-shadow: 0 0 0 2px var(--accent); }
 @media (prefers-reduced-motion: reduce) { .harvest { animation: none; } }

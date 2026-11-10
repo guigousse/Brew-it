@@ -269,7 +269,10 @@ export class App {
   private moneyEl = h('span', 'money-value');
   private moneyPill = h('div', 'money');
   /** Gains de l'absence à récolter : une petite bourse sous l'argent, qu'on touche quand on veut. */
+  /** La bourse de l'absence : deux boutons, les diamants (à gauche) et l'argent (à droite), récoltés séparément. */
   private harvest = h('button', 'harvest hidden');
+  private harvestGems = h('button', 'harvest harvest-gem hidden');
+  private harvests = h('div', 'harvests');
   /** Compteur d'argent qui défile après une récolte. */
   private moneyAnim: { from: number; to: number; start: number } | null = null;
   /** Le compteur de diamants garde son ancienne valeur le temps que les diamants récoltés arrivent. */
@@ -376,7 +379,9 @@ export class App {
     logo.append(img(stationCanvas('boil', 1), 'pix logo-icon'), h('span', 'logo-text', 'Brew It'));
     const pill = this.moneyPill;
     pill.append(h('span', 'coin'), this.moneyEl);
-    this.harvest.onclick = () => this.collectOffline();
+    this.harvest.onclick = () => this.collectOfflineMoney();
+    this.harvestGems.onclick = () => this.collectOfflineGems();
+    this.harvests.append(this.harvestGems, this.harvest);
     const opts = h('button', 'icon-btn', '⚙');
     opts.setAttribute('aria-label', 'Options');
     opts.onclick = () => this.openOptions();
@@ -504,7 +509,7 @@ export class App {
       e.preventDefault();
       this.toast(`Il te manque ${moneyInt(Math.ceil(missing))}`, 'bad');
     }, true);
-    root.append(this.header, this.stage, this.fabs, this.harvest, this.boostHud, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
+    root.append(this.header, this.stage, this.fabs, this.harvests, this.boostHud, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }
@@ -653,15 +658,22 @@ export class App {
     if (off && off.earned <= 0 && !off.gems) g.collectOffline(); // rien à récolter : on n'en parle pas
     const earned = g.offline?.earned ?? 0;
     const offGems = g.offline?.gems ?? 0;
-    this.harvest.classList.toggle('hidden', earned <= 0 && offGems <= 0);
-    if (earned > 0 || offGems > 0) {
-      // la bourse de l'absence : l'argent, et les diamants s'il y en a
-      const text = `+${moneyShort(earned)}|${offGems}`;
+    this.harvest.classList.toggle('hidden', earned <= 0);
+    this.harvestGems.classList.toggle('hidden', offGems <= 0);
+    if (earned > 0) {
+      const text = `+${moneyShort(earned)}`;
       if (this.harvest.dataset.text !== text) {
         this.harvest.dataset.text = text;
-        this.harvest.replaceChildren(h('span', 'harvest-bag', '💰'), h('span', 'harvest-value', `+${moneyShort(earned)}`));
-        if (offGems > 0) this.harvest.append(h('span', 'harvest-sep'), iconCanvas('gem', 1, 'gems-icon'), h('span', 'harvest-gems', `+${offGems}`));
-        this.harvest.setAttribute('aria-label', `Récolter ${moneyInt(earned)}${offGems > 0 ? ` et ${gemsText(offGems)}` : ''} gagnés pendant ton absence`);
+        this.harvest.replaceChildren(h('span', 'harvest-bag', '💰'), h('span', 'harvest-value', text));
+        this.harvest.setAttribute('aria-label', `Récolter ${moneyInt(earned)} gagnés pendant ton absence`);
+      }
+    }
+    if (offGems > 0) {
+      const text = `+${offGems}`;
+      if (this.harvestGems.dataset.text !== text) {
+        this.harvestGems.dataset.text = text;
+        this.harvestGems.replaceChildren(iconCanvas('gem', 1, 'gems-icon'), h('span', 'harvest-value', text));
+        this.harvestGems.setAttribute('aria-label', `Récolter ${gemsText(offGems)} gagnés pendant ton absence`);
       }
     }
     const can = g.canBrew();
@@ -2446,28 +2458,35 @@ export class App {
     }
   }
 
-  /** Récolte les gains de l'absence : l'argent défile, un petit mot résume l'absence. */
-  collectOffline(): void {
+  /** Récolte l'argent de l'absence : les pièces filent vers le compteur, l'argent défile, un petit mot résume l'absence. */
+  collectOfflineMoney(): void {
     const g = this.game();
     const o = g.offline;
-    if (!o) return;
+    if (!o || o.earned <= 0) return;
     const from = g.money;
-    const gems = o.gems ?? 0;
-    // les pièces et les diamants filent de la bourse vers leurs compteurs, puis l'argent défile
-    if (o.earned > 0) this.fly(this.harvest, this.moneyPill, 8, () => h('span', 'fly coin'));
-    if (gems > 0) {
-      this.gemsHold = { value: g.gems, until: performance.now() + 750 };
-      this.fly(this.harvest, this.gemsPill, Math.min(6, gems), () => iconCanvas('gem', 1, 'fly fly-gem'));
-    }
-    g.collectOffline();
+    const { seconds, liters: l } = o;
+    this.fly(this.harvest, this.moneyPill, 8, () => h('span', 'fly coin'));
+    const earned = g.collectOffline('money');
     this.moneyAnim = { from, to: g.money, start: performance.now() + 600 };
     this.moneyPill.classList.add('gain');
     this.harvest.classList.add('hidden');
-    const hrs = Math.floor(o.seconds / 3600);
-    const min = Math.floor((o.seconds % 3600) / 60);
-    const gemsPart = gems > 0 ? ` et ${gemsText(gems)}` : '';
-    this.toast(`+${moneyInt(o.earned)}${gems > 0 ? ` · +${gems} 💎` : ''} · ${hrs ? `${hrs} h ` : ''}${min} min d'absence, ${liters(o.liters ?? 0)} vendus`, 'good');
-    this.log(`Pendant ton absence (${hrs ? `${hrs} h ` : ''}${min} min) : ${liters(o.liters ?? 0)} de bière vendus, +${moneyInt(o.earned)}${gemsPart}`, 'good', 'chart');
+    const hrs = Math.floor(seconds / 3600);
+    const min = Math.floor((seconds % 3600) / 60);
+    this.toast(`+${moneyInt(earned)} · ${hrs ? `${hrs} h ` : ''}${min} min d'absence, ${liters(l ?? 0)} vendus`, 'good');
+    this.log(`Pendant ton absence (${hrs ? `${hrs} h ` : ''}${min} min) : ${liters(l ?? 0)} de bière vendus, +${moneyInt(earned)}`, 'good', 'chart');
+    this.onSent?.();
+  }
+
+  /** Récolte les diamants de l'absence : ils filent vers leur compteur, qui se met à jour à leur arrivée. */
+  collectOfflineGems(): void {
+    const g = this.game();
+    const n = g.offline?.gems ?? 0;
+    if (n <= 0) return;
+    this.gemsHold = { value: g.gems, until: performance.now() + 750 };
+    this.fly(this.harvestGems, this.gemsPill, Math.min(6, n), () => iconCanvas('gem', 1, 'fly fly-gem'));
+    g.collectOffline('gems');
+    this.harvestGems.classList.add('hidden');
+    this.toast(`+${gemsText(n)} gagnés pendant ton absence`, 'good');
     this.onSent?.();
   }
 
@@ -2799,7 +2818,7 @@ export class App {
     });
     const hide = !live.length || this.view === 'shop' || this.modalOpen;
     this.boostHud.classList.toggle('hidden', hide);
-    this.boostHud.classList.toggle('below-harvest', !this.harvest.classList.contains('hidden'));
+    this.boostHud.classList.toggle('below-harvest', !this.harvest.classList.contains('hidden') || !this.harvestGems.classList.contains('hidden'));
     if (hide) return;
     const mult = (id: string) => BOOSTS.find((x) => x.id === id)?.mult ?? 1;
     const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|');

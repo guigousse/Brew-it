@@ -843,10 +843,18 @@ describe('diamants', () => {
     const gems = g.gems;
     simulateOffline(g, 4 * 3600);
     expect(g.gems).toBe(gems); // rien d'ajouté tant qu'on n'a pas récolté
-    const off = g.offline!;
-    expect(off.gems).toBeGreaterThanOrEqual(1);
-    g.collectOffline();
-    expect(g.gems).toBe(gems + (off.gems ?? 0));
+    const offGems = g.offline!.gems ?? 0;
+    const offMoney = g.offline!.earned;
+    expect(offGems).toBeGreaterThanOrEqual(1);
+    // deux récoltes séparées : les diamants d'abord, puis l'argent ; le bilan reste jusqu'à la dernière
+    const money = g.money;
+    expect(g.collectOffline('gems')).toBe(offGems);
+    expect(g.gems).toBe(gems + offGems);
+    expect(g.money).toBe(money);
+    expect(g.offline).not.toBeNull();
+    expect(g.collectOffline('money')).toBe(offMoney);
+    expect(g.money).toBe(money + offMoney);
+    expect(g.offline).toBeNull();
   });
 
   it('un achat de diamants est crédité une seule fois ; le pack de démarrage ne s\'achète qu\'une fois', () => {
