@@ -313,7 +313,7 @@ Les fûts pleins y sont rangés à côté des caisses : ce sont de petits fûts 
 
 ## Pubs vidéo récompensées
 Toujours au choix du joueur, jamais imposées. Chaque usage est limité à **3 pubs par jour** (jour local) ; ensuite son bouton disparaît jusqu'au lendemain.
-- **Au retour dans le jeu**, la bourse de l'absence est en haut à droite, comme toujours, et se récolte d'un geste. Une fenêtre propose en plus de **doubler l'argent** contre une pub (pas les diamants), avec le montant. Pub regardée : le montant double sous un tampon « ×2 », les pièces quittent la fenêtre pour rejoindre la bourse, puis la fenêtre disparaît ; la bourse doublée brille davantage (reflet qui passe, halo, pastille « ×2 ») jusqu'à ce qu'on la récolte. « Non merci » ferme la fenêtre. Une bourse ne se double qu'une fois.
+- **Au retour dans le jeu**, la bourse de l'absence est en haut à droite, comme toujours, et se récolte d'un geste. Une fenêtre propose en plus de **doubler l'argent** contre une pub (pas les diamants), avec le montant. Le message est sobre (« Doubler tes gains ? », ce qui a été gagné, ce qu'on recevrait). Pub regardée : la fenêtre se ferme et les pièces filent jusqu'à la bourse, dont le montant grossit à leur arrivée ; la bourse doublée brille davantage (reflet qui passe, halo, pastille « ×2 ») jusqu'à ce qu'on la récolte. « Non merci » ferme la fenêtre. Une bourse ne se double qu'une fois.
 - **Prospecter** : sous la prochaine lettre du tableau des commandes, « ▶ Gratuit » fait arriver une lettre tout de suite contre une pub, à côté de la prospection à 3 diamants.
 
 Aucune régie n'est encore branchée : `src/platform/ads.ts` montre une pub de test de 5 s. Brancher une vraie régie (AdMob par exemple) ne touchera que ce fichier.

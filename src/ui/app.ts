@@ -2543,83 +2543,53 @@ export class App {
   private harvestHoldUntil = 0;
 
   /**
-   * Au retour : la bourse de l'absence reste en haut à droite (on la récolte comme avant) ; une fenêtre propose
-   * seulement de doubler l'argent contre une pub (3 fois par jour au plus). Pub regardée : le montant double sous
-   * un tampon « ×2 », les pièces quittent la fenêtre pour rejoindre la bourse, qui brille alors davantage.
+   * Au retour : la bourse de l'absence reste en haut à droite (on la récolte comme avant) ; une fenêtre sobre propose
+   * seulement de doubler l'argent contre une pub (3 fois par jour au plus). Pub regardée : les pièces quittent la
+   * fenêtre pour rejoindre la bourse, dont le montant grossit à leur arrivée et qui brille alors davantage.
    */
   private openOfflineReward(): void {
     const g = this.game();
     const o = g.offline;
     const left = g.adLeft('double');
     if (!o || o.earned <= 0 || o.doubled || left <= 0) return;
-    const card = this.modalCard('Bon retour !');
+    const card = this.modalCard('Doubler tes gains ?');
     card.classList.add('reward-card');
     const hrs = Math.floor(o.seconds / 3600);
     const min = Math.floor((o.seconds % 3600) / 60);
-    card.append(h('div', 'reward-sub', `Pendant ces ${hrs ? `${hrs} h ` : ''}${min} min, ta brasserie a gagné`));
-    const prize = h('div', 'reward-prize');
-    const money = h('div', 'reward-money');
-    const value = h('span', 'reward-value', `+${moneyInt(o.earned)}`);
-    money.append(h('span', 'reward-bag', '💰'), value);
-    prize.append(money);
-    card.append(prize, h('div', 'reward-sub', 'Double-le avec une courte pub !'));
+    const amount = h('strong', 'reward-amount', moneyInt(o.earned));
+    const p1 = h('p', 'reward-text');
+    p1.append(`Pendant ton absence (${hrs ? `${hrs} h ` : ''}${min} min), ta brasserie a gagné `, amount, '.');
+    const p2 = h('p', 'reward-text', `Regarde une courte pub pour recevoir ${moneyInt(o.earned * 2)} au lieu de ${moneyInt(o.earned)}.`);
     const dbl = h('button', 'btn primary big reward-double');
-    dbl.append(h('span', 'reward-double-main', `▶ Doubler · +${moneyInt(o.earned * 2)}`), h('span', 'reward-double-sub', `encore ${left} aujourd'hui`));
+    dbl.append(h('span', 'reward-double-main', '▶ Regarder la pub · ×2'), h('span', 'reward-double-sub', `Encore ${left} fois aujourd'hui`));
     const no = this.btn('btn', 'Non merci', () => this.closeModal());
     dbl.onclick = async () => {
       dbl.disabled = true;
       const seen = await showRewardedAd();
       dbl.disabled = false;
       if (!seen) return this.toast('Pub interrompue : rien de doublé', 'info');
-      const from = o.earned;
       const r = g.doubleOffline();
       if (!r.ok) return this.toast(r.reason!, 'bad');
-      dbl.remove();
-      no.remove();
-      this.doubleToHarvest(card, prize, value, from, g.offline?.earned ?? from * 2);
+      this.coinsToHarvest(amount);
     };
-    card.append(dbl, no);
+    card.append(p1, p2, dbl, no);
   }
 
-  /** Le gain double sous un tampon « ×2 », puis les pièces filent de la fenêtre jusqu'à la bourse, qui s'illumine. */
-  private doubleToHarvest(card: HTMLElement, prize: HTMLElement, value: HTMLElement, from: number, to: number): void {
-    card.classList.add('doubling');
-    prize.classList.add('doubled');
-    const rays = h('div', 'reward-rays');
-    const stamp = h('div', 'reward-stamp', '×2');
-    prize.prepend(rays);
-    prize.append(stamp);
+  /** Après la pub : les pièces filent de la fenêtre jusqu'à la bourse, qui prend le montant doublé à leur arrivée. */
+  private coinsToHarvest(from: HTMLElement): void {
     this.harvestHoldUntil = performance.now() + 60_000; // levé à l'arrivée des pièces
-    sfx.play('levelUp');
-    this.onSent?.();
-    requestAnimationFrame(() => stamp.classList.add('down'));
-    const start = performance.now();
-    const dur = 800;
-    const step = (now: number) => {
-      const k = Math.min(1, (now - start) / dur);
-      value.textContent = `+${moneyInt(Math.round(from + (to - from) * (1 - (1 - k) ** 3)))}`;
-      if (k < 1) return void requestAnimationFrame(step);
-      value.classList.add('final');
-      // la bourse en haut à droite prend le nouveau montant à l'arrivée des pièces (elle passe devant le voile de la fenêtre)
-      this.harvest.classList.remove('hidden');
-      this.harvests.classList.add('over-modal');
-      this.fly(value, this.harvest, 14, () => h('span', 'fly coin'));
-      window.setTimeout(() => {
-        sfx.play('cash');
-        this.onSent?.();
-        this.harvestHoldUntil = 0;
-        this.harvest.dataset.text = '';
-        this.update();
-        this.harvest.classList.remove('boost-in');
-        void this.harvest.offsetWidth;
-        this.harvest.classList.add('boost-in');
-      }, 750);
-      window.setTimeout(() => {
-        this.closeModal();
-        this.harvests.classList.remove('over-modal');
-      }, 1300);
-    };
-    requestAnimationFrame(step);
+    this.harvest.classList.remove('hidden');
+    this.harvests.classList.add('over-modal');
+    this.fly(from, this.harvest, 12, () => h('span', 'fly coin'));
+    window.setTimeout(() => this.closeModal(), 250);
+    window.setTimeout(() => {
+      sfx.play('cash');
+      this.onSent?.();
+      this.harvestHoldUntil = 0;
+      this.harvests.classList.remove('over-modal');
+      this.harvest.dataset.text = '';
+      this.update();
+    }, 900);
   }
 
   /** Récolte l'argent de l'absence : les pièces filent vers le compteur, l'argent défile, un petit mot résume l'absence. */

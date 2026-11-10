@@ -800,19 +800,13 @@ button:disabled { cursor: default; opacity: .5; }
 @media (prefers-reduced-motion: reduce) { .boost-chip, .boost-chip::after, .boost-row.mine .boost-icon { animation: none; } }
 
 /* ---- bourse de l'absence, en grand au retour ---- */
-.reward-card { justify-items: stretch; text-align: center; }
-.reward-sub { color: #a894bc; font-size: 17px; }
-.reward-prize { display: grid; justify-items: center; gap: 6px; padding: 14px 8px; background: var(--panel-2); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 var(--border-hi), inset 0 0 18px #f2c14e30; }
-.reward-money, .reward-gems { display: flex; align-items: center; gap: 10px; }
-.reward-bag { font-size: 40px; line-height: 1; }
-.reward-value { font-family: 'Silkscreen', monospace; font-size: 30px; color: var(--accent); text-shadow: 2px 2px 0 #0008; }
-.reward-gems .reward-value { font-size: 22px; color: #8cd0ff; }
-.reward-gem { image-rendering: pixelated; }
-.reward-money { animation: reward-pop .45s steps(5) both; }
-@keyframes reward-pop { from { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.12); opacity: 1; } to { transform: scale(1); } }
+.reward-card { justify-items: stretch; }
 .reward-double { display: grid; gap: 2px; justify-items: center; }
 .reward-double-main { font-size: 20px; }
 .reward-double-sub { font-size: 14px; opacity: .8; }
+
+.reward-text { margin: 0; font-size: 18px; line-height: 1.35; }
+.reward-amount { color: var(--accent); white-space: nowrap; }
 
 /* ---- prospection contre une pub ---- */
 .slot-free:has(.prospect-btns) { flex-wrap: wrap; }
@@ -827,27 +821,6 @@ button:disabled { cursor: default; opacity: .5; }
 .ad-test-tag { font-family: 'Silkscreen', monospace; font-size: 16px; padding: 4px 10px; border: 2px solid #f6ecd6; }
 .ad-test-count { font-family: 'Silkscreen', monospace; font-size: 64px; }
 
-/* ---- le gain qui double : soleil doré, tampon ×2, montant qui grimpe, gerbe de pièces ---- */
-.reward-prize { position: relative; overflow: hidden; }
-.reward-prize.doubled { overflow: visible; animation: reward-shake .5s steps(6) .35s; }
-.reward-prize > *:not(.reward-rays) { position: relative; z-index: 1; }
-.reward-rays { position: absolute; z-index: 0; left: 50%; top: 50%; width: 360px; height: 360px; margin: -180px 0 0 -180px; pointer-events: none;
-  background: repeating-conic-gradient(#f2c14e55 0 10deg, transparent 10deg 20deg); border-radius: 50%;
-  -webkit-mask-image: radial-gradient(circle, #000 25%, transparent 68%); mask-image: radial-gradient(circle, #000 25%, transparent 68%);
-  animation: rays-in .5s ease-out both, rays-spin 6s linear infinite; }
-@keyframes rays-in { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: scale(1); } }
-@keyframes rays-spin { to { rotate: 360deg; } }
-.reward-stamp { position: absolute !important; right: -10px; top: -16px; font-family: 'Silkscreen', monospace; font-size: 28px; color: #fff; background: #e8553a; border: 3px solid #1b1424; padding: 0 8px; box-shadow: 3px 3px 0 #1b1424; rotate: -12deg; opacity: 0; transform: scale(3); }
-.reward-stamp.down { animation: stamp-down .35s cubic-bezier(.3, 1.6, .5, 1) forwards; }
-@keyframes stamp-down { from { opacity: 0; transform: scale(3); } to { opacity: 1; transform: scale(1); } }
-@keyframes reward-shake { 0%, 100% { translate: 0 0; } 20% { translate: -4px 2px; } 40% { translate: 4px -2px; } 60% { translate: -3px 1px; } 80% { translate: 2px -1px; } }
-.reward-value.final { animation: value-glow .9s steps(6) 2; color: #ffe7a0; }
-@keyframes value-glow { 50% { text-shadow: 2px 2px 0 #0008, 0 0 14px #ffe7a0; transform: scale(1.12); } }
-.burst-coin { position: absolute !important; left: 50%; top: 45%; margin: -6px 0 0 -6px; z-index: 2 !important; animation: coin-burst 1.1s cubic-bezier(.2, .8, .4, 1) forwards; }
-@keyframes coin-burst { 0% { transform: translate(0, 0) scale(.4); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 60px)) scale(1); opacity: 0; } }
-.reward-card.doubling { box-shadow: inset 0 0 0 2px var(--accent), 0 0 30px #f2c14e80, 0 6px 0 #0008; }
-.reward-cash { animation: reward-pop .4s steps(5) both; }
-
 /* ---- bourse doublée par une pub : elle brille davantage jusqu'à la récolte ---- */
 .harvest.boosted { position: relative; overflow: visible; background: linear-gradient(100deg, #f2c14e 0 40%, #fff6c8 50%, #f2c14e 60% 100%) 0 0 / 300% 100%;
   box-shadow: inset 2px 2px 0 #fff6c8, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008, 0 0 10px #ffe7a0, 0 0 18px #f2c14ea0;
@@ -855,6 +828,4 @@ button:disabled { cursor: default; opacity: .5; }
 @keyframes harvest-shine { from { background-position: 100% 0; } to { background-position: -50% 0; } }
 @keyframes harvest-glow { 50% { box-shadow: inset 2px 2px 0 #fff6c8, inset -2px -2px 0 var(--accent-dark), 0 3px 0 #0008, 0 0 16px #fff2b0, 0 0 28px #f2c14ec0; } }
 .harvest-x2 { margin-left: 2px; padding: 1px 3px; font-size: 11px; color: #fff; background: #e8553a; border: 1px solid var(--ink); rotate: -8deg; }
-.harvest.boost-in { animation: harvest-boost-in .5s steps(5), harvest-shine 1.6s linear infinite, harvest-glow 1.2s steps(3) infinite; }
-@keyframes harvest-boost-in { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
 .harvests.over-modal { z-index: 11; }
