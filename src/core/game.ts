@@ -136,6 +136,8 @@ export interface OfflineReport {
   /** Litres vendus pendant l'absence. */
   liters: number;
   batches: number;
+  /** Diamants gagnés pendant l'absence (commandes livrées par le livreur, passages de niveau), récoltés avec l'argent. */
+  gems?: number;
 }
 
 type StationState = { level: number };
@@ -1407,6 +1409,7 @@ export class Game {
   collectOffline(): number {
     const e = this.offline?.earned ?? 0;
     this.money += e;
+    this.gems += this.offline?.gems ?? 0;
     this.offline = null;
     return e;
   }
@@ -1896,6 +1899,7 @@ export function simulateOffline(game: Game, seconds: number, max = MAX_OFFLINE_S
   const target = Math.min(seconds, max);
   if (target < 5) return null;
   const money = game.money;
+  const gems = game.gems;
   const sold = game.totalSold;
   const liters = game.totalLiters;
   const done = game.batchesDone;
@@ -1903,6 +1907,9 @@ export function simulateOffline(game: Game, seconds: number, max = MAX_OFFLINE_S
   for (let t = 0; t < target; t += step) game.step(step);
   const earned = game.money - money;
   game.money = money;
+  // les diamants de l'absence attendent dans la bourse, comme l'argent
+  const gemsEarned = Math.max(0, game.gems - gems);
+  game.gems -= gemsEarned;
   const prev = game.offline;
   game.offline = {
     seconds: target + (prev?.seconds ?? 0),
@@ -1910,6 +1917,7 @@ export function simulateOffline(game: Game, seconds: number, max = MAX_OFFLINE_S
     sold: game.totalSold - sold + (prev?.sold ?? 0),
     liters: game.totalLiters - liters + (prev?.liters ?? 0),
     batches: game.batchesDone - done + (prev?.batches ?? 0),
+    gems: gemsEarned + (prev?.gems ?? 0),
   };
   // Le coût des brassins automatiques lancés pendant l'absence est déjà déduit des gains.
   if (earned < 0) game.money += earned;

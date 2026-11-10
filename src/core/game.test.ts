@@ -835,6 +835,20 @@ describe('boosts', () => {
 });
 
 describe('diamants', () => {
+  it('les diamants gagnés pendant l\'absence attendent dans la bourse, avec l\'argent', () => {
+    const g = withBeer(1e6);
+    g.beers[0]!.stock = 2000;
+    g.staffUntil.courier = g.time + 8 * 3600; // le livreur livre pendant l'absence
+    g.orders = [{ ...drawOrder(997, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'classic', qty: 12, minQuality: 0, tip: true } as Order];
+    const gems = g.gems;
+    simulateOffline(g, 4 * 3600);
+    expect(g.gems).toBe(gems); // rien d'ajouté tant qu'on n'a pas récolté
+    const off = g.offline!;
+    expect(off.gems).toBeGreaterThanOrEqual(1);
+    g.collectOffline();
+    expect(g.gems).toBe(gems + (off.gems ?? 0));
+  });
+
   it('un achat de diamants est crédité une seule fois ; le pack de démarrage ne s\'achète qu\'une fois', () => {
     const g = withBeer(0);
     const g0 = g.gems;

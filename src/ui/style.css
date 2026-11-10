@@ -448,6 +448,9 @@ button:disabled { cursor: default; opacity: .5; }
 .harvest.hidden { display: none; }
 .harvest:active { transform: translateY(1px); }
 .harvest-bag { font-size: 16px; line-height: 1; }
+.harvest-sep { width: 2px; height: 14px; margin: 0 3px; background: var(--accent-dark); }
+.harvest .gems-icon { width: 16px; height: 16px; image-rendering: pixelated; }
+.harvest-gems { color: #1d4f8a; }
 @keyframes harvest-bob { 50% { transform: translateY(-2px); } }
 .money.gain { box-shadow: 0 0 0 2px var(--accent); }
 @media (prefers-reduced-motion: reduce) { .harvest { animation: none; } }
