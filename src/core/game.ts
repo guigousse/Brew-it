@@ -8,7 +8,7 @@ import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
-import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
+import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -213,6 +213,10 @@ export class Game {
   adPrestige = false;
   /** Boosts en cours, un par canal (brasserie, levure, bar, grossiste). */
   boosts: Partial<Record<BoostChannel, { id: BoostId; until: number }>> = {};
+  /** Achats de diamants déjà crédités (identifiants de transaction App Store) : un achat n'est jamais compté deux fois. */
+  purchases: string[] = [];
+  /** Packs « une seule fois » déjà achetés. */
+  packsBought: GemPackId[] = [];
   /** Fin des contrats du livreur et de l'apprenti (le barman a le sien : barmanUntil). */
   staffUntil: { courier: number; apprentice: number } = { courier: 0, apprentice: 0 };
   /** Mobilier du bar, dans l'ordre d'achat. */
@@ -981,7 +985,28 @@ export class Game {
   }
 
   /** Diamants gagnées (commande livrée, niveau de la brasserie). */
-  earnGems(n: number, why: 'order' | 'level'): void {
+  /** Le pack peut-il encore s'acheter (le pack de démarrage, une seule fois) ? */
+  packAvailable(id: GemPackId): boolean {
+    const pack = gemPackById(id);
+    return !!pack && !(pack.once && this.packsBought.includes(id));
+  }
+
+  /**
+   * Crédite un achat de diamants confirmé par l'App Store. Idempotent : une transaction déjà créditée (reprise au
+   * lancement, notification en double) ne rapporte rien de plus.
+   */
+  grantPurchase(productId: string, transactionId: string): CommandResult & { gems?: number } {
+    const pack = gemPackByProduct(productId);
+    if (!pack) return { ok: false, reason: 'Produit inconnu' };
+    if (this.purchases.includes(transactionId)) return { ok: false, reason: 'Achat déjà crédité' };
+    this.purchases.push(transactionId);
+    if (this.purchases.length > 500) this.purchases.splice(0, this.purchases.length - 500);
+    if (pack.once && !this.packsBought.includes(pack.id)) this.packsBought.push(pack.id);
+    this.earnGems(pack.gems, 'purchase');
+    return { ok: true, gems: pack.gems };
+  }
+
+  earnGems(n: number, why: 'order' | 'level' | 'purchase'): void {
     if (n <= 0) return;
     this.gems += n;
     this.events.emit({ type: 'gems', amount: n, why });
@@ -1713,7 +1738,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
     };
   }
@@ -1798,6 +1823,8 @@ export class Game {
     // les lettres d'avant les pourboires : une commande simple gardait son diamant affiché
     for (const o of g.orders) if (o.tip == null && (o.kind === 'classic' || o.kind === 'keg')) o.tip = true;
     g.boosts ??= {};
+    g.purchases ??= [];
+    g.packsBought ??= [];
     // le grossiste sans limite avait son propre poste avant d'être rangé avec le grossiste
     const gate = (g.boosts as Record<string, { id: BoostId; until: number } | undefined>).quota;
     if (gate) {

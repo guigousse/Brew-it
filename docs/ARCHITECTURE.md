@@ -26,7 +26,7 @@ src/
 │   └── space.ts          profondeur : sols en perspective (point de fuite), ombrage tramé, ombres portées
 ├── ui/                   interface DOM : header, barre de navigation en bas (pièces, magasin), boutons d'action carrés et objets du décor à toucher, glissement, panneaux,
 │                         ordinateur du bureau (menu d'applications, tableau de bord, messages…), dégustation, Gaston ; format.ts : montants courts du header (2,5k)
-├── platform/             Capacitor : stockage fichier, cycle de vie, haptique
+├── platform/             Capacitor : stockage fichier, cycle de vie, haptique, achats intégrés (purchases.ts, StoreKit)
 └── main.ts               boucle à pas fixe (20 ticks/s), sauvegarde auto, production hors-ligne
 ```
 

@@ -234,7 +234,7 @@ Variantes essayées et écartées : une fois par jour (plafond J12,8 sur un post
 
 Le joueur simulé dépense ses diamants à chaque visite pour couvrir l'absence suivante : grossiste généreux, puis le meilleur boost des machines, puis la levure express.
 
-**Packs proposés** (environ 100 💎 par euro, soit environ 2 € le jour gagné) :
+**Packs en vente** (boutique de diamants ; produits App Store dans TESTFLIGHT.md ; environ 100 💎 par euro, soit environ 2 € le jour gagné) :
 
 | Pack | Diamants | Prix |
 |---|---|---|

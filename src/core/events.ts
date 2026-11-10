@@ -12,7 +12,7 @@ export type GameEvent =
   | { type: 'batchRuined'; beerId: number }
   | { type: 'autoSent'; client: string; amount: number }
   | { type: 'apprenticePlanned'; beerId: number }
-  | { type: 'gems'; amount: number; why: 'order' | 'level' };
+  | { type: 'gems'; amount: number; why: 'order' | 'level' | 'purchase' };
 
 type Listener = (e: GameEvent) => void;
 

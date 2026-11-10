@@ -6,7 +6,7 @@ import { COMPUTERS, WHOLESALE_PRICE, drawOrder, orderGems, FIRST_ORDER_S, openTy
 import { Rng } from './rng';
 import { popTarget, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
-import { GEMS } from './shop';
+import { GEM_PACKS, GEMS } from './shop';
 import { STATION_ORDER } from './stations';
 import { STORAGE } from './warehouse';
 
@@ -822,6 +822,22 @@ describe('boosts', () => {
 });
 
 describe('diamants', () => {
+  it('un achat de diamants est crédité une seule fois ; le pack de démarrage ne s\'achète qu\'une fois', () => {
+    const g = withBeer(0);
+    const g0 = g.gems;
+    const starter = GEM_PACKS.find((p) => p.id === 'starter')!;
+    expect(g.packAvailable('starter')).toBe(true);
+    expect(g.grantPurchase(starter.productId, 'tx-1')).toMatchObject({ ok: true, gems: 500 });
+    expect(g.grantPurchase(starter.productId, 'tx-1').ok).toBe(false); // la même transaction, reprise au lancement
+    expect(g.gems).toBe(g0 + 500);
+    expect(g.packAvailable('starter')).toBe(false);
+    expect(g.packAvailable('chest')).toBe(true);
+    expect(g.grantPurchase('com.inconnu', 'tx-2').ok).toBe(false);
+    const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
+    expect(back.grantPurchase(starter.productId, 'tx-1').ok).toBe(false); // toujours connue après la sauvegarde
+    expect(back.packAvailable('starter')).toBe(false);
+  });
+
   it('on en gagne au départ, par commande livrée et par niveau de la brasserie', () => {
     const g = withBeer(1e7);
     expect(g.gems).toBe(GEMS.start);

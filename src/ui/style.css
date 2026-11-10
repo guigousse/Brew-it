@@ -506,7 +506,7 @@ button:disabled { cursor: default; opacity: .5; }
 /* --- Magasin : le comptoir de Gaston, trois onglets, le rayon dessous ---------------------- */
 .room.shop-pane { position: relative; display: block; overflow: hidden; }
 .shop { position: absolute; inset: 0; display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; background: var(--bg); }
-.shop-tabs { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--ink); border-bottom: 2px solid var(--ink); }
+.shop-tabs { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; background: var(--ink); border-bottom: 2px solid var(--ink); }
 .shop-tab { position: relative; display: grid; justify-items: center; gap: 2px; min-height: 52px; padding: 6px 2px 5px; background: var(--panel); border: 0; color: var(--dim); font-family: var(--font-title); font-size: 11px; text-transform: uppercase; }
 .shop-tab-icon { width: 32px; height: 32px; image-rendering: pixelated; filter: grayscale(.6) brightness(.85); }
 .shop-tab.active { background: #4a3a24; color: var(--accent); box-shadow: inset 0 -3px 0 var(--accent); }
@@ -741,3 +741,26 @@ button:disabled { cursor: default; opacity: .5; }
 .boost-chip-icon canvas { width: 32px; height: 32px; image-rendering: pixelated; }
 .boost-chip-mult { position: absolute; right: -6px; bottom: -4px; padding: 0 2px; font-family: var(--font-title); font-size: 10px; line-height: 12px; color: var(--ink); background: #7ee081; border: 1px solid var(--ink); }
 .boost-chip:active { transform: translateY(1px); }
+
+/* --- Boutique de diamants ------------------------------------------------------------------ */
+.gems-head { display: grid; justify-items: center; gap: 4px; padding: 6px 4px 2px; text-align: center; }
+.gems-count { display: flex; align-items: center; gap: 8px; font-family: var(--font-title); font-size: 22px; color: #7fd0ff; }
+.gems-count-icon { width: 32px; height: 32px; image-rendering: pixelated; }
+.gems-why { margin: 0; font-size: 17px; line-height: 1.1; color: var(--dim); }
+.gem-pack { position: relative; display: grid; justify-items: center; align-content: start; gap: 6px; padding: 14px 8px 10px; background: linear-gradient(#2a3550, #1d2236); border: 2px solid var(--ink); box-shadow: inset 2px 2px 0 #3f5378; text-align: center; }
+.gem-pack.big { grid-template-columns: auto 1fr; grid-template-areas: 'pile text' 'pile buy'; justify-items: start; align-items: center; gap: 4px 14px; padding: 18px 14px 14px; border-color: var(--accent); box-shadow: inset 0 0 0 2px #f2c14e55, 0 0 12px #f2c14e33; }
+.gem-pack.big .gem-pack-pile { grid-area: pile; }
+.gem-pack.big .gem-pack-text { grid-area: text; justify-items: start; text-align: left; }
+.gem-pack.big .gem-pack-buy { grid-area: buy; }
+.gem-pack-tag { position: absolute; top: -2px; right: -2px; padding: 1px 6px; font-family: var(--font-title); font-size: 10px; text-transform: uppercase; color: var(--ink); background: var(--accent); }
+.gem-pack-pile { display: flex; align-items: flex-end; justify-content: center; min-height: 36px; }
+.gem-pack-gem { width: 24px; height: 24px; margin: 0 -4px; image-rendering: pixelated; }
+.gem-pack.big .gem-pack-gem { width: 36px; height: 36px; margin: 0 -6px; }
+.gem-pack-gem:nth-child(even) { transform: translateY(-6px); }
+.gem-pack-text { display: grid; justify-items: center; gap: 1px; line-height: 1.05; }
+.gem-pack-n { font-family: var(--font-title); font-size: 14px; color: #7fd0ff; }
+.gem-pack.big .gem-pack-n { font-size: 18px; }
+.gem-pack-name { font-size: 16px; color: var(--dim); }
+.gem-pack-buy { min-height: 40px; font-size: 19px; }
+.gem-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gems-boosts { justify-self: center; margin-top: 4px; }

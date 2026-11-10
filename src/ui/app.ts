@@ -15,7 +15,7 @@ import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/room
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
-import { BOOST_POSTS, BOOSTS, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
+import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
@@ -85,12 +85,13 @@ const DECOR_ICON: Record<DecorId, IconId> = {
 };
 
 /** Onglets du magasin. */
-type ShopTab = 'bar' | 'boosts' | 'labels';
+type ShopTab = 'bar' | 'boosts' | 'labels' | 'gems';
 /** Onglets du magasin, de gauche à droite. */
 const SHOP_TABS: readonly { id: ShopTab; name: string; icon: IconId }[] = [
   { id: 'bar', name: 'Bar', icon: 'plant' },
   { id: 'boosts', name: 'Boosts', icon: 'bolt' },
   { id: 'labels', name: 'Étiquettes', icon: 'labels' },
+  { id: 'gems', name: 'Diamants', icon: 'gem' },
 ];
 /** Icône de chaque effet (poste de boost), en haut à droite de l'écran quand il est actif : la marmite des machines… */
 const EFFECT_ICON: Record<BoostChannel, IconId> = { brew: 'brew', yeast: 'flask', bar: 'mug', wholesale: 'truck' };
@@ -253,6 +254,12 @@ export interface AppCallbacks {
   getSpeed(): number;
   setSpeed(s: number): void;
   newGame(): void;
+  /** La boutique de diamants : « appstore » (iOS), « dev » (achats simulés), « none » (navigateur). */
+  storeKind(): 'appstore' | 'dev' | 'none';
+  /** Prix localisés des packs (identifiant de produit → prix), quand la boutique répond. */
+  gemPrices(): Promise<Map<string, string>>;
+  /** Achète un pack : crédite les diamants, sauvegarde, puis termine la transaction. */
+  buyGems(productId: string): Promise<{ ok: boolean; gems?: number; cancelled?: boolean; reason?: string }>;
 }
 
 /** Interface du jeu : header, brasserie, barre du bas, panneaux et fenêtres. */
@@ -288,6 +295,10 @@ export class App {
   private shopBody = h('div', 'shop-body');
   private shopTabs = new Map<ShopTab, { btn: HTMLButtonElement; mark: HTMLElement }>();
   private shopTab: ShopTab = 'bar';
+  /** Prix des packs de diamants donnés par l'App Store (null : pas encore demandés). */
+  private gemPrices: Map<string, string> | null = null;
+  /** Pack dont l'achat est en cours (les boutons attendent la réponse de l'App Store). */
+  private gemBuying: string | null = null;
   /** Case choisie sur la piste de la décoration (null : la prochaine en vente). */
   private decorPick: DecorId | null = null;
   private shopKey = '';
@@ -368,8 +379,8 @@ export class App {
     opts.setAttribute('aria-label', 'Options');
     opts.onclick = () => this.openOptions();
     this.gemsPill.append(iconCanvas('gem', 1, 'gems-icon'), this.gemsEl);
-    this.gemsPill.setAttribute('aria-label', 'Diamants : voir les boosts');
-    this.gemsPill.onclick = () => this.openShop('boosts');
+    this.gemsPill.setAttribute('aria-label', 'Diamants : la boutique de diamants');
+    this.gemsPill.onclick = () => this.openShop('gems');
     this.header.append(logo, this.gemsPill, pill, opts);
     for (const t of TABS) {
       const btn = h('button', 'nav-tab');
@@ -2819,6 +2830,7 @@ export class App {
       bar: next && g.money >= next.cost ? { text: '', cls: 'dot' } : { text: '', cls: '' },
       boosts: soonest > 0 ? { text: clock(soonest), cls: 'timer' } : { text: '', cls: '' },
       labels: LABEL_UNLOCKS.some((x) => !g.unlocked.includes(x.id) && !x.gems && g.money >= x.cost) ? { text: '', cls: 'dot' } : { text: '', cls: '' },
+      gems: { text: '', cls: '' },
     };
     for (const [id, { btn, mark }] of this.shopTabs) {
       btn.classList.toggle('active', id === tab);
@@ -2832,6 +2844,7 @@ export class App {
       tab === 'bar' ? DECOR_ORDER.map((id) => g.money >= g.decorDef(id).cost) : 0,
       tab === 'boosts' ? [BOOSTS.map((b) => [b.channel ? g.boostOf(b.channel)?.id : 0, g.boostBlocked(b.id)]), g.batches.length > 0 || g.planned > 0] : 0,
       tab === 'labels' ? LABEL_UNLOCKS.map((x) => g.money >= x.cost) : 0,
+      tab === 'gems' ? [g.packsBought, this.gemBuying, this.gemPrices ? [...this.gemPrices] : null] : 0,
     ]);
     if (key === this.shopKey) return;
     this.shopKey = key;
@@ -2841,6 +2854,7 @@ export class App {
     if (tab === 'bar') this.shopBar(g);
     if (tab === 'boosts') this.shopBoosts(g);
     if (tab === 'labels') this.shopLabels(g);
+    if (tab === 'gems') this.shopGems(g);
     this.shopBody.scrollTop = scroll;
   }
 
@@ -2857,6 +2871,70 @@ export class App {
       run();
     };
     return b;
+  }
+
+  /**
+   * Rayon Diamants : la boutique d'argent réel. Le pack de démarrage en tête (une seule fois), puis les quatre packs.
+   * Les prix viennent de l'App Store dans la devise du joueur ; en attendant, les prix de référence en euros.
+   */
+  private shopGems(g: Game): void {
+    if (!this.gemPrices) {
+      this.gemPrices = new Map();
+      void this.cb.gemPrices().then((m) => {
+        this.gemPrices = m;
+        this.shopKey = '';
+        this.renderShop();
+      });
+    }
+    const kind = this.cb.storeKind();
+    const head = h('div', 'gems-head');
+    const count = h('div', 'gems-count');
+    count.append(iconCanvas('gem', 2, 'gems-count-icon'), h('span', '', g.gems.toLocaleString('fr-FR')));
+    head.append(count, h('p', 'gems-why', 'Les diamants font gagner du temps : boosts, prospection, pièces rares d\'étiquette.'));
+    this.shopBody.append(head);
+    const card = (pack: GemPack, big: boolean) => {
+      const el = h('div', `gem-pack${big ? ' big' : ''}`);
+      if (pack.tag) el.append(h('span', 'gem-pack-tag', pack.tag));
+      const pile = h('div', 'gem-pack-pile');
+      // une pile de diamants d'autant plus haute que le pack est gros
+      const n = pack.gems >= 2000 ? 5 : pack.gems >= 1000 ? 4 : pack.gems >= 400 ? 3 : pack.gems >= 200 ? 2 : 1;
+      for (let i = 0; i < n; i++) pile.append(iconCanvas('gem', big ? 3 : 2, 'gem-pack-gem'));
+      const text = h('div', 'gem-pack-text');
+      text.append(h('span', 'gem-pack-n', `${pack.gems.toLocaleString('fr-FR')} diamants`), h('span', 'gem-pack-name', pack.name));
+      const price = this.gemPrices?.get(pack.productId) ?? pack.price;
+      const busy = this.gemBuying != null;
+      const b = this.btn(`btn primary price gem-pack-buy${busy ? ' short' : ''}`, this.gemBuying === pack.id ? '…' : price, () => {
+        if (this.gemBuying) return;
+        if (kind === 'none') return this.toast('Les achats de diamants se font dans l\'app iPhone', 'info');
+        this.gemBuying = pack.id;
+        this.shopKey = '';
+        this.renderShop();
+        void this.cb.buyGems(pack.productId).then((r) => {
+          this.gemBuying = null;
+          this.shopKey = '';
+          if (r.ok) {
+            this.toast(`+${r.gems!.toLocaleString('fr-FR')} diamants, merci !`, 'good');
+            // le bouton a été redessiné pendant l'achat : on part de celui qui est à l'écran
+            const from = this.shopBody.querySelector<HTMLElement>(`[data-pack="${pack.id}"]`) ?? this.gemsPill;
+            this.fly(from, this.gemsPill, 6, () => iconCanvas('gem', 1, 'fly fly-gem'));
+            this.onSent?.();
+          } else if (!r.cancelled) this.toast(r.reason ?? 'Achat impossible pour le moment', 'bad');
+          this.renderShop();
+        });
+      });
+      b.dataset.pack = pack.id;
+      b.setAttribute('aria-label', `Acheter ${pack.gems} diamants pour ${price}`);
+      el.append(pile, text, b);
+      return el;
+    };
+    const starter = GEM_PACKS.find((p) => p.once && g.packAvailable(p.id));
+    if (starter) this.shopBody.append(card(starter, true));
+    const grid = h('div', 'gem-grid');
+    for (const p of GEM_PACKS.filter((x) => !x.once)) grid.append(card(p, false));
+    this.shopBody.append(grid);
+    this.shopBody.append(this.btn('btn small gems-boosts', 'Voir les boosts', () => this.openShop('boosts')));
+    if (kind === 'dev') this.shopBody.append(h('p', 'hint', 'Développement : les achats sont simulés.'));
+    if (kind === 'none') this.shopBody.append(h('p', 'hint', 'Les achats de diamants se font dans l\'app iPhone.'));
   }
 
   /** Rayon Bar : la vitrine (la pièce choisie, montrée dans le bar), puis toute la piste de la décoration. */

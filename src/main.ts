@@ -2,8 +2,10 @@ import './ui/style.css';
 import { FixedStepLoop, Game, simulateOffline } from './core/game';
 import { SaveManager } from './core/save';
 import { clientTypeById } from './core/orders';
+import { GEM_PACKS } from './core/shop';
 import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
+import { createGemStore, type Purchase } from './platform/purchases';
 import { createStorage } from './platform/storage';
 import { App } from './ui/app';
 
@@ -26,10 +28,34 @@ async function boot() {
   }
   let loop = new FixedStepLoop(() => game);
 
+  // Boutique de diamants : un achat est crédité et sauvegardé avant d'être terminé auprès de l'App Store,
+  // pour qu'il ne se perde jamais (l'App Store le rend au prochain lancement tant qu'il n'est pas terminé).
+  const store = createGemStore();
+  const credit = async (p: Purchase) => {
+    const r = game.grantPurchase(p.productId, p.transactionId);
+    if (r.ok || r.reason === 'Achat déjà crédité') {
+      await saves.save(game);
+      await store.finish(p.transactionId);
+    }
+    return r;
+  };
+
   const app = new App(document.getElementById('app')!, () => game, {
     getSpeed: () => loop.speed,
     setSpeed: (s) => (loop.speed = s),
     newGame: () => start(new Game()),
+    storeKind: () => store.kind,
+    gemPrices: () => store.prices(GEM_PACKS.map((p) => p.productId)),
+    buyGems: async (productId) => {
+      try {
+        const p = await store.buy(productId);
+        if (!p) return { ok: false, cancelled: true };
+        return await credit(p);
+      } catch (e) {
+        console.error('Achat de diamants', e);
+        return { ok: false, reason: e instanceof Error ? e.message : 'Achat impossible pour le moment' };
+      }
+    },
   });
 
   app.onTasteReady = () => tapFeedback(true);
@@ -79,6 +105,16 @@ async function boot() {
     void saves.save(game);
   }
   start(game);
+
+  // achats payés mais pas encore crédités (app tuée pendant l'achat, achat approuvé plus tard)
+  const recover = async (p: Purchase) => {
+    const r = await credit(p);
+    if (r.ok) app.toast(`Achat reçu : +${r.gems} diamants`, 'good');
+  };
+  store.onUpdate((p) => void recover(p));
+  void store.pending().then(async (list) => {
+    for (const p of list) await recover(p);
+  });
 
   let last = performance.now();
   let uiTimer = 0;

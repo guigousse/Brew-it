@@ -18,6 +18,36 @@ export const GEMS = {
   breweryLevel: [0, 0, 15, 25, 40, 60] as readonly number[],
 } as const;
 
+// ------------------------------------------------------------------ boutique de diamants
+
+/**
+ * Packs de diamants, achetés avec de l'argent réel (App Store). Environ 100 diamants par euro : un jour de partie
+ * gagné vaut environ 200 diamants (voir BALANCE.md, « Économie des diamants »). Les prix affichés viennent de l'App
+ * Store (dans la devise du joueur) ; `price` n'est qu'une valeur de repli. Le pack de démarrage ne s'achète qu'une fois.
+ */
+export type GemPackId = 'starter' | 'handful' | 'purse' | 'chest' | 'trunk';
+export interface GemPack {
+  id: GemPackId;
+  /** Identifiant du produit consommable dans App Store Connect. */
+  productId: string;
+  name: string;
+  gems: number;
+  price: string;
+  /** Une seule fois par partie. */
+  once?: boolean;
+  /** Ruban affiché sur la carte. */
+  tag?: string;
+}
+export const GEM_PACKS: readonly GemPack[] = [
+  { id: 'starter', productId: 'com.guigousse.brewit.gems.starter', name: 'Pack de démarrage', gems: 500, price: '1,99 €', once: true, tag: 'Une seule fois' },
+  { id: 'handful', productId: 'com.guigousse.brewit.gems.80', name: 'Poignée de diamants', gems: 80, price: '0,99 €' },
+  { id: 'purse', productId: 'com.guigousse.brewit.gems.450', name: 'Bourse de diamants', gems: 450, price: '4,99 €' },
+  { id: 'chest', productId: 'com.guigousse.brewit.gems.1000', name: 'Coffre de diamants', gems: 1000, price: '9,99 €', tag: 'Populaire' },
+  { id: 'trunk', productId: 'com.guigousse.brewit.gems.2200', name: 'Malle de diamants', gems: 2200, price: '19,99 €', tag: 'Meilleure affaire' },
+];
+export const gemPackById = (id: string) => GEM_PACKS.find((p) => p.id === id);
+export const gemPackByProduct = (productId: string) => GEM_PACKS.find((p) => p.productId === productId);
+
 // ------------------------------------------------------------------ boosts
 
 /** Un boost occupe un « poste » : un seul effet actif par poste, que l'on peut prolonger. */
