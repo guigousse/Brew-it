@@ -250,6 +250,9 @@ function rackGrid(lv: number) {
   return { per, cap, cell, cols, rows, gap, rowH, gw, ox, base, top: base - rows * rowH };
 }
 
+/** Ombre d'une case selon son remplissage en profondeur : une case presque vide est sombre, une case pleine ne l'est pas. */
+const depthShade = (fill: number) => 0.72 * (1 - Math.max(0, Math.min(1, fill)));
+
 /** Taille de la caisse au bout du tapis, et durée de son trajet jusqu'à l'étagère (s). */
 const CRATE_AT_END = 20;
 const FLY = 0.9;
@@ -259,26 +262,32 @@ type BeerT = Game['beers'][number];
 function rackPlan(beers: BeerT[], lv: number) {
   const { per, cap, cell, cols, rows, rowH, ox, base } = rackGrid(lv);
   const cells = Math.min(cap, rows * cols);
-  const kegs: BeerT[] = [];
-  for (const beer of beers) for (let k = 0; k < Math.ceil(beer.kegs.length / per); k++) kegs.push(beer);
+  // Quand une case tient plusieurs caisses (ou fûts) en profondeur, `fill` dit à quel point elle est pleine :
+  // la première caisse est tout au fond, dans l'ombre ; la case s'éclaircit à mesure qu'elle se remplit.
+  const kegs: { beer: BeerT; fill: number }[] = [];
+  for (const beer of beers) for (let k = 0; k < Math.ceil(beer.kegs.length / per); k++) kegs.push({ beer, fill: Math.min(per, beer.kegs.length - k * per) / per });
   kegs.splice(cells);
-  const crates = (per === 1 ? crateList(beers) : beers.flatMap((beer) => {
-    const out: { beer: BeerT; count: number }[] = [];
-    for (let left = beer.stock; left > 0; left -= 12 * per) out.push({ beer, count: Math.max(1, Math.round(Math.min(left, 12 * per) / per)) });
+  const crates = (per === 1 ? crateList(beers).map((c) => ({ ...c, fill: 1 })) : beers.flatMap((beer) => {
+    const out: { beer: BeerT; count: number; fill: number }[] = [];
+    for (let left = beer.stock; left > 0; left -= 12 * per) {
+      const inSlot = Math.min(left, 12 * per);
+      const n = Math.ceil(inSlot / 12);
+      out.push({ beer, count: inSlot - (n - 1) * 12, fill: n / per }); // la caisse de devant, peut-être entamée
+    }
     return out;
   })).slice(0, cells - kegs.length);
   const at = (i: number) => ({ x: ox + (i % cols) * cell, y: base - (Math.floor(i / cols) + 1) * rowH });
   const kegCells = kegs.map((_, k) => Math.floor(k / cols) * cols + (cols - 1 - (k % cols)));
   const used = new Set<number>(kegCells);
-  const items: { x: number; y: number; keg: boolean; beer: BeerT; beerId: number; count: number }[] = [];
+  const items: { x: number; y: number; keg: boolean; beer: BeerT; beerId: number; count: number; fill: number }[] = [];
   let i = 0;
   for (const crate of crates) {
     while (used.has(i)) i++;
     if (i >= cells) break;
     used.add(i);
-    items.push({ ...at(i), keg: false, beer: crate.beer, beerId: crate.beer.id, count: crate.count });
+    items.push({ ...at(i), keg: false, beer: crate.beer, beerId: crate.beer.id, count: crate.count, fill: crate.fill });
   }
-  kegs.forEach((beer, k) => items.push({ ...at(kegCells[k]!), keg: true, beer, beerId: beer.id, count: 12 }));
+  kegs.forEach(({ beer, fill }, k) => items.push({ ...at(kegCells[k]!), keg: true, beer, beerId: beer.id, count: 12, fill }));
   return { cell, items };
 }
 
@@ -443,6 +452,12 @@ export class StorageRoom extends Room {
         g.fillRect(x + 2, y + 2, sz, sz);
         if (f.keg) drawKeg(g, x, y, sz, st.beer!.label, lv);
         else drawCrate(g, x, y, sz, { beer: st.beer!, count: 12 }, lv);
+        // en approchant de sa case, la caisse s'enfonce dans la profondeur : elle prend l'ombre de la case
+        const dark = depthShade(target.fill) * e;
+        if (dark > 0 && !f.keg) {
+          g.fillStyle = `rgba(10,6,16,${dark.toFixed(3)})`;
+          g.fillRect(x, y, sz, sz);
+        }
       });
     }
     // lumière qui vacille dans le coin du garage et la cave
@@ -485,12 +500,12 @@ export class StorageRoom extends Room {
   }
 
   /** La case de la dernière caisse (ou du dernier fût) d'une bière, une fois ajouté ce qui arrive. */
-  private slotOf(beers: Game['beers'], lv: number, id: number, keg: boolean, add: { bottles?: number; kegs?: number }): { x: number; y: number; s: number } | null {
+  private slotOf(beers: Game['beers'], lv: number, id: number, keg: boolean, add: { bottles?: number; kegs?: number }): { x: number; y: number; s: number; fill: number } | null {
     const base = beers.map((b) => (b.id === id ? { ...b, stock: b.stock + (add.bottles ?? 0), kegs: [...b.kegs, ...Array<number>(add.kegs ?? 0).fill(20)] } : b));
     const plan = rackPlan(base, lv);
     const mine = plan.items.filter((it) => it.beerId === id && it.keg === keg);
     const last = mine[mine.length - 1];
-    return last ? { x: last.x, y: last.y, s: plan.cell - 1 } : null;
+    return last ? { x: last.x, y: last.y, s: plan.cell - 1, fill: last.fill } : null;
   }
 
   /**
@@ -522,6 +537,14 @@ export class StorageRoom extends Room {
           g.fillStyle = 'rgba(255,255,255,0.14)';
           g.fillRect(it.x, it.y, cell - 1, cell - 2);
         }
+      }
+      // profondeur : la case s'éclaircit à mesure qu'elle se remplit
+      const dark = depthShade(it.fill);
+      if (dark > 0) {
+        g.globalCompositeOperation = 'source-atop'; // n'assombrit que la caisse (ou le fût), pas le mur
+        g.fillStyle = `rgba(10,6,16,${dark.toFixed(3)})`;
+        g.fillRect(it.x, it.y, cell - 1, cell - 1);
+        g.globalCompositeOperation = 'source-over';
       }
     }
     this.drawGauge(g, game, lv, ox + gw - 30, top - 15);
