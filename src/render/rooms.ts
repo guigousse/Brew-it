@@ -18,6 +18,7 @@ import { clearDecorCache, decorLights, drawDecor, furnitureBox, paintDecor } fro
 import type { FurnitureId } from '../core/shop';
 import { drawBeltBand, drawBeltBottle, drawBeltKeg, LINE, lineArrived, lineItems, lineState, paintBelt } from './scene';
 import type { RoomKey } from './decorLayout';
+import { tl } from '../i18n';
 
 export const ROOM_W = 160;
 export const ROOM_H = 300;
@@ -1391,7 +1392,7 @@ export class BarRoom extends Room {
       px(sx + 1, CT().top - 8, 20, 7, '#e8dcc0');
       g.fillStyle = '#a8483a';
       g.font = '6px monospace';
-      g.fillText('À SEC', sx + 2, CT().top - 2);
+      g.fillText(tl('À SEC'), sx + 2, CT().top - 2);
     }
   }
 }

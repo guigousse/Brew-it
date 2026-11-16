@@ -2,6 +2,7 @@ import type { Tasting } from './brewing/model';
 import { clamp01 } from './math';
 import type { Rng } from './rng';
 import { TRENDS, trendById, type Trend } from './trends';
+import { tl } from '../i18n';
 
 /**
  * Commandes : des missions qui arrivent sur l'ordinateur du stockage, envoyées par une clientèle variée
@@ -32,53 +33,53 @@ export interface ClientType {
 
 export const CLIENT_TYPES: readonly ClientType[] = [
   {
-    id: 'particulier', label: 'les particuliers', level: 1, pop: 0, size: 0.6, price: 3.2, minQuality: 0.3,
-    names: ['Anniversaire de Lucie', 'Barbecue des voisins', 'Crémaillère de Tom', 'Apéro de Marc', 'Soirée foot chez Karim', 'Mariage de Paul & Inès', 'Pot de départ de Sophie'],
+    id: 'particulier', label: tl('les particuliers'), level: 1, pop: 0, size: 0.6, price: 3.2, minQuality: 0.3,
+    names: [tl('Anniversaire de Lucie'), tl('Barbecue des voisins'), tl('Crémaillère de Tom'), tl('Apéro de Marc'), tl('Soirée foot chez Karim'), tl('Mariage de Paul & Inès'), tl('Pot de départ de Sophie')],
     kinds: { classic: 4, style: 2, keg: 1, urgent: 1 },
   },
   {
-    id: 'bistrot', label: 'les bistrots', level: 1, pop: 0, size: 1, price: 3.4, minQuality: 0.45,
-    names: ['Bistrot Chez Lulu', 'Café du Commerce', 'Le Zinc', 'Bar des Sports', 'Pizzeria Mamma'],
+    id: 'bistrot', label: tl('les bistrots'), level: 1, pop: 0, size: 1, price: 3.4, minQuality: 0.45,
+    names: [tl('Bistrot Chez Lulu'), tl('Café du Commerce'), tl('Le Zinc'), tl('Bar des Sports'), tl('Pizzeria Mamma')],
     kinds: { classic: 3, style: 2, keg: 2, urgent: 1 },
   },
   {
-    id: 'epicerie', label: 'les épiceries fines', level: 1, pop: 0.15, size: 1, price: 3.8, minQuality: 0.55,
-    names: ['Épicerie Le Panier', 'Maison Roux', 'Comptoir des Saveurs'],
+    id: 'epicerie', label: tl('les épiceries fines'), level: 1, pop: 0.15, size: 1, price: 3.8, minQuality: 0.55,
+    names: [tl('Épicerie Le Panier'), tl('Maison Roux'), tl('Comptoir des Saveurs')],
     kinds: { classic: 2, style: 2, mix: 2 },
   },
   {
-    id: 'caviste', label: 'les cavistes', level: 2, pop: 0.3, size: 1.4, price: 4.8, minQuality: 0.65,
-    names: ['Le Houblon d\'Or', 'La Cave de Jeanne', 'Bières & Cie'],
+    id: 'caviste', label: tl('les cavistes'), level: 2, pop: 0.3, size: 1.4, price: 4.8, minQuality: 0.65,
+    names: [tl('Le Houblon d\'Or'), tl('La Cave de Jeanne'), tl('Bières & Cie')],
     kinds: { style: 3, mix: 2, prestige: 1 },
   },
   {
-    id: 'restaurant', label: 'les restaurants', level: 2, pop: 0.4, size: 1.4, price: 4.4, minQuality: 0.6,
-    names: ['Brasserie de la Gare', 'L\'Ardoise', 'Le Gourmet', 'Crêperie Ty Breizh'],
+    id: 'restaurant', label: tl('les restaurants'), level: 2, pop: 0.4, size: 1.4, price: 4.4, minQuality: 0.6,
+    names: [tl('Brasserie de la Gare'), 'L\'Ardoise', tl('Le Gourmet'), tl('Crêperie Ty Breizh')],
     kinds: { classic: 2, style: 2, mix: 1, urgent: 1 },
   },
   {
-    id: 'fetes', label: 'les fêtes de village', level: 3, pop: 0.4, size: 2.5, price: 3.2, minQuality: 0.4,
-    names: ['Fête du village', 'Comité des fêtes', 'Kermesse de l\'école', 'Club de rugby'],
+    id: 'fetes', label: tl('les fêtes de village'), level: 3, pop: 0.4, size: 2.5, price: 3.2, minQuality: 0.4,
+    names: [tl('Fête du village'), tl('Comité des fêtes'), tl('Kermesse de l\'école'), tl('Club de rugby')],
     kinds: { keg: 3, classic: 2, urgent: 1 },
   },
   {
-    id: 'festival', label: 'les festivals', level: 3, pop: 0.6, size: 4, price: 3, minQuality: 0.45,
-    names: ['Festival Rock en Fût', 'Fête de la musique', 'Festival des Brasseurs'],
+    id: 'festival', label: tl('les festivals'), level: 3, pop: 0.6, size: 4, price: 3, minQuality: 0.45,
+    names: [tl('Festival Rock en Fût'), tl('Fête de la musique'), tl('Festival des Brasseurs')],
     kinds: { keg: 3, style: 1, classic: 1 },
   },
   {
-    id: 'supermarche', label: 'les supermarchés', level: 4, pop: 0.5, size: 5, price: 2.4, minQuality: 0.45,
-    names: ['Supermarché Grand Panier', 'Hypermarché du Rond-Point'],
+    id: 'supermarche', label: tl('les supermarchés'), level: 4, pop: 0.5, size: 5, price: 2.4, minQuality: 0.45,
+    names: [tl('Supermarché Grand Panier'), tl('Hypermarché du Rond-Point')],
     kinds: { classic: 3, mix: 2 },
   },
   {
-    id: 'gastro', label: 'les grandes tables', level: 4, pop: 0.8, size: 0.8, price: 7, minQuality: 0.85,
-    names: ['Le Grand Cerf (étoilé)', 'Palace Royal', 'Maison Lumière'],
+    id: 'gastro', label: tl('les grandes tables'), level: 4, pop: 0.8, size: 0.8, price: 7, minQuality: 0.85,
+    names: [tl('Le Grand Cerf (étoilé)'), tl('Palace Royal'), tl('Maison Lumière')],
     kinds: { prestige: 3, style: 1 },
   },
   {
-    id: 'export', label: 'l\'export', level: 5, pop: 0.7, size: 5, price: 3.8, minQuality: 0.75,
-    names: ['Importateur de Tokyo', 'Distributeur de Montréal', 'Pub de Dublin', 'Bar à bières de Berlin'],
+    id: 'export', label: tl('l\'export'), level: 5, pop: 0.7, size: 5, price: 3.8, minQuality: 0.75,
+    names: [tl('Importateur de Tokyo'), tl('Distributeur de Montréal'), tl('Pub de Dublin'), tl('Bar à bières de Berlin')],
     kinds: { style: 2, mix: 1, prestige: 2 },
   },
 ];
@@ -111,11 +112,11 @@ export interface Order {
 export const ORDER_BASE = [15, 80, 300, 1500, 6000] as const;
 /** L'ordinateur du stockage : chaque niveau ajoute une place au tableau des commandes. */
 export const COMPUTERS: readonly { name: string; slots: number; cost: number }[] = [
-  { name: 'Vieux minitel', slots: 2, cost: 0 },
-  { name: 'PC d\'occasion', slots: 3, cost: 1500 },
-  { name: 'Poste de bureau', slots: 4, cost: 40000 },
-  { name: 'Logiciel de gestion', slots: 5, cost: 400000 },
-  { name: 'Intelligence logistique', slots: 6, cost: 2000000 },
+  { name: tl('Vieux minitel'), slots: 2, cost: 0 },
+  { name: tl('PC d\'occasion'), slots: 3, cost: 1500 },
+  { name: tl('Poste de bureau'), slots: 4, cost: 40000 },
+  { name: tl('Logiciel de gestion'), slots: 5, cost: 400000 },
+  { name: tl('Intelligence logistique'), slots: 6, cost: 2000000 },
 ];
 /** Délai entre deux nouvelles commandes (s de jeu) : de 30 à 60 min. */
 export const ORDER_GAP_MIN_S = 30 * 60;
@@ -147,7 +148,7 @@ export function orderGems(o: Pick<Order, 'kind' | 'minQuality' | 'tip'>): number
 
 /** Libellés des types de commandes. */
 export const KIND_LABEL: Record<OrderKind, string> = {
-  classic: 'Commande', style: 'Style recherché', keg: 'Fûts', mix: 'Assortiment', urgent: 'Urgent', prestige: 'Prestige',
+  classic: tl('Commande'), style: tl('Style recherché'), keg: tl('Fûts'), mix: tl('Assortiment'), urgent: tl('Urgent'), prestige: tl('Prestige'),
 };
 
 /** Grossiste : il reprend n'importe quelle bière buvable (bouteilles ou fûts), à moitié prix environ d'une commande. Prix d'une bouteille de 33 cl. */
@@ -234,10 +235,10 @@ export function fits(o: Order, t: Tasting): boolean {
 /** Ce que demande la commande, en quelques mots. */
 export function orderAsk(o: Order): string {
   const want = o.want ? trendById(o.want)?.short : undefined;
-  const what = o.kind === 'keg' ? `${o.qty} fût${o.qty > 1 ? 's' : ''}` : `${o.qty} btl`;
+  const what = o.kind === 'keg' ? tl('{0} fût{1}', o.qty, o.qty > 1 ? 's' : '') : tl('{0} btl', o.qty);
   const parts = [what];
-  if (o.mix) parts.push(`${o.mix} bières différentes`);
+  if (o.mix) parts.push(tl('{0} bières différentes', o.mix));
   if (want) parts.push(want);
-  if (o.kind === 'prestige') parts.push('Excellente');
+  if (o.kind === 'prestige') parts.push(tl('Excellente'));
   return parts.join(' · ');
 }

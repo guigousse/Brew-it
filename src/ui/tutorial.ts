@@ -7,6 +7,7 @@
  * L'étape en cours est `game.tips` (sauvegardée) ; TUTO_DONE quand la visite est finie ou passée.
  */
 import { TUTO_DONE, type Game } from '../core/game';
+import { tl } from '../i18n';
 
 export type TourView = 'office' | 'workshop' | 'storage' | 'bar' | 'shop';
 
@@ -40,40 +41,40 @@ interface Step {
   done?: (g: Game, host: TourHost) => boolean;
 }
 
-const ROOM_NAME: Record<TourView, string> = { office: 'au bureau', workshop: 'à l\'atelier', storage: 'au stockage', bar: 'au bar', shop: 'au magasin' };
+const ROOM_NAME: Record<TourView, string> = { office: tl('au bureau'), workshop: tl('à l\'atelier'), storage: tl('au stockage'), bar: tl('au bar'), shop: tl('au magasin') };
 
 const brewed = (g: Game) => !!g.trial || g.batches.length > 0 || g.beers.length > 0;
 
 export const TOUR: readonly Step[] = [
   // ---- le bureau
-  { view: 'office', text: 'Salut, moi c\'est Gaston ! Je vais te faire visiter ta brasserie. On commence par le bureau.', next: 'C\'est parti' },
-  { view: 'office', target: 'computer', text: 'L\'ordinateur : tes clients y envoient leurs commandes. Tu y trouves aussi le grossiste et les tendances.', next: 'Suivant' },
-  { view: 'office', target: 'display', text: 'Le présentoir montre ta gamme : les bières que tu as créées.', next: 'Suivant' },
-  { view: 'office', target: 'officePlaque', text: 'Chaque pièce s\'améliore : touche son nom, en haut, pour voir ce que tu peux acheter.', next: 'Suivant' },
-  { view: 'office', target: 'nav:workshop', text: 'Allons à l\'atelier, là où naît la bière. Touche « Atelier ».', done: (_, h) => h.view() === 'workshop' },
+  { view: 'office', text: tl('Salut, moi c\'est Gaston ! Je vais te faire visiter ta brasserie. On commence par le bureau.'), next: tl('C\'est parti') },
+  { view: 'office', target: 'computer', text: tl('L\'ordinateur : tes clients y envoient leurs commandes. Tu y trouves aussi le grossiste et les tendances.'), next: tl('Suivant') },
+  { view: 'office', target: 'display', text: tl('Le présentoir montre ta gamme : les bières que tu as créées.'), next: tl('Suivant') },
+  { view: 'office', target: 'officePlaque', text: tl('Chaque pièce s\'améliore : touche son nom, en haut, pour voir ce que tu peux acheter.'), next: tl('Suivant') },
+  { view: 'office', target: 'nav:workshop', text: tl('Allons à l\'atelier, là où naît la bière. Touche « Atelier ».'), done: (_, h) => h.view() === 'workshop' },
   // ---- l'atelier
-  { view: 'workshop', target: 'mill', text: 'Le grain entre en haut et passe de machine en machine jusqu\'à la bouteille, en bas.', next: 'Suivant' },
-  { view: 'workshop', target: 'mash', text: 'Touche une machine pour voir ses réglages.', done: (_, h) => h.sheet() === 'station' },
-  { view: 'workshop', text: 'Les réglages changent le goût de la bière. J\'ai tout réglé pour ma blonde : garde-les pour l\'instant.', next: 'Suivant' },
-  { view: 'workshop', target: 'brewBtn', text: 'Lance ton premier brassin avec ce bouton.', done: brewed },
-  { view: 'workshop', target: 'nav:storage', text: 'Bravo ! La bière descend de machine en machine. Pendant ce temps, allons voir le stockage.', done: (_, h) => h.view() === 'storage' },
+  { view: 'workshop', target: 'mill', text: tl('Le grain entre en haut et passe de machine en machine jusqu\'à la bouteille, en bas.'), next: tl('Suivant') },
+  { view: 'workshop', target: 'mash', text: tl('Touche une machine pour voir ses réglages.'), done: (_, h) => h.sheet() === 'station' },
+  { view: 'workshop', text: tl('Les réglages changent le goût de la bière. J\'ai tout réglé pour ma blonde : garde-les pour l\'instant.'), next: tl('Suivant') },
+  { view: 'workshop', target: 'brewBtn', text: tl('Lance ton premier brassin avec ce bouton.'), done: brewed },
+  { view: 'workshop', target: 'nav:storage', text: tl('Bravo ! La bière descend de machine en machine. Pendant ce temps, allons voir le stockage.'), done: (_, h) => h.view() === 'storage' },
   // ---- le stockage
-  { view: 'storage', target: 'racks', text: 'Tes bouteilles arrivent ici, en caisses. Le surplus part chez le grossiste, qui te le rachète.', next: 'Suivant' },
-  { view: 'storage', target: 'nav:bar', text: 'Maintenant, le bar !', done: (_, h) => h.view() === 'bar' },
+  { view: 'storage', target: 'racks', text: tl('Tes bouteilles arrivent ici, en caisses. Le surplus part chez le grossiste, qui te le rachète.'), next: tl('Suivant') },
+  { view: 'storage', target: 'nav:bar', text: tl('Maintenant, le bar !'), done: (_, h) => h.view() === 'bar' },
   // ---- le bar
-  { view: 'bar', target: 'counter', text: 'Au bar, tes clients boivent ta bière en fût. Touche le comptoir pour brancher tes fûts.', next: 'Suivant' },
-  { view: 'bar', target: 'barBtns', text: 'Ici, lance des soirées et embauche un barman : plus de clients, plus de ventes.', next: 'Suivant' },
-  { view: 'bar', target: 'nav:shop', text: 'Au magasin : de la déco pour le bar, des boosts et de nouvelles étiquettes.', next: 'Suivant' },
-  { target: 'money', text: 'En haut, ton argent et tes diamants. Les commandes livrées rapportent des diamants.', next: 'Suivant' },
+  { view: 'bar', target: 'counter', text: tl('Au bar, tes clients boivent ta bière en fût. Touche le comptoir pour brancher tes fûts.'), next: tl('Suivant') },
+  { view: 'bar', target: 'barBtns', text: tl('Ici, lance des soirées et embauche un barman : plus de clients, plus de ventes.'), next: tl('Suivant') },
+  { view: 'bar', target: 'nav:shop', text: tl('Au magasin : de la déco pour le bar, des boosts et de nouvelles étiquettes.'), next: tl('Suivant') },
+  { target: 'money', text: tl('En haut, ton argent et tes diamants. Les commandes livrées rapportent des diamants.'), next: tl('Suivant') },
   // ---- la première bière
-  { target: 'nav:workshop', text: 'Retournons à l\'atelier : ta bière va bientôt sortir !', done: (_, h) => h.view() === 'workshop' },
+  { target: 'nav:workshop', text: tl('Retournons à l\'atelier : ta bière va bientôt sortir !'), done: (_, h) => h.view() === 'workshop' },
   {
     view: 'workshop',
     target: (g) => (g.tastable ? 'taste' : undefined),
-    text: (g) => (g.tastable ? 'Ta première bouteille est sortie : goûte-la !' : 'Ta bière arrive au bout de la chaîne… encore un instant.'),
+    text: (g) => (g.tastable ? tl('Ta première bouteille est sortie : goûte-la !') : tl('Ta bière arrive au bout de la chaîne… encore un instant.')),
     done: (g) => g.beers.length > 0,
   },
-  { target: 'nav:office', text: 'Ta première bière est dans ta gamme ! Livre-la à tes clients depuis l\'ordinateur du bureau. Bonne brasse !', next: 'Terminer' },
+  { target: 'nav:office', text: tl('Ta première bière est dans ta gamme ! Livre-la à tes clients depuis l\'ordinateur du bureau. Bonne brasse !'), next: tl('Terminer') },
 ];
 
 /** Le doigt pixelisé (gant blanc, manchette bleue), pointé vers le haut : le bout de l'index est en (4, 0). */
@@ -182,7 +183,7 @@ export class Tour {
     if (g.tips === 0 && this.host.view() !== 'office' && this.key === '') this.host.goView('office');
     // hors de la pièce de l'étape : on montre l'onglet pour y revenir
     const away = s.view && this.host.view() !== s.view;
-    const text = away ? `Reviens ${ROOM_NAME[s.view!]} pour continuer la visite.` : typeof s.text === 'function' ? s.text(g) : s.text;
+    const text = away ? tl('Reviens {0} pour continuer la visite.', ROOM_NAME[s.view!]) : typeof s.text === 'function' ? s.text(g) : s.text;
     const tid = away ? (`nav:${s.view}` as TourTarget) : typeof s.target === 'function' ? s.target(g) : s.target;
     const el = tid ? this.host.target(tid) : null;
     const key = `${g.tips}|${text}|${away}`;
@@ -200,7 +201,7 @@ export class Tour {
       if (g.tips < TOUR.length - 1) {
         const skip = document.createElement('button');
         skip.className = 'tour-skip';
-        skip.textContent = 'Passer la visite';
+        skip.textContent = tl('Passer la visite');
         skip.onclick = () => {
           g.tips = TUTO_DONE;
           this.hide();

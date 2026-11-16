@@ -23,6 +23,7 @@ import { sfx } from '../platform/audio';
 import { showRewardedAd } from '../platform/ads';
 import { Tour, type TourTarget, type TourView } from './tutorial';
 import { compact, countdown, dialTime } from './format';
+import { chosenLang, LANGS, locale, setLang, systemLang, tl, type Lang } from '../i18n';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const el = document.createElement(tag);
@@ -30,12 +31,14 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
   if (text != null) el.textContent = text;
   return el;
 };
-const money = (v: number) => `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: v % 1 ? 2 : 0 })} €`;
-const moneyInt = (v: number) => `${Math.floor(v).toLocaleString('fr-FR')} €`;
+/** Couleur de la bière (« Blonde » est aussi un style : la couleur a sa propre traduction). */
+const colorName = (c: string) => tl(c === 'Blonde' ? 'Blonde (couleur)' : c);
+const money = (v: number) => `${v.toLocaleString(locale, { maximumFractionDigits: 2, minimumFractionDigits: v % 1 ? 2 : 0 })} €`;
+const moneyInt = (v: number) => `${Math.floor(v).toLocaleString(locale)} €`;
 /** Un volume en litres : une décimale sous 10 L. */
-const liters = (v: number) => `${v < 10 ? (Math.round(v * 10) / 10).toLocaleString('fr-FR') : Math.round(v).toLocaleString('fr-FR')} L`;
-const moneyShort = (v: number) => (v >= 1e6 ? `${(v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} M€` : v >= 1e4 ? `${Math.round(v / 1000)} k€` : moneyInt(v));
-const fmtRate = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: v < 10 ? 1 : 0 });
+const liters = (v: number) => `${v < 10 ? (Math.round(v * 10) / 10).toLocaleString(locale) : Math.round(v).toLocaleString(locale)} L`;
+const moneyShort = (v: number) => (v >= 1e6 ? `${(v / 1e6).toLocaleString(locale, { maximumFractionDigits: 1 })} M€` : v >= 1e4 ? `${Math.round(v / 1000)} k€` : moneyInt(v));
+const fmtRate = (v: number) => v.toLocaleString(locale, { maximumFractionDigits: v < 10 ? 1 : 0 });
 const VERDICT_CLASS: Record<string, string> = { Imbuvable: 'v-bad', Médiocre: 'v-meh', Correcte: 'v-ok', Bonne: 'v-good', Excellente: 'v-top' };
 
 /** Bouton d'action rond : une icône, une pastille d'info, un petit nom dessous. */
@@ -52,14 +55,14 @@ const AD_ICON: Record<AdId, IconId> = { flyers: 'poster', paper: 'clipboard', ra
 
 /** L'effet d'une campagne en une ligne : « 6 h · lettres ×2 · popularité +10 % · une lettre tout de suite ». */
 export function adEffect(ad: AdDef): string {
-  const fr = (x: number) => String(x).replace('.', ',');
+  const fr = (x: number) => x.toLocaleString(locale);
   const nb = '\u00a0'; // espace insécable : « +10 % » ne se coupe pas
-  const parts = [`${ad.duration / 3600}${nb}h`, `lettres${nb}×${fr(ad.orderBoost)}`, `popularité +${Math.round(ad.pop * 100)}${nb}%`];
-  if (ad.letters === 1) parts.push('une lettre tout de suite');
-  else if (ad.letters > 1) parts.push('emplacements remplis');
-  if (ad.pay !== 1) parts.push(`commandes +${Math.round((ad.pay - 1) * 100)}${nb}%`);
-  if (ad.prestige) parts.push('une commande de prestige');
-  if (ad.bar !== 1) parts.push(`bar +${Math.round((ad.bar - 1) * 100)}${nb}% de clients`);
+  const parts = [`${ad.duration / 3600}${nb}h`, tl('lettres{0}×{1}', nb, fr(ad.orderBoost)), tl('popularité +{0}{1}%', Math.round(ad.pop * 100), nb)];
+  if (ad.letters === 1) parts.push(tl('une lettre tout de suite'));
+  else if (ad.letters > 1) parts.push(tl('emplacements remplis'));
+  if (ad.pay !== 1) parts.push(tl('commandes +{0}{1}%', Math.round((ad.pay - 1) * 100), nb));
+  if (ad.prestige) parts.push(tl('une commande de prestige'));
+  if (ad.bar !== 1) parts.push(tl('bar +{0}{1}% de clients', Math.round((ad.bar - 1) * 100), nb));
   return parts.join(' · ');
 }
 
@@ -78,7 +81,7 @@ function setPlaque(b: HTMLButtonElement, text: string, canUp: boolean, upLabel: 
   const t = b.querySelector<HTMLElement>('.plaque-text')!;
   if (t.textContent !== text) t.textContent = text;
   b.classList.toggle('alert', canUp);
-  const aria = canUp ? `${text} : ${upLabel} possible` : text;
+  const aria = canUp ? tl('{0} : {1} possible', text, upLabel) : text;
   if (b.getAttribute('aria-label') !== aria) b.setAttribute('aria-label', aria);
 }
 
@@ -91,15 +94,15 @@ const DECOR_ICON: Record<DecorId, IconId> = {
 type ShopTab = 'bar' | 'boosts' | 'labels' | 'gems';
 /** Onglets du magasin, de gauche à droite. */
 const SHOP_TABS: readonly { id: ShopTab; name: string; icon: IconId }[] = [
-  { id: 'bar', name: 'Bar', icon: 'plant' },
-  { id: 'boosts', name: 'Boosts', icon: 'bolt' },
-  { id: 'labels', name: 'Étiquettes', icon: 'labels' },
-  { id: 'gems', name: 'Diamants', icon: 'gem' },
+  { id: 'bar', name: tl('Bar'), icon: 'plant' },
+  { id: 'boosts', name: tl('Boosts'), icon: 'bolt' },
+  { id: 'labels', name: tl('Étiquettes'), icon: 'labels' },
+  { id: 'gems', name: tl('Diamants'), icon: 'gem' },
 ];
 /** Icône de chaque effet (poste de boost), en haut à droite de l'écran quand il est actif : la marmite des machines… */
 const EFFECT_ICON: Record<BoostChannel, IconId> = { brew: 'brew', yeast: 'flask', bar: 'mug', wholesale: 'truck' };
 /** Le nom de chaque effet, pour la lecture d'écran. */
-const EFFECT_NAME: Record<BoostChannel, string> = { brew: 'Machines', yeast: 'Fermentation et garde', bar: 'Clients du bar', wholesale: 'Grossiste' };
+const EFFECT_NAME: Record<BoostChannel, string> = { brew: tl('Machines'), yeast: tl('Fermentation et garde'), bar: tl('Clients du bar'), wholesale: tl('Grossiste') };
 /** Icône de chaque boost, dans le magasin. */
 const BOOST_ICON: Record<BoostId, IconId> = {
   rush: 'flame', cadence: 'fast2', nightShift: 'moon', fullSpeed: 'fast3', yeast: 'yeast', happyHour: 'mug', buzz: 'bubble', broker: 'truck', openGate: 'crate', prospect: 'envelope',
@@ -116,25 +119,25 @@ function furnitureEffects(id: DecorId): string[] {
   const pct = (m: number) => `+${Math.round((m - 1) * 100)} %`;
   const out: string[] = [];
   if (f.clients) out.push(`clients ${pct(f.clients)}`);
-  if (f.seats) out.push(`+${f.seats} places`);
+  if (f.seats) out.push(tl('+{0} places', f.seats));
   if (f.price) out.push(`verres ${pct(f.price)}`);
-  if (f.pop) out.push(`gamme connue ${pct(f.pop)}`);
+  if (f.pop) out.push(tl('gamme connue {0}', pct(f.pop)));
   return out;
 }
 
 /** Effet d'un boost en quelques mots : multiplicateur et durée. */
 function boostShort(b: BoostDef): string {
-  const n = (v: number) => String(v).replace('.', ',');
-  const dur = b.minutes >= 60 ? `${b.minutes / 60} h` : `${b.minutes} min`;
-  if (!b.channel) return 'immédiat';
-  if (b.channel === 'bar') return `clients ×${n(b.mult)}${b.priceMult ? ` · verres −${Math.round((1 - b.priceMult) * 100)} %` : ''} · ${dur}`;
-  if (b.channel === 'wholesale') return `prix ×${n(b.mult)} · ${dur}`;
-  if (b.id === 'openGate') return `sans limite · ${dur}`;
-  return `×${n(b.mult)} · ${dur}`;
+  const n = (v: number) => v.toLocaleString(locale);
+  const dur = b.minutes >= 60 ? `${b.minutes / 60} h` : tl('{0} min', b.minutes);
+  if (!b.channel) return tl('immédiat');
+  if (b.channel === 'bar') return tl('clients ×{0}{1} · {2}', n(b.mult), b.priceMult ? tl(' · verres −{0} %', Math.round((1 - b.priceMult) * 100)) : '', dur);
+  if (b.channel === 'wholesale') return tl('prix ×{0} · {1}', n(b.mult), dur);
+  if (b.id === 'openGate') return tl('sans limite · {0}', dur);
+  return tl('×{0} · {1}', n(b.mult), dur);
 }
 
 /** Un nombre de diamants, en toutes lettres. */
-const gemsText = (n: number) => `${n} diamant${n > 1 ? 's' : ''}`;
+const gemsText = (n: number) => tl('{0} diamant{1}', n, n > 1 ? 's' : '');
 
 /** Nom de la pièce en haut à gauche. */
 function roomTitle(plaque: HTMLElement): HTMLElement {
@@ -144,19 +147,19 @@ function roomTitle(plaque: HTMLElement): HTMLElement {
 }
 
 /** Ce qu'on affiche à la place d'un temps quand la file ne se videra pas. */
-const BLOCKED_TEXT: Record<'storage' | 'money' | 'slow', string> = { storage: '⏸ stockage plein', money: '⏸ fonds insuffisants', slow: 'plus de 24 h' };
+const BLOCKED_TEXT: Record<'storage' | 'money' | 'slow', string> = { storage: tl('⏸ stockage plein'), money: tl('⏸ fonds insuffisants'), slow: tl('plus de 24 h') };
 
 /** Explication sous la production restante quand la file va se bloquer. */
 function blockedHint(res: { ends: number[]; blocked: 'storage' | 'money' | 'slow' | null }, format?: Format): string {
   const n = res.ends.length;
-  const after = `La file se bloque après ${n} brassin${n > 1 ? 's' : ''}`;
+  const after = tl('La file se bloque après {0} brassin{1}', n, n > 1 ? 's' : '');
   if (res.blocked === 'storage') {
     return format === 'keg'
-      ? `${after} : le stockage sera plein de fûts. Sers-les au bar, livre des commandes de fûts ou vends-en au grossiste (dans la limite de son quota du jour) ; sinon programme moins de fûts, ou agrandis le stockage.`
-      : `${after} : le stockage sera plein. Livre des commandes, vends au grossiste (dans la limite de son quota du jour) ou agrandis le stockage.`;
+      ? tl('{0} : le stockage sera plein de fûts. Sers-les au bar, livre des commandes de fûts ou vends-en au grossiste (dans la limite de son quota du jour) ; sinon programme moins de fûts, ou agrandis le stockage.', after)
+      : tl('{0} : le stockage sera plein. Livre des commandes, vends au grossiste (dans la limite de son quota du jour) ou agrandis le stockage.', after);
   }
-  if (res.blocked === 'money') return `${after} : il n'y aura plus de quoi payer les ingrédients.`;
-  return 'La file entière prendra plus de 24 h.';
+  if (res.blocked === 'money') return tl('{0} : il n\'y aura plus de quoi payer les ingrédients.', after);
+  return tl('La file entière prendra plus de 24 h.');
 }
 
 /** Icône de chaque événement du bar. */
@@ -183,39 +186,39 @@ function img(canvas: HTMLCanvasElement, cls = 'pix'): HTMLImageElement {
 /** Les pièces : le bureau, puis le trajet de la bière ; on glisse de l'une à l'autre. */
 export type RoomId = 'office' | 'workshop' | 'storage' | 'bar';
 const ROOMS: readonly { id: RoomId; name: string }[] = [
-  { id: 'office', name: 'Bureau' },
-  { id: 'workshop', name: 'Atelier' },
-  { id: 'storage', name: 'Stockage' },
-  { id: 'bar', name: 'Bar' },
+  { id: 'office', name: tl('Bureau') },
+  { id: 'workshop', name: tl('Atelier') },
+  { id: 'storage', name: tl('Stockage') },
+  { id: 'bar', name: tl('Bar') },
 ];
 /** Ce que montre l'écran : une des pièces, ou le magasin. */
 export type View = RoomId | 'shop';
 /** Onglets de la barre de navigation, de gauche à droite. */
 const TABS: readonly { id: View; name: string; icon: IconId }[] = [
-  { id: 'office', name: 'Bureau', icon: 'office' },
-  { id: 'workshop', name: 'Atelier', icon: 'flask' },
-  { id: 'storage', name: 'Stockage', icon: 'crate' },
-  { id: 'bar', name: 'Bar', icon: 'mug' },
-  { id: 'shop', name: 'Magasin', icon: 'cart' },
+  { id: 'office', name: tl('Bureau'), icon: 'office' },
+  { id: 'workshop', name: tl('Atelier'), icon: 'flask' },
+  { id: 'storage', name: tl('Stockage'), icon: 'crate' },
+  { id: 'bar', name: tl('Bar'), icon: 'mug' },
+  { id: 'shop', name: tl('Magasin'), icon: 'cart' },
 ];
 const isRoom = (v: View): v is RoomId => ROOMS.some((r) => r.id === v);
 
 /** Couleur de chaque source de ventes dans le graphique (palette validée sur le fond des panneaux). */
 const SOURCE: Record<SaleSource, { name: string; color: string }> = {
-  bar: { name: 'Bar', color: '#b8862a' },
-  orders: { name: 'Commandes', color: '#3f88d4' },
-  wholesale: { name: 'Grossiste', color: '#d45c8e' },
+  bar: { name: tl('Bar'), color: '#b8862a' },
+  orders: { name: tl('Commandes'), color: '#3f88d4' },
+  wholesale: { name: tl('Grossiste'), color: '#d45c8e' },
 };
 
 /** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
 export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'wholesale';
 const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
-  { id: 'dashboard', name: 'Tableau de bord', icon: 'chart' },
-  { id: 'messages', name: 'Messages', icon: 'bubble' },
-  { id: 'orders', name: 'Commandes', icon: 'clipboard' },
-  { id: 'staff', name: 'Personnel', icon: 'staff' },
-  { id: 'trends', name: 'Tendances', icon: 'trend' },
-  { id: 'wholesale', name: 'Grossiste', icon: 'truck' },
+  { id: 'dashboard', name: tl('Tableau de bord'), icon: 'chart' },
+  { id: 'messages', name: tl('Messages'), icon: 'bubble' },
+  { id: 'orders', name: tl('Commandes'), icon: 'clipboard' },
+  { id: 'staff', name: tl('Personnel'), icon: 'staff' },
+  { id: 'trends', name: tl('Tendances'), icon: 'trend' },
+  { id: 'wholesale', name: tl('Grossiste'), icon: 'truck' },
 ];
 /** Un message reçu au bureau (commandes, tendances, brassins…), daté en temps de jeu. */
 interface Message { at: number; text: string; kind: 'good' | 'bad' | 'info'; icon: IconId; read: boolean }
@@ -245,12 +248,12 @@ const gameClock = (t: number) => {
 /** Ancienneté d'un message, en temps de jeu. */
 const ago = (s: number) => {
   const m = Math.floor(Math.max(0, s) / 60);
-  return m < 1 ? 'à l\'instant' : m < 60 ? `il y a ${m} min` : m < 24 * 60 ? `il y a ${Math.floor(m / 60)} h` : `il y a ${Math.floor(m / 1440)} j`;
+  return m < 1 ? tl('à l\'instant') : m < 60 ? tl('il y a {0} min', m) : m < 24 * 60 ? tl('il y a {0} h', Math.floor(m / 60)) : tl('il y a {0} j', Math.floor(m / 1440));
 };
 
 const duration = (s: number) => {
   const m = Math.max(0, Math.floor(s / 60));
-  return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`;
+  return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : tl('{0} min', m);
 };
 
 export interface AppCallbacks {
@@ -283,7 +286,7 @@ export class App {
   private stage = h('main', 'stage');
   private sceneWrap = h('div', 'scene-wrap');
   private overlays = new Map<StationId, { btn: HTMLButtonElement; label: HTMLElement; bar: HTMLElement; text: HTMLElement }>();
-  private tasteBtn = h('button', 'taste-btn hidden', '🍺 Goûter');
+  private tasteBtn = h('button', 'taste-btn hidden', tl('🍺 Goûter'));
   /** Plaque du niveau de la brasserie, en haut à gauche de la scène. */
   private plaque = roomPlaque();
   private announcedTaste = -1;
@@ -292,12 +295,12 @@ export class App {
   /** Actions de la pièce : des boutons ronds flottants en bas à droite, l'action principale en dessous. */
   private fabs = h('div', 'fabs');
   private tabbar = h('nav', 'tabbar');
-  private brewBtn = fab('brew', 'Brasser');
+  private brewBtn = fab('brew', tl('Brasser'));
   /** La brasserie était-elle déjà à l'arrêt au rendu précédent ? (la notification ne part qu'au moment où elle s'arrête) */
   private wasStopped = false;
-  private rangeBtn = fab('range', 'Ma gamme');
-  private eventsBtn = fab('events', 'Événements');
-  private barmanBtn = fab('barman', 'Barman en renfort');
+  private rangeBtn = fab('range', tl('Ma gamme'));
+  private eventsBtn = fab('events', tl('Événements'));
+  private barmanBtn = fab('barman', tl('Barman en renfort'));
   /** Le magasin : trois onglets, et le rayon affiché dessous. */
   private shopPane = h('div', 'shop');
   private shopBody = h('div', 'shop-body');
@@ -386,10 +389,10 @@ export class App {
     this.harvestGems.onclick = () => this.collectOfflineGems();
     this.harvests.append(this.harvestGems, this.harvest);
     const opts = h('button', 'icon-btn', '⚙');
-    opts.setAttribute('aria-label', 'Options');
+    opts.setAttribute('aria-label', tl('Options'));
     opts.onclick = () => this.openOptions();
     this.gemsPill.append(iconCanvas('gem', 1, 'gems-icon'), this.gemsEl);
-    this.gemsPill.setAttribute('aria-label', 'Diamants : la boutique de diamants');
+    this.gemsPill.setAttribute('aria-label', tl('Diamants : la boutique de diamants'));
     this.gemsPill.onclick = () => this.openShop('gems');
     this.header.append(logo, this.gemsPill, pill, opts);
     for (const t of TABS) {
@@ -424,14 +427,15 @@ export class App {
     // bureau : la fenêtre sur l'atelier, le panneau des commandes, le présentoir de la gamme et l'ordinateur
     this.officeWrap.append(this.officeRoom.canvas);
     const OFFICE_HITS = {
-      window: { label: 'Fenêtre : aller à l\'atelier', run: () => this.goView('workshop') },
-      board: { label: 'Panneau des commandes', run: () => this.openComputer('orders') },
-      display: { label: 'Présentoir : ma gamme', run: () => this.open({ kind: 'range' }) },
-      computer: { label: 'Ordinateur', run: () => this.openComputer() },
+      window: { label: tl('Fenêtre : aller à l\'atelier'), run: () => this.goView('workshop') },
+      board: { label: tl('Panneau des commandes'), run: () => this.openComputer('orders') },
+      display: { label: tl('Présentoir : ma gamme'), run: () => this.open({ kind: 'range' }) },
+      computer: { label: tl('Ordinateur'), run: () => this.openComputer() },
     };
     for (const hit of this.officeRoom.hits()) {
       const el = h('button', 'station-hit');
       el.setAttribute('aria-label', OFFICE_HITS[hit.id].label);
+      el.dataset.hit = hit.id;
       el.onclick = OFFICE_HITS[hit.id].run;
       if (hit.id === 'computer') this.computerHit = el;
       this.officeWrap.append(el);
@@ -443,7 +447,8 @@ export class App {
     this.storageWrap.append(this.storageRoom.canvas);
     for (const hit of this.storageRoom.hits()) {
       const el = h('button', 'station-hit');
-      el.setAttribute('aria-label', 'Rayonnages');
+      el.setAttribute('aria-label', tl('Rayonnages'));
+      el.dataset.hit = 'racks';
       el.onclick = () => this.open({ kind: 'storage' });
       this.storageWrap.append(el);
       this.roomHits.push({ el, rect: hit.rect });
@@ -454,13 +459,14 @@ export class App {
     this.barWrap.append(this.barRoom.canvas);
     const counter = this.barRoom.hits(1)[0]!;
     const counterEl = h('button', 'station-hit');
-    counterEl.setAttribute('aria-label', 'Comptoir');
+    counterEl.setAttribute('aria-label', tl('Comptoir'));
+    counterEl.dataset.hit = 'counter';
     counterEl.onclick = () => this.open({ kind: 'bar' });
     this.barWrap.append(counterEl);
     this.roomHits.push({ el: counterEl, rect: counter.rect });
     // le panneau lumineux au-dessus des bouteilles : on y écrit son message (sans panneau, c'est le comptoir)
     const signEl = h('button', 'station-hit');
-    signEl.setAttribute('aria-label', 'Panneau lumineux : changer le message');
+    signEl.setAttribute('aria-label', tl('Panneau lumineux : changer le message'));
     signEl.onclick = () => (this.game().hasFurniture('neon') ? this.openBarMessage() : this.open({ kind: 'bar' }));
     this.barWrap.append(signEl);
     this.roomHits.push({ el: signEl, rect: this.signRect });
@@ -507,18 +513,18 @@ export class App {
       if (missing <= 0) return;
       e.stopPropagation();
       e.preventDefault();
-      this.toast(`Il te manque ${moneyInt(Math.ceil(missing))}`, 'bad');
+      this.toast(tl('Il te manque {0}', moneyInt(Math.ceil(missing))), 'bad');
     }, true);
     // Gaston fait visiter la brasserie : le doigt montre, la surbrillance isole, la bulle explique
     const tourTargets: Record<string, () => HTMLElement | HTMLElement[] | null | undefined> = {
       computer: () => this.computerHit,
-      display: () => this.roomHits.find((x) => x.el.getAttribute('aria-label')?.startsWith('Présentoir'))?.el,
+      display: () => this.roomHits.find((x) => x.el.dataset.hit === 'display')?.el,
       officePlaque: () => this.officePlaque,
       mill: () => this.overlays.get('mill')?.label,
       mash: () => this.overlays.get('mash')?.btn,
       brewBtn: () => this.brewBtn,
-      racks: () => this.roomHits.find((x) => x.el.getAttribute('aria-label') === 'Rayonnages')?.el,
-      counter: () => this.roomHits.find((x) => x.el.getAttribute('aria-label') === 'Comptoir')?.el,
+      racks: () => this.roomHits.find((x) => x.el.dataset.hit === 'racks')?.el,
+      counter: () => this.roomHits.find((x) => x.el.dataset.hit === 'counter')?.el,
       barBtns: () => [this.eventsBtn, this.barmanBtn],
       money: () => [this.gemsPill, this.moneyPill],
       taste: () => (this.tasteBtn.classList.contains('hidden') ? null : this.tasteBtn),
@@ -639,8 +645,8 @@ export class App {
       const running = all.filter((b) => !b.waiting);
       const left = running.length ? Math.min(...running.map((b) => b.duration - b.elapsed)) : 0;
       o.text.textContent = batch
-        ? id === 'bottling' && g.bottlingBlocked ? 'Stockage plein ⏸'
-        : id === 'bottling' && g.tastable === batch ? 'À goûter ⏸'
+        ? id === 'bottling' && g.bottlingBlocked ? tl('Stockage plein ⏸')
+        : id === 'bottling' && g.tastable === batch ? tl('À goûter ⏸')
         : many > 1 ? `${STATIONS[id].step}${running.length ? ` · ${clock(left)}` : ' ⏸'}`
         : batch.waiting ? `${STATIONS[id].step} ⏸` : `${STATIONS[id].step} · ${clock(left)}`
         : STATIONS[id].step;
@@ -677,7 +683,7 @@ export class App {
   update(): void {
     const g = this.game();
     if (!this.moneyAnim) this.moneyEl.textContent = compact(g.money);
-    const moneyAria = `Argent : ${moneyInt(g.money)}`;
+    const moneyAria = tl('Argent : {0}', moneyInt(g.money));
     if (this.moneyPill.getAttribute('aria-label') !== moneyAria) this.moneyPill.setAttribute('aria-label', moneyAria);
     this.renderBoostHud(g);
     if (this.gemsHold && performance.now() >= this.gemsHold.until) this.gemsHold = null;
@@ -696,12 +702,12 @@ export class App {
     this.harvestGems.classList.toggle('hidden', offGems <= 0);
     if (earned > 0) {
       const text = `+${moneyShort(earned)}`;
-      const key = `${text}${doubled ? '×2' : ''}`;
+      const key = `${text}${doubled ? tl('×2') : ''}`;
       if (this.harvest.dataset.text !== key) {
         this.harvest.dataset.text = key;
         this.harvest.replaceChildren(h('span', 'harvest-bag', '💰'), h('span', 'harvest-value', text));
-        if (doubled) this.harvest.append(h('span', 'harvest-x2', '×2'));
-        this.harvest.setAttribute('aria-label', `Récolter ${moneyInt(earned)} gagnés pendant ton absence`);
+        if (doubled) this.harvest.append(h('span', 'harvest-x2', tl('×2')));
+        this.harvest.setAttribute('aria-label', tl('Récolter {0} gagnés pendant ton absence', moneyInt(earned)));
       }
     }
     if (offGems > 0) {
@@ -709,7 +715,7 @@ export class App {
       if (this.harvestGems.dataset.text !== text) {
         this.harvestGems.dataset.text = text;
         this.harvestGems.replaceChildren(iconCanvas('gem', 1, 'gems-icon'), h('span', 'harvest-value', text));
-        this.harvestGems.setAttribute('aria-label', `Récolter ${gemsText(offGems)} gagnés pendant ton absence`);
+        this.harvestGems.setAttribute('aria-label', tl('Récolter {0} gagnés pendant ton absence', gemsText(offGems)));
       }
     }
     // les deux boutons côte à côte ne doivent pas mordre sur l'étiquette de la pièce : sur un écran étroit,
@@ -732,45 +738,45 @@ export class App {
     // la brasserie à l'arrêt se voit partout (après le tutoriel) : « 0 » en rouge sur Brasser, « ! » sur l'onglet Atelier, et une notification
     const stopped = g.stopped && g.tips >= TUTO_DONE;
     setFab(this.brewBtn, g.planned ? String(g.planned) : stopped ? '0' : '', can.ok && !g.planned ? 'ready' : '',
-      g.planned ? `Brasser : ${g.planned} programmé${g.planned > 1 ? 's' : ''}` : stopped ? 'Brasser : la brasserie est à l\'arrêt' : 'Brasser');
+      g.planned ? tl('Brasser : {0} programmé{1}', g.planned, g.planned > 1 ? 's' : '') : stopped ? tl('Brasser : la brasserie est à l\'arrêt') : tl('Brasser'));
     this.brewBtn.querySelector('.fab-badge')!.classList.toggle('stop', stopped);
     if (stopped && !this.wasStopped) {
-      this.toast('La brasserie est à l\'arrêt : programme des brassins', 'bad', {
-        label: 'Brasser', run: () => {
+      this.toast(tl('La brasserie est à l\'arrêt : programme des brassins'), 'bad', {
+        label: tl('Brasser'), run: () => {
           this.goView('workshop');
           this.open({ kind: 'brew' });
         },
       }, 8000);
     }
     this.wasStopped = stopped;
-    setFab(this.rangeBtn, trial ? '!' : '', trial ? 'alert' : '', `Ma gamme : ${g.beers.length}/${g.rangeSlots}`);
+    setFab(this.rangeBtn, trial ? '!' : '', trial ? 'alert' : '', tl('Ma gamme : {0}/{1}', g.beers.length, g.rangeSlots));
     const ready = g.readyOrders.length;
     const emptyTap = g.taps.some((t) => t.glasses <= 0);
     const kegsReady = g.beers.some((b) => b.kegs.length > 0);
     this.syncKegHits();
     const nextBar = BAR[g.barLevel];
     const eventReady = !g.partying && g.time >= g.partyReadyAt;
-    setFab(this.eventsBtn, g.partying ? clock(g.partyUntil - g.time) : '', g.partying ? 'alert' : '', g.partying ? `${g.barEvent.name} en cours` : 'Événements');
+    setFab(this.eventsBtn, g.partying ? clock(g.partyUntil - g.time) : '', g.partying ? 'alert' : '', g.partying ? tl('{0} en cours', g.barEvent.name) : tl('Événements'));
     this.eventsBtn.classList.toggle('dim', !g.partying && !eventReady);
     // barman : temps restant de son contrat ; le bouton s'allume quand un fût attend d'être branché
     const left = g.barmanUntil - g.time;
-    setFab(this.barmanBtn, g.barmanOn ? (left >= 3600 ? `${Math.ceil(left / 3600)} h` : `${Math.ceil(left / 60)} min`) : '',
-      g.barmanOn ? 'alert' : emptyTap && kegsReady ? 'ready' : '', g.barmanOn ? `Barman en renfort : encore ${duration(left)}` : 'Embaucher un barman');
+    setFab(this.barmanBtn, g.barmanOn ? (left >= 3600 ? `${Math.ceil(left / 3600)} h` : tl('{0} min', Math.ceil(left / 60))) : '',
+      g.barmanOn ? 'alert' : emptyTap && kegsReady ? 'ready' : '', g.barmanOn ? tl('Barman en renfort : encore {0}', duration(left)) : tl('Embaucher un barman'));
     // améliorations possibles : la flèche brille
     const stationUp = STATION_ORDER.some((id) => g.level(id) < MAX_LEVEL && g.money >= g.upgradeCost(id));
     const nextStore = STORAGE[g.storageLevel];
     const nextPc = COMPUTERS[g.computerLevel];
     // l'ordinateur (l'enveloppe est dessinée sur son écran) : son nom dit les commandes en attente
     const unread = this.unread;
-    this.computerHit?.setAttribute('aria-label', `Ordinateur : ${g.orders.length} commande${g.orders.length > 1 ? 's' : ''}${ready ? `, ${ready} à livrer` : ''}${unread ? `, ${unread} message${unread > 1 ? 's' : ''}` : ''}`);
+    this.computerHit?.setAttribute('aria-label', tl('Ordinateur : {0} commande{1}{2}{3}', g.orders.length, g.orders.length > 1 ? 's' : '', ready ? tl(', {0} à livrer', ready) : '', unread ? tl(', {0} message{1}', unread, unread > 1 ? 's' : '') : ''));
     this.fabs.classList.toggle('hidden', !isRoom(this.view) || !!this.openSheet);
     // les notifications se posent au-dessus du panneau ouvert
     const sheetTop = this.openSheet ? this.sheet.getBoundingClientRect().top : 0;
     this.root.style.setProperty('--toast-bottom', sheetTop ? `${Math.round(window.innerHeight - sheetTop)}px` : 'var(--bottom-h, 70px)');
     // le tutoriel montre le bouton dont il parle
-    setPlaque(this.plaque, `★ ${g.breweryLevel} · ${g.breweryName}`, stationUp, 'amélioration');
+    setPlaque(this.plaque, `★ ${g.breweryLevel} · ${g.breweryName}`, stationUp, tl('amélioration'));
     setPlaque(this.storagePlaque, `▣ ${STORAGE[g.storageLevel - 1]!.name}`, !!nextStore && g.money >= nextStore.cost, 'agrandissement');
-    setPlaque(this.officePlaque, `▣ ${COMPUTERS[g.computerLevel - 1]!.name}`, !!nextPc && g.money >= nextPc.cost, 'amélioration');
+    setPlaque(this.officePlaque, `▣ ${COMPUTERS[g.computerLevel - 1]!.name}`, !!nextPc && g.money >= nextPc.cost, tl('amélioration'));
     setPlaque(this.barPlaque, `★ ${g.barLevel} · ${g.bar.name}`, !!nextBar && g.money >= nextBar.cost, 'agrandissement');
     // pastilles des onglets de pièces
     const badges: Record<RoomId, string> = {
@@ -911,7 +917,7 @@ export class App {
     const def = STATIONS[id];
     const lv = g.level(id);
     const body = this.frameSheet(`${def.names[lv - 1]}`, stationCanvas(id, lv));
-    body.append(h('div', 'step-tag', `${def.step} · niveau ${lv}/${MAX_LEVEL}`));
+    body.append(h('div', 'step-tag', tl('{0} · niveau {1}/{2}', def.step, lv, MAX_LEVEL)));
     const batch = g.batchAt(id);
     if (def.strain) {
       const row = h('div', 'chips');
@@ -924,7 +930,7 @@ export class App {
         });
         row.append(c);
       }
-      body.append(h('div', 'section-title', 'Levure'), row, desc);
+      body.append(h('div', 'section-title', tl('Levure')), row, desc);
     }
     const knobs = h('div', 'knob-row');
     for (const k of def.knobs) {
@@ -937,13 +943,13 @@ export class App {
     const tankCost = g.tankCost(id);
     if (TANK_STAGES.includes(id)) {
       const row = h('div', 'deal-row');
-      row.append(h('span', 'stats-line strong', `Cuves : ${g.tankCount(id)}/${MAX_TANKS}`));
+      row.append(h('span', 'stats-line strong', tl('Cuves : {0}/{1}', g.tankCount(id), MAX_TANKS)));
       if (tankCost != null) {
-        const b = this.btn('btn small', `+ 1 cuve · ${moneyShort(tankCost)}`, () => {
+        const b = this.btn('btn small', tl('+ 1 cuve · {0}', moneyShort(tankCost)), () => {
           const r = g.addTank(id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('repair');
-          this.toast('Nouvelle cuve installée', 'good');
+          this.toast(tl('Nouvelle cuve installée'), 'good');
           this.sheetKey = '';
         });
         this.costGate(b, tankCost);
@@ -953,7 +959,7 @@ export class App {
     }
     // amélioration
     const up = h('div', 'card upgrade');
-    up.append(h('div', 'section-title', 'Améliorer'));
+    up.append(h('div', 'section-title', tl('Améliorer')));
     // On ne dévoile que le palier suivant : la surprise reste entière pour les niveaux d'après.
     const levels = h('div', 'levels');
     const cell = (i: number, tag: string, cls: string) => {
@@ -961,21 +967,21 @@ export class App {
       c.append(h('div', 'section-title', tag), img(stationCanvas(id, i), 'pix level-pic'), h('div', 'level-name', def.names[i - 1]!), h('div', 'level-perk', def.perks[i - 1]!));
       return c;
     };
-    levels.append(cell(lv, `Actuel · niv. ${lv}`, 'done'));
-    if (lv < MAX_LEVEL) levels.append(h('div', 'level-arrow', '➜'), cell(lv + 1, `Suivant · niv. ${lv + 1}`, 'current'));
+    levels.append(cell(lv, tl('Actuel · niv. {0}', lv), 'done'));
+    if (lv < MAX_LEVEL) levels.append(h('div', 'level-arrow', '➜'), cell(lv + 1, tl('Suivant · niv. {0}', lv + 1), 'current'));
     up.append(levels);
     if (lv < MAX_LEVEL) {
       const cost = g.upgradeCost(id);
-      const b = this.btn('btn primary', `Améliorer · ${moneyInt(cost)}`, () => {
+      const b = this.btn('btn primary', tl('Améliorer · {0}', moneyInt(cost)), () => {
         const r = g.upgrade(id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('upgrade');
-        this.toast(`${def.names[lv]} installé !`, 'good');
+        this.toast(tl('{0} installé !', def.names[lv]), 'good');
         this.sheetKey = '';
       });
       this.costGate(b, cost);
       up.append(b);
-    } else up.append(h('p', 'note', 'Niveau maximal'));
+    } else up.append(h('p', 'note', tl('Niveau maximal')));
     body.append(up);
   }
 
@@ -991,9 +997,9 @@ export class App {
       this.wiz = null;
       return this.queueView(g);
     }
-    const body = this.frameSheet(w.step === 'trial' ? 'Nouvel essai' : 'Programmer des brassins');
+    const body = this.frameSheet(w.step === 'trial' ? tl('Nouvel essai') : tl('Programmer des brassins'));
     if (w.step !== 'trial') body.append(this.wizSteps(w.step));
-    else if (g.beers.length) body.append(this.btn('btn small wiz-back', '‹ Retour', () => this.wizGo('beer')));
+    else if (g.beers.length) body.append(this.btn('btn small wiz-back', tl('‹ Retour'), () => this.wizGo('beer')));
     if (w.step === 'trial') this.trialStep(g, body);
     if (w.step === 'beer') this.beerStep(g, body);
     if (w.step === 'format' && beer) this.formatStep(g, body, beer);
@@ -1048,7 +1054,7 @@ export class App {
     const at = order.indexOf(step);
     row.append(this.btn('btn small wiz-back', '‹', () => this.wizGo(at === 0 ? null : order[at - 1]!)));
     order.forEach((id, i) => {
-      const el = this.btn(`wiz-step${i === at ? ' active' : i < at ? ' done' : ''}`, `${i + 1}. ${['Bière', 'Format', 'Nombre'][i]}`, () => i < at && this.wizGo(id));
+      const el = this.btn(`wiz-step${i === at ? ' active' : i < at ? ' done' : ''}`, `${i + 1}. ${[tl('Bière'), tl('Format'), tl('Nombre')][i]}`, () => i < at && this.wizGo(id));
       el.disabled = i > at;
       row.append(el);
     });
@@ -1061,19 +1067,19 @@ export class App {
     const b = head && g.beer(head.beerId);
     if (!head || !b) return '';
     const cost = g.brewCost(b.recipe, g.batchLiters, head.format);
-    if (g.money < cost && !g.broke) return `⏸ Il manque ${moneyInt(cost - g.money)}`;
-    if (!g.roomFor(head.format)) return '⏸ Stockage plein';
+    if (g.money < cost && !g.broke) return tl('⏸ Il manque {0}', moneyInt(cost - g.money));
+    if (!g.roomFor(head.format)) return tl('⏸ Stockage plein');
     return '';
   }
 
   /** La file : les groupes de brassins, dans l'ordre où ils partiront. */
   private queueView(g: Game): void {
-    const body = this.frameSheet('Brasser');
-    if (g.tastable) body.append(this.btn('btn primary', '🍺 Un essai attend : goûter', () => this.openTasting()));
-    body.append(this.btn('btn primary big', '+ Programmer des brassins', () => this.wizGo('beer', { beerId: null, format: 'bottle', count: 1 })));
+    const body = this.frameSheet(tl('Brasser'));
+    if (g.tastable) body.append(this.btn('btn primary', tl('🍺 Un essai attend : goûter'), () => this.openTasting()));
+    body.append(this.btn('btn primary big', tl('+ Programmer des brassins'), () => this.wizGo('beer', { beerId: null, format: 'bottle', count: 1 })));
     // la file et sa capacité
     const head = h('div', 'beer-head');
-    head.append(h('span', 'section-title', 'File des brassins'), h('span', 'stats-line', `${g.planned}/${g.planCap}`));
+    head.append(h('span', 'section-title', tl('File des brassins')), h('span', 'stats-line', `${g.planned}/${g.planCap}`));
     const bar = h('div', 'progress');
     const fill = h('div', 'progress-fill');
     fill.style.width = `${Math.min(100, (g.planned / g.planCap) * 100)}%`;
@@ -1084,11 +1090,11 @@ export class App {
     const inLine = g.batches.filter((b) => b.beerId != null).length;
     if (fc && (fc.res.ends.length || !fc.res.done)) {
       const eta = h('div', 'eta-total');
-      eta.append(h('span', '', '⏱ Production restante'), this.etaEl(fc, fc.res.done ? fc.res.ends.length - 1 : -1, 'big'));
+      eta.append(h('span', '', tl('⏱ Production restante')), this.etaEl(fc, fc.res.done ? fc.res.ends.length - 1 : -1, 'big'));
       body.append(eta);
       if (!fc.res.done) body.append(h('p', 'note bad', blockedHint(fc.res, g.plan[0]?.format)));
     }
-    if (!g.plan.length) body.append(h('p', 'hint', inLine ? 'Aucun autre brassin programmé.' : 'Aucun brassin programmé : la brasserie est à l\'arrêt.'));
+    if (!g.plan.length) body.append(h('p', 'hint', inLine ? tl('Aucun autre brassin programmé.') : tl('Aucun brassin programmé : la brasserie est à l\'arrêt.')));
     const list = h('div', 'plan-list');
     g.plan.forEach((p, i) => {
       const b = g.beer(p.beerId);
@@ -1100,23 +1106,23 @@ export class App {
         g.unplan(i);
         this.refreshSheet();
         // on peut se raviser
-        this.toast(`${removed.count} × ${b.name} retiré${removed.count > 1 ? 's' : ''}`, 'info', { label: 'Annuler', run: () => {
+        this.toast(tl('{0} × {1} retiré{2}', removed.count, b.name, removed.count > 1 ? 's' : ''), 'info', { label: tl('Annuler'), run: () => {
           g.plan.splice(Math.min(i, g.plan.length), 0, removed);
           this.refreshSheet();
         } }, 5000);
       });
-      close.setAttribute('aria-label', 'Retirer de la file');
+      close.setAttribute('aria-label', tl('Retirer de la file'));
       card.append(h('div', 'plan-title', `${i + 1}. ${b.name}`), close);
       const row = h('div', 'plan-row');
       const pic = h('div', 'plan-pic');
       pic.append(this.beerVisual(b, p.format));
       const info = h('div', 'plan-info');
-      info.append(h('span', 'stats-line strong', p.format === 'keg' ? 'Fûts' : 'Bouteilles'));
+      info.append(h('span', 'stats-line strong', p.format === 'keg' ? tl('Fûts') : tl('Bouteilles')));
       // fin du dernier brassin de ce groupe
       const done = inLine + g.plan.slice(0, i + 1).reduce((n, x) => n + x.count, 0) - 1;
       if (fc) {
         const w = h('span', 'plan-eta');
-        if (fc.res.ends[done] != null) w.append(h('span', '', 'prêt dans '));
+        if (fc.res.ends[done] != null) w.append(h('span', '', tl('prêt dans ')));
         w.append(this.etaEl(fc, done));
         info.append(w);
       }
@@ -1128,13 +1134,13 @@ export class App {
         this.refreshSheet();
       });
       up.disabled = i === 0;
-      up.setAttribute('aria-label', 'Avancer dans la file');
+      up.setAttribute('aria-label', tl('Avancer dans la file'));
       const down = this.btn('btn small', '▼', () => {
         g.movePlan(i, 1);
         this.refreshSheet();
       });
       down.disabled = i === g.plan.length - 1;
-      down.setAttribute('aria-label', 'Reculer dans la file');
+      down.setAttribute('aria-label', tl('Reculer dans la file'));
       const moves = h('div', 'plan-moves');
       moves.append(up, down);
       ctl.append(this.stepper(p.count, 1, Math.max(1, g.planLimit(p.format, i)), (n) => {
@@ -1150,19 +1156,19 @@ export class App {
 
   /** Étape 1 : quelle bière ? */
   private beerStep(g: Game, body: HTMLElement): void {
-    body.append(h('div', 'wiz-q', 'Quelle bière brasser\u00a0?'));
+    body.append(h('div', 'wiz-q', tl('Quelle bière brasser ?')));
     const grid = h('div', 'pick-grid');
     for (const b of g.beers) {
       const card = h('button', 'card pick-card');
       const thumb = h('canvas', 'label-thumb pick-label');
       drawLabel(thumb, b.label, b.name);
-      card.append(thumb, h('span', 'beer-name', b.name), h('span', 'stats-line', `${b.stock} btl · ${b.kegs.length} fût${b.kegs.length > 1 ? 's' : ''}`), h('span', 'pop-stars', starText(b.pop)));
+      card.append(thumb, h('span', 'beer-name', b.name), h('span', 'stats-line', tl('{0} btl · {1} fût{2}', b.stock, b.kegs.length, b.kegs.length > 1 ? 's' : '')), h('span', 'pop-stars', starText(b.pop)));
       card.onclick = () => this.wizGo('format', { beerId: b.id });
       grid.append(card);
     }
     // un essai : les réglages actuels des machines, s'ils ne sont pas ceux d'une bière de la gamme
     const trial = h('button', 'card pick-card trial');
-    trial.append(h('span', 'pick-icon', '🧪'), h('span', 'beer-name', 'Nouvel essai'), h('span', 'stats-line', g.selectedBeer == null ? 'Réglages actuels des machines' : 'Change un réglage d\'une machine d\'abord'));
+    trial.append(h('span', 'pick-icon', '🧪'), h('span', 'beer-name', tl('Nouvel essai')), h('span', 'stats-line', g.selectedBeer == null ? tl('Réglages actuels des machines') : tl('Change un réglage d\'une machine d\'abord')));
     trial.disabled = g.selectedBeer != null;
     trial.onclick = () => this.wizGo('trial');
     grid.append(trial);
@@ -1171,9 +1177,9 @@ export class App {
 
   /** Étape 2 : bouteilles ou fûts ? */
   private formatStep(g: Game, body: HTMLElement, beer: Beer): void {
-    body.append(h('div', 'wiz-q', 'Bouteilles ou fûts\u00a0?'));
+    body.append(h('div', 'wiz-q', tl('Bouteilles ou fûts ?')));
     const grid = h('div', 'pick-grid');
-    for (const [f, name, use] of [['bottle', 'Bouteilles', 'Pour le stock et les commandes'], ['keg', 'Fûts', 'Pour les tireuses du bar']] as const) {
+    for (const [f, name, use] of [['bottle', tl('Bouteilles'), tl('Pour le stock et les commandes')], ['keg', tl('Fûts'), tl('Pour les tireuses du bar')]] as const) {
       const card = h('button', `card pick-card format${this.wiz?.format === f ? ' selected' : ''}`);
       card.setAttribute('aria-label', `${name} : ${use}`);
       card.append(this.beerVisual(beer, f), h('span', 'beer-name', name));
@@ -1189,17 +1195,17 @@ export class App {
     // au plus : la place dans la file, et ce que le stockage peut recevoir
     const room = g.planLimit(f);
     const n = Math.max(1, Math.min(w.count, room || 1));
-    body.append(h('div', 'wiz-q', 'Combien de brassins\u00a0?'));
+    body.append(h('div', 'wiz-q', tl('Combien de brassins ?')));
     const visual = h('div', 'batch-visual');
     const side = h('div', 'batch-side');
-    side.append(this.beerVisual(beer, f), h('span', 'stats-line', `${beer.name}`), h('span', 'stats-line', f === 'keg' ? 'Fûts' : 'Bouteilles'));
+    side.append(this.beerVisual(beer, f), h('span', 'stats-line', `${beer.name}`), h('span', 'stats-line', f === 'keg' ? tl('Fûts') : tl('Bouteilles')));
     visual.append(side, this.batchGrid(beer, f, n));
     body.append(visual);
     const row = h('div', 'count-row');
     row.append(this.stepper(n, 1, Math.max(1, room), (v) => this.wizGo('count', { count: v })));
     const chips = h('div', 'chips');
     for (const v of [1, 5, 10, 25, 50].filter((x) => x < room)) chips.append(this.btn(`chip${v === n ? ' active' : ''}`, String(v), () => this.wizGo('count', { count: v })));
-    if (room > 1) chips.append(this.btn(`chip${n === room ? ' active' : ''}`, `Max ${room}`, () => this.wizGo('count', { count: room })));
+    if (room > 1) chips.append(this.btn(`chip${n === room ? ' active' : ''}`, tl('Max {0}', room), () => this.wizGo('count', { count: room })));
     row.append(chips);
     body.append(row);
     // bilan
@@ -1210,31 +1216,31 @@ export class App {
       r.append(h('span', '', k), h('span', 'live-value', v));
       sum.append(r);
     };
-    line('Production', this.batchOutput(g, f, n));
-    line('Ingrédients', `${moneyInt(unit * n)} (${moneyInt(unit)} / brassin)`);
-    line('Au plus', room < g.planRoom ? `${room} (place au stockage)` : `${room} (place dans la file)`);
+    line(tl('Production'), this.batchOutput(g, f, n));
+    line(tl('Ingrédients'), `${moneyInt(unit * n)} (${moneyInt(unit)} / brassin)`);
+    line(tl('Au plus'), room < g.planRoom ? tl('{0} (place au stockage)', room) : tl('{0} (place dans la file)', room));
     // quand ces brassins seraient prêts, après ceux déjà programmés
     const fc = this.forecast(g, { beerId: beer.id, format: f, count: n });
     if (fc) {
       const r = h('div', 'live-row');
-      r.append(h('span', '', fc.res.done ? 'Prêts dans' : 'Prêts'), this.etaEl(fc, fc.res.done ? fc.res.ends.length - 1 : -1));
+      r.append(h('span', '', fc.res.done ? tl('Prêts dans') : tl('Prêts')), this.etaEl(fc, fc.res.done ? fc.res.ends.length - 1 : -1));
       sum.append(r);
       if (!fc.res.done) sum.append(h('p', 'note bad', blockedHint(fc.res, f)));
     }
-    sum.append(h('p', 'hint', 'Payés au lancement de chaque brassin. Un brassin attend l\'argent et la place dont il a besoin.'));
+    sum.append(h('p', 'hint', tl('Payés au lancement de chaque brassin. Un brassin attend l\'argent et la place dont il a besoin.')));
     body.append(sum);
-    const go = this.btn('btn primary big', room ? `Programmer ${n} brassin${n > 1 ? 's' : ''}` : g.planRoom ? 'Stockage plein' : 'File pleine', () => {
+    const go = this.btn('btn primary big', room ? tl('Programmer {0} brassin{1}', n, n > 1 ? 's' : '') : g.planRoom ? tl('Stockage plein') : tl('File pleine'), () => {
       const r = g.planBrew(beer.id, f, n);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('pop');
-      this.toast(`${n} brassin${n > 1 ? 's' : ''} programmé${n > 1 ? 's' : ''}`, 'good');
+      this.toast(tl('{0} brassin{1} programmé{2}', n, n > 1 ? 's' : '', n > 1 ? 's' : ''), 'good');
       this.wizGo(null);
     });
     go.disabled = !room;
     body.append(go);
     if (!room) body.append(h('p', 'note bad', g.planRoom
-      ? `Plus de place au stockage (en comptant les brassins déjà programmés). ${f === 'keg' ? 'Sers des fûts au bar, livre des commandes de fûts, vends-en au grossiste' : 'Livre des commandes, vends au grossiste'}, ou agrandis le stockage.`
-      : `La file est pleine (${g.planCap} brassins). Elle s'allonge avec le niveau de la brasserie.`));
+      ? tl('Plus de place au stockage (en comptant les brassins déjà programmés). {0}, ou agrandis le stockage.', f === 'keg' ? tl('Sers des fûts au bar, livre des commandes de fûts, vends-en au grossiste') : tl('Livre des commandes, vends au grossiste'))
+      : tl('La file est pleine ({0} brassins). Elle s\'allonge avec le niveau de la brasserie.', g.planCap)));
   }
 
   /** Un essai : les réglages actuels des machines ; on goûtera la première bouteille. */
@@ -1242,18 +1248,18 @@ export class App {
     const card = h('div', 'card');
     const cost = g.brewCost(g.recipe, g.batchLiters, 'bottle');
     card.append(
-      h('p', 'hint', 'Un brassin avec les réglages actuels des machines. On goûte la première bouteille, puis on décide de la garder dans la gamme.'),
-      h('div', 'stats-line strong', `${this.batchOutput(g, 'bottle', 1)} · ${g.broke ? 'offert par Gaston' : moneyInt(cost)}`),
+      h('p', 'hint', tl('Un brassin avec les réglages actuels des machines. On goûte la première bouteille, puis on décide de la garder dans la gamme.')),
+      h('div', 'stats-line strong', `${this.batchOutput(g, 'bottle', 1)} · ${g.broke ? tl('offert par Gaston') : moneyInt(cost)}`),
     );
     body.append(card);
     const can = g.canBrew();
     const busy = !!g.batchAt('mill');
-    const label = g.queued ? 'En attente du moulin…' : can.ok ? (g.broke ? 'Brasser (offert par Gaston)' : 'Brasser l\'essai') : busy ? 'Brasser au prochain tour' : can.reason!;
+    const label = g.queued ? tl('En attente du moulin…') : can.ok ? (g.broke ? tl('Brasser (offert par Gaston)') : tl('Brasser l\'essai')) : busy ? tl('Brasser au prochain tour') : can.reason!;
     const go = this.btn('btn primary big', label, () => {
       const r = busy ? g.queueBrew() : g.brew();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('pop');
-      if (busy) this.toast('En file d\'attente', 'good');
+      if (busy) this.toast(tl('En file d\'attente'), 'good');
       this.close();
     });
     go.disabled = g.queued || (!can.ok && !(busy && g.money >= cost));
@@ -1262,10 +1268,10 @@ export class App {
 
   /** Ce que donnent n brassins : bouteilles, ou fûts de x verres. */
   private batchOutput(g: Game, f: Format, n: number): string {
-    if (f === 'bottle') return `${(Math.floor(g.batchLiters / 0.33) * n).toLocaleString('fr-FR')} btl`;
+    if (f === 'bottle') return tl('{0} btl', (Math.floor(g.batchLiters / 0.33) * n).toLocaleString(locale));
     const kl = kegLiters(g.batchLiters);
     const k = Math.floor(g.batchLiters / kl) * n;
-    return `${k.toLocaleString('fr-FR')} fût${k > 1 ? 's' : ''} de ${kegGlasses(kl)} verres`;
+    return tl('{0} fût{1} de {2} verres', k.toLocaleString(locale), k > 1 ? 's' : '', kegGlasses(kl));
   }
 
   /** −  n  + */
@@ -1275,9 +1281,9 @@ export class App {
     const plus = this.btn('knob-btn', '+', () => onChange(Math.min(max, value + 1)));
     minus.disabled = value <= min;
     plus.disabled = value >= max;
-    minus.setAttribute('aria-label', 'Moins');
-    plus.setAttribute('aria-label', 'Plus');
-    el.append(minus, h('span', 'stepper-value', `×${value}`), plus);
+    minus.setAttribute('aria-label', tl('Moins'));
+    plus.setAttribute('aria-label', tl('Plus'));
+    el.append(minus, h('span', 'stepper-value', tl('×{0}', value)), plus);
     return el;
   }
 
@@ -1337,9 +1343,9 @@ export class App {
 
   // --- Ma gamme : une étagère de grandes bouteilles, et une silhouette « + » pour en créer une nouvelle
   private rangeSheet(g: Game): void {
-    const body = this.frameSheet(`Ma gamme · ${g.beers.length}/${g.rangeSlots}`);
+    const body = this.frameSheet(tl('Ma gamme · {0}/{1}', g.beers.length, g.rangeSlots));
     this.sheet.classList.add('fit');
-    if (g.tastable) body.append(this.btn('btn primary', '🍺 Un essai attend : goûter', () => this.openTasting()));
+    if (g.tastable) body.append(this.btn('btn primary', tl('🍺 Un essai attend : goûter'), () => this.openTasting()));
     if (this.shelfSel == null || !g.beers.some((b) => b.id === this.shelfSel)) this.shelfSel = g.selectedBeer ?? g.beers[0]?.id ?? null;
     // L'étagère entière, 2 rangées de 4 : bières, places libres, la place à acheter (+), puis les futures places.
     const shelf = h('div', 'shelf');
@@ -1363,11 +1369,11 @@ export class App {
       items.push(item);
       return item;
     };
-    for (const b of g.beers) slot('beer', `${b.stock} btl`, () => {
+    for (const b of g.beers) slot('beer', tl('{0} btl', b.stock), () => {
       this.shelfSel = b.id;
       this.sheetKey = '';
     }, b);
-    for (let i = g.beers.length; i < g.rangeSlots; i++) slot('empty', 'Libre', () => this.toast('Garde un essai pour la remplir', 'info'));
+    for (let i = g.beers.length; i < g.rangeSlots; i++) slot('empty', tl('Libre'), () => this.toast(tl('Garde un essai pour la remplir'), 'info'));
     const cost = g.nextSlotCost;
     if (cost != null) {
       const add = slot('add', moneyShort(cost), () => this.openNewRange());
@@ -1389,68 +1395,68 @@ export class App {
     const g = this.game();
     const cost = g.nextSlotCost;
     if (cost == null) return;
-    const card = this.modalCard('Nouvelle gamme');
+    const card = this.modalCard(tl('Nouvelle gamme'));
     card.append(
-      h('p', 'hint', 'Une place de plus sur ton étagère.'),
+      h('p', 'hint', tl('Une place de plus sur ton étagère.')),
     );
-    const buy = this.btn('btn primary big', `Créer une gamme · ${moneyInt(cost)}`, () => {
+    const buy = this.btn('btn primary big', tl('Créer une gamme · {0}', moneyInt(cost)), () => {
       const r = g.buySlot();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('paper');
       this.closeModal();
       this.sheetKey = '';
-      this.toast('Nouvelle place !', 'good');
+      this.toast(tl('Nouvelle place !'), 'good');
     });
     this.costGate(buy, cost);
     card.append(buy);
-    if (g.money < cost) card.append(h('p', 'note bad', `Il te manque ${moneyInt(cost - g.money)}.`));
-    card.append(this.btn('btn', 'Annuler', () => this.closeModal()));
+    if (g.money < cost) card.append(h('p', 'note bad', tl('Il te manque {0}.', moneyInt(cost - g.money))));
+    card.append(this.btn('btn', tl('Annuler'), () => this.closeModal()));
   }
 
   // --- Stockage : les caisses s'empilent jusqu'à ce que la réserve soit pleine
   private storageSheet(g: Game): void {
     const lvl = STORAGE[g.storageLevel - 1]!;
-    const body = this.frameSheet(`Stockage · ${lvl.name}`);
+    const body = this.frameSheet(tl('Stockage · {0}', lvl.name));
     const capCrates = lvl.crates;
     const crates = Math.ceil(g.stored / CRATE);
-    body.append(h('div', 'stats-line strong', `${crates} / ${capCrates} caisses`));
+    body.append(h('div', 'stats-line strong', tl('{0} / {1} caisses', crates, capCrates)));
     const bar = h('div', 'progress');
     const fill = h('div', `progress-fill${g.storageFull ? ' full' : ''}`);
     fill.style.width = `${Math.min(100, (g.stored / g.storageCap) * 100)}%`;
     bar.append(fill);
     body.append(bar);
-    if (g.bottlingBlocked) body.append(h('p', 'note bad', 'Plein : embouteillage à l\'arrêt'));
+    if (g.bottlingBlocked) body.append(h('p', 'note bad', tl('Plein : embouteillage à l\'arrêt')));
     if (g.beers.length) {
       const list = h('div', 'stock-list');
       for (const b of g.beers) {
         const line = h('div', 'stock-line');
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.stock} btl${b.kegs.length ? ` · ${b.kegs.length} fûts` : ''}`));
+        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tl('{0} btl{1}', b.stock, b.kegs.length ? tl(' · {0} fûts', b.kegs.length) : '')));
         list.append(line);
       }
       body.append(list);
     }
-    body.append(this.btn('btn small', '⬆ Agrandir le stockage', () => this.open({ kind: 'storageUp' })));
+    body.append(this.btn('btn small', tl('⬆ Agrandir le stockage'), () => this.open({ kind: 'storageUp' })));
   }
 
   // --- Stockage : l'agrandir
   private storageUpSheet(g: Game): void {
     const lvl = STORAGE[g.storageLevel - 1]!;
-    const body = this.frameSheet(`Agrandir le stockage`);
+    const body = this.frameSheet(tl('Agrandir le stockage'));
     const up = h('div', 'card upgrade');
     // Seulement le palier actuel et le suivant.
     const levels = h('div', 'storage-levels');
     const next = STORAGE[g.storageLevel];
-    for (const [l, tag, cls] of [[lvl, 'Actuel', 'done'], [next, 'Suivant', 'current']] as const) {
+    for (const [l, tag, cls] of [[lvl, tl('Actuel'), 'done'], [next, tl('Suivant'), 'current']] as const) {
       if (!l) continue;
       const cell = h('div', `storage-level ${cls}`);
-      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.crates.toLocaleString('fr-FR')} caisses`));
+      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', tl('{0} caisses', l.crates.toLocaleString(locale))));
       levels.append(cell);
     }
     up.append(levels);
     if (next) {
-      const b = this.btn('btn primary', `Agrandir · ${moneyInt(next.cost)}`, () => {
+      const b = this.btn('btn primary', tl('Agrandir · {0}', moneyInt(next.cost)), () => {
         const r = g.upgradeStorage();
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('upgrade');
@@ -1459,7 +1465,7 @@ export class App {
       });
       this.costGate(b, next.cost);
       up.append(b);
-    } else up.append(h('p', 'note', 'Niveau maximal'));
+    } else up.append(h('p', 'note', tl('Niveau maximal')));
     body.append(up);
   }
 
@@ -1468,22 +1474,22 @@ export class App {
     const v = verdictOf(t.quality);
     const card = h('div', 'card beer');
     const head = h('div', 'beer-head');
-    head.append(h('span', 'beer-name', b.name), h('span', `verdict ${VERDICT_CLASS[v]}`, v));
-    card.append(head, h('div', 'stats-line', `${t.style} · ${t.abv.toFixed(1)} % · ${b.stock} btl${b.kegs.length ? ` · ${b.kegs.length} fûts` : ''}`));
+    head.append(h('span', 'beer-name', b.name), h('span', `verdict ${VERDICT_CLASS[v]}`, tl(v)));
+    card.append(head, h('div', 'stats-line', tl('{0} · {1} % · {2} btl{3}', tl(t.style), t.abv.toFixed(1), b.stock, b.kegs.length ? tl(' · {0} fûts', b.kegs.length) : '')));
     card.append(this.popLine(g, b));
     const actions = h('div', 'row');
-    actions.append(this.btn('btn small', b.id === g.selectedBeer ? '✓ Chargée' : 'Charger', () => {
+    actions.append(this.btn('btn small', b.id === g.selectedBeer ? tl('✓ Chargée') : tl('Charger'), () => {
       g.loadBeer(b.id);
       this.sheetKey = '';
     }));
-    actions.append(this.btn('btn small', 'Fiche', () => this.openTastingView(b.name, t)));
-    actions.append(this.btn('btn small', 'Étiquette', () => this.openLabelEditor(b.name, b.label, (name, label) => {
+    actions.append(this.btn('btn small', tl('Fiche'), () => this.openTastingView(b.name, t)));
+    actions.append(this.btn('btn small', tl('Étiquette'), () => this.openLabelEditor(b.name, b.label, (name, label) => {
       b.name = name.trim() || b.name;
       g.setLabel(b.id, label);
       this.sheetKey = '';
       this.closeModal();
     })));
-    actions.append(this.confirmBtn('btn small bad', 'Retirer', 'Retirer de la gamme ?', () => {
+    actions.append(this.confirmBtn('btn small bad', tl('Retirer'), tl('Retirer de la gamme ?'), () => {
       g.removeBeer(b.id);
       this.sheetKey = '';
     }));
@@ -1501,8 +1507,8 @@ export class App {
 
   // --- Bar : popularité, affluence et fûts branchés
   private barSheet(g: Game): void {
-    const body = this.frameSheet('Les fûts');
-    body.append(h('div', 'stats-line strong', `Marque ${starText(g.brand)} · ${fmtRate(g.barRate * 60)} clients/h`));
+    const body = this.frameSheet(tl('Les fûts'));
+    body.append(h('div', 'stats-line strong', tl('Marque {0} · {1} clients/h', starText(g.brand), fmtRate(g.barRate * 60))));
     const list = h('div', 'stock-list');
     g.taps.forEach((tap, i) => {
       const b = g.beer(tap.beerId);
@@ -1510,14 +1516,14 @@ export class App {
       if (b) {
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tap.glasses > 0 ? `${tap.glasses}/${tap.capacity} verres` : 'Vide'));
-      } else line.append(h('span', 'stock-name', `Tireuse ${i + 1}`), h('span', 'stock-qty', '—'));
+        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tap.glasses > 0 ? tl('{0}/{1} verres', tap.glasses, tap.capacity) : tl('Vide')));
+      } else line.append(h('span', 'stock-name', tl('Tireuse {0}', i + 1)), h('span', 'stock-qty', '—'));
       line.append(h('span', 'tap-state', '⇄'));
       line.onclick = () => this.openKegSwap(i);
       list.append(line);
     });
     body.append(list);
-    if (!g.beers.some((b) => b.kegs.length)) body.append(h('p', 'hint', 'Aucun fût plein : brasse en « Fûts » à l\'atelier.'));
+    if (!g.beers.some((b) => b.kegs.length)) body.append(h('p', 'hint', tl('Aucun fût plein : brasse en « Fûts » à l\'atelier.')));
   }
 
   /** Changer le fût d'une tireuse : on prend un fût plein au stockage. */
@@ -1526,20 +1532,20 @@ export class App {
     const tap = g.taps[i];
     if (!tap) return;
     this.barRoom.selected = `keg${i}`;
-    const card = this.modalCard('Changer le fût');
-    if (tap.glasses > 0) card.append(h('p', 'hint', `Il reste ${tap.glasses} verres, ils seront perdus.`));
+    const card = this.modalCard(tl('Changer le fût'));
+    if (tap.glasses > 0) card.append(h('p', 'hint', tl('Il reste {0} verres, ils seront perdus.', tap.glasses)));
     const list = h('div', 'stock-list');
     for (const b of g.beers) {
       const line = h('button', 'stock-line tap-line');
       const thumb = h('canvas', 'label-thumb');
       drawLabel(thumb, b.label, b.name);
-      line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${b.kegs.length} fût${b.kegs.length > 1 ? 's' : ''}`));
+      line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tl('{0} fût{1}', b.kegs.length, b.kegs.length > 1 ? 's' : '')));
       line.disabled = !b.kegs.length;
       line.onclick = () => {
         const r = g.swapKeg(i, b.id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('crate');
-        this.toast(`Fût de ${b.name} branché`, 'good');
+        this.toast(tl('Fût de {0} branché', b.name), 'good');
         this.barRoom.selected = null;
         this.sheetKey = '';
         this.closeModal();
@@ -1547,8 +1553,8 @@ export class App {
       list.append(line);
     }
     card.append(list);
-    if (!g.beers.some((b) => b.kegs.length > 0)) card.append(h('p', 'note bad', 'Aucun fût plein : brasse en « Fûts » à l\'atelier.'));
-    card.append(this.btn('btn', 'Fermer', () => {
+    if (!g.beers.some((b) => b.kegs.length > 0)) card.append(h('p', 'note bad', tl('Aucun fût plein : brasse en « Fûts » à l\'atelier.')));
+    card.append(this.btn('btn', tl('Fermer'), () => {
       this.barRoom.selected = null;
       this.closeModal();
     }));
@@ -1557,18 +1563,18 @@ export class App {
   // --- Bar : l'agrandir (plus de places, de tireuses, une meilleure ambiance)
   private barUpSheet(g: Game): void {
     const lvl = g.bar;
-    const body = this.frameSheet(`Bar · ${lvl.name}`);
+    const body = this.frameSheet(tl('Bar · {0}', lvl.name));
     const next = BAR[g.barLevel];
     const levels = h('div', 'storage-levels');
-    for (const [l, tag, cls] of [[lvl, 'Actuel', 'done'], [next, 'Suivant', 'current']] as const) {
+    for (const [l, tag, cls] of [[lvl, tl('Actuel'), 'done'], [next, tl('Suivant'), 'current']] as const) {
       if (!l) continue;
       const cell = h('div', `storage-level ${cls}`);
-      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', `${l.taps} tireuse${l.taps > 1 ? 's' : ''} · ${l.seats} places`));
+      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', tl('{0} tireuse{1} · {2} places', l.taps, l.taps > 1 ? 's' : '', l.seats)));
       levels.append(cell);
     }
     body.append(levels);
     if (next) {
-      const b = this.btn('btn primary', `Agrandir · ${moneyInt(next.cost)}`, () => {
+      const b = this.btn('btn primary', tl('Agrandir · {0}', moneyInt(next.cost)), () => {
         const r = g.upgradeBar();
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('upgrade');
@@ -1579,48 +1585,48 @@ export class App {
       });
       this.costGate(b, next.cost);
       body.append(b);
-    } else body.append(h('p', 'note', 'Niveau maximal'));
+    } else body.append(h('p', 'note', tl('Niveau maximal')));
   }
 
   /** Barman en renfort : 8 h à rebrancher les fûts vides, à renouveler. */
   openBarman(): void {
     const g = this.game();
-    const card = this.modalCard('Barman en renfort');
+    const card = this.modalCard(tl('Barman en renfort'));
     const head = h('div', 'event-head');
-    head.append(iconCanvas('barman', 2), h('p', 'hint', `Pendant ${BARMAN.duration / 3600} h, il rebranche tout seul les fûts vides avec ceux du stockage, même quand tu n'es pas là. Pense à renouveler son contrat.`));
+    head.append(iconCanvas('barman', 2), h('p', 'hint', tl('Pendant {0} h, il rebranche tout seul les fûts vides avec ceux du stockage, même quand tu n\'es pas là. Pense à renouveler son contrat.', BARMAN.duration / 3600)));
     card.append(head);
     const kegs = g.beers.reduce((s, b) => s + b.kegs.length, 0);
-    card.append(h('div', g.barmanOn ? 'note' : 'stats-line', g.barmanOn ? `En poste encore ${duration(g.barmanUntil - g.time)}` : 'Pas de barman en renfort'));
-    card.append(h('div', kegs ? 'stats-line strong' : 'note bad', `Fûts pleins au stockage : ${kegs}`));
+    card.append(h('div', g.barmanOn ? 'note' : 'stats-line', g.barmanOn ? tl('En poste encore {0}', duration(g.barmanUntil - g.time)) : tl('Pas de barman en renfort')));
+    card.append(h('div', kegs ? 'stats-line strong' : 'note bad', tl('Fûts pleins au stockage : {0}', kegs)));
     const cost = g.barmanCost;
     const tooLong = Math.max(g.time, g.barmanUntil) + BARMAN.duration - g.time > BARMAN.maxAhead;
-    const go = this.btn('btn primary big', tooLong ? 'Contrat déjà prolongé au maximum (24 h)' : `${g.barmanOn ? 'Prolonger de 8 h' : 'Embaucher pour 8 h'} · ${moneyInt(cost)}`, () => {
+    const go = this.btn('btn primary big', tooLong ? tl('Contrat déjà prolongé au maximum (24 h)') : `${g.barmanOn ? tl('Prolonger de 8 h') : tl('Embaucher pour 8 h')} · ${moneyInt(cost)}`, () => {
       const r = g.hireBarman();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('doorOpen');
-      this.toast(g.barmanUntil - g.time > BARMAN.duration + 1 ? 'Contrat prolongé' : 'Barman embauché !', 'good');
+      this.toast(g.barmanUntil - g.time > BARMAN.duration + 1 ? tl('Contrat prolongé') : tl('Barman embauché !'), 'good');
       this.onSent?.();
       this.closeModal();
     });
     const full = !g.barmanOn && g.staffBusy >= g.staffSlots;
-    if (full) go.textContent = `Aucun poste libre (${g.staffBusy}/${g.staffSlots})`;
+    if (full) go.textContent = tl('Aucun poste libre ({0}/{1})', g.staffBusy, g.staffSlots);
     go.disabled = tooLong || full;
     if (!go.disabled) this.costGate(go, cost);
-    card.append(h('p', 'hint', `Personnel : ${g.staffBusy}/${g.staffSlots} postes occupés.`));
-    card.append(go, this.btn('btn', 'Tout le personnel (bureau)', () => this.openComputer('staff')), this.btn('btn', 'Fermer', () => this.closeModal()));
+    card.append(h('p', 'hint', tl('Personnel : {0}/{1} postes occupés.', g.staffBusy, g.staffSlots)));
+    card.append(go, this.btn('btn', tl('Tout le personnel (bureau)'), () => this.openComputer('staff')), this.btn('btn', tl('Fermer'), () => this.closeModal()));
   }
 
   /** Les événements du bar : la fête, puis ceux qu'on débloque en achetant des objets au magasin. */
   openEvents(): void {
     const g = this.game();
     if (this.view !== 'bar') this.goRoom('bar');
-    const card = this.modalCard('Événements');
+    const card = this.modalCard(tl('Événements'));
     const kegs = g.beers.reduce((s, b) => s + b.kegs.length, 0);
-    if (g.partying) card.append(h('div', 'note', `${g.barEvent.name} en cours · encore ${clock(g.partyUntil - g.time)}`));
-    else if (g.time < g.partyReadyAt) card.append(h('div', 'hint', `Le quartier se repose : prochain événement dans ${duration(g.partyReadyAt - g.time)}`));
+    if (g.partying) card.append(h('div', 'note', tl('{0} en cours · encore {1}', g.barEvent.name, clock(g.partyUntil - g.time))));
+    else if (g.time < g.partyReadyAt) card.append(h('div', 'hint', tl('Le quartier se repose : prochain événement dans {0}', duration(g.partyReadyAt - g.time))));
     card.append(
-      h('p', 'hint', 'Pendant un événement, les fûts vides sont rebranchés tout seuls avec ceux du stockage.'),
-      h('div', kegs ? 'stats-line strong' : 'note bad', `Fûts pleins au stockage : ${kegs}`),
+      h('p', 'hint', tl('Pendant un événement, les fûts vides sont rebranchés tout seuls avec ceux du stockage.')),
+      h('div', kegs ? 'stats-line strong' : 'note bad', tl('Fûts pleins au stockage : {0}', kegs)),
     );
     const can = !g.partying && g.time >= g.partyReadyAt;
     for (const ev of BAR_EVENTS) {
@@ -1634,17 +1640,17 @@ export class App {
       if (item && !g.owns(item.id)) {
         el.classList.add('locked');
         const next = g.nextDecor;
-        el.append(this.btn('btn small', next?.id === item.id ? `🔒 Achète « ${item.name} » au magasin` : `🔒 Au magasin, après « ${next?.name} »`, () => {
+        el.append(this.btn('btn small', next?.id === item.id ? tl('🔒 Achète « {0} » au magasin', item.name) : tl('🔒 Au magasin, après « {0} »', next?.name), () => {
           this.closeModal();
           this.openShop('bar', item.id);
         }));
       } else {
         const cost = g.eventCost(ev.id);
-        const go = this.btn('btn primary', `Lancer · ${moneyInt(cost)}`, () => {
+        const go = this.btn('btn primary', tl('Lancer · {0}', moneyInt(cost)), () => {
           const r = g.startEvent(ev.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('crowd');
-          this.toast(`${ev.name} : c'est parti !`, 'good');
+          this.toast(tl('{0} : c\'est parti !', ev.name), 'good');
           this.onSent?.();
           this.closeModal();
         });
@@ -1654,7 +1660,7 @@ export class App {
       }
       card.append(el);
     }
-    card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
+    card.append(this.btn('btn', tl('Fermer'), () => this.closeModal()));
   }
 
   // ------------------------------------------------------------------ ordinateur du bureau
@@ -1671,7 +1677,7 @@ export class App {
     const g = this.game();
     const pc = h('div', `pc computer pc-lv${Math.min(5, g.computerLevel)}`);
     pc.setAttribute('role', 'dialog');
-    pc.setAttribute('aria-label', 'Ordinateur');
+    pc.setAttribute('aria-label', tl('Ordinateur'));
     const screen = h('div', 'pc-screen');
     // fond d'écran : l'atelier, flouté
     const wall = h('canvas', 'pc-wall');
@@ -1683,7 +1689,7 @@ export class App {
     const chin = h('div', 'pc-chin');
     const led = h('span', 'pc-led');
     chin.append(led, h('span', 'pc-brand', COMPUTERS[g.computerLevel - 1]!.name), this.btn('pc-power', '⏻', () => this.closeModal()));
-    chin.lastElementChild!.setAttribute('aria-label', 'Éteindre l\'ordinateur');
+    chin.lastElementChild!.setAttribute('aria-label', tl('Éteindre l\'ordinateur'));
     pc.append(screen, chin);
     this.modal.append(pc);
     this.computer = { app, key: '', ui };
@@ -1709,7 +1715,7 @@ export class App {
   /** Nouvelle partie : la boîte de réception repart de zéro, avec un mot de Gaston. */
   resetMessages(): void {
     this.messages = [];
-    this.log('Gaston : bienvenue au bureau ! Les commandes, les tendances et les nouvelles de la brasserie arrivent ici.', 'info', 'bubble');
+    this.log(tl('Gaston : bienvenue au bureau ! Les commandes, les tendances et les nouvelles de la brasserie arrivent ici.'), 'info', 'bubble');
   }
 
   private computerKey(g: Game): string {
@@ -1754,7 +1760,7 @@ export class App {
     ui.replaceChildren();
     // barre du haut : le système, l'heure du jeu
     const bar = h('div', 'pc-bar');
-    bar.append(h('span', 'pc-os', 'BREW OS'), h('span', 'pc-clock', gameClock(g.time)));
+    bar.append(h('span', 'pc-os', tl('BREW OS')), h('span', 'pc-clock', gameClock(g.time)));
     ui.append(bar);
     if (!st.app) {
       ui.append(this.pcHome(g));
@@ -1767,11 +1773,11 @@ export class App {
       st.app = null;
       this.renderComputer();
     });
-    back.setAttribute('aria-label', 'Retour au menu');
+    back.setAttribute('aria-label', tl('Retour au menu'));
     const title = h('span', 'pc-win-title');
     title.append(iconCanvas(def.icon, 1, 'pc-win-icon'), h('span', '', def.name));
     const x = this.btn('pc-x', '✕', () => this.closeModal());
-    x.setAttribute('aria-label', 'Éteindre l\'ordinateur');
+    x.setAttribute('aria-label', tl('Éteindre l\'ordinateur'));
     head.append(back, title, x);
     const body = h('div', 'pc-body');
     body.setAttribute('data-app', st.app);
@@ -1834,8 +1840,8 @@ export class App {
   /** Le personnel : des postes selon le niveau de la brasserie, des contrats de 8 h qu'on prolonge jusqu'à 24 h. */
   private staffTab(g: Game, card: HTMLElement): void {
     const next = STAFF_SLOTS.findIndex((n, i) => i >= g.breweryLevel && n > g.staffSlots);
-    card.append(h('div', 'stats-line strong', `Postes occupés : ${g.staffBusy} / ${g.staffSlots}`));
-    card.append(h('p', 'hint', next >= 0 ? `Un poste de plus quand la brasserie passe ★${next + 1}.` : 'Tous les postes sont ouverts.'));
+    card.append(h('div', 'stats-line strong', tl('Postes occupés : {0} / {1}', g.staffBusy, g.staffSlots)));
+    card.append(h('p', 'hint', next >= 0 ? tl('Un poste de plus quand la brasserie passe ★{0}.', next + 1) : tl('Tous les postes sont ouverts.')));
     for (const def of STAFF) {
       const on = g.staffOn(def.id);
       const left = g.staffEnd(def.id) - g.time;
@@ -1845,16 +1851,16 @@ export class App {
       title.append(h('span', 'beer-name', def.name), h('span', 'hint', def.role));
       head.append(iconCanvas(def.id, 3), title);
       el.append(head, h('p', 'hint', def.text));
-      const state = h('div', 'stats-line', on ? `En poste · encore ${duration(left)}` : 'Libre');
+      const state = h('div', 'stats-line', on ? tl('En poste · encore {0}', duration(left)) : tl('Libre'));
       el.append(state);
       const cost = g.staffCost(def.id);
       const full = !on && g.staffBusy >= g.staffSlots;
       const tooLong = on && left + STAFF_CONTRACT.duration > STAFF_CONTRACT.maxAhead;
-      const b = this.btn('btn primary', full ? 'Aucun poste libre' : tooLong ? 'Contrat au maximum (24 h)' : `${on ? 'Prolonger de 8 h' : 'Embaucher pour 8 h'} · ${moneyShort(cost)}`, () => {
+      const b = this.btn('btn primary', full ? tl('Aucun poste libre') : tooLong ? tl('Contrat au maximum (24 h)') : `${on ? tl('Prolonger de 8 h') : tl('Embaucher pour 8 h')} · ${moneyShort(cost)}`, () => {
         const r = g.hire(def.id);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('doorOpen');
-        this.toast(on ? 'Contrat prolongé' : `${def.name} embauché !`, 'good');
+        this.toast(on ? tl('Contrat prolongé') : tl('{0} embauché !', def.name), 'good');
         this.computer!.key = '';
         this.refreshComputer();
       });
@@ -1867,7 +1873,7 @@ export class App {
 
   /** La boîte de réception : tout ce qui s'est passé à la brasserie ; l'ouvrir marque tout comme lu. */
   private messagesTab(g: Game, card: HTMLElement): void {
-    if (!this.messages.length) card.append(h('p', 'hint', 'Aucun message.'));
+    if (!this.messages.length) card.append(h('p', 'hint', tl('Aucun message.')));
     for (const m of this.messages) {
       const el = h('div', `pc-msg ${m.kind}${m.read ? '' : ' unread'}`);
       el.append(iconCanvas(m.icon, 2, 'pc-msg-icon'));
@@ -1885,24 +1891,24 @@ export class App {
     const g = this.game();
     const cur = COMPUTERS[g.computerLevel - 1]!;
     const next = COMPUTERS[g.computerLevel];
-    const card = this.modalCard('Améliorer l\'ordinateur');
-    card.append(h('div', 'stats-line strong', `${cur.name} · ${cur.slots} places de commandes`));
+    const card = this.modalCard(tl('Améliorer l\'ordinateur'));
+    card.append(h('div', 'stats-line strong', tl('{0} · {1} places de commandes', cur.name, cur.slots)));
     if (!next) {
-      card.append(h('p', 'hint', 'Ton ordinateur est au sommet.'), this.btn('btn', 'Fermer', () => this.closeModal()));
+      card.append(h('p', 'hint', tl('Ton ordinateur est au sommet.')), this.btn('btn', tl('Fermer'), () => this.closeModal()));
       return;
     }
-    card.append(h('p', 'hint', `Suivant : ${next.name}, ${next.slots} places au tableau des commandes, et un nouveau décor pour le bureau.`));
-    const buy = this.btn('btn primary big', `Installer · ${moneyInt(next.cost)}`, () => {
+    card.append(h('p', 'hint', tl('Suivant : {0}, {1} places au tableau des commandes, et un nouveau décor pour le bureau.', next.name, next.slots)));
+    const buy = this.btn('btn primary big', tl('Installer · {0}', moneyInt(next.cost)), () => {
       const r = g.upgradeComputer();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('upgrade');
-      this.toast(`${next.name} installé`, 'good');
+      this.toast(tl('{0} installé', next.name), 'good');
       this.closeModal();
     });
     this.costGate(buy, next.cost);
     card.append(buy);
-    if (g.money < next.cost) card.append(h('p', 'note bad', `Il te manque ${moneyInt(next.cost - g.money)}.`));
-    card.append(this.btn('btn', 'Annuler', () => this.closeModal()));
+    if (g.money < next.cost) card.append(h('p', 'note bad', tl('Il te manque {0}.', moneyInt(next.cost - g.money))));
+    card.append(this.btn('btn', tl('Annuler'), () => this.closeModal()));
   }
 
   /**
@@ -1918,13 +1924,13 @@ export class App {
     // l'ordinateur : une place de plus au tableau à chaque niveau
     const next = COMPUTERS[g.computerLevel];
     const foot = h('div', 'pc-foot');
-    foot.append(h('span', 'hint', `${COMPUTERS[g.computerLevel - 1]!.name} · ${g.boardSlots} emplacements`));
+    foot.append(h('span', 'hint', tl('{0} · {1} emplacements', COMPUTERS[g.computerLevel - 1]!.name, g.boardSlots)));
     if (next) {
-      const b = this.btn('btn small', `+1 place · ${moneyShort(next.cost)}`, () => {
+      const b = this.btn('btn small', tl('+1 place · {0}', moneyShort(next.cost)), () => {
         const r = g.upgradeComputer();
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('upgrade');
-        this.toast(`${next.name} installé`, 'good');
+        this.toast(tl('{0} installé', next.name), 'good');
         this.computer!.key = '';
         this.refreshComputer();
       });
@@ -1947,33 +1953,33 @@ export class App {
     const t = this.timer(countdown(wait), 'wait');
     t.querySelector<HTMLElement>('.timer-text')!.dataset.slot = String(i);
     const info = h('div', 'slot-free-info');
-    info.append(h('span', 'slot-free-text', 'Prochaine lettre'), t);
+    info.append(h('span', 'slot-free-text', tl('Prochaine lettre')), t);
     el.append(iconCanvas('envelope', 2, 'slot-free-icon'), info);
     if (i === 0) {
-      const b = this.gemsBtn('Prospecter', g.boostCost('prospect'), () => {
+      const b = this.gemsBtn(tl('Prospecter'), g.boostCost('prospect'), () => {
         const r = g.buyBoost('prospect');
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('paper');
-        this.toast('Une lettre arrive !', 'good');
+        this.toast(tl('Une lettre arrive !'), 'good');
         this.computer!.key = '';
         this.refreshComputer();
       });
-      b.setAttribute('aria-label', `Prospecter : une lettre tout de suite, pour ${gemsText(g.boostCost('prospect'))}`);
+      b.setAttribute('aria-label', tl('Prospecter : une lettre tout de suite, pour {0}', gemsText(g.boostCost('prospect'))));
       // la même prospection contre une pub, 3 fois par jour au plus (le bouton disparaît ensuite jusqu'au lendemain)
       const left = g.adLeft('prospect');
       if (left > 0) {
         const ad = h('button', 'btn small ad-btn');
-        ad.append(h('span', '', '▶ Gratuit'), h('span', 'ad-left', `${left}/${AD_DAILY}`));
-        ad.setAttribute('aria-label', `Prospecter gratuitement en regardant une pub (encore ${left} aujourd'hui)`);
+        ad.append(h('span', '', tl('▶ Gratuit')), h('span', 'ad-left', `${left}/${AD_DAILY}`));
+        ad.setAttribute('aria-label', tl('Prospecter gratuitement en regardant une pub (encore {0} aujourd\'hui)', left));
         ad.onclick = async () => {
           ad.disabled = true;
           const seen = await showRewardedAd();
           ad.disabled = false;
-          if (!seen) return this.toast('Pub interrompue : pas de lettre', 'info');
+          if (!seen) return this.toast(tl('Pub interrompue : pas de lettre'), 'info');
           const r = g.prospectWithAd();
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('paper');
-          this.toast('Une lettre arrive !', 'good');
+          this.toast(tl('Une lettre arrive !'), 'good');
           this.computer!.key = '';
           this.refreshComputer();
         };
@@ -2007,24 +2013,24 @@ export class App {
     if (o.kind !== 'classic') ask.append(h('span', `ask-kind${o.kind === 'urgent' ? ' urgent' : ''}`, KIND_LABEL[o.kind]));
     ask.append(iconCanvas(o.kind === 'keg' ? 'keg' : 'range', 1, 'ask-icon'));
     const want = o.want ? trendById(o.want) : undefined;
-    const parts = [`${o.qty}${o.kind === 'keg' ? ` fût${o.qty > 1 ? 's' : ''}` : ''}`];
-    if (o.mix) parts.push(`${o.mix} bières`);
+    const parts = [`${o.qty}${o.kind === 'keg' ? tl(' fût{0}', o.qty > 1 ? 's' : '') : ''}`];
+    if (o.mix) parts.push(tl('{0} bières', o.mix));
     if (want) parts.push(want.short);
     ask.append(h('span', 'ask-text', parts.join(' · ')));
     const q5 = Math.round(o.minQuality * 5);
     const quality = h('span', 'ask-quality', '★'.repeat(q5) + '☆'.repeat(5 - q5));
-    quality.setAttribute('aria-label', `Qualité minimale : ${Math.round(o.minQuality * 100)} %`);
+    quality.setAttribute('aria-label', tl('Qualité minimale : {0} %', Math.round(o.minQuality * 100)));
     ask.append(quality);
     card.append(ask);
     // ce qui partira
     const ok = g.suitable(o);
     const avail = (b: Beer) => (o.kind === 'keg' ? b.kegs.length : b.stock);
-    if (!ok.length) card.append(h('p', 'letter-status none', '✗ Aucune bière ne convient'));
+    if (!ok.length) card.append(h('p', 'letter-status none', tl('✗ Aucune bière ne convient')));
     else if (!this.editing.has(o.id)) {
       const line = h('div', `letter-status ${q.ok ? 'ok' : 'short'}`);
       const names = (q.take.length ? q.take.map((t) => t.beer) : ok).map((b) => b.name).join(', ');
-      line.append(h('span', 'letter-status-text', q.ok ? `✓ ${names}` : `Stock insuffisant : ${names}`));
-      if (ok.length > 1) line.append(this.btn('btn small', 'Changer', () => {
+      line.append(h('span', 'letter-status-text', q.ok ? `✓ ${names}` : tl('Stock insuffisant : {0}', names)));
+      if (ok.length > 1) line.append(this.btn('btn small', tl('Changer'), () => {
         this.editing.add(o.id);
         this.computer!.key = '';
         this.refreshComputer();
@@ -2062,9 +2068,9 @@ export class App {
     // les diamants n'apparaissent que si la lettre en porte (commande difficile, ou pourboire d'une commande simple)
     gain.append(h('span', '', moneyInt(o.reward)));
     if (gems > 0) gain.append(h('span', 'order-gain-sep', '+'), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(gems)));
-    send.append(h('span', 'order-send-label', 'Envoyer'), gain);
-    send.setAttribute('aria-label', `Envoyer : ${moneyInt(o.reward)}${gems > 0 ? ` et ${gemsText(gems)}` : ''}`);
-    row.append(send, this.confirmBtn('btn small letter-decline', 'Refuser', 'Refuser ?', () => {
+    send.append(h('span', 'order-send-label', tl('Envoyer')), gain);
+    send.setAttribute('aria-label', tl('Envoyer : {0}{1}', moneyInt(o.reward), gems > 0 ? tl(' et {0}', gemsText(gems)) : ''));
+    row.append(send, this.confirmBtn('btn small letter-decline', tl('Refuser'), tl('Refuser ?'), () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
       this.computer!.key = '';
@@ -2092,7 +2098,7 @@ export class App {
   private deliver(card: HTMLElement, from: HTMLElement, amount: number, gems: number): void {
     this.deliveringUntil = performance.now() + 1300;
     card.classList.add('delivered');
-    card.append(h('div', 'letter-delivered', 'LIVRÉ'));
+    card.append(h('div', 'letter-delivered', tl('LIVRÉ')));
     this.gainToast(amount);
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if (!reduce) {
@@ -2134,7 +2140,7 @@ export class App {
     const cur = g.ad;
     const box = h('div', `post${cur ? ' live' : ''}`);
     const head = h('div', 'post-head');
-    head.append(h('span', 'post-name', 'Campagnes de pub'));
+    head.append(h('span', 'post-name', tl('Campagnes de pub')));
     if (cur) {
       const left = h('span', '', duration(g.adUntil - g.time));
       left.dataset.expires = String(g.adUntil);
@@ -2153,30 +2159,30 @@ export class App {
       let b: HTMLButtonElement;
       if (!g.adUnlocked(ad.id)) {
         const pc = COMPUTERS[ad.computer - 1]!;
-        b = this.btn('btn price lock', `🔒 ${pc.name}`, () => this.toast(`${ad.name} : avec l'ordinateur « ${pc.name} »`, 'info'));
+        b = this.btn('btn price lock', `🔒 ${pc.name}`, () => this.toast(tl('{0} : avec l\'ordinateur « {1} »', ad.name, pc.name), 'info'));
       } else if (mine) {
         b = this.gemsBtn(`+${AD_EXTEND.hours} h`, AD_EXTEND.gems, () => {
           const r = g.extendAd();
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('newspaper');
-          this.toast(`${ad.name} : prolongée de ${AD_EXTEND.hours} h`, 'good');
+          this.toast(tl('{0} : prolongée de {1} h', ad.name, AD_EXTEND.hours), 'good');
           this.onSent?.();
           this.computer!.key = '';
           this.refreshComputer();
         });
-        b.setAttribute('aria-label', `Prolonger ${ad.name} de ${AD_EXTEND.hours} heures : ${gemsText(AD_EXTEND.gems)}`);
+        b.setAttribute('aria-label', tl('Prolonger {0} de {1} heures : {2}', ad.name, AD_EXTEND.hours, gemsText(AD_EXTEND.gems)));
       } else if (cur) {
-        b = this.btn('btn price lock', 'occupé', () => this.toast(`${cur.name} est en cours : une seule campagne à la fois`, 'info'));
+        b = this.btn('btn price lock', tl('occupé'), () => this.toast(tl('{0} est en cours : une seule campagne à la fois', cur.name), 'info'));
       } else {
         b = this.btn('btn primary price', moneyShort(cost), () => {
           const r = g.advertise(ad.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('newspaper');
-          this.toast(`${ad.name} : ta gamme fait parler d'elle`, 'good');
+          this.toast(tl('{0} : ta gamme fait parler d\'elle', ad.name), 'good');
           this.computer!.key = '';
           this.refreshComputer();
         });
-        b.setAttribute('aria-label', `Lancer ${ad.name} : ${moneyInt(cost)}`);
+        b.setAttribute('aria-label', tl('Lancer {0} : {1}', ad.name, moneyInt(cost)));
         this.costGate(b, cost);
       }
       row.append(icon, text, b);
@@ -2187,7 +2193,7 @@ export class App {
 
   /** La popularité de la marque et les tendances du moment. */
   private trendsTab(g: Game, card: HTMLElement): void {
-    card.append(h('div', 'stats-line strong', `Ta marque : ${starText(g.brand)}`));
+    card.append(h('div', 'stats-line strong', tl('Ta marque : {0}', starText(g.brand))));
     card.append(this.adsBox(g));
     for (const tr of g.trends) {
       const def = trendById(tr.id);
@@ -2219,10 +2225,10 @@ export class App {
     box.type = 'checkbox';
     box.checked = g.autoWholesale;
     box.onchange = () => (g.autoWholesale = box.checked);
-    auto.append(box, h('span', '', 'Vendre automatiquement quand le stockage est plein'));
-    card.append(auto, h('p', 'hint', 'Bouteilles et fûts, à petit prix, dans la limite d\'un quota par bière qui se recharge à minuit. Plus une bière est populaire, plus il en reprend.'));
+    auto.append(box, h('span', '', tl('Vendre automatiquement quand le stockage est plein')));
+    card.append(auto, h('p', 'hint', tl('Bouteilles et fûts, à petit prix, dans la limite d\'un quota par bière qui se recharge à minuit. Plus une bière est populaire, plus il en reprend.')));
     const beers = g.beers.filter((b) => (b.stock > 0 || b.kegs.length > 0) && b.tasting.quality >= DRINKABLE_MIN);
-    if (!beers.length) card.append(h('p', 'hint', 'Rien en stock.'));
+    if (!beers.length) card.append(h('p', 'hint', tl('Rien en stock.')));
     for (const b of beers) {
       const box = h('div', 'ws-beer');
       const head = h('div', 'stock-line');
@@ -2231,7 +2237,7 @@ export class App {
       const quota = g.wholesaleQuota(b);
       const left = g.wholesaleLeft(b);
       const open = !Number.isFinite(quota); // grossiste sans limite (boost)
-      head.append(thumb, h('span', 'stock-name', b.name), h('span', `ws-quota${left <= 0 ? ' full' : ''}`, open ? 'sans limite' : `${liters(quota - left)} / ${liters(quota)}`));
+      head.append(thumb, h('span', 'stock-name', b.name), h('span', `ws-quota${left <= 0 ? ' full' : ''}`, open ? tl('sans limite') : `${liters(quota - left)} / ${liters(quota)}`));
       const bar = h('div', 'ws-bar');
       const fill = h('div', 'ws-fill');
       fill.style.width = `${open ? 0 : Math.min(100, quota ? (100 * (quota - left)) / quota : 100)}%`;
@@ -2257,11 +2263,11 @@ export class App {
         if (can > one.n) el.append(sell(one.n, one.label));
         const kegL = [...b.kegs].sort((x, y) => x - y).slice(0, can).reduce((s, k) => s + k * GLASS_L, 0);
         const value = (format === 'bottle' ? can * BOTTLE_L : kegL) * perL;
-        el.append(sell(can, can > 0 ? `${can === have ? 'Tout' : can} · ${moneyInt(value)}` : 'Quota atteint'));
+        el.append(sell(can, can > 0 ? `${can === have ? tl('Tout') : can} · ${moneyInt(value)}` : tl('Quota atteint')));
         box.append(el);
       };
-      row('bottle', b.stock, `${b.stock} btl`, { n: CRATE, label: '1 caisse' });
-      row('keg', b.kegs.length, `${b.kegs.length} fût${b.kegs.length > 1 ? 's' : ''}`, { n: 1, label: '1 fût' });
+      row('bottle', b.stock, tl('{0} btl', b.stock), { n: CRATE, label: '1 caisse' });
+      row('keg', b.kegs.length, tl('{0} fût{1}', b.kegs.length, b.kegs.length > 1 ? 's' : ''), { n: 1, label: tl('1 fût') });
       card.append(box);
     }
   }
@@ -2310,10 +2316,10 @@ export class App {
     for (const hit of this.barRoom.hits(n, g.partying).slice(1)) {
       const el = h('button', 'station-hit');
       if (hit.id.startsWith('keg')) {
-        el.setAttribute('aria-label', `Fût de la tireuse ${Number(hit.id.slice(3)) + 1} : les fûts`);
+        el.setAttribute('aria-label', tl('Fût de la tireuse {0} : les fûts', Number(hit.id.slice(3)) + 1));
         el.onclick = () => this.open({ kind: 'bar' });
       } else {
-        el.setAttribute('aria-label', `${g.barEvent.name} : événements`);
+        el.setAttribute('aria-label', tl('{0} : événements', g.barEvent.name));
         el.onclick = () => this.openEvents();
       }
       this.barWrap.append(el);
@@ -2397,25 +2403,25 @@ export class App {
     const b = g.tastable;
     if (!b?.tasting) return;
     const t = b.tasting;
-    const card = this.modalCard('Dégustation');
+    const card = this.modalCard(tl('Dégustation'));
     this.tastingBody(card, t);
     const ok = t.quality >= DRINKABLE_MIN;
     const full = g.beers.length >= g.rangeSlots;
     const slotCost = g.nextSlotCost;
-    const keep = this.btn('btn primary big', ok ? (full ? 'Gamme pleine' : 'Garder cette bière') : 'Imbuvable', () => {
-      this.openLabelEditor(g.beers.length ? '' : 'Blonde de Gaston', { ...DEFAULT_LABEL }, (name, label) => {
+    const keep = this.btn('btn primary big', ok ? (full ? tl('Gamme pleine') : tl('Garder cette bière')) : tl('Imbuvable'), () => {
+      this.openLabelEditor(g.beers.length ? '' : tl('Blonde de Gaston'), { ...DEFAULT_LABEL }, (name, label) => {
         const r = g.keepTrial(name, label);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('pickup');
         this.closeModal();
-        this.toast('Nouvelle bière dans ta gamme !', 'good');
+        this.toast(tl('Nouvelle bière dans ta gamme !'), 'good');
         this.sheetKey = '';
       });
     });
     keep.disabled = !ok || full;
     if (full && ok) {
       if (slotCost != null) {
-        const buy = this.btn('btn', `Créer une gamme · ${moneyInt(slotCost)}`, () => {
+        const buy = this.btn('btn', tl('Créer une gamme · {0}', moneyInt(slotCost)), () => {
           const r = g.buySlot();
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('paper');
@@ -2428,10 +2434,10 @@ export class App {
     }
     // le premier essai, guidé par Gaston, ne se jette pas
     if (!g.beers.length && g.tips < TUTO_DONE) return void card.append(keep);
-    card.append(keep, this.confirmBtn('btn bad', 'Jeter', 'Jeter ce brassin ? Toucher pour confirmer', () => {
+    card.append(keep, this.confirmBtn('btn bad', tl('Jeter'), tl('Jeter ce brassin ? Toucher pour confirmer'), () => {
       g.discardTrial();
       this.closeModal();
-      this.toast('Brassin jeté', 'info');
+      this.toast(tl('Brassin jeté'), 'info');
       this.sheetKey = '';
     }));
   }
@@ -2443,7 +2449,7 @@ export class App {
    */
   openLabelEditor(name: string, initial: Label, onDone: (name: string, label: Label) => void, base: Label = initial): void {
     const label: Label = { ...initial };
-    const card = this.modalCard('Ton étiquette');
+    const card = this.modalCard(tl('Ton étiquette'));
     const preview = h('div', 'label-preview');
     const big = h('canvas', 'label-big');
     const bottle = h('div', 'shelf-bottle');
@@ -2453,7 +2459,7 @@ export class App {
     preview.append(big, bottle);
     const input = h('input', 'name-input');
     input.maxLength = 22;
-    input.placeholder = 'Nom de ta bière';
+    input.placeholder = tl('Nom de ta bière');
     input.value = name;
     let stones: HTMLElement | null = null;
     const redraw = () => {
@@ -2466,7 +2472,7 @@ export class App {
     };
     const g = this.game();
     input.oninput = redraw;
-    card.append(preview, h('div', 'section-title', 'Nom'), input);
+    card.append(preview, h('div', 'section-title', tl('Nom')), input);
     const isOpen = (kind: UnlockKind, value: string) => g.isUnlocked(kind, value) || String(base[kind]) === value;
     const chooser = <K extends keyof Label>(title: string, key: K, options: { id: Label[K]; name: string }[], kind?: UnlockKind) => {
       const row = h('div', 'chips');
@@ -2474,7 +2480,7 @@ export class App {
         const open = !kind || isOpen(kind, String(o.id));
         const x = LABEL_UNLOCKS.find((u) => u.kind === kind && u.value === o.id);
         const c = this.btn(`chip${(label[key] ?? 'classic') === o.id ? ' active' : ''}${open ? '' : ' locked'}`, open ? o.name : `🔒 ${o.name}`, () => {
-          if (!open) return this.toast(`« ${o.name} » se débloque au magasin, rayon Étiquettes · ${x?.gems ? gemsText(x.gems) : moneyShort(x?.cost ?? 0)}`, 'info');
+          if (!open) return this.toast(tl('« {0} » se débloque au magasin, rayon Étiquettes · {1}', o.name, x?.gems ? gemsText(x.gems) : moneyShort(x?.cost ?? 0)), 'info');
           label[key] = o.id;
           row.querySelectorAll('.chip').forEach((y) => y.classList.toggle('active', y === c));
           redraw();
@@ -2497,12 +2503,12 @@ export class App {
       }
       card.append(h('div', 'section-title', title), row);
     };
-    chooser('Bouteille', 'bottle', BOTTLES, 'bottle');
-    chooser('Forme', 'shape', SHAPES, 'shape');
-    colors('Fond', 'bg');
-    chooser('Motif', 'pattern', PATTERNS, 'pattern');
-    colors('Couleur du motif', 'patternColor');
-    chooser('Emblème', 'emblem', EMBLEMS, 'emblem');
+    chooser(tl('Bouteille'), 'bottle', BOTTLES, 'bottle');
+    chooser(tl('Forme'), 'shape', SHAPES, 'shape');
+    colors(tl('Fond'), 'bg');
+    chooser(tl('Motif'), 'pattern', PATTERNS, 'pattern');
+    colors(tl('Couleur du motif'), 'patternColor');
+    chooser(tl('Emblème'), 'emblem', EMBLEMS, 'emblem');
     // logo diamant : le choix de la pierre
     stones = h('div', 'gem-stones');
     const stoneRow = h('div', 'swatches');
@@ -2517,11 +2523,11 @@ export class App {
       sw.title = st.name;
       stoneRow.append(sw);
     }
-    stones.append(h('div', 'section-title', 'Pierre du diamant'), stoneRow);
+    stones.append(h('div', 'section-title', tl('Pierre du diamant')), stoneRow);
     card.append(stones);
-    chooser('Police du nom', 'font', FONTS);
-    colors('Couleur du texte et du contour', 'textColor');
-    card.append(this.btn('btn primary big', 'Valider l\'étiquette', () => onDone(input.value, label)));
+    chooser(tl('Police du nom'), 'font', FONTS);
+    colors(tl('Couleur du texte et du contour'), 'textColor');
+    card.append(this.btn('btn primary big', tl('Valider l\'étiquette'), () => onDone(input.value, label)));
     redraw();
     void document.fonts?.ready.then(redraw);
   }
@@ -2529,17 +2535,17 @@ export class App {
   private openTastingView(name: string, t: Tasting): void {
     const card = this.modalCard(name);
     this.tastingBody(card, t);
-    card.append(this.btn('btn', 'Fermer', () => this.closeModal()));
+    card.append(this.btn('btn', tl('Fermer'), () => this.closeModal()));
   }
 
   private tastingBody(card: HTMLElement, t: Tasting): void {
     const v = verdictOf(t.quality);
-    card.append(h('div', `verdict big ${VERDICT_CLASS[v]}`, v), h('div', 'score', `${t.style} · note ${Math.round(t.quality * 20)}/20`));
+    card.append(h('div', `verdict big ${VERDICT_CLASS[v]}`, tl(v)), h('div', 'score', tl('{0} · note {1}/20', tl(t.style), Math.round(t.quality * 20))));
     const stats = h('div', 'tasting-stats');
     const lab = (x: number, a: string, b: string, c: string) => (x > 0.66 ? a : x > 0.33 ? b : c);
     for (const [k, val] of [
-      ['Alcool', `${t.abv.toFixed(1)} %`], ['Amertume', `${Math.round(t.ibu)} IBU`], ['Couleur', t.color],
-      ['Arôme', lab(t.aroma, 'Intense', 'Présent', 'Discret')], ['Limpidité', lab(t.clarity, 'Limpide', 'Voilée', 'Trouble')], ['Bulles', t.co2 < 1.8 ? 'Plate' : t.co2 > 3.2 ? 'Excessives' : 'Fines'],
+      [tl('Alcool'), `${t.abv.toFixed(1)} %`], [tl('Amertume'), tl('{0} IBU', Math.round(t.ibu))], [tl('Couleur'), colorName(t.color)],
+      [tl('Arôme'), lab(t.aroma, tl('Intense'), tl('Présent'), tl('Discret'))], [tl('Limpidité'), lab(t.clarity, tl('Limpide'), tl('Voilée'), tl('Trouble'))], [tl('Bulles'), t.co2 < 1.8 ? tl('Plate') : t.co2 > 3.2 ? tl('Excessives') : tl('Fines')],
     ] as const) {
       const c = h('div', 'stat');
       c.append(h('div', 'section-title', k), h('div', 'stat-value', val));
@@ -2547,14 +2553,14 @@ export class App {
     }
     card.append(stats);
     if (t.defects.length) {
-      card.append(h('div', 'section-title', 'Ce qui ne va pas'));
+      card.append(h('div', 'section-title', tl('Ce qui ne va pas')));
       const ul = h('ul', 'defects');
       for (const d of t.defects) ul.append(h('li', '', d.label));
       card.append(ul);
-    } else card.append(h('p', 'note', 'Aucun défaut'));
+    } else card.append(h('p', 'note', tl('Aucun défaut')));
     // au-delà des défauts : ce qui manque pour une grande bière
     if (t.tips?.length && t.quality >= 0.6) {
-      card.append(h('div', 'section-title', 'Pour plus de finesse'));
+      card.append(h('div', 'section-title', tl('Pour plus de finesse')));
       const ul = h('ul', 'defects tips');
       for (const tip of t.tips.slice(0, 3)) ul.append(h('li', '', tip));
       card.append(ul);
@@ -2575,7 +2581,7 @@ export class App {
     const g = this.game();
     const o = g.offline;
     if (!o || o.earned <= 0 || o.doubled || g.adLeft('double') <= 0) return;
-    const card = this.modalCard('Doubler tes gains ?');
+    const card = this.modalCard(tl('Doubler tes gains ?'));
     card.classList.add('reward-card');
     // une ligne : la bourse, l'offre, et le bouton Play à côté (la croix du titre ferme la fenêtre)
     const row = h('div', 'reward-row');
@@ -2583,16 +2589,16 @@ export class App {
     const note = h('p', 'reward-note hidden');
     const amount = h('strong', 'reward-amount', moneyInt(o.earned));
     const text = h('p', 'reward-text');
-    text.append('Regardez une pub pour gagner ', amount, ' supplémentaires !');
+    text.append(tl('Regardez une pub pour gagner '), amount, tl(' supplémentaires !'));
     const play = h('button', 'btn primary reward-play', '▶');
-    play.setAttribute('aria-label', `Regarder une pub pour gagner ${moneyInt(o.earned)} supplémentaires`);
+    play.setAttribute('aria-label', tl('Regarder une pub pour gagner {0} supplémentaires', moneyInt(o.earned)));
     play.onclick = async () => {
       play.disabled = true;
       const seen = await showRewardedAd();
       play.disabled = false;
       if (!seen) {
         // pub passée : la fenêtre reste, on peut réessayer (rien n'est compté)
-        note.textContent = 'La pub n\'a pas été vue jusqu\'au bout : tes gains ne sont pas doublés. Tu peux réessayer.';
+        note.textContent = tl('La pub n\'a pas été vue jusqu\'au bout : tes gains ne sont pas doublés. Tu peux réessayer.');
         note.classList.remove('hidden');
         return;
       }
@@ -2636,8 +2642,8 @@ export class App {
     this.harvest.classList.add('hidden');
     const hrs = Math.floor(seconds / 3600);
     const min = Math.floor((seconds % 3600) / 60);
-    this.toast(`+${moneyInt(earned)} · ${hrs ? `${hrs} h ` : ''}${min} min d'absence, ${liters(l ?? 0)} vendus`, 'good');
-    this.log(`Pendant ton absence (${hrs ? `${hrs} h ` : ''}${min} min) : ${liters(l ?? 0)} de bière vendus, +${moneyInt(earned)}`, 'good', 'chart');
+    this.toast(tl('+{0} · {1}{2} min d\'absence, {3} vendus', moneyInt(earned), hrs ? `${hrs} h ` : '', min, liters(l ?? 0)), 'good');
+    this.log(tl('Pendant ton absence ({0}{1} min) : {2} de bière vendus, +{3}', hrs ? `${hrs} h ` : '', min, liters(l ?? 0), moneyInt(earned)), 'good', 'chart');
     this.onSent?.();
   }
 
@@ -2651,7 +2657,7 @@ export class App {
     g.collectOffline('gems');
     sfx.play('gem');
     this.harvestGems.classList.add('hidden');
-    this.toast(`+${gemsText(n)} gagnés pendant ton absence`, 'good');
+    this.toast(tl('+{0} gagnés pendant ton absence', gemsText(n)), 'good');
     this.onSent?.();
   }
 
@@ -2659,17 +2665,17 @@ export class App {
   openBrewery(levelUp = false): void {
     const g = this.game();
     const lv = g.breweryLevel;
-    const card = this.modalCard(levelUp ? 'Ta brasserie grandit !' : 'Ta brasserie');
+    const card = this.modalCard(levelUp ? tl('Ta brasserie grandit !') : tl('Ta brasserie'));
     card.append(h('div', 'verdict big v-top', `★ ${lv} · ${g.breweryName}`));
     const opened = CLIENT_TYPES.filter((d) => d.level === lv && d.level > 1);
-    if (levelUp && opened.length) card.append(h('p', 'note', `Nouveaux clients : ${opened.map((d) => d.label).join(', ')}`));
+    if (levelUp && opened.length) card.append(h('p', 'note', tl('Nouveaux clients : {0}', opened.map((d) => d.label).join(', '))));
     if (lv < MAX_LEVEL) {
-      card.append(h('div', 'section-title', `Prochain : ★${lv + 1} ${BREWERY_NAMES[lv]}`));
+      card.append(h('div', 'section-title', tl('Prochain : ★{0} {1}', lv + 1, BREWERY_NAMES[lv])));
       const list = h('div', 'brewery-list');
       for (const id of STATION_ORDER) {
         const ok = g.level(id) > lv;
         const row = h('div', `brewery-row${ok ? ' ok' : ''}`);
-        row.append(img(stationCanvas(id, g.level(id)), 'pix brewery-pic'), h('span', '', STATIONS[id].step), h('span', 'brewery-state', ok ? '✓' : `niv. ${g.level(id)}`));
+        row.append(img(stationCanvas(id, g.level(id)), 'pix brewery-pic'), h('span', '', STATIONS[id].step), h('span', 'brewery-state', ok ? '✓' : tl('niv. {0}', g.level(id))));
         row.onclick = () => {
           this.closeModal();
           this.goRoom('workshop');
@@ -2679,23 +2685,23 @@ export class App {
       }
       const next = CLIENT_TYPES.filter((d) => d.level === lv + 1);
       card.append(list);
-      if (next.length) card.append(h('p', 'hint', `Débloque : ${next.map((d) => d.label).join(', ')}`));
-    } else card.append(h('p', 'note', 'Niveau maximal'));
-    card.append(this.btn('btn primary', 'Fermer', () => this.closeModal()));
+      if (next.length) card.append(h('p', 'hint', tl('Débloque : {0}', next.map((d) => d.label).join(', '))));
+    } else card.append(h('p', 'note', tl('Niveau maximal')));
+    card.append(this.btn('btn primary', tl('Fermer'), () => this.closeModal()));
   }
 
   private openOptions(): void {
     const g = this.game();
-    const card = this.modalCard('Options');
-    card.append(h('div', 'stats-line', `${g.batchesDone} brassins · ${liters(g.totalLiters)} vendus · ${moneyInt(g.totalRevenue)}`));
-    const fresh = this.btn('btn bad', 'Nouvelle partie', () => {
+    const card = this.modalCard(tl('Options'));
+    card.append(h('div', 'stats-line', tl('{0} brassins · {1} vendus · {2}', g.batchesDone, liters(g.totalLiters), moneyInt(g.totalRevenue))));
+    const fresh = this.btn('btn bad', tl('Nouvelle partie'), () => {
       if (fresh.dataset.confirm) {
         this.closeModal();
         this.cb.newGame();
         return;
       }
       fresh.dataset.confirm = '1';
-      fresh.textContent = 'Sûr ? Ta brasserie sera effacée. Toucher pour confirmer';
+      fresh.textContent = tl('Sûr ? Ta brasserie sera effacée. Toucher pour confirmer');
     });
     const sound = h('div', 'card');
     const vol = h('input', 'volume-range');
@@ -2704,40 +2710,56 @@ export class App {
     vol.max = '100';
     vol.step = '5';
     vol.value = String(sfx.prefs.volume);
-    vol.setAttribute('aria-label', 'Volume des bruitages');
+    vol.setAttribute('aria-label', tl('Volume des bruitages'));
     vol.oninput = () => sfx.setVolume(Number(vol.value));
     vol.onchange = () => sfx.play('pop');
-    const toggle = this.btn(`chip${sfx.prefs.effects ? ' active' : ''}`, sfx.prefs.effects ? 'Activés' : 'Coupés', () => {
+    const toggle = this.btn(`chip${sfx.prefs.effects ? ' active' : ''}`, sfx.prefs.effects ? tl('Activés') : tl('Coupés'), () => {
       sfx.setEffects(!sfx.prefs.effects);
       toggle.classList.toggle('active', sfx.prefs.effects);
-      toggle.textContent = sfx.prefs.effects ? 'Activés' : 'Coupés';
+      toggle.textContent = sfx.prefs.effects ? tl('Activés') : tl('Coupés');
       vol.disabled = !sfx.prefs.effects;
       sfx.play('pop');
     });
     vol.disabled = !sfx.prefs.effects;
     const row = h('div', 'volume-row');
     row.append(toggle, vol);
-    sound.append(h('div', 'section-title', 'Bruitages'), row);
+    sound.append(h('div', 'section-title', tl('Bruitages')), row);
     card.append(sound);
+    // la langue : celle du système par défaut (l'anglais si le jeu ne la parle pas)
+    const langCard = h('div', 'card');
+    const langs = h('div', 'chips');
+    const chosen = chosenLang();
+    const sys = LANGS.find((l) => l.id === systemLang())!;
+    const opt = (id: Lang | null, name: string) => {
+      const c = this.btn(`chip${chosen === id ? ' active' : ''}`, name, () => {
+        if (chosen === id) return;
+        setLang(id);
+      });
+      langs.append(c);
+    };
+    opt(null, tl('Système ({0})', sys.name));
+    for (const l of LANGS) opt(l.id, l.name);
+    langCard.append(h('div', 'section-title', tl('Langue')), langs);
+    card.append(langCard);
     // Accélération du temps : réservée aux tests (elle fausserait l'équilibrage du jeu).
     const speed = h('div', 'card');
     const chips = h('div', 'chips');
     for (const v of [1, 2, 4, 10]) {
-      const c = this.btn(`chip${this.cb.getSpeed() === v ? ' active' : ''}`, `×${v}`, () => {
+      const c = this.btn(`chip${this.cb.getSpeed() === v ? ' active' : ''}`, tl('×{0}', v), () => {
         this.cb.setSpeed(v);
         chips.querySelectorAll('.chip').forEach((x) => x.classList.toggle('active', x === c));
       });
       chips.append(c);
     }
-    speed.append(h('div', 'section-title', 'Mode test : vitesse'), chips);
+    speed.append(h('div', 'section-title', tl('Mode test : vitesse')), chips);
     if (import.meta.env.DEV) card.append(speed);
-    card.append(fresh, this.btn('btn', 'Fermer', () => this.closeModal()));
+    card.append(fresh, this.btn('btn', tl('Fermer'), () => this.closeModal()));
   }
 
   /** Le message qui défile sur le panneau lumineux du comptoir. */
   private openBarMessage(): void {
     const g = this.game();
-    const card = this.modalCard('Panneau lumineux');
+    const card = this.modalCard(tl('Panneau lumineux'));
     const input = h('input', 'name-input');
     input.maxLength = BAR_MESSAGE_MAX;
     input.placeholder = BAR_MESSAGE;
@@ -2748,9 +2770,9 @@ export class App {
     };
     input.onkeydown = (e) => { if (e.key === 'Enter') save(); };
     card.append(
-      h('div', 'stats-line', `Le message qui défile sur la façade du comptoir (${BAR_MESSAGE_MAX} caractères au plus).`),
+      h('div', 'stats-line', tl('Le message qui défile sur la façade du comptoir ({0} caractères au plus).', BAR_MESSAGE_MAX)),
       input,
-      this.btn('btn primary', 'Afficher ce message', save),
+      this.btn('btn primary', tl('Afficher ce message'), save),
     );
     input.focus();
   }
@@ -2794,15 +2816,15 @@ export class App {
     const minutes = g.salesMinutes();
     const hour = g.revenueLastHour;
     const last5 = minutes.slice(-5).reduce((s, m) => s + m.bar + m.orders + m.wholesale, 0);
-    kpi('Dernière heure', moneyShort(hour), `${moneyInt(last5 / 5)}/min ces 5 min`);
-    kpi('Recettes totales', moneyShort(g.totalRevenue), `${liters(g.totalLiters)} vendus`);
-    kpi('Marque', starText(g.brand), `${fmtRate(g.barRate * 60)} clients/h au bar`);
-    kpi('Brassins', String(g.batchesDone), `${g.batches.length} en cours`);
+    kpi(tl('Dernière heure'), moneyShort(hour), tl('{0}/min ces 5 min', moneyInt(last5 / 5)));
+    kpi(tl('Recettes totales'), moneyShort(g.totalRevenue), tl('{0} vendus', liters(g.totalLiters)));
+    kpi(tl('Marque'), starText(g.brand), tl('{0} clients/h au bar', fmtRate(g.barRate * 60)));
+    kpi(tl('Brassins'), String(g.batchesDone), tl('{0} en cours', g.batches.length));
     page.append(kpis);
 
     // ventes minute par minute
     const chart = h('div', 'card dash-chart');
-    chart.append(h('div', 'section-title', 'Ventes · 60 dernières minutes'));
+    chart.append(h('div', 'section-title', tl('Ventes · 60 dernières minutes')));
     const legend = h('div', 'legend');
     for (const src of SALE_SOURCES) {
       const it = h('span', 'legend-item');
@@ -2814,23 +2836,23 @@ export class App {
     const tip = h('div', 'chart-tip');
     const canvas = h('canvas', 'sales-canvas');
     canvas.setAttribute('role', 'img');
-    canvas.setAttribute('aria-label', `Ventes de la dernière heure : ${moneyInt(hour)}`);
+    canvas.setAttribute('aria-label', tl('Ventes de la dernière heure : {0}', moneyInt(hour)));
     const axis = h('div', 'chart-axis');
-    axis.append(h('span', '', '−60 min'), h('span', '', '−30'), h('span', '', 'maintenant'));
+    axis.append(h('span', '', tl('−60 min')), h('span', '', '−30'), h('span', '', 'maintenant'));
     chart.append(legend, tip, canvas, axis);
     page.append(chart);
     const showTip = () => {
       const i = this.dashPick;
       const m = i != null ? minutes[i] : undefined;
       if (!m) {
-        tip.textContent = hour ? 'Touche une barre pour le détail' : 'Pas encore de vente cette heure-ci';
+        tip.textContent = hour ? tl('Touche une barre pour le détail') : tl('Pas encore de vente cette heure-ci');
         tip.classList.add('dim');
         return;
       }
       tip.classList.remove('dim');
       const ago = minutes.length - 1 - i!;
       const parts = SALE_SOURCES.filter((s) => m[s] > 0).map((s) => `${SOURCE[s].name} ${moneyInt(m[s])}`);
-      tip.textContent = `${ago ? `Il y a ${ago} min` : 'Cette minute'} : ${moneyInt(m.bar + m.orders + m.wholesale)}${parts.length ? ` · ${parts.join(' · ')}` : ''}`;
+      tip.textContent = `${ago ? tl('Il y a {0} min', ago) : tl('Cette minute')} : ${moneyInt(m.bar + m.orders + m.wholesale)}${parts.length ? ` · ${parts.join(' · ')}` : ''}`;
     };
     const draw = () => this.drawSales(canvas, minutes);
     const pick = (e: PointerEvent) => {
@@ -2853,7 +2875,7 @@ export class App {
 
     // d'où vient l'argent (depuis le début)
     const split = h('div', 'card');
-    split.append(h('div', 'section-title', 'Répartition des recettes'));
+    split.append(h('div', 'section-title', tl('Répartition des recettes')));
     const totals: Record<SaleSource, number> = { bar: g.barRevenue, orders: g.ordersRevenue, wholesale: g.wholesaleRevenue };
     const sum = Math.max(1e-9, totals.bar + totals.orders + totals.wholesale);
     for (const src of SALE_SOURCES) {
@@ -2870,35 +2892,35 @@ export class App {
 
     // la brasserie en direct
     const live = h('div', 'card');
-    live.append(h('div', 'section-title', 'En direct'));
+    live.append(h('div', 'section-title', tl('En direct')));
     const line = (k: string, v: string, cls = '') => {
       const r = h('div', `live-row ${cls}`);
       r.append(h('span', '', k), h('span', 'live-value', v));
       live.append(r);
     };
     const sorted = [...g.batches].sort((a, b) => b.stage - a.stage);
-    if (!sorted.length) line('Atelier', 'à l\'arrêt', 'dim');
+    if (!sorted.length) line(tl('Atelier'), tl('à l\'arrêt'), 'dim');
     for (const b of sorted) {
       const id = STATION_ORDER[b.stage]!;
-      const name = g.beer(b.beerId)?.name ?? 'Essai';
+      const name = g.beer(b.beerId)?.name ?? tl('Essai');
       line(`${name} · ${STATIONS[id].step}`, b.waiting ? '⏸' : clock(b.duration - b.elapsed));
     }
-    if (g.tastable) line('Essai', 'à goûter 🍺');
-    line('Stockage', g.storageFull ? 'plein !' : `${Math.round((g.stored / g.storageCap) * 100)} %`, g.storageFull ? 'bad' : '');
+    if (g.tastable) line(tl('Essai'), tl('à goûter 🍺'));
+    line(tl('Stockage'), g.storageFull ? tl('plein !') : `${Math.round((g.stored / g.storageCap) * 100)} %`, g.storageFull ? 'bad' : '');
     const taps = g.taps.filter((t) => t.glasses > 0).length;
-    line('Bar', `${taps}/${g.taps.length} tireuses · ${g.glassesLeft} verres`);
-    if (g.partying) line('Fête', `🎉 ${clock(g.partyUntil - g.time)}`);
+    line(tl('Bar'), tl('{0}/{1} tireuses · {2} verres', taps, g.taps.length, g.glassesLeft));
+    if (g.partying) line(tl('Fête'), `🎉 ${clock(g.partyUntil - g.time)}`);
     if (g.ad) line(g.ad.name, `📣 ${clock(g.adUntil - g.time)}`);
     const fc = this.forecast(g);
-    if (fc) line('File de brassins', `${g.planned} · ${fc.res.done ? `fin dans ${clock(fc.at + fc.res.total - g.time)}` : BLOCKED_TEXT[fc.res.blocked ?? 'slow']}`, fc.res.done ? '' : 'bad');
-    else line('File de brassins', 'vide');
-    line('Commandes', g.orders.length ? `${g.orders.length} en attente${g.readyOrders.length ? ` · ${g.readyOrders.length} prête${g.readyOrders.length > 1 ? 's' : ''}` : ''}` : 'aucune');
+    if (fc) line(tl('File de brassins'), `${g.planned} · ${fc.res.done ? tl('fin dans {0}', clock(fc.at + fc.res.total - g.time)) : BLOCKED_TEXT[fc.res.blocked ?? 'slow']}`, fc.res.done ? '' : 'bad');
+    else line(tl('File de brassins'), 'vide');
+    line(tl('Commandes'), g.orders.length ? tl('{0} en attente{1}', g.orders.length, g.readyOrders.length ? tl(' · {0} prête{1}', g.readyOrders.length, g.readyOrders.length > 1 ? 's' : '') : '') : 'aucune');
     page.append(live);
 
     // les bières qui rapportent le plus
     if (g.beers.length) {
       const top = h('div', 'card');
-      top.append(h('div', 'section-title', 'Ma gamme'));
+      top.append(h('div', 'section-title', tl('Ma gamme')));
       const list = h('div', 'stock-list');
       for (const b of [...g.beers].sort((a, c) => c.revenue - a.revenue)) {
         const el = h('div', 'stock-line');
@@ -3020,7 +3042,7 @@ export class App {
         // le grossiste sans limite : une caisse marquée « ∞ »
         const gate = b.id === 'openGate';
         face.append(h('span', 'boost-chip-dial'), iconCanvas(gate ? 'crate' : EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-time'));
-        el.append(face, h('span', 'boost-chip-mult', gate ? '∞' : `×${String(mult(b.id)).replace('.', ',')}`));
+        el.append(face, h('span', 'boost-chip-mult', gate ? '∞' : tl('×{0}', mult(b.id).toLocaleString(locale))));
         el.onclick = () => this.openShop('boosts');
         this.boostHud.append(el);
       }
@@ -3032,7 +3054,7 @@ export class App {
       const t = dialTime(left);
       const span = el.querySelector('.boost-chip-time')!;
       if (span.textContent !== t) span.textContent = t;
-      el.setAttribute('aria-label', `${b.id === 'openGate' ? 'Grossiste sans limite' : `${EFFECT_NAME[b.ch]} ×${String(mult(b.id)).replace('.', ',')}`} : encore ${duration(left)}`);
+      el.setAttribute('aria-label', tl('{0} : encore {1}', b.id === 'openGate' ? tl('Grossiste sans limite') : tl('{0} ×{1}', EFFECT_NAME[b.ch], mult(b.id).toLocaleString(locale)), duration(left)));
     });
   }
 
@@ -3089,7 +3111,7 @@ export class App {
     b.classList.toggle('short', short);
     b.onclick = () => {
       const missing = gems - this.game().gems;
-      if (missing > 0) return this.toast(`Il te manque ${gemsText(missing)} : les commandes livrées en rapportent`, 'bad');
+      if (missing > 0) return this.toast(tl('Il te manque {0} : les commandes livrées en rapportent', gemsText(missing)), 'bad');
       run();
     };
     return b;
@@ -3111,8 +3133,8 @@ export class App {
     const kind = this.cb.storeKind();
     const head = h('div', 'gems-head');
     const count = h('div', 'gems-count');
-    count.append(iconCanvas('gem', 2, 'gems-count-icon'), h('span', '', g.gems.toLocaleString('fr-FR')));
-    head.append(count, h('p', 'gems-why', 'Les diamants font gagner du temps : boosts, prospection, pièces rares d\'étiquette.'));
+    count.append(iconCanvas('gem', 2, 'gems-count-icon'), h('span', '', g.gems.toLocaleString(locale)));
+    head.append(count, h('p', 'gems-why', tl('Les diamants font gagner du temps : boosts, prospection, pièces rares d\'étiquette.')));
     this.shopBody.append(head);
     const card = (pack: GemPack, big: boolean) => {
       const el = h('div', `gem-pack${big ? ' big' : ''}`);
@@ -3122,12 +3144,12 @@ export class App {
       const n = pack.gems >= 2000 ? 5 : pack.gems >= 1000 ? 4 : pack.gems >= 400 ? 3 : pack.gems >= 200 ? 2 : 1;
       for (let i = 0; i < n; i++) pile.append(iconCanvas('gem', big ? 3 : 2, 'gem-pack-gem'));
       const text = h('div', 'gem-pack-text');
-      text.append(h('span', 'gem-pack-n', `${pack.gems.toLocaleString('fr-FR')} diamants`), h('span', 'gem-pack-name', pack.name));
+      text.append(h('span', 'gem-pack-n', tl('{0} diamants', pack.gems.toLocaleString(locale))), h('span', 'gem-pack-name', pack.name));
       const price = this.gemPrices?.get(pack.productId) ?? pack.price;
       const busy = this.gemBuying != null;
       const b = this.btn(`btn primary price gem-pack-buy${busy ? ' short' : ''}`, this.gemBuying === pack.id ? '…' : price, () => {
         if (this.gemBuying) return;
-        if (kind === 'none') return this.toast('Les achats de diamants se font dans l\'app iPhone', 'info');
+        if (kind === 'none') return this.toast(tl('Les achats de diamants se font dans l\'app iPhone'), 'info');
         this.gemBuying = pack.id;
         this.shopKey = '';
         this.renderShop();
@@ -3136,17 +3158,17 @@ export class App {
           this.shopKey = '';
           if (r.ok) {
             sfx.play('gem');
-            this.toast(`+${r.gems!.toLocaleString('fr-FR')} diamants, merci !`, 'good');
+            this.toast(tl('+{0} diamants, merci !', r.gems!.toLocaleString(locale)), 'good');
             // le bouton a été redessiné pendant l'achat : on part de celui qui est à l'écran
             const from = this.shopBody.querySelector<HTMLElement>(`[data-pack="${pack.id}"]`) ?? this.gemsPill;
             this.fly(from, this.gemsPill, 6, () => iconCanvas('gem', 1, 'fly fly-gem'));
             this.onSent?.();
-          } else if (!r.cancelled) this.toast(r.reason ?? 'Achat impossible pour le moment', 'bad');
+          } else if (!r.cancelled) this.toast(r.reason ?? tl('Achat impossible pour le moment'), 'bad');
           this.renderShop();
         });
       });
       b.dataset.pack = pack.id;
-      b.setAttribute('aria-label', `Acheter ${pack.gems} diamants pour ${price}`);
+      b.setAttribute('aria-label', tl('Acheter {0} diamants pour {1}', pack.gems, price));
       el.append(pile, text, b);
       return el;
     };
@@ -3155,9 +3177,9 @@ export class App {
     const grid = h('div', 'gem-grid');
     for (const p of GEM_PACKS.filter((x) => !x.once)) grid.append(card(p, false));
     this.shopBody.append(grid);
-    this.shopBody.append(this.btn('btn small gems-boosts', 'Voir les boosts', () => this.openShop('boosts')));
-    if (kind === 'dev') this.shopBody.append(h('p', 'hint', 'Développement : les achats sont simulés.'));
-    if (kind === 'none') this.shopBody.append(h('p', 'hint', 'Les achats de diamants se font dans l\'app iPhone.'));
+    this.shopBody.append(this.btn('btn small gems-boosts', tl('Voir les boosts'), () => this.openShop('boosts')));
+    if (kind === 'dev') this.shopBody.append(h('p', 'hint', tl('Développement : les achats sont simulés.')));
+    if (kind === 'none') this.shopBody.append(h('p', 'hint', tl('Les achats de diamants se font dans l\'app iPhone.')));
   }
 
   /** Rayon Bar : la vitrine (la pièce choisie, montrée dans le bar), puis toute la piste de la décoration. */
@@ -3173,25 +3195,25 @@ export class App {
     const card = h('div', `vitrine${isNext ? ' next' : ''}`);
     const scene = h('div', 'vitrine-scene');
     scene.style.height = `${SHOWCASE_H}px`;
-    scene.append(this.showcase.canvas, h('span', 'vitrine-pin', owned ? 'Dans ton bar' : 'Aperçu dans ton bar'));
+    scene.append(this.showcase.canvas, h('span', 'vitrine-pin', owned ? tl('Dans ton bar') : tl('Aperçu dans ton bar')));
     this.showcase.showcase = d.event ? { event: DECOR_EVENT[pick] } : { furniture: pick as (typeof FURNITURE)[number]['id'] };
     this.showcaseScene = scene;
     const body = h('div', 'vitrine-body');
     const name = h('div', 'vitrine-name');
-    name.append(h('span', 'beer-name', d.name), h('span', `kind-tag ${d.event ? 'kind-prestige' : 'kind-style'}`, d.event ? 'Événement' : 'Mobilier'));
+    name.append(h('span', 'beer-name', d.name), h('span', `kind-tag ${d.event ? 'kind-prestige' : 'kind-style'}`, d.event ? tl('Événement') : tl('Mobilier')));
     const fx = h('div', 'fx');
-    for (const t of d.event ? [ev!.name, `${ev!.mult} fois plus de clients`] : furnitureEffects(pick)) fx.append(h('span', 'fx-chip', t));
+    for (const t of d.event ? [ev!.name, tl('{0} fois plus de clients', ev!.mult)] : furnitureEffects(pick)) fx.append(h('span', 'fx-chip', t));
     body.append(name, fx, h('p', 'hint', ev ? ev.text : d.text));
     if (owned) {
-      body.append(this.btn('btn price own', '✓ Au bar · voir', () => this.goView('bar')));
+      body.append(this.btn('btn price own', tl('✓ Au bar · voir'), () => this.goView('bar')));
     } else if (isNext) {
-      const b = this.btn('btn primary price', `${d.event ? 'Acheter' : 'Installer'} · ${moneyShort(d.cost)}`, () => {
+      const b = this.btn('btn primary price', `${d.event ? tl('Acheter') : tl('Installer')} · ${moneyShort(d.cost)}`, () => {
         const r = g.buyDecor(pick);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('repair');
         this.decorPick = null;
         this.onSent?.();
-        this.toast(d.event ? `${d.name} : nouvel événement au bar !` : `${d.name} : au bar !`, 'good', { label: 'Voir', run: () => this.goView('bar') });
+        this.toast(d.event ? tl('{0} : nouvel événement au bar !', d.name) : tl('{0} : au bar !', d.name), 'good', { label: tl('Voir'), run: () => this.goView('bar') });
         this.shopKey = '';
         this.renderShop();
       });
@@ -3199,7 +3221,7 @@ export class App {
       body.append(b);
     } else {
       const before = g.decorDef(DECOR_ORDER[idx - 1]!);
-      body.append(this.btn('btn price lock', `🔒 Après « ${before.name} » · ${moneyShort(d.cost)}`, () => {
+      body.append(this.btn('btn price lock', tl('🔒 Après « {0} » · {1}', before.name, moneyShort(d.cost)), () => {
         this.decorPick = null;
         this.shopKey = '';
         this.renderShop();
@@ -3209,13 +3231,13 @@ export class App {
     // la piste
     const count = DECOR_ORDER.filter((id) => g.ownsDecor(id)).length;
     const head = h('div', 'shop-section');
-    head.append(h('span', '', 'La suite'), h('span', 'shop-section-n', `${count} / ${DECOR_ORDER.length} au bar`));
+    head.append(h('span', '', tl('La suite')), h('span', 'shop-section-n', tl('{0} / {1} au bar', count, DECOR_ORDER.length)));
     const track = h('div', 'decor-track');
     for (const id of DECOR_ORDER) {
       const dd = g.decorDef(id);
       const own = g.ownsDecor(id);
       const slot = h('button', `decor-slot${own ? ' owned' : next?.id === id ? ' next' : ' locked'}${id === pick ? ' picked' : ''}`);
-      slot.setAttribute('aria-label', `${dd.name}${own ? ' : au bar' : ` : ${moneyShort(dd.cost)}`}`);
+      slot.setAttribute('aria-label', `${dd.name}${own ? tl(' : au bar') : ` : ${moneyShort(dd.cost)}`}`);
       if (dd.event) slot.append(h('i', 'decor-ev'));
       slot.append(iconCanvas(DECOR_ICON[id], 2), h('span', 'decor-slot-price', own ? '✓' : moneyShort(dd.cost)));
       slot.onclick = () => {
@@ -3225,7 +3247,7 @@ export class App {
       };
       track.append(slot);
     }
-    this.shopBody.append(card, head, track, h('p', 'hint', 'Le carré doré marque un objet d\'événement. Toucher une case la montre dans la vitrine.'));
+    this.shopBody.append(card, head, track, h('p', 'hint', tl('Le carré doré marque un objet d\'événement. Toucher une case la montre dans la vitrine.')));
   }
 
   /** Le bar de la vitrine : redessiné à chaque image, cadré sur l'objet en vente. */
@@ -3266,19 +3288,19 @@ export class App {
         text.append(h('span', 'boost-name', def.name), h('span', 'boost-effect', def.text));
         const blocked = g.boostBlocked(def.id);
         let b: HTMLButtonElement;
-        if (blocked && cur) b = this.btn('btn price lock', 'occupé', () => this.toast(`${blocked} : celui-ci attend la fin.`, 'info'));
+        if (blocked && cur) b = this.btn('btn price lock', tl('occupé'), () => this.toast(tl('{0} : celui-ci attend la fin.', blocked), 'info'));
         else {
           const extend = !!cur;
           b = this.gemsBtn('', def.gems, () => {
             const r = g.buyBoost(def.id);
             if (!r.ok) return this.toast(r.reason!, 'bad');
             sfx.play('recharge');
-            this.toast(extend ? `${def.name} : prolongé !` : `${def.name} !`, 'good');
+            this.toast(extend ? tl('{0} : prolongé !', def.name) : `${def.name} !`, 'good');
             this.onSent?.();
             this.renderShop();
           });
           if (blocked) b.classList.add('short');
-          b.setAttribute('aria-label', `${extend ? 'Prolonger avec' : 'Lancer'} ${def.name} : ${gemsText(def.gems)}`);
+          b.setAttribute('aria-label', `${extend ? tl('Prolonger avec') : tl('Lancer')} ${def.name} : ${gemsText(def.gems)}`);
         }
         row.append(icon, text, b);
         box.append(row);
@@ -3304,7 +3326,7 @@ export class App {
     }
     const beer = g.beers[0];
     const sample = beer?.label ?? DEFAULT_LABEL;
-    const name = beer?.name ?? 'Ma bière';
+    const name = beer?.name ?? tl('Ma bière');
     const grid = h('div', `unlock-grid${kind === 'bottle' ? ' bottles' : ''}`);
     for (const x of LABEL_UNLOCKS.filter((y) => y.kind === kind)) {
       const owned = g.unlocked.includes(x.id);
@@ -3329,13 +3351,13 @@ export class App {
       }
       cell.append(preview, h('span', 'unlock-name', x.name));
       let b: HTMLButtonElement;
-      if (owned) b = this.btn('btn price own', '✓ Débloqué', () => this.toast(`${x.name} est dans l'éditeur d'étiquette (Ma gamme → Étiquette)`, 'info'));
+      if (owned) b = this.btn('btn price own', tl('✓ Débloqué'), () => this.toast(tl('{0} est dans l\'éditeur d\'étiquette (Ma gamme → Étiquette)', x.name), 'info'));
       else {
         const buy = () => {
           const r = g.buyUnlock(x.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('pickup');
-          this.toast(`${x.name} : dans l'éditeur d'étiquette !`, 'good');
+          this.toast(tl('{0} : dans l\'éditeur d\'étiquette !', x.name), 'good');
           this.onSent?.();
           this.shopKey = '';
           this.renderShop();
@@ -3345,12 +3367,12 @@ export class App {
           b = this.btn('btn primary price', moneyShort(x.cost), buy);
           this.costGate(b, x.cost);
         }
-        b.setAttribute('aria-label', `Débloquer ${x.name}`);
+        b.setAttribute('aria-label', tl('Débloquer {0}', x.name));
       }
       cell.append(b);
       grid.append(cell);
     }
-    this.shopBody.append(tabs, grid, h('p', 'hint', 'Ce que tu débloques apparaît dans l\'éditeur d\'étiquette (Ma gamme → Étiquette).'));
+    this.shopBody.append(tabs, grid, h('p', 'hint', tl('Ce que tu débloques apparaît dans l\'éditeur d\'étiquette (Ma gamme → Étiquette).')));
   }
 
   // ------------------------------------------------------------------ Gaston

@@ -1,3 +1,4 @@
+import { locale, tl } from '../i18n';
 /** Formats d'affichage purs (testables sans navigateur). */
 
 /**
@@ -10,12 +11,12 @@ export function compact(v: number): string {
     const x = n / d;
     const dec = x < 100 ? 1 : 0;
     const f = Math.floor(x * 10 ** dec) / 10 ** dec;
-    return `${f.toLocaleString('fr-FR', { maximumFractionDigits: dec })}${u}`;
+    return `${f.toLocaleString(locale, { maximumFractionDigits: dec })}${u}`;
   };
   if (n < 1000) return String(n);
   if (n < 1e6) return unit(1e3, 'k');
   if (n < 1e9) return unit(1e6, 'M');
-  return unit(1e9, 'Md');
+  return unit(1e9, tl('Md'));
 }
 
 /**
@@ -24,10 +25,10 @@ export function compact(v: number): string {
  */
 export function countdown(s: number): string {
   const t = Math.max(0, Math.ceil(s));
-  if (t < 60) return `dans ${t} s`;
+  if (t < 60) return tl('dans {0} s', t);
   const m = Math.ceil(t / 60);
-  if (m < 60) return `dans ${m} min`;
-  return `dans ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+  if (m < 60) return tl('dans {0} min', m);
+  return tl('dans {0} h {1}', Math.floor(m / 60), String(m % 60).padStart(2, '0'));
 }
 
 /** Temps au centre du cadran d'un boost : les heures au-delà d'une heure, puis les minutes, puis les secondes. */

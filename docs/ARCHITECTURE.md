@@ -34,3 +34,13 @@ src/
 - **Pièces :** les canvas (bureau, atelier, stockage, bar) et le magasin (DOM, avec un second canvas du bar pour sa vitrine) sont posés côte à côte sur une piste qui glisse au doigt. Seule la pièce affichée est redessinée, et ses voisines pendant un glissement ; au bureau, l'atelier l'est aussi, car on le voit par la fenêtre. Un glissement « avale » le clic qui suit, pour ne pas ouvrir la machine sous le doigt.
 - **Rendu :** chaque pièce a un plan de 160 × 300 px, agrandi au pixel près (`image-rendering: pixelated`) pour tenir entier à l'écran. Son canvas couvre tout l'écran : le décor (murs, sols, passerelles) est peint d'un seul tenant jusqu'aux bords, plus large ou plus haut que le plan selon le format, sans rien recopier. Les sols de toutes les pièces fuient vers un point à hauteur des yeux ; l'ombrage (coins, pied des murs, lampes, ombres portées) est tramé au pixel, une fois, quand le décor est mis en cache. Les sprites sont peints une seule fois puis mis en cache, et les effets sont redessinés à chaque image.
 - **iOS :** `.github/workflows/testflight.yml`, lancé à la demande depuis l'onglet Actions, compile, signe et envoie le build sur TestFlight (voir `docs/TESTFLIGHT.md`).
+
+## Langues (`src/i18n/`)
+
+Le jeu parle français, anglais, espagnol et chinois simplifié. Le français est la langue source : chaque texte affiché passe par `tl('texte français', ...valeurs)`, et `en.ts`, `es.ts`, `zh.ts` donnent sa traduction (`{0}`, `{1}`… sont les valeurs ; une traduction peut les déplacer ou en omettre, par exemple le « s » d'un pluriel en chinois).
+
+- **Langue** : celle choisie dans les Options, sinon celle du système si le jeu la parle, sinon l'anglais. Changer de langue recharge le jeu (les données sont traduites au chargement). Sur iOS, `CFBundleLocalizations` (Info.plist) permet à la WebView de connaître la langue du téléphone.
+- **Ajouter un texte** : l'écrire avec `tl('…')`, puis ajouter sa traduction dans les trois dictionnaires. Le test `src/i18n/i18n.test.ts` échoue tant qu'une traduction manque.
+- **Identifiants internes** : les styles, couleurs et verdicts de dégustation (`src/core/brewing/model.ts`) restent en français dans la sauvegarde et la logique (les tendances les comparent) ; on les traduit seulement à l'affichage.
+- Les textes générés une fois et sauvegardés (nom d'un client, défauts d'une dégustation, journal) gardent la langue du moment où ils sont nés.
+- Les nombres suivent la langue (`locale`).

@@ -4,6 +4,7 @@
  * Données pures : les effets sont appliqués par la partie (game.ts).
  */
 import type { StationId } from './stations';
+import { tl } from '../i18n';
 
 // ------------------------------------------------------------------ diamants (monnaie premium)
 
@@ -39,11 +40,11 @@ export interface GemPack {
   tag?: string;
 }
 export const GEM_PACKS: readonly GemPack[] = [
-  { id: 'starter', productId: 'com.guigousse.brewit.gems.starter', name: 'Pack de démarrage', gems: 500, price: '1,99 €', once: true, tag: 'Une seule fois' },
-  { id: 'handful', productId: 'com.guigousse.brewit.gems.80', name: 'Poignée de diamants', gems: 80, price: '0,99 €' },
-  { id: 'purse', productId: 'com.guigousse.brewit.gems.450', name: 'Bourse de diamants', gems: 450, price: '4,99 €' },
-  { id: 'chest', productId: 'com.guigousse.brewit.gems.1000', name: 'Coffre de diamants', gems: 1000, price: '9,99 €', tag: 'Populaire' },
-  { id: 'trunk', productId: 'com.guigousse.brewit.gems.2200', name: 'Malle de diamants', gems: 2200, price: '19,99 €', tag: 'Meilleure affaire' },
+  { id: 'starter', productId: 'com.guigousse.brewit.gems.starter', name: tl('Pack de démarrage'), gems: 500, price: '1,99 €', once: true, tag: tl('Une seule fois') },
+  { id: 'handful', productId: 'com.guigousse.brewit.gems.80', name: tl('Poignée de diamants'), gems: 80, price: '0,99 €' },
+  { id: 'purse', productId: 'com.guigousse.brewit.gems.450', name: tl('Bourse de diamants'), gems: 450, price: '4,99 €' },
+  { id: 'chest', productId: 'com.guigousse.brewit.gems.1000', name: tl('Coffre de diamants'), gems: 1000, price: '9,99 €', tag: tl('Populaire') },
+  { id: 'trunk', productId: 'com.guigousse.brewit.gems.2200', name: tl('Malle de diamants'), gems: 2200, price: '19,99 €', tag: tl('Meilleure affaire') },
 ];
 export const gemPackById = (id: string) => GEM_PACKS.find((p) => p.id === id);
 export const gemPackByProduct = (productId: string) => GEM_PACKS.find((p) => p.productId === productId);
@@ -71,24 +72,24 @@ export interface BoostDef {
 
 /** Les postes, dans l'ordre du magasin ; « null » réunit les coups ponctuels. */
 export const BOOST_POSTS: readonly { id: BoostChannel | null; name: string; text: string }[] = [
-  { id: 'brew', name: 'Machines', text: 'Toutes les machines tournent plus vite. Le temps du jeu, lui, ne change pas.' },
-  { id: 'yeast', name: 'Fermentation', text: 'Fermentation et garde : là où les brassins attendent le plus.' },
-  { id: 'bar', name: 'Clients du bar', text: 'Plus de monde au comptoir.' },
-  { id: 'wholesale', name: 'Grossiste', text: 'Le grossiste paie plus cher, ou reprend tout sans limite.' },
-  { id: null, name: 'Coups ponctuels', text: 'Un effet immédiat.' },
+  { id: 'brew', name: tl('Machines'), text: tl('Toutes les machines tournent plus vite. Le temps du jeu, lui, ne change pas.') },
+  { id: 'yeast', name: tl('Fermentation'), text: tl('Fermentation et garde : là où les brassins attendent le plus.') },
+  { id: 'bar', name: tl('Clients du bar'), text: tl('Plus de monde au comptoir.') },
+  { id: 'wholesale', name: tl('Grossiste'), text: tl('Le grossiste paie plus cher, ou reprend tout sans limite.') },
+  { id: null, name: tl('Coups ponctuels'), text: tl('Un effet immédiat.') },
 ];
 
 export const BOOSTS: readonly BoostDef[] = [
-  { id: 'rush', channel: 'brew', name: 'Coup de feu', text: 'Machines 2× plus vite · 30 min', mult: 2, minutes: 30, gems: 3 },
-  { id: 'cadence', channel: 'brew', name: 'Cadence ×2', text: 'Machines 2× plus vite · 2 h', mult: 2, minutes: 120, gems: 10 },
-  { id: 'nightShift', channel: 'brew', name: 'Équipe de nuit', text: 'Machines 2× plus vite · 8 h', mult: 2, minutes: 480, gems: 30 },
-  { id: 'fullSpeed', channel: 'brew', name: 'Plein régime', text: 'Machines 3× plus vite · 1 h', mult: 3, minutes: 60, gems: 12 },
-  { id: 'yeast', channel: 'yeast', name: 'Levure express', text: 'Cuves 3× plus vite · 2 h', mult: 3, minutes: 120, gems: 8 },
-  { id: 'happyHour', channel: 'bar', name: 'Happy hour', text: 'Clients ×2, verres −20 % · 2 h', mult: 2, minutes: 120, priceMult: 0.8, gems: 6 },
-  { id: 'buzz', channel: 'bar', name: 'Bouche-à-oreille', text: '50 % de clients en plus · 8 h', mult: 1.5, minutes: 480, gems: 15 },
-  { id: 'broker', channel: 'wholesale', name: 'Grossiste généreux', text: 'Le grossiste paie +50 % · 4 h', mult: 1.5, minutes: 240, gems: 8 },
-  { id: 'openGate', channel: 'wholesale', name: 'Grossiste sans limite', text: 'Le grossiste reprend tout · 4 h', mult: 1, minutes: 240, gems: 50 },
-  { id: 'prospect', name: 'Prospection', text: 'Une commande arrive tout de suite', mult: 1, minutes: 0, gems: 3 },
+  { id: 'rush', channel: 'brew', name: tl('Coup de feu'), text: tl('Machines 2× plus vite · 30 min'), mult: 2, minutes: 30, gems: 3 },
+  { id: 'cadence', channel: 'brew', name: tl('Cadence ×2'), text: tl('Machines 2× plus vite · 2 h'), mult: 2, minutes: 120, gems: 10 },
+  { id: 'nightShift', channel: 'brew', name: tl('Équipe de nuit'), text: tl('Machines 2× plus vite · 8 h'), mult: 2, minutes: 480, gems: 30 },
+  { id: 'fullSpeed', channel: 'brew', name: tl('Plein régime'), text: tl('Machines 3× plus vite · 1 h'), mult: 3, minutes: 60, gems: 12 },
+  { id: 'yeast', channel: 'yeast', name: tl('Levure express'), text: tl('Cuves 3× plus vite · 2 h'), mult: 3, minutes: 120, gems: 8 },
+  { id: 'happyHour', channel: 'bar', name: tl('Happy hour'), text: tl('Clients ×2, verres −20 % · 2 h'), mult: 2, minutes: 120, priceMult: 0.8, gems: 6 },
+  { id: 'buzz', channel: 'bar', name: tl('Bouche-à-oreille'), text: tl('50 % de clients en plus · 8 h'), mult: 1.5, minutes: 480, gems: 15 },
+  { id: 'broker', channel: 'wholesale', name: tl('Grossiste généreux'), text: tl('Le grossiste paie +50 % · 4 h'), mult: 1.5, minutes: 240, gems: 8 },
+  { id: 'openGate', channel: 'wholesale', name: tl('Grossiste sans limite'), text: tl('Le grossiste reprend tout · 4 h'), mult: 1, minutes: 240, gems: 50 },
+  { id: 'prospect', name: tl('Prospection'), text: tl('Une commande arrive tout de suite'), mult: 1, minutes: 0, gems: 3 },
 ];
 export const boostById = (id: string) => BOOSTS.find((b) => b.id === id);
 
@@ -111,9 +112,9 @@ export interface StaffDef {
   text: string;
 }
 export const STAFF: readonly StaffDef[] = [
-  { id: 'barman', name: 'Barman', role: 'Au bar', text: 'Rebranche les fûts vides avec ceux du stockage, même pendant ton absence.' },
-  { id: 'courier', name: 'Livreur', role: 'Aux commandes', text: 'Envoie les commandes que ton stock peut remplir, même pendant ton absence.' },
-  { id: 'apprentice', name: 'Apprenti brasseur', role: 'À l\'atelier', text: 'Quand la file est vide, il reprogramme ton dernier brassin : la brasserie ne s\'arrête pas.' },
+  { id: 'barman', name: tl('Barman'), role: tl('Au bar'), text: tl('Rebranche les fûts vides avec ceux du stockage, même pendant ton absence.') },
+  { id: 'courier', name: tl('Livreur'), role: tl('Aux commandes'), text: tl('Envoie les commandes que ton stock peut remplir, même pendant ton absence.') },
+  { id: 'apprentice', name: tl('Apprenti brasseur'), role: tl('À l\'atelier'), text: tl('Quand la file est vide, il reprogramme ton dernier brassin : la brasserie ne s\'arrête pas.') },
 ];
 export const staffById = (id: string) => STAFF.find((s) => s.id === id);
 /** Un contrat dure 8 h, et se prolonge jusqu'à 24 h d'avance. */
@@ -144,11 +145,11 @@ export interface FurnitureDef {
 }
 /** Le mobilier se débloque l'un après l'autre ; chaque meuble s'accorde au style du bar, à tous ses niveaux. */
 export const FURNITURE: readonly FurnitureDef[] = [
-  { id: 'plants', name: 'Plantes vertes', text: 'Au bout du comptoir. Ta gamme se fait connaître 20 % plus vite au bar.', cost: 400, pop: 1.2 },
-  { id: 'posters', name: 'Affiches encadrées', text: 'Au mur. 5 % de clients en plus.', cost: 2500, clients: 1.05 },
-  { id: 'neon', name: 'Enseigne lumineuse', text: 'Elle attire les passants : 15 % de clients en plus.', cost: 12000, clients: 1.15 },
-  { id: 'benches', name: 'Banquettes', text: 'Deux places de plus, et 10 % de clients en plus.', cost: 90000, clients: 1.1, seats: 2 },
-  { id: 'jukebox', name: 'Juke-box', text: 'Les clients s\'attardent : les verres se vendent 10 % plus cher.', cost: 200000, price: 1.1 },
+  { id: 'plants', name: tl('Plantes vertes'), text: tl('Au bout du comptoir. Ta gamme se fait connaître 20 % plus vite au bar.'), cost: 400, pop: 1.2 },
+  { id: 'posters', name: tl('Affiches encadrées'), text: tl('Au mur. 5 % de clients en plus.'), cost: 2500, clients: 1.05 },
+  { id: 'neon', name: tl('Enseigne lumineuse'), text: tl('Elle attire les passants : 15 % de clients en plus.'), cost: 12000, clients: 1.15 },
+  { id: 'benches', name: tl('Banquettes'), text: tl('Deux places de plus, et 10 % de clients en plus.'), cost: 90000, clients: 1.1, seats: 2 },
+  { id: 'jukebox', name: tl('Juke-box'), text: tl('Les clients s\'attardent : les verres se vendent 10 % plus cher.'), cost: 200000, price: 1.1 },
 ];
 export const furnitureById = (id: string) => FURNITURE.find((f) => f.id === id);
 
@@ -174,10 +175,10 @@ export interface LabelUnlock {
   gems?: number;
 }
 export const UNLOCK_KINDS: readonly { id: UnlockKind; name: string }[] = [
-  { id: 'bottle', name: 'Bouteilles' },
-  { id: 'shape', name: 'Formes' },
-  { id: 'emblem', name: 'Logos' },
-  { id: 'pattern', name: 'Motifs' },
+  { id: 'bottle', name: tl('Bouteilles') },
+  { id: 'shape', name: tl('Formes') },
+  { id: 'emblem', name: tl('Logos') },
+  { id: 'pattern', name: tl('Motifs') },
 ];
 const u = (kind: UnlockKind, value: string, name: string, cost: number): LabelUnlock => ({ id: `${kind}:${value}`, kind, value, name, cost });
 /** Les cosmétiques de luxe (bouteille d'or, diamant en relief, fleurs de lys d'or) : 500 diamants pièce. */
@@ -186,27 +187,27 @@ export const LUXURY_GEMS = 500;
 const p = (kind: UnlockKind, value: string, name: string, gems: number): LabelUnlock => ({ id: `${kind}:${value}`, kind, value, name, cost: 0, gems });
 /** Tout ce que l'éditeur d'étiquettes peut gagner : formes de bouteille, d'étiquette, logos et motifs (quelques-uns en diamants). */
 export const LABEL_UNLOCKS: readonly LabelUnlock[] = [
-  u('bottle', 'longneck', 'Long col', 800),
-  u('bottle', 'stubby', 'Trapue', 4000),
-  u('bottle', 'swing', 'Bouchon mécanique', 20000),
-  p('bottle', 'champagne', 'Champenoise', 40),
-  p('bottle', 'gold', 'Bouteille d\'or', LUXURY_GEMS),
-  u('shape', 'round', 'Arrondie', 500),
-  u('shape', 'arch', 'Arche', 3000),
-  u('shape', 'notched', 'Coins coupés', 15000),
-  p('shape', 'baroque', 'Cartouche baroque', LUXURY_GEMS),
-  u('emblem', 'leaf', 'Feuille', 300),
-  u('emblem', 'bee', 'Abeille', 1500),
-  u('emblem', 'sun', 'Soleil', 6000),
-  u('emblem', 'fish', 'Poisson', 25000),
-  p('emblem', 'castle', 'Château', 30),
-  p('emblem', 'skull', 'Crâne', 50),
-  p('emblem', 'gem', 'Diamant', LUXURY_GEMS),
-  u('pattern', 'zigzag', 'Zigzag', 400),
-  u('pattern', 'scales', 'Écailles', 2500),
-  u('pattern', 'herringbone', 'Chevrons', 12000),
-  p('pattern', 'tartan', 'Tartan', 30),
-  p('pattern', 'artdeco', 'Art déco', LUXURY_GEMS),
+  u('bottle', 'longneck', tl('Long col'), 800),
+  u('bottle', 'stubby', tl('Trapue'), 4000),
+  u('bottle', 'swing', tl('Bouchon mécanique'), 20000),
+  p('bottle', 'champagne', tl('Champenoise'), 40),
+  p('bottle', 'gold', tl('Bouteille d\'or'), LUXURY_GEMS),
+  u('shape', 'round', tl('Arrondie'), 500),
+  u('shape', 'arch', tl('Arche'), 3000),
+  u('shape', 'notched', tl('Coins coupés'), 15000),
+  p('shape', 'baroque', tl('Cartouche baroque'), LUXURY_GEMS),
+  u('emblem', 'leaf', tl('Feuille'), 300),
+  u('emblem', 'bee', tl('Abeille'), 1500),
+  u('emblem', 'sun', tl('Soleil'), 6000),
+  u('emblem', 'fish', tl('Poisson'), 25000),
+  p('emblem', 'castle', tl('Château'), 30),
+  p('emblem', 'skull', tl('Crâne'), 50),
+  p('emblem', 'gem', tl('Diamant'), LUXURY_GEMS),
+  u('pattern', 'zigzag', tl('Zigzag'), 400),
+  u('pattern', 'scales', tl('Écailles'), 2500),
+  u('pattern', 'herringbone', tl('Chevrons'), 12000),
+  p('pattern', 'tartan', tl('Tartan'), 30),
+  p('pattern', 'artdeco', tl('Art déco'), LUXURY_GEMS),
 ];
 export const unlockById = (id: string) => LABEL_UNLOCKS.find((x) => x.id === id);
 /** Ce qui est libre dès le début est tout ce qui n'est pas dans la liste des déblocages. */

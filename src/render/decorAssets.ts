@@ -6,6 +6,7 @@ import type { DecorAsset, DecorCtx } from './decor';
 import { drawMiniLabel } from './labelArt';
 import { BAR_MESSAGE } from '../core/game';
 import { ellipseShadow, shade, trap } from './space';
+import { tl } from '../i18n';
 
 const P = (g: CanvasRenderingContext2D) => (x: number, y: number, w: number, h: number, c: string) => {
   g.fillStyle = c;
@@ -78,35 +79,35 @@ function city(g: CanvasRenderingContext2D, w: number, h: number): void {
 export const DECOR_ASSETS: readonly DecorAsset[] = [
   // ------------------------------------------------------------------ lumières
   {
-    id: 'bulb', name: 'Ampoule nue', room: 'bar', w: 5, h: 5, pad: 1, hang: { xs: [2], color: '#1b1424' }, light: [2, 4, 50, 0.3],
+    id: 'bulb', name: tl('Ampoule nue'), room: 'bar', w: 5, h: 5, pad: 1, hang: { xs: [2], color: '#1b1424' }, light: [2, 4, 50, 0.3],
     draw(g) { const px = P(g); px(0, 0, 5, 5, '#f0d890'); px(1, 1, 3, 3, '#fff4b0'); },
   },
   {
-    id: 'lightRay', name: 'Rai de lumière', room: 'bar', w: 48, h: 94,
+    id: 'lightRay', name: tl('Rai de lumière'), room: 'bar', w: 48, h: 94,
     draw(g) { cone(g, 48, 94, 0.07); },
   },
   {
-    id: 'lightRayWide', name: 'Grand rai de lumière', room: 'bar', w: 74, h: 94,
+    id: 'lightRayWide', name: tl('Grand rai de lumière'), room: 'bar', w: 74, h: 94,
     draw(g) { cone(g, 74, 94, 0.06); },
   },
   {
-    id: 'greenPendant', name: 'Suspension verte', room: 'bar', w: 11, h: 5, hang: { xs: [5], color: '#1b1424' }, light: [5, 6, 34, 0.25],
+    id: 'greenPendant', name: tl('Suspension verte'), room: 'bar', w: 11, h: 5, hang: { xs: [5], color: '#1b1424' }, light: [5, 6, 34, 0.25],
     draw(g) { const px = P(g); px(0, 0, 11, 4, '#2c5a3a'); px(2, 4, 7, 1, '#fff4b0'); },
   },
   {
-    id: 'brassSconce', name: 'Applique dorée', room: 'bar', w: 9, h: 4, hang: { xs: [4], color: '#8a5c14' }, light: [4, 4, 26, 0.2],
+    id: 'brassSconce', name: tl('Applique dorée'), room: 'bar', w: 9, h: 4, hang: { xs: [4], color: '#8a5c14' }, light: [4, 4, 26, 0.2],
     draw(g) { const px = P(g); px(0, 0, 9, 3, '#e8b030'); px(1, 3, 7, 1, '#fff4b0'); },
   },
   {
-    id: 'factoryLamp', name: 'Lampe industrielle', room: 'bar', w: 13, h: 6, hang: { xs: [6], color: '#1b1424' }, light: [6, 6, 30, 0.2],
+    id: 'factoryLamp', name: tl('Lampe industrielle'), room: 'bar', w: 13, h: 6, hang: { xs: [6], color: '#1b1424' }, light: [6, 6, 30, 0.2],
     draw(g) { const px = P(g); px(0, 0, 13, 5, '#2c283a'); px(1, 5, 11, 1, '#fff4b0'); },
   },
   {
-    id: 'lantern', name: 'Lanterne', room: 'storage', w: 5, h: 7, pad: 2, light: [2, 3, 40, 0.35],
+    id: 'lantern', name: tl('Lanterne'), room: 'storage', w: 5, h: 7, pad: 2, light: [2, 3, 40, 0.35],
     draw(g) { const px = P(g); wallShadow(g, 0, 0, 5, 7, 0.3); px(0, 0, 5, 7, '#2a1a10'); px(1, 1, 3, 5, '#ffb050'); },
   },
   {
-    id: 'candle', name: 'Bougie et halo', room: 'workshop', w: 44, h: 44,
+    id: 'candle', name: tl('Bougie et halo'), room: 'workshop', w: 44, h: 44,
     draw(g) {
       const px = P(g);
       g.fillStyle = 'rgba(255,190,90,0.10)'; g.beginPath(); g.arc(22, 22, 22, 0, Math.PI * 2); g.fill();
@@ -115,7 +116,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'workLamp', name: 'Lampe d\'atelier', room: 'workshop', w: 42, h: 60,
+    id: 'workLamp', name: tl('Lampe d\'atelier'), room: 'workshop', w: 42, h: 60,
     draw(g, c) {
       const px = P(g);
       px(21, 0, 1, 6, '#2c283a');
@@ -126,7 +127,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'ceilingNeon', name: 'Néon de plafond', room: 'workshop', w: 52, h: 55,
+    id: 'ceilingNeon', name: tl('Néon de plafond'), room: 'workshop', w: 52, h: 55,
     draw(g) {
       const px = P(g);
       px(12, 0, 29, 2, '#ffffff'); px(13, 2, 27, 1, '#5ef0ff');
@@ -135,7 +136,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'deskLamp', name: 'Lampe de bureau', room: 'office', w: 24, h: 22,
+    id: 'deskLamp', name: tl('Lampe de bureau'), room: 'office', w: 24, h: 22,
     draw(g, c) {
       const px = P(g);
       // origine : la lampe est en (6, 0) ; sa lumière tombe sur le plateau, en bas
@@ -148,17 +149,17 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
   },
   // ------------------------------------------------------------------ murs : enseignes, fenêtres, cadres
   {
-    id: 'openSign', name: 'Pancarte OUVERT', room: 'bar', w: 36, h: 16,
+    id: 'openSign', name: tl('Pancarte OUVERT'), room: 'bar', w: 36, h: 16,
     draw(g) {
       const px = P(g);
       g.save(); g.translate(1, 5); g.rotate(-0.12);
       px(0, 0, 34, 11, '#5a3a1c'); px(1, 1, 32, 9, '#e8dcc0');
-      g.fillStyle = '#a8483a'; g.font = '8px monospace'; g.textBaseline = 'alphabetic'; g.fillText('OUVERT', 2, 8);
+      g.fillStyle = '#a8483a'; g.font = '8px monospace'; g.textBaseline = 'alphabetic'; g.fillText(tl('OUVERT'), 2, 8);
       g.restore();
     },
   },
   {
-    id: 'brewSign', name: 'Enseigne BREW IT', room: 'bar', w: 72, h: 16, pad: 4,
+    id: 'brewSign', name: tl('Enseigne BREW IT'), room: 'bar', w: 72, h: 16, pad: 4,
     draw(g) {
       const px = P(g);
       g.fillStyle = 'rgba(255,90,208,0.10)'; g.fillRect(-4, -4, 80, 24);
@@ -167,15 +168,15 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'cityView', name: 'Baie sur la ville', room: 'workshop', w: 100, h: 30,
+    id: 'cityView', name: tl('Baie sur la ville'), room: 'workshop', w: 100, h: 30,
     draw(g) { city(g, 100, 30); },
   },
   {
-    id: 'cityViewSmall', name: 'Petite baie sur la ville', room: 'bar', w: 72, h: 24,
+    id: 'cityViewSmall', name: tl('Petite baie sur la ville'), room: 'bar', w: 72, h: 24,
     draw(g) { city(g, 72, 24); },
   },
   {
-    id: 'moonWindow', name: 'Lucarne au clair de lune', room: 'workshop', w: 24, h: 24,
+    id: 'moonWindow', name: tl('Lucarne au clair de lune'), room: 'workshop', w: 24, h: 24,
     draw(g) {
       const px = P(g);
       g.fillStyle = '#2a2030'; g.beginPath(); g.arc(12, 12, 11, 0, Math.PI * 2); g.fill();
@@ -185,7 +186,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'garageWindow', name: 'Fenêtre de garage', room: 'workshop', w: 46, h: 62,
+    id: 'garageWindow', name: tl('Fenêtre de garage'), room: 'workshop', w: 46, h: 62,
     draw(g) {
       const px = P(g);
       // la fenêtre (16 × 24) en haut, au milieu ; son rai de lumière dessous
@@ -197,7 +198,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'archWindow', name: 'Baie en arc', room: 'workshop', w: 52, h: 76,
+    id: 'archWindow', name: tl('Baie en arc'), room: 'workshop', w: 52, h: 76,
     draw(g) {
       const px = P(g);
       const x = 10;
@@ -212,7 +213,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'cellarVent', name: 'Soupirail', room: 'bar', w: 28, h: 8,
+    id: 'cellarVent', name: tl('Soupirail'), room: 'bar', w: 28, h: 8,
     draw(g) {
       const px = P(g);
       px(0, 0, 28, 8, '#1b1424'); px(1, 1, 26, 6, '#2a3a5a');
@@ -220,7 +221,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'cobweb', name: 'Toile d\'araignée', room: 'bar', w: 19, h: 21,
+    id: 'cobweb', name: tl('Toile d\'araignée'), room: 'bar', w: 19, h: 21,
     draw(g) {
       g.strokeStyle = 'rgba(255,255,255,0.22)';
       g.lineWidth = 1;
@@ -231,19 +232,19 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'crack', name: 'Fissure', room: 'bar', w: 2, h: 17,
+    id: 'crack', name: tl('Fissure'), room: 'bar', w: 2, h: 17,
     draw(g) { const px = P(g); px(0, 0, 1, 10, '#3a2c20'); px(1, 9, 1, 8, '#3a2c20'); },
   },
   {
-    id: 'posterBottle', name: 'Cadre : bouteille', room: 'bar', w: 18, h: 24, pad: 2, furniture: 'posters',
+    id: 'posterBottle', name: tl('Cadre : bouteille'), room: 'bar', w: 18, h: 24, pad: 2, furniture: 'posters',
     draw(g, c) { poster(g, c, 0); },
   },
   {
-    id: 'posterMug', name: 'Cadre : chope', room: 'bar', w: 18, h: 24, pad: 2, furniture: 'posters',
+    id: 'posterMug', name: tl('Cadre : chope'), room: 'bar', w: 18, h: 24, pad: 2, furniture: 'posters',
     draw(g, c) { poster(g, c, 1); },
   },
   {
-    id: 'board', name: 'Ardoise de la carte', room: 'bar', w: 40, h: 24, pad: 1, anim: true,
+    id: 'board', name: tl('Ardoise de la carte'), room: 'bar', w: 40, h: 24, pad: 1, anim: true,
     draw(g, c) {
       const px = P(g);
       if (c.lv < 2 && !c.preview) return;
@@ -259,7 +260,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'chalkboard', name: 'Ardoise des bières', room: 'workshop', w: 28, h: 18,
+    id: 'chalkboard', name: tl('Ardoise des bières'), room: 'workshop', w: 28, h: 18,
     draw(g) {
       const px = P(g);
       px(0, 0, 28, 18, '#5a3a18'); px(1, 1, 26, 16, '#2a3030');
@@ -267,7 +268,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'toolBoard', name: 'Outils accrochés', room: 'storage', w: 18, h: 14, pad: 3,
+    id: 'toolBoard', name: tl('Outils accrochés'), room: 'storage', w: 18, h: 14, pad: 3,
     draw(g) {
       const px = P(g);
       wallShadow(g, 0, 0, 18, 14, 0.35);
@@ -275,7 +276,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'coldUnit', name: 'Groupe froid', room: 'storage', w: 52, h: 14, pad: 3,
+    id: 'coldUnit', name: tl('Groupe froid'), room: 'storage', w: 52, h: 14, pad: 3,
     draw(g) {
       const px = P(g);
       wallShadow(g, 0, 0, 52, 14, 0.4);
@@ -284,7 +285,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'thermometer', name: 'Thermomètre 2 °C', room: 'storage', w: 22, h: 12,
+    id: 'thermometer', name: tl('Thermomètre 2 °C'), room: 'storage', w: 22, h: 12,
     draw(g) {
       const px = P(g);
       px(0, 0, 22, 12, '#1c2a3a'); px(2, 2, 18, 8, '#0c1420');
@@ -292,14 +293,14 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'robotArm', name: 'Bras robotisé', room: 'storage', w: 120, h: 20,
+    id: 'robotArm', name: tl('Bras robotisé'), room: 'storage', w: 120, h: 20,
     draw(g) {
       const px = P(g);
       px(0, 0, 120, 3, '#b8c6d6'); px(50, 3, 6, 12, '#8a9ab0'); px(46, 14, 14, 3, '#5a6a82'); px(52, 17, 2, 3, '#5ef0ff');
     },
   },
   {
-    id: 'jarShelf', name: 'Étagère de bocaux', room: 'workshop', w: 34, h: 8,
+    id: 'jarShelf', name: tl('Étagère de bocaux'), room: 'workshop', w: 34, h: 8,
     draw(g) {
       const px = P(g);
       px(0, 6, 34, 2, '#7a5228');
@@ -308,7 +309,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'bottleShelf', name: 'Étagère à bouteilles', room: 'bar', w: 70, h: 16,
+    id: 'bottleShelf', name: tl('Étagère à bouteilles'), room: 'bar', w: 70, h: 16,
     draw(g, c) {
       const px = P(g);
       const lv = c.lv;
@@ -325,7 +326,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'barShelf', name: 'Étagère à bouteilles du comptoir', room: 'bar', w: 100, h: 16,
+    id: 'barShelf', name: tl('Étagère à bouteilles du comptoir'), room: 'bar', w: 100, h: 16,
     draw(g, c) {
       const px = P(g);
       const lv = c.lv;
@@ -342,7 +343,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'clock', name: 'Horloge', room: 'office', w: 21, h: 21, pad: 4, anim: true,
+    id: 'clock', name: tl('Horloge'), room: 'office', w: 21, h: 21, pad: 4, anim: true,
     draw(g, c) {
       const r = 9;
       const x = 10;
@@ -370,7 +371,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
   },
   // ------------------------------------------------------------------ sol et meubles
   {
-    id: 'smallPlant', name: 'Plante en pot', room: 'bar', w: 30, h: 24, furniture: 'plants',
+    id: 'smallPlant', name: tl('Plante en pot'), room: 'bar', w: 30, h: 24, furniture: 'plants',
     draw(g, c) {
       const px = P(g);
       const x = 10;
@@ -387,7 +388,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'bigPlant', name: 'Grande plante', room: 'office', w: 60, h: 56,
+    id: 'bigPlant', name: tl('Grande plante'), room: 'office', w: 60, h: 56,
     draw(g, c) {
       const px = P(g);
       // le pot (24 de large) est en (18, 30) ; ses feuilles montent et retombent autour
@@ -414,7 +415,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'mug', name: 'Tasse', room: 'office', w: 8, h: 8,
+    id: 'mug', name: tl('Tasse'), room: 'office', w: 8, h: 8,
     draw(g) {
       const px = P(g);
       px(0, 7, 8, 1, 'rgba(0,0,0,0.35)');
@@ -422,7 +423,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'chair', name: 'Chaise de bureau', room: 'office', w: 44, h: 54,
+    id: 'chair', name: tl('Chaise de bureau'), room: 'office', w: 44, h: 54,
     draw(g, c) {
       // dessinée à l'échelle du bureau (×1,35), chaque mesure arrondie au pixel
       const q = (v: number) => Math.round(v * 1.35);
@@ -470,7 +471,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'neonSign', name: 'Panneau à message (au mur)', room: 'bar', w: SIGN_W, h: 10, pad: 4, anim: true, furniture: 'neon',
+    id: 'neonSign', name: tl('Panneau à message (au mur)'), room: 'bar', w: SIGN_W, h: 10, pad: 4, anim: true, furniture: 'neon',
     draw(g, c) {
       wallShadow(g, 0, 0, SIGN_W, 10, 0.4);
       messageSign(g, c);
@@ -479,11 +480,11 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'neonSignHanging', name: 'Panneau à message (suspendu)', room: 'bar', w: SIGN_W, h: 10, pad: 4, anim: true, furniture: 'neon', hang: { xs: [4, SIGN_W - 5], color: '#8a9ab0' },
+    id: 'neonSignHanging', name: tl('Panneau à message (suspendu)'), room: 'bar', w: SIGN_W, h: 10, pad: 4, anim: true, furniture: 'neon', hang: { xs: [4, SIGN_W - 5], color: '#8a9ab0' },
     draw(g, c) { messageSign(g, c); },
   },
   {
-    id: 'jukebox', name: 'Juke-box', room: 'bar', w: 14, h: 42, pad: 14, anim: true, furniture: 'jukebox',
+    id: 'jukebox', name: tl('Juke-box'), room: 'bar', w: 14, h: 42, pad: 14, anim: true, furniture: 'jukebox',
     draw(g, c) {
       const px = P(g);
       const lv = c.lv;
@@ -507,7 +508,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'barrel', name: 'Vieux tonneau', room: 'bar', w: 20, h: 26, pad: 3,
+    id: 'barrel', name: tl('Vieux tonneau'), room: 'bar', w: 20, h: 26, pad: 3,
     draw(g) {
       const px = P(g);
       floorShadow(g, 10, 26, 11, 2);
@@ -518,7 +519,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'emptyCrate', name: 'Caisse de bouteilles vides', room: 'bar', w: 24, h: 22,
+    id: 'emptyCrate', name: tl('Caisse de bouteilles vides'), room: 'bar', w: 24, h: 22,
     draw(g) {
       const px = P(g);
       px(0, 10, 24, 12, '#6a5a4a'); px(0, 10, 24, 1, '#8a7a68');
@@ -527,7 +528,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
   },
   // ------------------------------------------------------------------ stockage : au sol
   {
-    id: 'maltSacks', name: 'Sacs de malt', room: 'storage', w: 36, h: 28, pad: 3,
+    id: 'maltSacks', name: tl('Sacs de malt'), room: 'storage', w: 36, h: 28, pad: 3,
     draw(g) {
       const px = P(g);
       floorShadow(g, 18, 27, 19, 3);
@@ -542,7 +543,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'bucket', name: 'Seau', room: 'storage', w: 11, h: 11, pad: 2,
+    id: 'bucket', name: tl('Seau'), room: 'storage', w: 11, h: 11, pad: 2,
     draw(g) {
       const px = P(g);
       floorShadow(g, 5, 11, 7, 2);
@@ -551,7 +552,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'coolBoxes', name: 'Caisses isothermes', room: 'storage', w: 34, h: 32, pad: 3,
+    id: 'coolBoxes', name: tl('Caisses isothermes'), room: 'storage', w: 34, h: 32, pad: 3,
     draw(g) {
       const px = P(g);
       floorShadow(g, 17, 31, 18, 3);
@@ -563,7 +564,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'palletJack', name: 'Transpalette', room: 'storage', w: 44, h: 30, pad: 3,
+    id: 'palletJack', name: tl('Transpalette'), room: 'storage', w: 44, h: 30, pad: 3,
     draw(g) {
       const px = P(g);
       floorShadow(g, 24, 29, 22, 3);
@@ -577,7 +578,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'extinguisher', name: 'Extincteur', room: 'storage', w: 9, h: 22, pad: 2,
+    id: 'extinguisher', name: tl('Extincteur'), room: 'storage', w: 9, h: 22, pad: 2,
     draw(g) {
       const px = P(g);
       floorShadow(g, 4, 22, 6, 2);
@@ -587,7 +588,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'deliveryBot', name: 'Robot de livraison', room: 'storage', w: 40, h: 34, pad: 3,
+    id: 'deliveryBot', name: tl('Robot de livraison'), room: 'storage', w: 40, h: 34, pad: 3,
     anim: true,
     draw(g, c) {
       const px = P(g);
@@ -605,7 +606,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'trolley', name: 'Diable et caisses vides', room: 'storage', w: 44, h: 76, pad: 2,
+    id: 'trolley', name: tl('Diable et caisses vides'), room: 'storage', w: 44, h: 76, pad: 2,
     draw(g, c) {
       const px = P(g);
       const lv = c.lv;
@@ -632,7 +633,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
   },
   // ------------------------------------------------------------------ bureau : objets sur le plateau, corbeille
   {
-    id: 'rotaryPhone', name: 'Téléphone à cadran', room: 'office', w: 18, h: 11,
+    id: 'rotaryPhone', name: tl('Téléphone à cadran'), room: 'office', w: 18, h: 11,
     draw(g) {
       const px = P(g);
       g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(3, 9, 16, 2);
@@ -643,7 +644,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'orderPile', name: 'Pile de bons de commande', room: 'office', w: 16, h: 9,
+    id: 'orderPile', name: tl('Pile de bons de commande'), room: 'office', w: 16, h: 9,
     draw(g) {
       const px = P(g);
       g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(3, 7, 14, 2);
@@ -652,7 +653,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'deskPhone', name: 'Téléphone fixe', room: 'office', w: 16, h: 9,
+    id: 'deskPhone', name: tl('Téléphone fixe'), room: 'office', w: 16, h: 9,
     draw(g) {
       const px = P(g);
       g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(3, 7, 14, 2);
@@ -663,7 +664,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'binders', name: 'Classeurs', room: 'office', w: 14, h: 15,
+    id: 'binders', name: tl('Classeurs'), room: 'office', w: 14, h: 15,
     draw(g) {
       const px = P(g);
       g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(3, 13, 12, 2);
@@ -673,7 +674,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'smartphone', name: 'Smartphone', room: 'office', w: 11, h: 4,
+    id: 'smartphone', name: tl('Smartphone'), room: 'office', w: 11, h: 4,
     draw(g) {
       const px = P(g);
       g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(2, 2, 10, 2);
@@ -681,7 +682,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'postits', name: 'Post-it', room: 'office', w: 9, h: 8,
+    id: 'postits', name: tl('Post-it'), room: 'office', w: 9, h: 8,
     draw(g) {
       const px = P(g);
       px(0, 1, 5, 5, '#f2e070'); px(0, 1, 5, 1, '#fff4b0'); px(1, 3, 3, 1, '#8a7a40');
@@ -689,7 +690,7 @@ export const DECOR_ASSETS: readonly DecorAsset[] = [
     },
   },
   {
-    id: 'smartSpeaker', name: 'Enceinte connectée', room: 'office', w: 8, h: 12, anim: true,
+    id: 'smartSpeaker', name: tl('Enceinte connectée'), room: 'office', w: 8, h: 12, anim: true,
     draw(g, c) {
       const px = P(g);
       g.fillStyle = 'rgba(16,10,24,0.3)'; g.fillRect(2, 10, 8, 2);

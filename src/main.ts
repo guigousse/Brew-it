@@ -9,6 +9,7 @@ import { createGemStore, type Purchase } from './platform/purchases';
 import { createStorage } from './platform/storage';
 import { sfx } from './platform/audio';
 import { App } from './ui/app';
+import { locale, tl } from './i18n';
 
 const AUTOSAVE_SECONDS = 20;
 
@@ -26,7 +27,7 @@ async function boot() {
       simulateOffline(game, loaded.elapsedSeconds);
     }
   } catch (err) {
-    console.error('Sauvegarde illisible, nouvelle partie', err);
+    console.error(tl('Sauvegarde illisible, nouvelle partie'), err);
     game = new Game();
   }
   let loop = new FixedStepLoop(() => game);
@@ -36,7 +37,7 @@ async function boot() {
   const store = createGemStore();
   const credit = async (p: Purchase) => {
     const r = game.grantPurchase(p.productId, p.transactionId);
-    if (r.ok || r.reason === 'Achat déjà crédité') {
+    if (r.ok || r.reason === tl('Achat déjà crédité')) {
       await saves.save(game);
       await store.finish(p.transactionId);
     }
@@ -55,8 +56,8 @@ async function boot() {
         if (!p) return { ok: false, cancelled: true };
         return await credit(p);
       } catch (e) {
-        console.error('Achat de diamants', e);
-        return { ok: false, reason: e instanceof Error ? e.message : 'Achat impossible pour le moment' };
+        console.error(tl('Achat de diamants'), e);
+        return { ok: false, reason: e instanceof Error ? e.message : tl('Achat impossible pour le moment') };
       }
     },
   });
@@ -75,42 +76,42 @@ async function boot() {
     app.resetMessages();
     unsubscribe = game.events.on((e) => {
       if (muted) return; // rattrapage hors-ligne : pas de rafale de notifications
-      const beerName = (id: number | null) => (id == null ? 'Essai' : game.beers.find((b) => b.id === id)?.name ?? 'Essai');
+      const beerName = (id: number | null) => (id == null ? tl('Essai') : game.beers.find((b) => b.id === id)?.name ?? tl('Essai'));
       if (e.type === 'stage') app.scene.onStage(e.stage, performance.now() / 1000);
       if (e.type === 'trend') {
         const tr = TRENDS.find((t) => t.id === e.id);
         sfx.play('newspaper');
-        app.toast(`Tendance : ${tr?.short}`, 'info');
-        app.log(`Nouvelle tendance : ${tr?.text ?? tr?.short}`, 'info', 'trend');
+        app.toast(tl('Tendance : {0}', tr?.short), 'info');
+        app.log(tl('Nouvelle tendance : {0}', tr?.text ?? tr?.short), 'info', 'trend');
       }
       if (e.type === 'batchRuined') {
         sfx.play('break');
-        app.toast(`Lot de « ${beerName(e.beerId)} » raté`, 'bad');
-        app.log(`Lot de « ${beerName(e.beerId)} » raté : il part à l'égout`, 'bad', 'brew');
+        app.toast(tl('Lot de « {0} » raté', beerName(e.beerId)), 'bad');
+        app.log(tl('Lot de « {0} » raté : il part à l\'égout', beerName(e.beerId)), 'bad', 'brew');
       }
       if (e.type === 'batchDone' && e.beerId != null) {
-        app.log(`Brassin de « ${beerName(e.beerId)} » terminé : ${e.kegs ? `${e.kegs} fût${e.kegs > 1 ? 's' : ''}` : `${e.bottles} bouteilles`}`, 'good', 'crate');
+        app.log(tl('Brassin de « {0} » terminé : {1}', beerName(e.beerId), e.kegs ? tl('{0} fût{1}', e.kegs, e.kegs > 1 ? 's' : '') : tl('{0} bouteilles', e.bottles)), 'good', 'crate');
       }
       if (e.type === 'breweryLevel') {
         sfx.play('levelUp');
         app.scene.flash();
         app.openBrewery(true);
         tapFeedback(true);
-        app.log(`La brasserie passe au niveau ${e.level} !`, 'good', 'up');
+        app.log(tl('La brasserie passe au niveau {0} !', e.level), 'good', 'up');
       }
       if (e.type === 'clientAvailable') {
         sfx.play('carillon');
-        app.toast(`Nouveaux clients : ${clientTypeById(e.id)?.label}`, 'good');
-        app.log(`Nouveaux clients : ${clientTypeById(e.id)?.label}`, 'good', 'bubble');
+        app.toast(tl('Nouveaux clients : {0}', clientTypeById(e.id)?.label), 'good');
+        app.log(tl('Nouveaux clients : {0}', clientTypeById(e.id)?.label), 'good', 'bubble');
       }
       if (e.type === 'order') {
         sfx.play('paper');
         app.toast(`📨 ${e.client}`, 'good');
-        app.log(`Nouvelle commande : ${e.client}`, 'good', 'envelope');
+        app.log(tl('Nouvelle commande : {0}', e.client), 'good', 'envelope');
         tapFeedback(false);
       }
-      if (e.type === 'autoSent') app.log(`Livreur : commande « ${e.client} » livrée, +${Math.round(e.amount).toLocaleString('fr-FR')} €`, 'good', 'courier');
-      if (e.type === 'orderExpired') app.log(`Commande expirée : ${e.client}`, 'bad', 'clipboard');
+      if (e.type === 'autoSent') app.log(tl('Livreur : commande « {0} » livrée, +{1} €', e.client, Math.round(e.amount).toLocaleString(locale)), 'good', 'courier');
+      if (e.type === 'orderExpired') app.log(tl('Commande expirée : {0}', e.client), 'bad', 'clipboard');
     });
     app.update();
     void saves.save(game);
@@ -120,7 +121,7 @@ async function boot() {
   // achats payés mais pas encore crédités (app tuée pendant l'achat, achat approuvé plus tard)
   const recover = async (p: Purchase) => {
     const r = await credit(p);
-    if (r.ok) app.toast(`Achat reçu : +${r.gems} diamants`, 'good');
+    if (r.ok) app.toast(tl('Achat reçu : +{0} diamants', r.gems), 'good');
   };
   store.onUpdate((p) => void recover(p));
   void store.pending().then(async (list) => {

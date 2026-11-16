@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { NativePurchases } from '@capgo/native-purchases';
+import { tl } from '../i18n';
 
 /** Un achat confirmé par la boutique, pas encore forcément crédité. */
 export interface Purchase {
@@ -70,7 +71,7 @@ class AppStore implements GemStore {
       const { transactions } = await NativePurchases.getUnfinishedTransactions();
       return transactions.map((t) => ({ productId: t.productIdentifier, transactionId: t.transactionId }));
     } catch (e) {
-      console.error('Achats : transactions en attente', e);
+      console.error(tl('Achats : transactions en attente'), e);
       return [];
     }
   }
@@ -104,7 +105,7 @@ class NoStore implements GemStore {
     return new Map();
   }
   async buy(): Promise<Purchase | null> {
-    throw new Error('Les achats se font dans l\'app iPhone');
+    throw new Error(tl('Les achats se font dans l\'app iPhone'));
   }
   async finish(): Promise<void> {}
   async pending(): Promise<Purchase[]> {

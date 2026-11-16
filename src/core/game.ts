@@ -10,10 +10,11 @@ import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upg
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
+import { tl } from '../i18n';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
 /** Message par défaut du panneau lumineux du bar, et sa longueur maximale. */
-export const BAR_MESSAGE = 'Bienvenue ! Santé et bonne dégustation';
+export const BAR_MESSAGE = tl('Bienvenue ! Santé et bonne dégustation');
 export const BAR_MESSAGE_MAX = 40;
 
 export interface Forecast {
@@ -341,8 +342,8 @@ export class Game {
   /** Ajoute une cuve de fermentation ou de garde. */
   addTank(id: StationId): CommandResult {
     const cost = this.tankCost(id);
-    if (cost == null) return { ok: false, reason: 'Plus de place pour une cuve' };
-    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (cost == null) return { ok: false, reason: tl('Plus de place pour une cuve') };
+    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= cost;
     this.tanks[id] = this.tankCount(id) + 1;
     return { ok: true };
@@ -424,8 +425,8 @@ export class Game {
   }
 
   canBrew(): CommandResult {
-    if (this.batchAt('mill')) return { ok: false, reason: 'Le moulin est occupé' };
-    if (this.money < this.brewCost(this.recipe, this.batchLiters, this.brewFormat) && !this.broke) return { ok: false, reason: 'Pas assez d\'argent pour les ingrédients' };
+    if (this.batchAt('mill')) return { ok: false, reason: tl('Le moulin est occupé') };
+    if (this.money < this.brewCost(this.recipe, this.batchLiters, this.brewFormat) && !this.broke) return { ok: false, reason: tl('Pas assez d\'argent pour les ingrédients') };
     return { ok: true };
   }
 
@@ -475,18 +476,18 @@ export class Game {
   /** Moulin occupé : le brassin partira dès qu'il se libère, avant les brassins programmés. */
   queueBrew(): CommandResult {
     if (!this.batchAt('mill')) return this.brew();
-    if (this.money < this.brewCost(this.recipe, this.batchLiters, this.brewFormat)) return { ok: false, reason: 'Pas assez d\'argent pour les ingrédients' };
+    if (this.money < this.brewCost(this.recipe, this.batchLiters, this.brewFormat)) return { ok: false, reason: tl('Pas assez d\'argent pour les ingrédients') };
     this.queued = true;
     return { ok: true };
   }
 
   /** Programme un brassin d'une bière de la gamme, en bouteilles ou en fûts. */
   planBrew(beerId: number, format: Format, count = 1): CommandResult {
-    if (!this.beers.some((b) => b.id === beerId)) return { ok: false, reason: 'Bière introuvable' };
+    if (!this.beers.some((b) => b.id === beerId)) return { ok: false, reason: tl('Bière introuvable') };
     count = Math.floor(count);
-    if (count < 1) return { ok: false, reason: 'Aucun brassin' };
-    if (count > this.planRoom) return { ok: false, reason: `${this.planCap} brassins programmés au plus` };
-    if (count > this.planLimit(format)) return { ok: false, reason: 'Pas assez de place au stockage' };
+    if (count < 1) return { ok: false, reason: tl('Aucun brassin') };
+    if (count > this.planRoom) return { ok: false, reason: tl('{0} brassins programmés au plus', this.planCap) };
+    if (count > this.planLimit(format)) return { ok: false, reason: tl('Pas assez de place au stockage') };
     // à la suite d'un groupe identique, on l'allonge
     const last = this.plan[this.plan.length - 1];
     if (last && last.beerId === beerId && last.format === format) last.count += count;
@@ -673,7 +674,7 @@ export class Game {
   /** Charge les réglages d'une bière de la gamme dans les appareils. */
   loadBeer(id: number): CommandResult {
     const beer = this.beers.find((b) => b.id === id);
-    if (!beer) return { ok: false, reason: 'Bière introuvable' };
+    if (!beer) return { ok: false, reason: tl('Bière introuvable') };
     this.recipe = { ...beer.recipe };
     this.selectedBeer = id;
     return { ok: true };
@@ -681,9 +682,9 @@ export class Game {
 
   upgrade(id: StationId): CommandResult {
     const lv = this.level(id);
-    if (lv >= MAX_LEVEL) return { ok: false, reason: 'Niveau maximal' };
+    if (lv >= MAX_LEVEL) return { ok: false, reason: tl('Niveau maximal') };
     const cost = this.upgradeCost(id);
-    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     const before = this.breweryLevel;
     this.money -= cost;
     this.stations[id].level = lv + 1;
@@ -698,8 +699,8 @@ export class Game {
   /** Achète une nouvelle place sur l'étagère de la gamme. */
   buySlot(): CommandResult {
     const cost = this.nextSlotCost;
-    if (cost == null) return { ok: false, reason: 'Ton étagère est complète' };
-    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (cost == null) return { ok: false, reason: tl('Ton étagère est complète') };
+    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= cost;
     this.rangeSlots++;
     return { ok: true };
@@ -707,8 +708,8 @@ export class Game {
 
   upgradeStorage(): CommandResult {
     const next = STORAGE[this.storageLevel];
-    if (!next) return { ok: false, reason: 'Niveau maximal' };
-    if (this.money < next.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (!next) return { ok: false, reason: tl('Niveau maximal') };
+    if (this.money < next.cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= next.cost;
     this.storageLevel++;
     return { ok: true };
@@ -731,11 +732,11 @@ export class Game {
   /** Garder l'essai : il entre dans la gamme avec son nom et son étiquette ; ses bouteilles sont étiquetées. */
   keepTrial(name: string, label: Label): CommandResult {
     const b = this.tastable;
-    if (!b?.tasting) return { ok: false, reason: 'Aucun essai à garder' };
-    if (b.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable : personne ne l\'achètera' };
-    if (this.beers.length >= this.rangeSlots) return { ok: false, reason: 'Ta gamme est pleine : achète une nouvelle place ou retire une bière' };
+    if (!b?.tasting) return { ok: false, reason: tl('Aucun essai à garder') };
+    if (b.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: tl('Imbuvable : personne ne l\'achètera') };
+    if (this.beers.length >= this.rangeSlots) return { ok: false, reason: tl('Ta gamme est pleine : achète une nouvelle place ou retire une bière') };
     const beer: Beer = {
-      id: this.nextId++, name: name.trim() || `Bière n°${this.beers.length + 1}`, recipe: b.recipe, tasting: b.tasting,
+      id: this.nextId++, name: name.trim() || tl('Bière n°{0}', this.beers.length + 1), recipe: b.recipe, tasting: b.tasting,
       stock: 0, kegs: [], sold: 0, revenue: 0, label: { ...label }, pop: 0, liters: 0, wsToday: 0,
     };
     this.beers.push(beer);
@@ -754,7 +755,7 @@ export class Game {
   /** Recommencer : l'essai est jeté, l'embouteillage se libère. */
   discardTrial(): CommandResult {
     const b = this.tastable ?? this.batchAt('bottling');
-    if (!b || b.beerId != null) return { ok: false, reason: 'Aucun essai à jeter' };
+    if (!b || b.beerId != null) return { ok: false, reason: tl('Aucun essai à jeter') };
     if (b === this.trial) this.trial = null;
     this.batches = this.batches.filter((x) => x !== b);
     return { ok: true };
@@ -804,8 +805,8 @@ export class Game {
   swapKeg(tap: number, beerId: number): CommandResult {
     const t = this.taps[tap];
     const beer = this.beer(beerId);
-    if (!t || !beer) return { ok: false, reason: 'Tireuse ou bière introuvable' };
-    if (!beer.kegs.length) return { ok: false, reason: `Aucun fût plein de « ${beer.name} » au stockage : programme un brassin en fûts` };
+    if (!t || !beer) return { ok: false, reason: tl('Tireuse ou bière introuvable') };
+    if (!beer.kegs.length) return { ok: false, reason: tl('Aucun fût plein de « {0} » au stockage : programme un brassin en fûts', beer.name) };
     // on branche le plus gros fût disponible
     beer.kegs.sort((a, b) => b - a);
     const glasses = beer.kegs.shift()!;
@@ -883,11 +884,11 @@ export class Game {
   }
 
   buyDecor(id: DecorId): CommandResult {
-    if (!DECOR_ORDER.includes(id)) return { ok: false, reason: 'Objet introuvable' };
-    if (this.ownsDecor(id)) return { ok: false, reason: 'Déjà acheté' };
+    if (!DECOR_ORDER.includes(id)) return { ok: false, reason: tl('Objet introuvable') };
+    if (this.ownsDecor(id)) return { ok: false, reason: tl('Déjà acheté') };
     const next = this.nextDecor;
-    if (next?.id !== id) return { ok: false, reason: `Il faut d'abord : ${next?.name}` };
-    if (this.money < next.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (next?.id !== id) return { ok: false, reason: tl('Il faut d\'abord : {0}', next?.name) };
+    if (this.money < next.cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= next.cost;
     if (next.event) this.owned.push(id as ShopItemId);
     else this.furniture.push(id as FurnitureId);
@@ -952,11 +953,11 @@ export class Game {
   /** Embauche (ou prolonge) un employé pour 8 h, jusqu'à 24 h d'avance ; il faut un poste libre pour un nouveau. */
   hire(id: StaffId): CommandResult {
     const on = this.staffOn(id);
-    if (!on && this.staffBusy >= this.staffSlots) return { ok: false, reason: `Plus de poste libre (${this.staffSlots}) : la brasserie en ouvre d'autres en grandissant` };
+    if (!on && this.staffBusy >= this.staffSlots) return { ok: false, reason: tl('Plus de poste libre ({0}) : la brasserie en ouvre d\'autres en grandissant', this.staffSlots) };
     const from = Math.max(this.time, this.staffEnd(id));
-    if (from + STAFF_CONTRACT.duration - this.time > STAFF_CONTRACT.maxAhead) return { ok: false, reason: 'Contrat déjà assez long' };
+    if (from + STAFF_CONTRACT.duration - this.time > STAFF_CONTRACT.maxAhead) return { ok: false, reason: tl('Contrat déjà assez long') };
     const cost = this.staffCost(id);
-    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= cost;
     if (id === 'barman') {
       this.barmanUntil = from + BARMAN.duration;
@@ -1030,8 +1031,8 @@ export class Game {
    */
   grantPurchase(productId: string, transactionId: string): CommandResult & { gems?: number } {
     const pack = gemPackByProduct(productId);
-    if (!pack) return { ok: false, reason: 'Produit inconnu' };
-    if (this.purchases.includes(transactionId)) return { ok: false, reason: 'Achat déjà crédité' };
+    if (!pack) return { ok: false, reason: tl('Produit inconnu') };
+    if (this.purchases.includes(transactionId)) return { ok: false, reason: tl('Achat déjà crédité') };
     this.purchases.push(transactionId);
     if (this.purchases.length > 500) this.purchases.splice(0, this.purchases.length - 500);
     if (pack.once && !this.packsBought.includes(pack.id)) this.packsBought.push(pack.id);
@@ -1053,13 +1054,13 @@ export class Game {
   /** Pourquoi un boost ne peut pas partir maintenant (hors manque de diamants), ou null. */
   boostBlocked(id: BoostId): string | null {
     const def = boostById(id);
-    if (!def) return 'Boost introuvable';
-    if (!def.channel) return id === 'prospect' && this.orders.length >= this.boardSlots ? 'Le tableau des commandes est plein' : null;
+    if (!def) return tl('Boost introuvable');
+    if (!def.channel) return id === 'prospect' && this.orders.length >= this.boardSlots ? tl('Le tableau des commandes est plein') : null;
     const cur = this.boostOf(def.channel);
     const curDef = cur ? boostById(cur.id) : undefined;
-    if (cur && curDef && !sameEffect(curDef, def)) return `« ${curDef.name} » est en cours`;
+    if (cur && curDef && !sameEffect(curDef, def)) return tl('« {0} » est en cours', curDef.name);
     const from = cur ? cur.until : this.time;
-    if (from + def.minutes * 60 - this.time > BOOST_MAX_AHEAD) return 'Déjà prolongé au maximum (24 h)';
+    if (from + def.minutes * 60 - this.time > BOOST_MAX_AHEAD) return tl('Déjà prolongé au maximum (24 h)');
     return null;
   }
 
@@ -1069,10 +1070,10 @@ export class Game {
    */
   buyBoost(id: BoostId): CommandResult {
     const def = boostById(id);
-    if (!def) return { ok: false, reason: 'Boost introuvable' };
+    if (!def) return { ok: false, reason: tl('Boost introuvable') };
     const blocked = this.boostBlocked(id);
     if (blocked) return { ok: false, reason: blocked };
-    if (this.gems < def.gems) return { ok: false, reason: 'Pas assez de diamants' };
+    if (this.gems < def.gems) return { ok: false, reason: tl('Pas assez de diamants') };
     this.gems -= def.gems;
     if (!def.channel) {
       this.syncSlots();
@@ -1109,13 +1110,13 @@ export class Game {
 
   buyUnlock(id: string): CommandResult {
     const x = unlockById(id);
-    if (!x) return { ok: false, reason: 'Introuvable' };
-    if (this.unlocked.includes(id)) return { ok: false, reason: 'Déjà débloqué' };
+    if (!x) return { ok: false, reason: tl('Introuvable') };
+    if (this.unlocked.includes(id)) return { ok: false, reason: tl('Déjà débloqué') };
     if (x.gems) {
-      if (this.gems < x.gems) return { ok: false, reason: 'Pas assez de diamants' };
+      if (this.gems < x.gems) return { ok: false, reason: tl('Pas assez de diamants') };
       this.gems -= x.gems;
     } else {
-      if (this.money < x.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+      if (this.money < x.cost) return { ok: false, reason: tl('Pas assez d\'argent') };
       this.money -= x.cost;
     }
     this.unlocked.push(id);
@@ -1130,12 +1131,12 @@ export class Game {
   /** Lance un événement au bar (il faut l'objet nécessaire, de l'argent, et que le quartier soit remis du précédent). */
   startEvent(id: BarEventId): CommandResult {
     const ev = barEventById(id);
-    if (!ev) return { ok: false, reason: 'Événement introuvable' };
-    if (ev.needs && !this.owns(ev.needs)) return { ok: false, reason: `Il faut d'abord acheter : ${SHOP_ITEMS.find((x) => x.id === ev.needs)?.name}` };
-    if (this.partying) return { ok: false, reason: 'Un événement bat déjà son plein' };
-    if (this.time < this.partyReadyAt) return { ok: false, reason: 'Le quartier se remet du dernier événement' };
+    if (!ev) return { ok: false, reason: tl('Événement introuvable') };
+    if (ev.needs && !this.owns(ev.needs)) return { ok: false, reason: tl('Il faut d\'abord acheter : {0}', SHOP_ITEMS.find((x) => x.id === ev.needs)?.name) };
+    if (this.partying) return { ok: false, reason: tl('Un événement bat déjà son plein') };
+    if (this.time < this.partyReadyAt) return { ok: false, reason: tl('Le quartier se remet du dernier événement') };
     const cost = this.eventCost(id);
-    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= cost;
     this.eventId = id;
     this.partyUntil = this.time + ev.duration;
@@ -1183,11 +1184,11 @@ export class Game {
    */
   advertise(id: AdId = 'flyers'): CommandResult {
     const ad = adById(id);
-    if (!ad) return { ok: false, reason: 'Campagne inconnue' };
-    if (!this.adUnlocked(id)) return { ok: false, reason: `Il faut d'abord : ${COMPUTERS[ad.computer - 1]?.name}` };
-    if (this.advertising) return { ok: false, reason: 'Une campagne est déjà en cours' };
+    if (!ad) return { ok: false, reason: tl('Campagne inconnue') };
+    if (!this.adUnlocked(id)) return { ok: false, reason: tl('Il faut d\'abord : {0}', COMPUTERS[ad.computer - 1]?.name) };
+    if (this.advertising) return { ok: false, reason: tl('Une campagne est déjà en cours') };
     const cost = this.adCost(id);
-    if (this.money < cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= cost;
     this.adId = id;
     this.adUntil = this.time + ad.duration;
@@ -1202,9 +1203,9 @@ export class Game {
 
   /** Prolonge la campagne en cours de quelques heures, en diamants (jusqu'à 24 h d'avance). */
   extendAd(): CommandResult {
-    if (!this.advertising) return { ok: false, reason: 'Aucune campagne en cours' };
-    if (this.adUntil - this.time + AD_EXTEND.hours * 3600 > AD_EXTEND.maxAhead) return { ok: false, reason: 'Pas plus de 24 h d\'avance' };
-    if (this.gems < AD_EXTEND.gems) return { ok: false, reason: 'Pas assez de diamants' };
+    if (!this.advertising) return { ok: false, reason: tl('Aucune campagne en cours') };
+    if (this.adUntil - this.time + AD_EXTEND.hours * 3600 > AD_EXTEND.maxAhead) return { ok: false, reason: tl('Pas plus de 24 h d\'avance') };
+    if (this.gems < AD_EXTEND.gems) return { ok: false, reason: tl('Pas assez de diamants') };
     this.gems -= AD_EXTEND.gems;
     this.adUntil += AD_EXTEND.hours * 3600;
     return { ok: true };
@@ -1237,8 +1238,8 @@ export class Game {
 
   upgradeBar(): CommandResult {
     const next = BAR[this.barLevel];
-    if (!next) return { ok: false, reason: 'Niveau maximal' };
-    if (this.money < next.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (!next) return { ok: false, reason: tl('Niveau maximal') };
+    if (this.money < next.cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= next.cost;
     this.barLevel++;
     while (this.taps.length < this.barTaps) this.taps.push({ beerId: null, glasses: 0, capacity: 0 });
@@ -1255,8 +1256,8 @@ export class Game {
   /** Améliore l'ordinateur : une place de plus au tableau des commandes. */
   upgradeComputer(): CommandResult {
     const next = COMPUTERS[this.computerLevel];
-    if (!next) return { ok: false, reason: 'Niveau maximal' };
-    if (this.money < next.cost) return { ok: false, reason: 'Pas assez d\'argent' };
+    if (!next) return { ok: false, reason: tl('Niveau maximal') };
+    if (this.money < next.cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= next.cost;
     this.computerLevel++;
     return { ok: true };
@@ -1312,9 +1313,9 @@ export class Game {
   /** Envoie une commande remplie avec les bières choisies : elle est payée tout de suite. */
   fulfill(orderId: number, beerIds: number[]): CommandResult & { amount?: number } {
     const o = this.orders.find((x) => x.id === orderId);
-    if (!o) return { ok: false, reason: 'Commande introuvable' };
+    if (!o) return { ok: false, reason: tl('Commande introuvable') };
     const q = this.quote(o, beerIds);
-    if (!q.ok) return { ok: false, reason: o.mix ? `Il faut ${o.mix} bières différentes` : `Il manque ${o.qty - q.filled} ${o.kind === 'keg' ? 'fûts' : 'bouteilles'}` };
+    if (!q.ok) return { ok: false, reason: o.mix ? tl('Il faut {0} bières différentes', o.mix) : tl('Il manque {0} {1}', o.qty - q.filled, o.kind === 'keg' ? tl('fûts') : 'bouteilles') };
     const units = q.take.reduce((s, t) => s + t.n, 0);
     let liters = 0;
     for (const { beer, n } of q.take) {
@@ -1348,7 +1349,7 @@ export class Game {
   declineOrder(orderId: number): CommandResult {
     const before = this.orders.length;
     this.orders = this.orders.filter((x) => x.id !== orderId);
-    if (before === this.orders.length) return { ok: false, reason: 'Commande introuvable' };
+    if (before === this.orders.length) return { ok: false, reason: tl('Commande introuvable') };
     this.freeSlot();
     return { ok: true };
   }
@@ -1391,12 +1392,12 @@ export class Game {
    */
   sellWholesale(beerId: number, n: number, format: Format = 'bottle'): CommandResult & { amount?: number; sold?: number } {
     const beer = this.beer(beerId);
-    if (!beer) return { ok: false, reason: 'Bière introuvable' };
-    if (beer.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: 'Imbuvable' };
+    if (!beer) return { ok: false, reason: tl('Bière introuvable') };
+    if (beer.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: tl('Imbuvable') };
     const have = format === 'bottle' ? beer.stock : beer.kegs.length;
-    if (Math.floor(n) <= 0 || have <= 0) return { ok: false, reason: 'Rien à vendre' };
+    if (Math.floor(n) <= 0 || have <= 0) return { ok: false, reason: tl('Rien à vendre') };
     n = Math.min(Math.floor(n), this.wholesaleSellable(beer, format));
-    if (n <= 0) return { ok: false, reason: 'Quota du grossiste atteint pour aujourd\'hui' };
+    if (n <= 0) return { ok: false, reason: tl('Quota du grossiste atteint pour aujourd\'hui') };
     let liters = n * BOTTLE_L;
     if (format === 'bottle') beer.stock -= n;
     else {
@@ -1462,9 +1463,9 @@ export class Game {
   /** Double l'argent de la bourse de l'absence, après une pub (les diamants ne doublent pas) ; la récolte suit. */
   doubleOffline(): CommandResult {
     const o = this.offline;
-    if (!o || o.earned <= 0) return { ok: false, reason: 'Rien à doubler' };
-    if (o.doubled) return { ok: false, reason: 'Déjà doublé' };
-    if (!this.useAd('double')) return { ok: false, reason: 'Plus de doublement aujourd\'hui' };
+    if (!o || o.earned <= 0) return { ok: false, reason: tl('Rien à doubler') };
+    if (o.doubled) return { ok: false, reason: tl('Déjà doublé') };
+    if (!this.useAd('double')) return { ok: false, reason: tl('Plus de doublement aujourd\'hui') };
     o.earned *= 2;
     o.doubled = true;
     return { ok: true };
@@ -1474,7 +1475,7 @@ export class Game {
   prospectWithAd(): CommandResult {
     const blocked = this.boostBlocked('prospect');
     if (blocked) return { ok: false, reason: blocked };
-    if (!this.useAd('prospect')) return { ok: false, reason: 'Plus de prospection offerte aujourd\'hui' };
+    if (!this.useAd('prospect')) return { ok: false, reason: tl('Plus de prospection offerte aujourd\'hui') };
     this.syncSlots();
     const i = this.orderWaits.indexOf(Math.min(...this.orderWaits));
     if (i >= 0) this.orderWaits[i] = 0;
@@ -1844,7 +1845,7 @@ export class Game {
 
   static fromJSON(raw: unknown): Game {
     const s = raw as Omit<ReturnType<Game['toJSON']>, 'version'> & { version: number };
-    if (!s || s.version < 2 || s.version > 7) throw new Error('Sauvegarde incompatible');
+    if (!s || s.version < 2 || s.version > 7) throw new Error(tl('Sauvegarde incompatible'));
     const g = new Game();
     const { demand: _d, signed: _s, deals: _dl, orderTimers: _t, ...rest } = s as typeof s & { demand?: unknown; signed?: unknown; deals?: unknown; orderTimers?: unknown };
     Object.assign(g, { ...rest, rng: new Rng(s.rng), announced: new Set(s.announced) });

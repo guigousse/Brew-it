@@ -1,3 +1,4 @@
+import { tl } from '../i18n';
 /**
  * Les éléments fixes du bar, ceux dont dépend le jeu (on les déplace, on ne les retire pas) : le comptoir
  * (et avec lui tireuses, barman et tabourets), l'emplacement de l'objet d'événement, la zone des tables.
@@ -8,7 +9,7 @@ export interface BarSpot { x: number; y: number; w: number; h: number }
 export type BarItem = 'counter' | 'event' | 'tables';
 
 /** Nom de chaque élément. */
-export const BAR_ITEM_NAMES: Record<BarItem, string> = { counter: 'Comptoir', event: 'Objet d\'événement', tables: 'Tables' };
+export const BAR_ITEM_NAMES: Record<BarItem, string> = { counter: tl('Comptoir'), event: tl('Objet d\'événement'), tables: tl('Tables') };
 
 /** Seul le comptoir change de taille (largeur, hauteur de la façade). */
 export const RESIZABLE: readonly BarItem[] = ['counter'];

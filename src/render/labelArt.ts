@@ -1,5 +1,6 @@
 /** Dessin des étiquettes : aperçu de l'éditeur (grand format) et miniature sur les bouteilles. */
 import { gemStone, type Label } from '../core/label';
+import { tl } from '../i18n';
 
 const EMBLEM_PIXELS: Record<Exclude<Label['emblem'], 'none' | 'gem'>, string[]> = {
   hop: ['....#....', '...###...', '..#####..', '.##.#.##.', '..#####..', '.##.#.##.', '..#####..', '...###...', '....#....'],
@@ -373,7 +374,7 @@ export function drawLabel(canvas: HTMLCanvasElement, l: Label, name: string): vo
     }
   }
   if (l.shape === 'baroque' && l.emblem === 'none') baroqueFrame(g, l, w, h);
-  const tx = name || 'Ma bière';
+  const tx = name || tl('Ma bière');
   const maxW = l.shape === 'baroque' ? w - 36 : w - 20;
   const size = l.font === 'retro' ? 18 : 12;
   crispText(g, tx, w / 2, h - 20, maxW, l.textColor, l.font, size);

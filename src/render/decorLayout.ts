@@ -1,3 +1,4 @@
+import { tl } from '../i18n';
 /**
  * Où sont posés les décors : pour chaque pièce et chaque niveau de la pièce, la liste de ses assets
  * (position du coin haut-gauche dans le plan de 160 × 300, échelle, retourné, devant le reste).
@@ -5,7 +6,7 @@
  */
 export type RoomKey = 'workshop' | 'office' | 'storage' | 'bar';
 
-export const ROOM_NAMES: Record<RoomKey, string> = { workshop: 'Atelier', office: 'Bureau', storage: 'Stockage', bar: 'Bar' };
+export const ROOM_NAMES: Record<RoomKey, string> = { workshop: tl('Atelier'), office: tl('Bureau'), storage: tl('Stockage'), bar: tl('Bar') };
 /** Nombre de niveaux (de décors) de chaque pièce. */
 export const ROOM_LEVELS: Record<RoomKey, number> = { workshop: 5, office: 5, storage: 5, bar: 5 };
 

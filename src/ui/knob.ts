@@ -1,3 +1,5 @@
+import { locale } from '../i18n';
+
 /**
  * Molette de réglage façon potentiomètre : on la « tourne » en glissant le doigt
  * (vers le haut ou vers la droite pour augmenter). Des boutons − / + permettent un réglage fin.
@@ -53,7 +55,7 @@ export function createKnob(o: KnobOptions): HTMLElement {
     const t = (value - o.min) / (o.max - o.min);
     pointer.style.transform = `rotate(${-ANGLE + t * ANGLE * 2}deg)`;
     dial.style.setProperty('--fill', `${t * 270}deg`);
-    readout.textContent = `${value.toLocaleString('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${o.unit}`;
+    readout.textContent = `${value.toLocaleString(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${o.unit}`;
     dial.setAttribute('aria-valuenow', String(value));
   };
   const set = (v: number) => {

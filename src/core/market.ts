@@ -1,5 +1,6 @@
 import type { Tasting } from './brewing/model';
 import { DRINKABLE_MIN } from './brewing/model';
+import { tl } from '../i18n';
 
 /** Facteur de prix selon la qualité de la bière (de 0,6 à 1,4). */
 export const qualityFactor = (t: Pick<Tasting, 'quality'>) => 0.6 + 0.8 * t.quality;
@@ -25,11 +26,11 @@ export interface BarLevel {
  * un client toutes les 10 minutes. L'affluence grandit avec la popularité de la marque et le niveau du bar.
  */
 export const BAR: readonly BarLevel[] = [
-  { name: 'Comptoir poussiéreux', rate: 1, taps: 1, seats: 2, priceMult: 1, cost: 0 },
-  { name: 'Bistrot de quartier', rate: 1.5, taps: 2, seats: 4, priceMult: 1.15, cost: 400 },
-  { name: 'Pub', rate: 3, taps: 3, seats: 7, priceMult: 1.3, cost: 6000 },
-  { name: 'Taproom', rate: 5, taps: 5, seats: 10, priceMult: 1.5, cost: 120000 },
-  { name: 'Bar du futur', rate: 10, taps: 8, seats: 12, priceMult: 1.8, cost: 900000 },
+  { name: tl('Comptoir poussiéreux'), rate: 1, taps: 1, seats: 2, priceMult: 1, cost: 0 },
+  { name: tl('Bistrot de quartier'), rate: 1.5, taps: 2, seats: 4, priceMult: 1.15, cost: 400 },
+  { name: tl('Pub'), rate: 3, taps: 3, seats: 7, priceMult: 1.3, cost: 6000 },
+  { name: tl('Taproom'), rate: 5, taps: 5, seats: 10, priceMult: 1.5, cost: 120000 },
+  { name: tl('Bar du futur'), rate: 10, taps: 8, seats: 12, priceMult: 1.8, cost: 900000 },
 ];
 
 /** Part de l'affluence maximale atteinte par une marque inconnue. */
@@ -92,9 +93,9 @@ export interface ShopItem {
   cost: number;
 }
 export const SHOP_ITEMS: readonly ShopItem[] = [
-  { id: 'darts', name: 'Cible de fléchettes', text: 'Débloque le tournoi de fléchettes', cost: 800 },
-  { id: 'tv', name: 'Télévision', text: 'Débloque la soirée foot', cost: 5000 },
-  { id: 'disco', name: 'Boule à facettes', text: 'Débloque la fête : projecteurs et confettis', cost: 60000 },
+  { id: 'darts', name: tl('Cible de fléchettes'), text: tl('Débloque le tournoi de fléchettes'), cost: 800 },
+  { id: 'tv', name: tl('Télévision'), text: tl('Débloque la soirée foot'), cost: 5000 },
+  { id: 'disco', name: tl('Boule à facettes'), text: tl('Débloque la fête : projecteurs et confettis'), cost: 60000 },
 ];
 
 /**
@@ -116,9 +117,9 @@ export interface BarEvent {
   needs: ShopItemId | null;
 }
 export const BAR_EVENTS: readonly BarEvent[] = [
-  { id: 'darts', name: 'Tournoi de fléchettes', text: '1 h : 15 fois plus de clients, verres 30 % plus chers, et ta gamme se fait 3 fois plus vite connaître.', mult: 15, duration: 3600, priceMult: 1.3, popMult: 3, cost: 0.5, needs: 'darts' },
-  { id: 'foot', name: 'Soirée foot', text: '1 h 30 de match : 20 fois plus de clients, et les verres 50 % plus chers.', mult: 20, duration: 90 * 60, priceMult: 1.5, popMult: 1, cost: 1, needs: 'tv' },
-  { id: 'party', name: 'Fête', text: '45 min : 60 fois plus de clients, verres 2 fois plus chers, la salle est en délire.', mult: PARTY.mult, duration: PARTY.duration, priceMult: 2, popMult: 1.5, cost: 1.5, needs: 'disco' },
+  { id: 'darts', name: tl('Tournoi de fléchettes'), text: tl('1 h : 15 fois plus de clients, verres 30 % plus chers, et ta gamme se fait 3 fois plus vite connaître.'), mult: 15, duration: 3600, priceMult: 1.3, popMult: 3, cost: 0.5, needs: 'darts' },
+  { id: 'foot', name: tl('Soirée foot'), text: tl('1 h 30 de match : 20 fois plus de clients, et les verres 50 % plus chers.'), mult: 20, duration: 90 * 60, priceMult: 1.5, popMult: 1, cost: 1, needs: 'tv' },
+  { id: 'party', name: tl('Fête'), text: tl('45 min : 60 fois plus de clients, verres 2 fois plus chers, la salle est en délire.'), mult: PARTY.mult, duration: PARTY.duration, priceMult: 2, popMult: 1.5, cost: 1.5, needs: 'disco' },
 ];
 export const barEventById = (id: string) => BAR_EVENTS.find((e) => e.id === id);
 
@@ -146,11 +147,11 @@ export interface AdDef {
   share: number;
 }
 export const ADS: readonly AdDef[] = [
-  { id: 'flyers', name: 'Affiches au marché', computer: 1, duration: 3 * 3600, orderBoost: 1.5, pop: 0.05, letters: 0, pay: 1, prestige: false, bar: 1, share: 0.04 },
-  { id: 'paper', name: 'Annonce dans le journal', computer: 2, duration: 6 * 3600, orderBoost: 2, pop: 0.1, letters: 1, pay: 1, prestige: false, bar: 1, share: 0.06 },
-  { id: 'radio', name: 'Spot à la radio', computer: 3, duration: 6 * 3600, orderBoost: 2, pop: 0.15, letters: Infinity, pay: 1.1, prestige: false, bar: 1, share: 0.08 },
-  { id: 'tv', name: 'Pub télé', computer: 4, duration: 8 * 3600, orderBoost: 2.5, pop: 0.2, letters: Infinity, pay: 1.2, prestige: true, bar: 1, share: 0.1 },
-  { id: 'national', name: 'Campagne nationale', computer: 5, duration: 12 * 3600, orderBoost: 3, pop: 0.25, letters: Infinity, pay: 1.3, prestige: false, bar: 1.5, share: 0.13 },
+  { id: 'flyers', name: tl('Affiches au marché'), computer: 1, duration: 3 * 3600, orderBoost: 1.5, pop: 0.05, letters: 0, pay: 1, prestige: false, bar: 1, share: 0.04 },
+  { id: 'paper', name: tl('Annonce dans le journal'), computer: 2, duration: 6 * 3600, orderBoost: 2, pop: 0.1, letters: 1, pay: 1, prestige: false, bar: 1, share: 0.06 },
+  { id: 'radio', name: tl('Spot à la radio'), computer: 3, duration: 6 * 3600, orderBoost: 2, pop: 0.15, letters: Infinity, pay: 1.1, prestige: false, bar: 1, share: 0.08 },
+  { id: 'tv', name: tl('Pub télé'), computer: 4, duration: 8 * 3600, orderBoost: 2.5, pop: 0.2, letters: Infinity, pay: 1.2, prestige: true, bar: 1, share: 0.1 },
+  { id: 'national', name: tl('Campagne nationale'), computer: 5, duration: 12 * 3600, orderBoost: 3, pop: 0.25, letters: Infinity, pay: 1.3, prestige: false, bar: 1.5, share: 0.13 },
 ];
 export const adById = (id: string) => ADS.find((a) => a.id === id);
 /** Revenu d'une journée typique selon le niveau de la brasserie (mesuré par le joueur simulé) : la base du prix des campagnes. */

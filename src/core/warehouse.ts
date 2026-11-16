@@ -1,3 +1,4 @@
+import { tl } from '../i18n';
 /** Bouteilles par caisse (comme les cartons de la ligne d'embouteillage). */
 export const CRATE = 12;
 
@@ -11,11 +12,11 @@ export interface StorageLevel {
 
 /** Niveaux du stockage : les caisses s'y empilent jusqu'à ce qu'il soit plein. */
 export const STORAGE: readonly StorageLevel[] = [
-  { name: 'Coin du garage', crates: 10, cost: 0 },
-  { name: 'Cave voûtée', crates: 60, cost: 250 },
-  { name: 'Chambre froide', crates: 400, cost: 8000 },
-  { name: 'Entrepôt', crates: 2500, cost: 120000 },
-  { name: 'Plateforme logistique', crates: 12000, cost: 800000 },
+  { name: tl('Coin du garage'), crates: 10, cost: 0 },
+  { name: tl('Cave voûtée'), crates: 60, cost: 250 },
+  { name: tl('Chambre froide'), crates: 400, cost: 8000 },
+  { name: tl('Entrepôt'), crates: 2500, cost: 120000 },
+  { name: tl('Plateforme logistique'), crates: 12000, cost: 800000 },
 ];
 
 /**

@@ -13,6 +13,7 @@ import { drawMiniLabel } from './labelArt';
 import { drawDigits, hash, painter, Room, type Px } from './rooms';
 import { boxShadow, dim, dropShadow, floor, floorLight, from, mix, rgb, seam, shade, skew, trap, wallLight, type Bounds } from './space';
 import type { Rect } from './sprites';
+import { tl } from '../i18n';
 
 const FLOOR = 206;
 /** Point de fuite : au milieu, à hauteur des yeux. */
@@ -349,7 +350,7 @@ export class OfficeRoom extends Room {
     g.fillStyle = lv === 5 ? '#5ef0ff' : '#f2c14e';
     g.font = '8px monospace';
     g.textBaseline = 'alphabetic';
-    g.fillText('GAMME', d.x + 12, d.y + 10);
+    g.fillText(tl('GAMME'), d.x + 12, d.y + 10);
     // le fond de la vitrine, éclairé d'en haut
     const s = SHOWCASE;
     px(s.x - 1, s.y - 1, s.w + 2, s.h + 2, '#1b1424');

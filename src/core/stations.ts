@@ -1,4 +1,5 @@
 import type { Recipe } from './brewing/model';
+import { tl } from '../i18n';
 
 export type StationId = 'mill' | 'mash' | 'boil' | 'cooler' | 'fermenter' | 'conditioning' | 'bottling';
 export const STATION_ORDER: readonly StationId[] = ['mill', 'mash', 'boil', 'cooler', 'fermenter', 'conditioning', 'bottling'];
@@ -16,7 +17,7 @@ export interface KnobDef {
 
 export const MAX_LEVEL = 5;
 /** La brasserie prend le niveau de son appareil le moins avancé : son décor change et de nouveaux clients s'ouvrent. */
-export const BREWERY_NAMES = ['Labo d\'alchimiste', 'Garage', 'Microbrasserie', 'Usine', 'Labo du futur'] as const;
+export const BREWERY_NAMES = [tl('Labo d\'alchimiste'), tl('Garage'), tl('Microbrasserie'), tl('Usine'), tl('Labo du futur')] as const;
 type Five<T> = readonly [T, T, T, T, T];
 
 export interface StationDef {
@@ -60,69 +61,69 @@ export const DAY_S = 30;
 
 export const STATIONS: Record<StationId, StationDef> = {
   mill: {
-    id: 'mill', step: 'Concassage', names: ['Mortier et pilon', 'Moulin à main', 'Moulin à rouleaux', 'Broyeur industriel', 'Broyeur laser'],
-    description: 'On casse les grains de malt pour libérer l\'amidon. La quantité de malt fait la force de la bière.',
+    id: 'mill', step: tl('Concassage'), names: [tl('Mortier et pilon'), tl('Moulin à main'), tl('Moulin à rouleaux'), tl('Broyeur industriel'), tl('Broyeur laser')],
+    description: tl('On casse les grains de malt pour libérer l\'amidon. La quantité de malt fait la force de la bière.'),
     knobs: [
-      { key: 'grainKg', label: 'Malt', min: 1, max: 10, step: 0.5, unit: 'kg' },
-      { key: 'crush', label: 'Finesse', min: 1, max: 10, step: 1, unit: '/10' },
+      { key: 'grainKg', label: tl('Malt'), min: 1, max: 10, step: 0.5, unit: 'kg' },
+      { key: 'crush', label: tl('Finesse'), min: 1, max: 10, step: 1, unit: '/10' },
     ],
-    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 %', '600 L · précision 100 %'],
+    perks: [tl('5 L · précision 40 %'), tl('20 L · précision 65 %'), tl('60 L · précision 85 %'), tl('200 L · précision 95 %'), tl('600 L · précision 100 %')],
     baseCost: 60,
   },
   mash: {
-    id: 'mash', step: 'Empâtage', names: ['Ballon sur bec Bunsen', 'Marmite isotherme', 'Cuve inox chauffée', 'Cuve d\'empâtage pro', 'Bioréacteur enzymatique'],
-    description: 'Le malt infuse dans l\'eau chaude : ses enzymes changent l\'amidon en sucre.',
+    id: 'mash', step: tl('Empâtage'), names: [tl('Ballon sur bec Bunsen'), tl('Marmite isotherme'), tl('Cuve inox chauffée'), tl('Cuve d\'empâtage pro'), tl('Bioréacteur enzymatique')],
+    description: tl('Le malt infuse dans l\'eau chaude : ses enzymes changent l\'amidon en sucre.'),
     knobs: [
-      { key: 'mashTemp', label: 'Température', min: 45, max: 85, step: 1, unit: '°C' },
-      { key: 'mashTime', label: 'Durée', min: 10, max: 120, step: 5, unit: 'min' },
+      { key: 'mashTemp', label: tl('Température'), min: 45, max: 85, step: 1, unit: '°C' },
+      { key: 'mashTime', label: tl('Durée'), min: 10, max: 120, step: 5, unit: 'min' },
     ],
-    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 %', '600 L · précision 100 %'],
+    perks: [tl('5 L · précision 40 %'), tl('20 L · précision 65 %'), tl('60 L · précision 85 %'), tl('200 L · précision 95 %'), tl('600 L · précision 100 %')],
     baseCost: 80,
   },
   boil: {
-    id: 'boil', step: 'Ébullition', names: ['Alambic de cuivre', 'Marmite sur gaz', 'Chaudière inox', 'Cuve d\'ébullition à vapeur', 'Bouilloire à induction'],
-    description: 'Le moût bout avec le houblon : au début pour l\'amertume, à la fin pour les arômes.',
+    id: 'boil', step: tl('Ébullition'), names: [tl('Alambic de cuivre'), tl('Marmite sur gaz'), tl('Chaudière inox'), tl('Cuve d\'ébullition à vapeur'), tl('Bouilloire à induction')],
+    description: tl('Le moût bout avec le houblon : au début pour l\'amertume, à la fin pour les arômes.'),
     knobs: [
-      { key: 'hopsBitter', label: 'Houblon amer', min: 0, max: 200, step: 5, unit: 'g' },
-      { key: 'hopsAroma', label: 'Houblon arôme', min: 0, max: 200, step: 5, unit: 'g' },
-      { key: 'boilTime', label: 'Durée', min: 5, max: 120, step: 5, unit: 'min' },
+      { key: 'hopsBitter', label: tl('Houblon amer'), min: 0, max: 200, step: 5, unit: 'g' },
+      { key: 'hopsAroma', label: tl('Houblon arôme'), min: 0, max: 200, step: 5, unit: 'g' },
+      { key: 'boilTime', label: tl('Durée'), min: 5, max: 120, step: 5, unit: 'min' },
     ],
-    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 %', '600 L · précision 100 %'],
+    perks: [tl('5 L · précision 40 %'), tl('20 L · précision 65 %'), tl('60 L · précision 85 %'), tl('200 L · précision 95 %'), tl('600 L · précision 100 %')],
     baseCost: 80,
   },
   cooler: {
-    id: 'cooler', step: 'Refroidissement', names: ['Réfrigérant en verre', 'Serpentin', 'Échangeur à plaques', 'Échangeur double étage', 'Cryo-échangeur'],
-    description: 'Il faut refroidir le moût avant d\'ajouter la levure : au-dessus de 35 °C, elle meurt.',
-    knobs: [{ key: 'pitchTemp', label: 'Température de sortie', min: 5, max: 60, step: 1, unit: '°C' }],
-    perks: ['5 L · précision 40 % · infection 10 %', '20 L · précision 65 % · infection 6 %', '60 L · précision 85 % · infection 2 %', '200 L · précision 95 % · sans infection', '600 L · précision 100 %'],
+    id: 'cooler', step: tl('Refroidissement'), names: [tl('Réfrigérant en verre'), tl('Serpentin'), tl('Échangeur à plaques'), tl('Échangeur double étage'), tl('Cryo-échangeur')],
+    description: tl('Il faut refroidir le moût avant d\'ajouter la levure : au-dessus de 35 °C, elle meurt.'),
+    knobs: [{ key: 'pitchTemp', label: tl('Température de sortie'), min: 5, max: 60, step: 1, unit: '°C' }],
+    perks: [tl('5 L · précision 40 % · infection 10 %'), tl('20 L · précision 65 % · infection 6 %'), tl('60 L · précision 85 % · infection 2 %'), tl('200 L · précision 95 % · sans infection'), tl('600 L · précision 100 %')],
     baseCost: 70,
   },
   fermenter: {
-    id: 'fermenter', step: 'Fermentation', names: ['Grande fiole', 'Seau de fermentation', 'Fermenteur conique', 'Fermenteur régulé', 'Bioréacteur piloté'],
-    description: 'La levure mange le sucre et fabrique l\'alcool et les bulles. Chaque souche a sa température idéale.',
+    id: 'fermenter', step: tl('Fermentation'), names: [tl('Grande fiole'), tl('Seau de fermentation'), tl('Fermenteur conique'), tl('Fermenteur régulé'), tl('Bioréacteur piloté')],
+    description: tl('La levure mange le sucre et fabrique l\'alcool et les bulles. Chaque souche a sa température idéale.'),
     strain: true,
     knobs: [
-      { key: 'fermentTemp', label: 'Température', min: 4, max: 36, step: 1, unit: '°C' },
-      { key: 'fermentDays', label: 'Durée', min: 1, max: 30, step: 1, unit: 'j' },
+      { key: 'fermentTemp', label: tl('Température'), min: 4, max: 36, step: 1, unit: '°C' },
+      { key: 'fermentDays', label: tl('Durée'), min: 1, max: 30, step: 1, unit: 'j' },
     ],
-    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 %', '600 L · précision 100 %'],
+    perks: [tl('5 L · précision 40 %'), tl('20 L · précision 65 %'), tl('60 L · précision 85 %'), tl('200 L · précision 95 %'), tl('600 L · précision 100 %')],
     baseCost: 100,
   },
   conditioning: {
-    id: 'conditioning', step: 'Garde', names: ['Bocal à bouchon', 'Dame-jeanne', 'Cuve de garde', 'Cuve de garde réfrigérée', 'Cuve de stase'],
-    description: 'La bière se repose et s\'affine. Au froid, elle devient limpide.',
+    id: 'conditioning', step: tl('Garde'), names: [tl('Bocal à bouchon'), tl('Dame-jeanne'), tl('Cuve de garde'), tl('Cuve de garde réfrigérée'), tl('Cuve de stase')],
+    description: tl('La bière se repose et s\'affine. Au froid, elle devient limpide.'),
     knobs: [
-      { key: 'gardeTemp', label: 'Température', min: 0, max: 20, step: 1, unit: '°C' },
-      { key: 'gardeDays', label: 'Durée', min: 0, max: 30, step: 1, unit: 'j' },
+      { key: 'gardeTemp', label: tl('Température'), min: 0, max: 20, step: 1, unit: '°C' },
+      { key: 'gardeDays', label: tl('Durée'), min: 0, max: 30, step: 1, unit: 'j' },
     ],
-    perks: ['5 L · précision 40 %', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 % · plus limpide', '600 L · précision 100 % · limpidité parfaite'],
+    perks: [tl('5 L · précision 40 %'), tl('20 L · précision 65 %'), tl('60 L · précision 85 %'), tl('200 L · précision 95 % · plus limpide'), tl('600 L · précision 100 % · limpidité parfaite')],
     baseCost: 90,
   },
   bottling: {
-    id: 'bottling', step: 'Embouteillage', names: ['Entonnoir et pipette', 'Canne d\'embouteillage', 'Tireuse 4 becs', 'Ligne automatique', 'Ligne robotisée'],
-    description: 'On met en bouteille avec un peu de sucre : la levure le transforme en bulles.',
-    knobs: [{ key: 'priming', label: 'Sucre', min: 0, max: 16, step: 0.5, unit: 'g/L' }],
-    perks: ['5 L · précision 40 % · oxydation', '20 L · précision 65 %', '60 L · précision 85 %', '200 L · précision 95 % · sans oxydation', '600 L · précision 100 %'],
+    id: 'bottling', step: tl('Embouteillage'), names: [tl('Entonnoir et pipette'), tl('Canne d\'embouteillage'), tl('Tireuse 4 becs'), tl('Ligne automatique'), tl('Ligne robotisée')],
+    description: tl('On met en bouteille avec un peu de sucre : la levure le transforme en bulles.'),
+    knobs: [{ key: 'priming', label: tl('Sucre'), min: 0, max: 16, step: 0.5, unit: 'g/L' }],
+    perks: [tl('5 L · précision 40 % · oxydation'), tl('20 L · précision 65 %'), tl('60 L · précision 85 %'), tl('200 L · précision 95 % · sans oxydation'), tl('600 L · précision 100 %')],
     baseCost: 70,
   },
 };

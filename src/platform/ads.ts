@@ -1,3 +1,4 @@
+import { tl } from '../i18n';
 /**
  * Pubs vidéo récompensées.
  *
@@ -21,12 +22,12 @@ export function showRewardedAd(): Promise<boolean> {
     box.className = 'ad-test-box';
     const tag = document.createElement('div');
     tag.className = 'ad-test-tag';
-    tag.textContent = 'Publicité (test)';
+    tag.textContent = tl('Publicité (test)');
     const count = document.createElement('div');
     count.className = 'ad-test-count';
     const close = document.createElement('button');
     close.className = 'btn ad-test-close';
-    close.textContent = 'Fermer sans récompense';
+    close.textContent = tl('Fermer sans récompense');
     box.append(tag, count, close);
     overlay.append(box);
     document.body.append(overlay);
@@ -40,7 +41,7 @@ export function showRewardedAd(): Promise<boolean> {
     const tick = () => {
       count.textContent = left > 0 ? String(left) : '✓';
       if (left <= 0) {
-        close.textContent = 'Récupérer la récompense';
+        close.textContent = tl('Récupérer la récompense');
         close.classList.add('primary');
         close.onclick = () => finish(true);
       }

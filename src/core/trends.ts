@@ -1,5 +1,6 @@
 import type { Tasting } from './brewing/model';
 import { clamp01 } from './math';
+import { tl } from '../i18n';
 
 /**
  * Tendances du moment : ce que les buveurs recherchent (un style ou un caractère).
@@ -16,20 +17,20 @@ export interface TrendDef {
 }
 
 export const TRENDS: readonly TrendDef[] = [
-  { id: 'ipa', text: 'Les IPA ont la cote', short: 'IPA', test: (t) => t.style === 'IPA' || t.style === 'Double IPA' },
-  { id: 'lager', text: 'Tout le monde veut une lager bien fraîche', short: 'Lager', test: (t) => t.style === 'Lager' || t.style === 'Bock' },
-  { id: 'saison', text: 'La saison revient à la mode', short: 'Saison', test: (t) => t.style === 'Saison' },
-  { id: 'blonde', text: 'Retour aux classiques : la blonde', short: 'Blonde', test: (t) => t.style === 'Blonde' },
-  { id: 'paleale', text: 'Les Pale Ale font parler d\'elles', short: 'Pale Ale', test: (t) => t.style === 'Pale Ale' },
-  { id: 'abbaye', text: 'Les bières d\'abbaye fortes séduisent', short: 'Triple / Forte', test: (t) => t.style === 'Triple' || t.style === 'Forte' },
-  { id: 'fruity', text: 'On cherche des bières fruitées', short: 'Fruitée', test: (t) => t.style === 'Ale fruitée' || t.style === 'Saison' },
-  { id: 'light', text: 'On boit léger : moins de 5 %', short: '< 5 %', test: (t) => t.abv < 5 },
-  { id: 'strong', text: 'Les bières qui tapent : 7 % et plus', short: '≥ 7 %', test: (t) => t.abv >= 7 },
-  { id: 'bitter', text: 'L\'amertume est en vogue', short: 'Amère', test: (t) => t.ibu >= 40 },
-  { id: 'soft', text: 'Les bières douces, peu amères', short: 'Douce', test: (t) => t.ibu < 20 },
-  { id: 'aroma', text: 'Il faut du nez : bières aromatiques', short: 'Aromatique', test: (t) => t.aroma >= 0.5 },
-  { id: 'clear', text: 'Bières limpides comme du cristal', short: 'Limpide', test: (t) => t.clarity >= 0.8 },
-  { id: 'dark', text: 'Les ambrées et cuivrées reviennent', short: 'Ambrée', test: (t) => t.color !== 'Blonde' },
+  { id: 'ipa', text: tl('Les IPA ont la cote'), short: tl('IPA'), test: (t) => t.style === 'IPA' || t.style === 'Double IPA' },
+  { id: 'lager', text: tl('Tout le monde veut une lager bien fraîche'), short: tl('Lager'), test: (t) => t.style === 'Lager' || t.style === 'Bock' },
+  { id: 'saison', text: tl('La saison revient à la mode'), short: tl('Saison'), test: (t) => t.style === 'Saison' },
+  { id: 'blonde', text: tl('Retour aux classiques : la blonde'), short: tl('Blonde'), test: (t) => t.style === 'Blonde' },
+  { id: 'paleale', text: tl('Les Pale Ale font parler d\'elles'), short: tl('Pale Ale'), test: (t) => t.style === 'Pale Ale' },
+  { id: 'abbaye', text: tl('Les bières d\'abbaye fortes séduisent'), short: tl('Triple / Forte'), test: (t) => t.style === 'Triple' || t.style === 'Forte' },
+  { id: 'fruity', text: tl('On cherche des bières fruitées'), short: tl('Fruitée'), test: (t) => t.style === 'Ale fruitée' || t.style === 'Saison' },
+  { id: 'light', text: tl('On boit léger : moins de 5 %'), short: '< 5 %', test: (t) => t.abv < 5 },
+  { id: 'strong', text: tl('Les bières qui tapent : 7 % et plus'), short: '≥ 7 %', test: (t) => t.abv >= 7 },
+  { id: 'bitter', text: tl('L\'amertume est en vogue'), short: tl('Amère'), test: (t) => t.ibu >= 40 },
+  { id: 'soft', text: tl('Les bières douces, peu amères'), short: tl('Douce'), test: (t) => t.ibu < 20 },
+  { id: 'aroma', text: tl('Il faut du nez : bières aromatiques'), short: tl('Aromatique'), test: (t) => t.aroma >= 0.5 },
+  { id: 'clear', text: tl('Bières limpides comme du cristal'), short: tl('Limpide'), test: (t) => t.clarity >= 0.8 },
+  { id: 'dark', text: tl('Les ambrées et cuivrées reviennent'), short: tl('Ambrée'), test: (t) => t.color !== 'Blonde' },
 ];
 
 export interface Trend {
