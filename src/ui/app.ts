@@ -2410,6 +2410,8 @@ export class App {
   private openContestResult(r: ContestResult): void {
     const g = this.game();
     const card = this.modalCard(`🏆 ${CONTEST_TIERS[r.tier]!.name}`);
+    // la fenêtre reste en haut et s'agrandit vers le bas à mesure que les bières arrivent
+    this.modal.classList.add('top');
     playCeremony({
       card, layer: this.modal, result: r, brewery: tl('Ta brasserie'),
       label: (r.beerId != null ? g.beer(r.beerId)?.label : undefined) ?? DEFAULT_LABEL,
@@ -2983,6 +2985,7 @@ export class App {
 
   private modalCard(title: string): HTMLElement {
     this.computer = null;
+    this.modal.classList.remove('top');
     this.modal.replaceChildren();
     this.modal.classList.remove('hidden');
     const card = h('div', 'modal-card');
@@ -2996,6 +2999,7 @@ export class App {
   private closeModal(): void {
     this.computer = null;
     this.modal.classList.add('hidden');
+    this.modal.classList.remove('top');
     this.modal.replaceChildren();
   }
 

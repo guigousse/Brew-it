@@ -166,7 +166,13 @@ export function playCeremony(o: CeremonyOptions): void {
     rows.splice(i, 0, row);
     board.insertBefore(row.el, board.children[i] ?? null);
     restyle();
+    follow(row.el);
   };
+  /** Sur un petit écran, la fenêtre défile pour garder en vue ce qui vient d'apparaître. */
+  const follow = (el: HTMLElement) => {
+    if (card.scrollHeight > card.clientHeight) el.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  };
+
   /** Une note qui défile de `from` à `to`. */
   const count = (el: HTMLElement, from: number, to: number, ms: number, onValue?: (v: number) => void) => new Promise<void>((res) => {
     const start = performance.now();
@@ -274,6 +280,8 @@ export function playCeremony(o: CeremonyOptions): void {
     const done = h('button', 'btn primary', tl('Continuer'));
     done.onclick = o.onDone;
     actions.append(done);
+    // la scène d'abord, puis le verdict
+    setTimeout(() => alive() && follow(verdict), 700);
 
     // effets à la mesure du résultat
     const burst = { gold: 70, silver: 34, bronze: 16, none: 0 }[outcome];
