@@ -345,7 +345,7 @@ button:disabled { cursor: default; opacity: .5; }
 .pc-win-icon { image-rendering: pixelated; width: 16px; height: auto; flex-shrink: 0; }
 .pc-back, .pc-x { min-width: 40px; min-height: 36px; padding: 0; font-size: 22px; line-height: 1; color: var(--ink); background: #ffffff40; border: 2px solid var(--ink); }
 .pc-back { font-size: 28px; }
-.pc-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+.pc-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 10px; }
 .pc-body > * { flex-shrink: 0; min-width: 0; }
 .pc-chin { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 2px; }
 .pc-led { width: 8px; height: 8px; background: var(--good); border: 1px solid var(--ink); box-shadow: 0 0 6px var(--good); }
@@ -686,7 +686,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 
 /* --- Commandes : des lettres épurées, sur papier crème ---------------------------------------- */
-.letter { position: relative; display: grid; gap: 8px; padding: 10px 12px; color: #2a1a12; background: #f3e6c4; border: 2px solid #1b1424; box-shadow: inset -3px -3px 0 #d8c69c; }
+.letter { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px 12px; color: #2a1a12; background: #f3e6c4; border: 2px solid #1b1424; box-shadow: inset -3px -3px 0 #d8c69c; }
 .letter.ready { box-shadow: inset -3px -3px 0 #d8c69c, 0 0 0 3px var(--accent); }
 .letter-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .letter-client { flex: 1; min-width: 0; font-size: 21px; line-height: 1.05; color: #2a1a12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -698,13 +698,16 @@ button:disabled { cursor: default; opacity: .5; }
 .timer.wait { color: var(--accent); }
 /* la demande : une ligne de texte, une seule couleur ; l'urgence seule en rouge */
 .letter-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 18px; color: #4a3424; }
+.ask-text { min-width: 0; overflow-wrap: anywhere; }
 .ask-kind { font-family: var(--font-title); font-size: 11px; text-transform: uppercase; color: #4a3424; }
 .ask-kind.urgent { color: #c8301c; }
 .ask-icon { width: 16px; height: 16px; image-rendering: pixelated; }
 .ask-quality { margin-left: auto; color: #a8742a; letter-spacing: -1px; }
 /* ce qui partira : une ligne, à l'encre */
 .letter-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: 18px; line-height: 1.1; color: #4a3424; }
-.letter-status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.letter > * { min-width: 0; }
+/* la liste des bières peut être longue (assortiment, plusieurs bières qui conviennent) : elle passe à la ligne */
+.letter-status-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .letter-status.ok { color: #2a1a12; }
 .letter-status.none, .letter-status.short { color: #8a6a50; }
 .letter .chips .chip { color: var(--text); }
