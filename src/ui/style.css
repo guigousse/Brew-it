@@ -859,3 +859,56 @@ button:disabled { cursor: default; opacity: .5; }
 .tour-skip { margin-left: auto; padding: 4px 0; font: inherit; font-size: 15px; color: var(--dim); background: none; border: 0; text-decoration: underline; }
 .tour-spot.hidden, .tour-finger.hidden, .tour-bubble.hidden { display: none; }
 @media (prefers-reduced-motion: reduce) { .tour-spot, .tour-finger-tap { animation: none; } .tour-finger, .tour-spot { transition: none; } }
+
+/* ---------------------------------------------------------------- popularité expliquée */
+.pop-box { display: grid; gap: 4px; }
+.pop-dir { font-size: 16px; white-space: nowrap; }
+.pop-dir.up { color: var(--good); }
+.pop-dir.down { color: #ffb4a4; }
+.pop-dir.flat { color: var(--dim); }
+.medal-chip { font-size: 15px; padding: 0 5px; color: var(--ink); background: var(--accent); border: 1px solid var(--ink); white-space: nowrap; }
+.pop-gauge { position: relative; height: 10px; background: #1b1424; border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px #4a3a5a; }
+.pop-fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#ffe08a, var(--accent) 50%, var(--accent-dark)); }
+.pop-goal { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: #fff4b0; box-shadow: 0 0 0 1px var(--ink); }
+.pop-cap { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(135deg, #0000 0 3px, #e8553a55 3px 5px); }
+.pop-why { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; font-size: 16px; color: var(--dim); }
+.pop-why-value { color: var(--accent); text-align: right; white-space: nowrap; }
+.pop-why .limit { color: #ffb4a4; }
+.pop-tip { font-size: 16px; }
+
+/* ---------------------------------------------------------------- concours et cocardes */
+.cocarde { image-rendering: pixelated; display: block; flex-shrink: 0; }
+.cocarde.small { width: 20px; height: 24px; }
+.cocarde.big { width: 80px; height: 96px; margin: 0 auto; animation: medal-drop .6s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: inherit; }
+.shelf-cocarde { position: absolute; right: -6px; top: 30px; width: 34px; height: 41px; filter: drop-shadow(1px 2px 0 #0008); pointer-events: none; }
+.cocarde-grid { display: grid; gap: 6px; }
+.cocarde-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, auto); align-items: center; gap: 8px; }
+.cocarde-row.locked { opacity: .45; }
+.cocarde-tier { font-size: 16px; line-height: 1.05; }
+.cocarde-cell { display: grid; justify-items: center; font-size: 15px; color: var(--accent); }
+.contest-letter { box-shadow: inset -3px -3px 0 #d8c69c, 0 0 0 3px #a8742a; }
+.contest-letter::after { content: ''; position: absolute; right: 10px; bottom: 10px; width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #e8553a, #8a2a1c 70%); box-shadow: 0 0 0 2px #6a1a10; opacity: .85; pointer-events: none; }
+.letter-sub { font-size: 16px; color: #8a6a50; text-transform: uppercase; letter-spacing: 1px; }
+.podium { display: grid; gap: 3px; }
+.podium-line { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 19px; color: #2a1a12; }
+.podium-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.podium-score { font-variant-numeric: tabular-nums; }
+.contest-checks { display: grid; gap: 1px; font-size: 18px; color: #a03a24; }
+.contest-check.ok { color: #2c6a3a; }
+.contest-check.info { color: #4a3424; }
+.letter .chip.ok:not(.active) { box-shadow: inset 0 0 0 2px var(--good); }
+.contest-letter .btn:disabled { opacity: .55; }
+.ceremony .podium-line { grid-template-columns: 18px auto minmax(0, 1fr) auto; color: var(--text); padding: 2px 4px; animation: rank-in .4s steps(4) both; }
+.ceremony .podium-line.me { background: #4a3a24; box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent); }
+.podium-rank { color: var(--dim); }
+.ceremony-verdict { display: grid; gap: 6px; justify-items: center; text-align: center; animation: rank-in .4s steps(4) both; }
+.ceremony-title { font-size: 22px; color: var(--accent); }
+@keyframes rank-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes medal-drop { from { opacity: 0; transform: translateY(-60px) scale(1.4); } }
+.cocarde.t2 { animation: gold-shine 3s steps(1) infinite; }
+.contest-letter { padding-bottom: 38px; }
+.palmares-line { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 4px 6px; background: #ffffff0d; }
+.palmares-text { display: grid; min-width: 0; line-height: 1.05; }
+.palmares-beer { color: var(--text); font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palmares-detail { color: var(--dim); font-size: 15px; overflow-wrap: anywhere; }
+.ceremony-beer { font-size: 19px; color: var(--text); margin-top: -4px; }

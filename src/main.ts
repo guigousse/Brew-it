@@ -9,6 +9,7 @@ import { createGemStore, type Purchase } from './platform/purchases';
 import { createStorage } from './platform/storage';
 import { sfx } from './platform/audio';
 import { App } from './ui/app';
+import { CONTEST_TIERS, contestName, MEDALS, type ContestTier, type Metal } from './core/contests';
 import { locale, tl } from './i18n';
 
 const AUTOSAVE_SECONDS = 20;
@@ -111,6 +112,16 @@ async function boot() {
         tapFeedback(false);
       }
       if (e.type === 'autoSent') app.log(tl('Livreur : commande « {0} » livrée, +{1} €', e.client, Math.round(e.amount).toLocaleString(locale)), 'good', 'courier');
+      if (e.type === 'contestOpen') {
+        sfx.play('paper');
+        const name = contestName({ tier: e.tier as ContestTier, cat: e.cat });
+        app.toast(`🏆 ${name}`, 'good');
+        app.log(tl('Lettre : {0}. Les inscriptions sont ouvertes 12 h.', name), 'good', 'trophy');
+      }
+      if (e.type === 'contestResult' && e.beerId != null) {
+        const name = CONTEST_TIERS[e.tier]!.name;
+        app.log(e.metal != null ? tl('{0} : {1} pour « {2} » !', name, MEDALS[e.metal as Metal], beerName(e.beerId)) : tl('{0} : « {1} » repart sans médaille', name, beerName(e.beerId)), e.metal != null ? 'good' : 'info', 'trophy');
+      }
       if (e.type === 'orderExpired') app.log(tl('Commande expirée : {0}', e.client), 'bad', 'clipboard');
     });
     app.update();

@@ -14,6 +14,8 @@ import { decorLayout } from '../render/decorLayout';
 import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
+import { drawCocarde } from '../render/cocarde';
+import { bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { GEMSTONES, BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
@@ -211,7 +213,7 @@ const SOURCE: Record<SaleSource, { name: string; color: string }> = {
 };
 
 /** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
-export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'wholesale';
+export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'wholesale' | 'contests';
 const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'dashboard', name: tl('Tableau de bord'), icon: 'chart' },
   { id: 'messages', name: tl('Messages'), icon: 'bubble' },
@@ -219,11 +221,23 @@ const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'staff', name: tl('Personnel'), icon: 'staff' },
   { id: 'trends', name: tl('Tendances'), icon: 'trend' },
   { id: 'wholesale', name: tl('Grossiste'), icon: 'truck' },
+  { id: 'contests', name: tl('Concours'), icon: 'trophy' },
 ];
 /** Un message reçu au bureau (commandes, tendances, brassins…), daté en temps de jeu. */
 interface Message { at: number; text: string; kind: 'good' | 'bad' | 'info'; icon: IconId; read: boolean }
 const MAX_MESSAGES = 60;
 type SheetState = { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'storage' | 'storageUp' | 'bar' | 'barUp' };
+
+/** Une cocarde de concours, en pixel art. */
+const cocardeCanvas = (m: Pick<Medal, 'tier' | 'metal'>, scale = 2, cls = 'cocarde') => {
+  const c = h('canvas', `${cls} t${m.tier}`);
+  drawCocarde(c, m.tier, m.metal, scale);
+  c.setAttribute('role', 'img');
+  c.setAttribute('aria-label', medalName(m));
+  return c;
+};
+/** « Or · Concours national ». */
+const medalName = (m: Pick<Medal, 'tier' | 'metal'>) => `${METALS[m.metal]} · ${CONTEST_TIERS[m.tier]!.name}`;
 
 const starText = (p: number) => {
   const n = stars(p);
@@ -362,6 +376,8 @@ export class App {
   /** Commandes dont on modifie le choix des bières. */
   private editing = new Set<number>();
   private picks = new Map<number, number[]>();
+  /** Bière choisie pour le concours en cours. */
+  private contestPick: number | null = null;
   /** Bière choisie sur l'étagère (fiche affichée sous l'étagère). */
   private shelfSel: number | null = null;
   private sheet = h('section', 'sheet hidden');
@@ -731,6 +747,14 @@ export class App {
         g.markDoubleOffered();
         this.openOfflineReward();
       }
+    }
+    // résultat d'un concours : la cérémonie s'ouvre dès que l'écran est libre
+    const res = g.contestResults[0];
+    // fermée par la croix : elle compte comme vue
+    if (res && res === this.ceremonyShown && !this.modalOpen) g.seenContestResult();
+    else if (res && res !== this.ceremonyShown && !this.modalOpen && !this.openSheet && !this.tour.active) {
+      this.ceremonyShown = res;
+      this.openContestResult(res);
     }
     const can = g.canBrew();
     const trial = g.tastable;
@@ -1362,6 +1386,8 @@ export class App {
         const spot = labelSpot(beer.label.bottle);
         Object.assign(lab.style, { left: `${spot.x * BOTTLE_SCALE}px`, top: `${spot.y * BOTTLE_SCALE}px` });
         bottle.append(lab);
+        const best = bestMedal(beer.medals);
+        if (best) bottle.append(cocardeCanvas(best, 2, 'cocarde shelf-cocarde'));
       }
       item.append(bottle, h('span', 'shelf-tag', tag));
       if (onclick) item.onclick = onclick;
@@ -1497,12 +1523,50 @@ export class App {
     return card;
   }
 
-  /** Popularité d'une bière en étoiles, et les tendances qu'elle suit. */
+  /**
+   * Popularité d'une bière : ses étoiles, une jauge vers la popularité qu'elle vise, et d'où vient cette cible
+   * (qualité, tendances, plafond de la brasserie), avec ce qui la limite et le geste qui la fait monter.
+   */
   private popLine(g: Game, b: Beer): HTMLElement {
+    const box = h('div', 'pop-box');
+    const p = g.popBreakdown(b);
     const line = h('div', 'pop-line');
-    line.append(h('span', 'pop-stars', starText(b.pop)));
+    const rising = p.target - b.pop > 0.01;
+    const falling = b.pop - p.target > 0.01;
+    line.append(h('span', 'pop-stars', starText(b.pop)), h('span', `pop-dir ${rising ? 'up' : falling ? 'down' : 'flat'}`, rising ? tl('▲ vise {0}', starText(p.target)) : falling ? tl('▼ redescend vers {0}', starText(p.target)) : tl('✓ au sommet')));
     for (const tr of trendsOf(b.tasting, g.trends)) line.append(h('span', 'trend-chip', `↗ ${tr.short}`));
-    return line;
+    const best = bestMedal(b.medals);
+    if (best) line.append(h('span', 'medal-chip', `${METALS[best.metal]} +${Math.round(g.medalBonus(b) * 100)} %`));
+    box.append(line);
+    // la jauge : la popularité actuelle, la cible (trait doré) et le plafond de la brasserie (cadenas)
+    const gauge = h('div', 'pop-gauge');
+    const fill = h('div', 'pop-fill');
+    fill.style.width = `${Math.min(100, b.pop * 100)}%`;
+    const goal = h('div', 'pop-goal');
+    goal.style.left = `${p.target * 100}%`;
+    gauge.append(fill, goal);
+    if (p.cap < 1) {
+      const cap = h('div', 'pop-cap');
+      cap.style.left = `${p.cap * 100}%`;
+      gauge.append(cap);
+    }
+    box.append(gauge);
+    // pourquoi cette cible
+    const why = h('div', 'pop-why');
+    const row = (label: string, value: string, cls = '') => why.append(h('span', `pop-why-label ${cls}`, label), h('span', `pop-why-value ${cls}`, value));
+    row(tl('Qualité {0}', tl(verdictOf(b.tasting.quality))), starText(p.quality));
+    if (p.trends > 0.005) row(tl('Tendances suivies'), `+${(p.trends * 5).toFixed(1)} ★`);
+    row(tl('🔒 Plafond : {0}', g.breweryName), starText(p.cap), p.limit === 'cap' ? 'limit' : '');
+    box.append(why);
+    const tip = p.limit === 'cap' && p.cap < 1
+      ? tl('Gaston : « Elle ne montera plus ici. Agrandis la brasserie pour qu\'on la connaisse au-delà. »')
+      : !rising
+        ? p.quality < 1 ? tl('Gaston : « Pour viser plus haut, il faut une meilleure bière, ou suivre une tendance. »') : ''
+        : b.kegs.length || g.taps.some((t) => t.beerId === b.id)
+          ? tl('Gaston : « Chaque verre servi au bar la fait connaître (vingt fois plus qu\'une bouteille livrée). »')
+          : tl('Gaston : « Mets-la en fût et sers-la au bar : c\'est là qu\'on la découvre. »');
+    if (tip) box.append(h('p', 'hint pop-tip', tip));
+    return box;
   }
 
   // --- Bar : popularité, affluence et fûts branchés
@@ -1722,6 +1786,7 @@ export class App {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
+      app === 'contests' ? [g.contest, g.contestNext > g.time ? Math.ceil((g.contestNext - g.time) / 60) : 0, g.breweryLevel, g.money >= g.contestFee, g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
       app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
   }
 
@@ -1791,6 +1856,7 @@ export class App {
     else if (st.app === 'orders') this.ordersTab(g, body);
     else if (st.app === 'staff') this.staffTab(g, body);
     else if (st.app === 'trends') this.trendsTab(g, body);
+    else if (st.app === 'contests') this.contestsTab(g, body);
     else this.wholesaleTab(g, body);
     body.scrollTop = scroll;
   }
@@ -1806,6 +1872,7 @@ export class App {
       staff: { text: `${g.staffBusy}/${g.staffSlots}`, hot: false },
       trends: { text: '', hot: false },
       wholesale: { text: '', hot: false },
+      contests: { text: g.contest && !g.contest.entry ? '!' : '', hot: !!g.contest && !g.contest.entry && g.beers.some((b) => g.contestChecks(b).every((x) => x.ok)) },
     };
     const grid = h('div', 'pc-apps');
     for (const a of PC_APPS) {
@@ -2218,6 +2285,177 @@ export class App {
     }
   }
 
+  /** Les concours : le concours en cours (une lettre à cachet de cire), l'inscription, puis le palmarès. */
+  private contestsTab(g: Game, card: HTMLElement): void {
+    const tiers = openTiers(g.breweryLevel);
+    if (!tiers.length) {
+      const el = h('div', 'card locked');
+      el.append(h('div', 'beer-name', tl('🔒 Les concours s\'ouvrent avec la microbrasserie')),
+        h('p', 'hint', tl('Régional (3 ★), national avec l\'usine (4 ★), international avec le labo du futur (5 ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.')));
+      card.append(el);
+    } else if (!g.contest) {
+      const el = h('div', 'card');
+      const wait = h('span', 'order-time');
+      wait.dataset.expires = String(g.contestNext);
+      wait.textContent = `⏳ ${duration(g.contestNext - g.time)}`;
+      const head = h('div', 'beer-head');
+      head.append(h('span', 'beer-name', tl('Prochain concours')), wait);
+      el.append(head, h('p', 'hint', tl('Une lettre arrivera au bureau. Prépare des bières excellentes et populaires : le jury goûte le dernier lot.')));
+      card.append(el);
+    } else card.append(this.contestLetter(g));
+    // le barème des cocardes : plus le concours est prestigieux, plus elle rapporte
+    const scale = h('div', 'card');
+    scale.append(h('div', 'beer-name', tl('Cocardes')), h('p', 'hint', tl('La meilleure médaille d\'une bière fait vendre plus, et plus cher (bar et grossiste).')));
+    const grid = h('div', 'cocarde-grid');
+    CONTEST_TIERS.forEach((t, tier) => {
+      const row = h('div', `cocarde-row${tiers.includes(tier as 0 | 1 | 2) ? '' : ' locked'}`);
+      row.append(h('span', 'cocarde-tier', `${t.name} · ${t.stars} ★`));
+      for (const metal of [0, 1, 2] as const) {
+        const cell = h('span', 'cocarde-cell');
+        cell.append(cocardeCanvas({ tier: tier as 0 | 1 | 2, metal }, 2), h('span', '', `+${Math.round(COCARDE_BONUS[tier * 3 + metal]! * 100)} %`));
+        row.append(cell);
+      }
+      grid.append(row);
+    });
+    scale.append(grid);
+    card.append(scale);
+    // le palmarès de la brasserie
+    const won = g.beers.flatMap((b) => (b.medals ?? []).map((m) => ({ b, m })));
+    if (won.length) {
+      const list = h('div', 'card');
+      list.append(h('div', 'beer-name', tl('Palmarès')));
+      won.sort((a, b) => cocardeRank(b.m) - cocardeRank(a.m));
+      for (const { b, m } of won) {
+        const line = h('div', 'palmares-line');
+        const text = h('div', 'palmares-text');
+        text.append(h('span', 'palmares-beer', b.name), h('span', 'palmares-detail', `${medalName(m)} · ${contestCategory(m.cat)?.short ?? ''} · ${m.score.toFixed(1)}/20`));
+        line.append(cocardeCanvas(m, 1, 'cocarde small'), text);
+        list.append(line);
+      }
+      card.append(list);
+    }
+  }
+
+  /** La lettre du concours en cours : la catégorie, les rivaux à battre, et la bière à inscrire. */
+  private contestLetter(g: Game): HTMLElement {
+    const c = g.contest!;
+    const tier = CONTEST_TIERS[c.tier]!;
+    const cat = contestCategory(c.cat);
+    const el = h('div', 'letter contest-letter');
+    const head = h('div', 'letter-head');
+    const time = this.timer(duration(c.closes - g.time));
+    time.dataset.expires = String(c.closes);
+    time.dataset.received = String(c.closes - 12 * 3600);
+    head.append(h('span', 'letter-client', `🏆 ${tier.name}`), time);
+    el.append(head);
+    this.paintTimer(time, g.time);
+    el.append(h('div', 'letter-ask', tl('Catégorie : {0}', cat?.text ?? c.cat)));
+    // les rivaux, du 1er au 3e : la note à battre pour chaque médaille
+    const podium = h('div', 'podium');
+    c.rivals.forEach((r, i) => {
+      const line = h('div', 'podium-line');
+      line.append(cocardeCanvas({ tier: c.tier, metal: (2 - i) as 0 | 1 | 2 }, 1, 'cocarde small'), h('span', 'podium-name', r.name), h('span', 'podium-score', r.score.toFixed(1)));
+      podium.append(line);
+    });
+    el.append(h('div', 'letter-sub', tl('À battre')), podium);
+    if (c.entry) {
+      const b = g.beer(c.entry.beerId);
+      el.append(h('p', 'letter-status ok', tl('✓ « {0} » est inscrite. Le jury goûte son lot à la clôture.', b?.name ?? '?')));
+      return el;
+    }
+    if (!g.beers.length) {
+      el.append(h('p', 'letter-status none', tl('Garde une bière dans ta gamme pour l\'inscrire.')));
+      return el;
+    }
+    if (this.contestPick == null || !g.beer(this.contestPick)) this.contestPick = g.contestCandidate()?.id ?? null;
+    const pick = g.beer(this.contestPick)!;
+    // les bières de la gamme, en puces : on choisit la candidate
+    const chips = h('div', 'chips');
+    for (const b of g.beers) {
+      const ok = g.contestChecks(b).every((x) => x.ok);
+      const chip = this.btn(`chip${b.id === pick.id ? ' active' : ''}${ok ? ' ok' : ''}`, b.name, () => {
+        this.contestPick = b.id;
+        this.renderComputer();
+      });
+      chips.append(chip);
+    }
+    el.append(h('div', 'letter-sub', tl('Ta candidate')), chips);
+    const note = Math.round(pick.tasting.quality * 200) / 10;
+    const checks = h('div', 'contest-checks');
+    for (const x of g.contestChecks(pick)) checks.append(h('div', `contest-check${x.ok ? ' ok' : ''}`, `${x.ok ? '✓' : '✗'} ${x.text}`));
+    checks.append(h('div', 'contest-check info', tl('Dernier lot : {0}/20 (le jury varie de ± 0,3)', note.toFixed(1))));
+    el.append(checks);
+    const fee = g.contestFee;
+    const ready = g.contestChecks(pick).every((x) => x.ok);
+    const go = this.btn('btn primary', tl('Inscrire · {0}', moneyInt(fee)), () => {
+      const r = g.enterContest(pick.id);
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('paper');
+      this.toast(tl('« {0} » est inscrite !', pick.name), 'good');
+      this.renderComputer();
+    });
+    if (!ready) go.disabled = true;
+    else this.costGate(go, fee);
+    el.append(go);
+    if (!ready) {
+      const miss = g.contestChecks(pick).find((x) => !x.ok)!;
+      el.append(h('p', 'letter-status short', this.contestAdvice(g, pick, miss.text)));
+    }
+    return el;
+  }
+
+  /** Ce qu'il faut faire pour remplir la condition qui manque. */
+  private contestAdvice(g: Game, b: Beer, miss: string): string {
+    const [cat, starsOk] = g.contestChecks(b);
+    if (miss === cat?.text) return tl('Elle n\'entre pas dans la catégorie : brasse une recette exprès.');
+    if (miss === starsOk?.text) {
+      const p = g.popBreakdown(b);
+      const need = CONTEST_TIERS[g.contest!.tier]!.stars;
+      if (stars(p.target) < need) return p.limit === 'cap' ? tl('Ta brasserie plafonne sa popularité à {0} : agrandis-la.', starText(p.cap)) : tl('Sa qualité ne la mène qu\'à {0} : améliore la recette ou le matériel.', starText(p.target));
+      return tl('Sers-la au bar pour la faire connaître : elle vise {0}.', starText(p.target));
+    }
+    return tl('Programme un brassin en bouteilles.');
+  }
+
+  /** La cérémonie : le classement se dévoile, et la médaille vient se poser sur la bouteille. */
+  private openContestResult(r: ContestResult): void {
+    const g = this.game();
+    const tier = CONTEST_TIERS[r.tier]!;
+    const card = this.modalCard(`🏆 ${tier.name}`);
+    card.classList.add('ceremony');
+    card.append(h('p', 'hint', tl('Catégorie : {0}', contestCategory(r.cat)?.text ?? r.cat)));
+    const rows = [...r.rivals.map((x) => ({ name: x.name, score: x.score, me: false })), { name: r.beerName, score: r.score ?? 0, me: true }];
+    rows.sort((a, b) => b.score - a.score || (a.me ? -1 : 1));
+    const list = h('div', 'podium ceremony-list');
+    // du dernier au premier : chaque ligne apparaît à son tour
+    rows.forEach((x, i) => {
+      const line = h('div', `podium-line${x.me ? ' me' : ''}`);
+      line.style.animationDelay = `${(rows.length - 1 - i) * 0.5}s`;
+      const metal = i <= 2 ? ((2 - i) as 0 | 1 | 2) : null;
+      line.append(h('span', 'podium-rank', `${i + 1}`), metal != null ? cocardeCanvas({ tier: r.tier, metal }, 1, 'cocarde small') : h('span', 'cocarde small'), h('span', 'podium-name', x.name), h('span', 'podium-score', x.score.toFixed(1)));
+      list.append(line);
+    });
+    card.append(list);
+    const verdict = h('div', 'ceremony-verdict');
+    verdict.style.animationDelay = `${rows.length * 0.5}s`;
+    if (r.metal != null) {
+      const big = cocardeCanvas({ tier: r.tier, metal: r.metal }, 4, 'cocarde big');
+      verdict.append(big, h('strong', 'ceremony-title', MEDALS[r.metal]), h('span', 'ceremony-beer', tl('pour « {0} »', r.beerName)),
+        h('p', 'hint', tl('Sa cocarde : +{0} % de ventes et de prix.', Math.round(COCARDE_BONUS[r.tier * 3 + r.metal]! * 100))));
+      sfx.play('levelUp');
+    } else {
+      verdict.append(h('strong', 'ceremony-title', tl('Pas de médaille cette fois.')));
+      sfx.play('paper');
+    }
+    if (r.tip) verdict.append(h('p', 'note', tl('Gaston : « Pour plus de finesse : {0} »', r.tip)));
+    card.append(verdict);
+    card.append(this.btn('btn primary', tl('Continuer'), () => {
+      g.seenContestResult();
+      this.closeModal();
+      this.sheetKey = '';
+    }));
+  }
+
   /** Le grossiste : il reprend bouteilles et fûts à tout moment, à petit prix, dans la limite d'un quota par bière (en litres, rechargé à minuit). */
   private wholesaleTab(g: Game, card: HTMLElement): void {
     const auto = h('label', 'toggle');
@@ -2569,6 +2807,7 @@ export class App {
 
   /** La bourse pour laquelle le doublement a déjà été proposé (une nouvelle absence en crée une autre). */
   private offlineShown: object | null = null;
+  private ceremonyShown: ContestResult | null = null;
   /** Jusqu'à quand la bourse garde son ancien montant (les pièces du doublement sont en vol). */
   private harvestHoldUntil = 0;
 

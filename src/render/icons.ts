@@ -196,6 +196,25 @@ const GRIDS = {
     '.kkkkkkkkkkkkkk.',
     '................',
   ],
+  // coupe des concours
+  trophy: [
+    '................',
+    '..kkkkkkkkkkkk..',
+    'kkkyyyyyyyyYYkkk',
+    'k.kyhyyyyyyYYk.k',
+    'k.kyhyyyyyyYYk.k',
+    '.kkyhyyyyyyYYkk.',
+    '...kyyyyyyyYYk..',
+    '....kyyyyyYYk...',
+    '.....kkyyYkk....',
+    '.......kYk......',
+    '.......kYk......',
+    '......kyyYk.....',
+    '....kkkkkkkkk...',
+    '....kCCCCCCCk...',
+    '....kkkkkkkkk...',
+    '................',
+  ],
   // atelier : fiole d'alchimiste, comme celle de la fermentation
   flask: [
     '.....kkkkkk.....',

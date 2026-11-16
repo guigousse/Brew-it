@@ -9,7 +9,8 @@ import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
-import { brandPopularity, gainPop, POP_CAP, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
+import { brandPopularity, gainPop, POP_CAP, stars, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
+import { CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
 import { tl } from '../i18n';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -101,7 +102,32 @@ export interface Beer {
   liters: number;
   /** Litres repris par le grossiste aujourd'hui (le quota se recharge à minuit). */
   wsToday: number;
+  /** Médailles gagnées en concours (la plus prestigieuse se porte en cocarde). */
+  medals?: Medal[];
 }
+
+/** Une condition d'inscription à un concours, cochée ou non. */
+export interface ContestCheck {
+  ok: boolean;
+  text: string;
+}
+
+/** D'où vient la popularité visée par une bière : sa qualité, les tendances, et le plafond de la brasserie. */
+export interface PopBreakdown {
+  /** Ce que vise la qualité seule (0 à 1). */
+  quality: number;
+  /** Ce qu'ajoutent les tendances suivies. */
+  trends: number;
+  /** Plafond de notoriété de la brasserie. */
+  cap: number;
+  /** Cible finale. */
+  target: number;
+  /** Ce qui limite la cible. */
+  limit: 'cap' | 'quality';
+}
+
+/** Diamants offerts pour une médaille, selon le concours (régional, national, international) et le métal. */
+export const MEDAL_GEMS: readonly (readonly [number, number, number])[] = [[5, 10, 20], [10, 20, 40], [20, 40, 80]];
 
 export interface Batch {
   id: number;
@@ -291,6 +317,14 @@ export class Game {
   tips = 0;
   /** Gains de la dernière absence, en attente de récolte. */
   offline: OfflineReport | null = null;
+  /** Concours en cours (inscriptions ouvertes), ou null entre deux concours. */
+  contest: Contest | null = null;
+  /** Ouverture du prochain concours (s de jeu) ; 0 tant que les concours ne sont pas ouverts. */
+  contestNext = 0;
+  /** Concours déjà tenus (ils se succèdent à tour de rôle). */
+  contestCount = 0;
+  /** Résultats pas encore vus par le joueur (la cérémonie s'affiche au retour). */
+  contestResults: ContestResult[] = [];
   private announced = new Set<string>();
 
   // ------------------------------------------------------------------ lectures
@@ -1040,7 +1074,7 @@ export class Game {
     return { ok: true, gems: pack.gems };
   }
 
-  earnGems(n: number, why: 'order' | 'level' | 'purchase'): void {
+  earnGems(n: number, why: 'order' | 'level' | 'purchase' | 'contest'): void {
     if (n <= 0) return;
     this.gems += n;
     this.events.emit({ type: 'gems', amount: n, why });
@@ -1231,6 +1265,103 @@ export class Game {
     return popTarget(b.tasting, this.trends, this.popCap);
   }
 
+  /** D'où vient la popularité visée par une bière. */
+  popBreakdown(b: Beer): PopBreakdown {
+    const quality = popTarget(b.tasting, [], 1);
+    const raw = popTarget(b.tasting, this.trends, 1);
+    const cap = this.popCap;
+    const target = Math.min(cap, raw);
+    return { quality, trends: raw - quality, cap, target, limit: raw > cap ? 'cap' : 'quality' };
+  }
+
+  /** Bonus de notoriété d'une bière médaillée (prix et ventes), de 0 à 0,5. */
+  medalBonus(b: Beer): number {
+    return medalBonus(b.medals);
+  }
+
+  // ------------------------------------------------------------------ concours
+
+  /** Droit d'inscription au concours en cours. */
+  get contestFee(): number {
+    return this.contest ? contestFee(this.contest.tier, this.breweryLevel) : 0;
+  }
+
+  /** Les conditions d'inscription d'une bière au concours en cours. */
+  contestChecks(b: Beer): ContestCheck[] {
+    const c = this.contest;
+    if (!c) return [];
+    const need = CONTEST_TIERS[c.tier]!.stars;
+    return [
+      { ok: inCategory(c, b.tasting), text: tl('Dans la catégorie') },
+      { ok: stars(b.pop) >= need, text: tl('{0} ★ de popularité', need) },
+      { ok: b.stock >= CONTEST_BOTTLES, text: tl('{0} bouteilles pour le jury', CONTEST_BOTTLES) },
+    ];
+  }
+
+  /** La meilleure candidate de la gamme : celle qui remplit le plus de conditions, puis la meilleure qualité. */
+  contestCandidate(): Beer | undefined {
+    const score = (b: Beer) => this.contestChecks(b).filter((x) => x.ok).length * 10 + b.tasting.quality;
+    return [...this.beers].sort((a, b) => score(b) - score(a))[0];
+  }
+
+  /** Inscrit une bière : le jury goûtera son dernier lot (6 bouteilles prises au stock). */
+  enterContest(beerId: number): CommandResult {
+    const c = this.contest;
+    if (!c) return { ok: false, reason: tl('Aucun concours en cours') };
+    if (c.entry) return { ok: false, reason: tl('Une bière est déjà inscrite') };
+    const b = this.beer(beerId);
+    if (!b) return { ok: false, reason: tl('Bière introuvable') };
+    const miss = this.contestChecks(b).find((x) => !x.ok);
+    if (miss) return { ok: false, reason: tl('Condition manquante : {0}', miss.text) };
+    const fee = this.contestFee;
+    if (this.money < fee) return { ok: false, reason: tl('Pas assez d\'argent') };
+    this.money -= fee;
+    b.stock -= CONTEST_BOTTLES;
+    c.entry = { beerId, quality: b.tasting.quality };
+    return { ok: true };
+  }
+
+  /** Les concours s'ouvrent avec la microbrasserie, puis se succèdent à tour de rôle. */
+  private tickContests(): void {
+    const tiers = openTiers(this.breweryLevel);
+    if (!tiers.length) return;
+    const c = this.contest;
+    if (c && this.time >= c.closes) this.judge(c);
+    if (this.contest) return;
+    if (!this.contestNext) this.contestNext = this.time + CONTEST_FIRST_S;
+    if (this.time < this.contestNext) return;
+    // du plus prestigieux au plus modeste, à tour de rôle
+    const tier = tiers[tiers.length - 1 - (this.contestCount % tiers.length)]!;
+    this.contest = drawContest(this.rng, tier, this.time);
+    this.contestCount++;
+    this.events.emit({ type: 'contestOpen', tier, cat: this.contest.cat });
+  }
+
+  /** Clôture : le jury goûte le lot inscrit, la bière gagne peut-être une médaille. */
+  private judge(c: Contest): void {
+    this.contest = null;
+    this.contestNext = this.time + CONTEST_GAP_MIN_S + (CONTEST_GAP_MAX_S - CONTEST_GAP_MIN_S) * this.rng.next();
+    const beer = c.entry ? this.beer(c.entry.beerId) : undefined;
+    if (!c.entry) return; // personne d'inscrit : le concours passe sans bruit
+    const score = juryScore(c.entry.quality, this.rng);
+    const { rank, metal } = placeOf(score, c.rivals);
+    const result: ContestResult = {
+      tier: c.tier, cat: c.cat, rivals: c.rivals, beerId: beer?.id ?? null, beerName: beer?.name ?? '?', score, rank, metal,
+      tip: beer?.tasting.tips?.[0],
+    };
+    if (beer && metal != null) {
+      (beer.medals ??= []).push({ tier: c.tier, metal, cat: c.cat, score });
+      this.earnGems(MEDAL_GEMS[c.tier]![metal], 'contest');
+    }
+    this.contestResults.push(result);
+    this.events.emit({ type: 'contestResult', tier: c.tier, metal, beerId: beer?.id ?? null });
+  }
+
+  /** La cérémonie a été vue. */
+  seenContestResult(): void {
+    this.contestResults.shift();
+  }
+
   /** Les tendances que suit une bière. */
   trendsOf(b: Beer) {
     return trendsOf(b.tasting, this.trends);
@@ -1364,7 +1495,7 @@ export class Game {
     // pendant un boost de production, le grossiste suit la cadence : sans ça, produire plus ne rapporterait rien
     if (this.boostOf('wholesale')?.id === 'openGate') return Infinity; // grossiste sans limite
     const boost = Math.max(this.boostMult('brew'), this.boostMult('yeast') > 1 ? 1.5 : 1);
-    return Math.round(this.batchLiters * (WHOLESALE_QUOTA.base + WHOLESALE_QUOTA.pop * beer.pop) * boost);
+    return Math.round(this.batchLiters * (WHOLESALE_QUOTA.base + WHOLESALE_QUOTA.pop * beer.pop) * boost * (1 + this.medalBonus(beer)));
   }
 
   /** Litres que le grossiste reprend encore aujourd'hui pour cette bière. */
@@ -1404,7 +1535,7 @@ export class Game {
       beer.kegs.sort((a, b) => a - b);
       liters = beer.kegs.splice(0, n).reduce((s, g) => s + g * GLASS_L, 0);
     }
-    const amount = (liters / BOTTLE_L) * wholesalePrice(beer.tasting) * this.boostMult('wholesale');
+    const amount = (liters / BOTTLE_L) * wholesalePrice(beer.tasting) * this.boostMult('wholesale') * (1 + this.medalBonus(beer));
     beer.wsToday += liters;
     beer.sold += n;
     beer.liters += liters;
@@ -1534,6 +1665,7 @@ export class Game {
       this.sellWhenFull();
     }
     this.tickTrends();
+    this.tickContests();
     // sans ventes, la popularité s'érode doucement
     const keep = Math.exp(-POP_DECAY * dt);
     for (const b of this.beers) b.pop *= keep;
@@ -1644,13 +1776,13 @@ export class Game {
       if (!flowing.length) break;
       const weight = (t: Tap) => {
         const b = this.beer(t.beerId)!;
-        return (0.2 + b.pop) * trendFactor(b.tasting, this.trends);
+        return (0.2 + b.pop) * trendFactor(b.tasting, this.trends) * (1 + this.medalBonus(b));
       };
       let pick = this.rng.next() * flowing.reduce((s, t) => s + weight(t), 0);
       let tap = flowing[0]!;
       for (const t of flowing) if ((pick -= weight(t)) <= 0) { tap = t; break; }
       const beer = this.beer(tap.beerId)!;
-      const price = glassPrice(this.barLevel, beer.tasting, this.trendsOf(beer).length) * (this.partying ? this.barEvent.priceMult : 1) * this.barPriceMult;
+      const price = glassPrice(this.barLevel, beer.tasting, this.trendsOf(beer).length) * (this.partying ? this.barEvent.priceMult : 1) * this.barPriceMult * (1 + this.medalBonus(beer));
       tap.glasses--;
       beer.sold++;
       beer.liters += GLASS_L;
@@ -1840,6 +1972,7 @@ export class Game {
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
+      contest: this.contest, contestNext: this.contestNext, contestCount: this.contestCount, contestResults: this.contestResults,
     };
   }
 
@@ -1950,6 +2083,10 @@ export class Game {
     g.lastPlan ??= null;
     g.queued ??= false;
     g.trial ??= null;
+    g.contest ??= null;
+    g.contestNext ??= 0;
+    g.contestCount ??= 0;
+    g.contestResults ??= [];
     return g;
   }
 }

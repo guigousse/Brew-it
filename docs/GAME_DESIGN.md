@@ -129,7 +129,7 @@ Chaque appareil exécute ta recette avec sa propre précision (`src/core/brewing
 
 - **Les écarts coûtent de la qualité** et sont expliqués à la dégustation, par exemple « Empâtage à 69 °C au lieu de 66 °C : le corps n'est pas celui de ta recette ».
 - **Le matériel rudimentaire ajoute un manque de netteté.** Un tirage « bon ou mauvais jour » par brassin le rend plus ou moins marqué.
-- **La finesse** : au-delà de l'absence de défauts, une grande bière est parfaitement réglée. Six points comptent : empâtage vers 66 °C ; fermentation dans le bas de la plage de la levure ; pétillance juste pour le style (2,3 vol., 2,6 pour une lager, 3 pour une saison) ; garde longue et froide (2 °C, deux fois la durée minimale) ; équilibre entre amertume et malt ; ébullition d'au moins 75 min. La finesse **plafonne** la note : 14/20 sans finesse, 18/20 pour une finesse de 0,8, et 20/20 seulement pour une bière parfaite en tout point (avec un matériel assez précis pour tenir les réglages). La dégustation indique « Pour plus de finesse » ce qu'il faut affiner. C'est la base des futurs concours de bières.
+- **La finesse** : au-delà de l'absence de défauts, une grande bière est parfaitement réglée. Six points comptent : empâtage vers 66 °C ; fermentation dans le bas de la plage de la levure ; pétillance juste pour le style (2,3 vol., 2,6 pour une lager, 3 pour une saison) ; garde longue et froide (2 °C, deux fois la durée minimale) ; équilibre entre amertume et malt ; ébullition d'au moins 75 min. La finesse **plafonne** la note : 14/20 sans finesse, 18/20 pour une finesse de 0,8, et 20/20 seulement pour une bière parfaite en tout point (avec un matériel assez précis pour tenir les réglages). La dégustation indique « Pour plus de finesse » ce qu'il faut affiner. C'est ce que goûte le jury des concours.
 - **Ce que donne la recette de Gaston**, d'après `npm run quality` (Monte-Carlo) :
 
 | Niveau | Résultat typique | Excellente |
@@ -224,6 +224,8 @@ L'objet d'un événement n'apparaît que pendant cet événement, toujours au m�
 
 **Tendances.** Trois tendances sont actives à la fois. Chacune dure de 8 à 16 h de jeu, puis une autre la remplace. Elles portent sur un style (IPA, lager, saison, blonde, pale ale, bières d'abbaye, fruitée) ou un caractère (léger < 5 %, fort ≥ 7 %, amer, doux, aromatique, limpide, ambré). Une bière dans la tendance vise une popularité plus haute, attire plus de clients au bar et s'y vend 15 % plus cher par tendance suivie.
 
+**La popularité expliquée** (fiche d'une bière, dans Ma gamme). Sous les étoiles : « ▲ vise ★★★★ » (ou « ▼ redescend vers… », ou « ✓ au sommet »), une **jauge** dorée avec un trait pour la cible et, hachuré en rouge, ce qui dépasse le plafond de la brasserie. Dessous, d'où vient la cible : la qualité (ses étoiles), les tendances suivies (+x ★) et le **plafond** du niveau de la brasserie, en rouge quand c'est lui qui bloque. Gaston dit le geste utile : agrandir la brasserie (plafond atteint), servir la bière au bar (elle monte encore), la mettre en fût (elle n'est pas au bar), ou faire une meilleure bière.
+
 L'application **Tendances** de l'ordinateur montre la popularité de la marque, les tendances du moment (avec les bières de la gamme qui les suivent) et la popularité de chaque bière. Les commandes « style recherché » reprennent souvent une tendance du moment. La fiche d'une bière de la gamme affiche aussi ses étoiles et ses tendances.
 
 **Campagnes de pub** (application Tendances de l'ordinateur, payées en euros). **Chaque niveau de l'ordinateur débloque une campagne**, plus chère et plus forte. **Une seule campagne à la fois** : les autres affichent « occupé ». Au lancement, toute la gamme gagne en popularité ; pendant la campagne, les lettres arrivent plus vite.
@@ -237,6 +239,31 @@ L'application **Tendances** de l'ordinateur montre la popularité de la marque, 
 | Intelligence logistique | Campagne nationale | 12 h | lettres ×3 · popularité +25 % · emplacements remplis · commandes +30 % · +50 % de clients au bar | 13 % |
 
 Le prix dépend du niveau de la brasserie : c'est une part d'une journée de revenus typique à ce niveau (1 500 €, 12 000 €, 90 000 €, 500 000 €, puis 1,8 M€ ; `AD_REF`). Au niveau 3, les affiches coûtent 3 600 € et la campagne nationale 12 000 €. **Prolonger** la campagne en cours : +3 h pour 5 diamants, jusqu'à 24 h d'avance (la seule place des diamants dans la pub). Mesure (24 h, livraisons toutes les 30 min) : une campagne rapporte environ 1,2 à 4,5 fois son prix à partir du niveau 2 de la brasserie ; pour un joueur qui ne passe que 4 fois par jour, elle est à peu près neutre, car les lettres attendent sa visite. Elle récompense le joueur actif.
+
+## Concours et cocardes (`src/core/contests.ts`)
+Les concours donnent un but au-delà des étoiles : une **médaille**, portée en **cocarde** sur la bouteille.
+
+| Concours | S'ouvre avec | Popularité exigée | Notes des rivaux | Cocarde |
+|---|---|---|---|---|
+| Régional | la microbrasserie (★3) | 3 ★ | 14 à 17/20 | médaillon sur collerette et ruban rouges |
+| National | l'usine (★4) | 4 ★ | 16 à 18,5/20 | collerette et ruban bleu-blanc-rouge, étoile frappée |
+| International | le labo du futur (★5) | 5 ★ | 18 à 19,8/20 | collerette pourpre bordée d'or, rayons d'or, étoile brillante |
+
+- **Un concours à la fois**, annoncé par une lettre (Messages, toast) : 10 min après l'ouverture des concours, puis 4 à 8 h après la clôture du précédent. Les concours ouverts se succèdent à tour de rôle, du plus prestigieux au plus modeste.
+- **Une catégorie** par concours : un style ou un caractère, les mêmes que les tendances (IPA, ≥ 7 %, limpide…). Il faut souvent brasser une recette exprès.
+- **Les rivaux sont connus d'avance** : trois brasseries et leurs notes. Battre la 3e donne le bronze, la 2e l'argent, la 1re l'or (à égalité, le joueur passe devant).
+- **Inscription** (application **Concours** de l'ordinateur, inscriptions ouvertes 12 h) : une bière de la catégorie, avec les étoiles exigées et 6 bouteilles pour le jury, plus un droit d'entrée (4 % d'une journée de revenus typique au niveau de la brasserie : 3 600 € à la microbrasserie, 20 000 € à l'usine, 72 000 € au labo du futur). Une seule bière par concours. Chaque condition s'affiche cochée ou non, avec le conseil pour la remplir.
+- **Le jury goûte le dernier lot** au moment de l'inscription : sa note sur 20, à ± 0,3 près. La précision du matériel et le « bon ou mauvais jour » comptent.
+- **La cérémonie** s'ouvre à la clôture (ou au retour) : le classement se dévoile de bas en haut, la cocarde tombe, Gaston donne le conseil de finesse. Une médaille rapporte aussi des diamants : 5, 10, 20 (régional), 10, 20, 40 (national), 20, 40, 80 (international).
+- **La cocarde** : la plus prestigieuse médaille d'une bière se porte sur sa bouteille, dans Ma gamme ; l'internationale scintille. Elle donne un **bonus de notoriété** : les verres et les bouteilles se vendent plus cher (bar, grossiste), et la bière se vend plus (clients du bar, quota du grossiste).
+
+| | Bronze | Argent | Or |
+|---|---|---|---|
+| Régional | +5 % | +8 % | +12 % |
+| National | +15 % | +20 % | +25 % |
+| International | +30 % | +40 % | +50 % |
+
+L'application Concours montre aussi le barème des cocardes et le **palmarès** de la brasserie. Les commandes ne changent pas : leur paiement est annoncé d'avance.
 
 ## Commandes
 L'ordinateur du bureau rassemble les applications **Commandes**, **Tendances** et **Grossiste** (avec le Tableau de bord et les Messages).
