@@ -968,11 +968,11 @@ const dict: Record<string, string> = {
   "Le jury proclame les résultats…": "The judges announce the results…",
   "Le podium": "The podium",
   "Le verdict": "The verdict",
-  "Les brasseries rivales": "The rival breweries",
   "Note exceptionnelle : le jury est sous le charme !": "Exceptional score: the judges are smitten!",
   "Passer ▸▸": "Skip ▸▸",
   "{0}e place": "Place {0}",
   "À {0} point de la marche du dessus.": "{0} pts short of the next step up.",
   "À {0} point du podium…": "{0} pts short of the podium…",
+  "Les bières en compétition": "The competing beers",
 };
 export default dict;

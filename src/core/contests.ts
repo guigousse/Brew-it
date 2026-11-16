@@ -2,6 +2,7 @@ import type { Tasting } from './brewing/model';
 import { AD_REF } from './market';
 import type { Rng } from './rng';
 import { TRENDS, trendById } from './trends';
+import { BOTTLES, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from './label';
 import { tl } from '../i18n';
 
 /**
@@ -48,13 +49,56 @@ export const CONTEST_FIRST_S = 10 * 60;
 /** L'avis du jury varie d'au plus ± 0,3 point autour de la note du lot. */
 export const JURY_SPREAD = 0.3;
 
-const RIVAL_NAMES = [
-  'Brasserie du Moulin', 'Les Trois Fûts', 'Hop & Co', 'La Mousse Dorée', 'Brasserie des Remparts', 'Le Chaudron',
-  'Malterie du Val', 'Brasserie Saint-Arnoux', 'La Houblonnière', 'Les Caves Rouges', 'Brasserie de l\'Écluse', 'Le Brasseur Fou',
+/** Brasseries rivales : des voisines au concours régional, de tout le pays au national, du monde entier à l'international. */
+const RIVAL_NAMES: readonly (readonly string[])[] = [
+  ['Brasserie du Moulin', 'Les Trois Fûts', 'Hop & Co', 'La Mousse Dorée', 'Brasserie des Remparts', 'Le Chaudron', 'Malterie du Val', 'La Houblonnière'],
+  ['Brasserie Saint-Arnoux', 'Les Caves Rouges', 'Brasserie de l\'Écluse', 'Le Brasseur Fou', 'Brasserie des Alpages', 'Maison Vauclair', 'Brasserie du Phare', 'Les Grands Chais'],
+  ['Brauerei Hofmann', 'Abbaye de Saint-Rombaut', 'Kettle & Crown', 'Cervecería del Sol', 'Osaka Craft Works', 'Pivovar Zlatý Lev', 'Brouwerij De Klok', 'Northern Lights Ales'],
+];
+/** Noms de leurs bières. */
+const RIVAL_BEERS = [
+  'La Ronchonne', 'Nuit Blanche', 'Vieille Tour', 'Brise d\'Automne', 'Cuivre & Malt', 'La Grande Soif', 'Pavé du Nord', 'Belle Écluse',
+  'Lune Rousse', 'Douce Folie', 'L\'Insoumise', 'Rouge-Gorge', 'Coup de Foudre', 'Petit Matin', 'Hop Story', 'Golden Fox',
+  'Old Lantern', 'Red Kite', 'Black Anchor', 'Sunny Side', 'Iron Monk', 'La Sauvage', 'Tête de Mule', 'L\'Éclaireuse',
+  'Plume d\'Or', 'Feu de Camp', 'Bise Noire', 'Belle Époque', 'Grain de Folie', 'La Mousquetaire', 'Silver Owl', 'Comète',
 ] as const;
 
+const DARK_BG = new Set(['#1b1424', '#1e3c78', '#2c6a3a', '#a8302a', '#8a5cc8', '#e8553a', '#c88a4a']);
+
+/** Une bouteille et une étiquette au hasard ; les rivaux internationaux s'offrent parfois du luxe. */
+export function randomLabel(rng: Rng, luxury = false): Label {
+  const pick = <T,>(list: readonly T[]) => list[Math.floor(rng.next() * list.length)]!;
+  const lux = luxury && rng.next() < 0.5;
+  const bg = pick(LABEL_COLORS);
+  let patternColor = pick(LABEL_COLORS);
+  if (patternColor === bg) patternColor = bg === '#f2c14e' ? '#1b1424' : '#f2c14e';
+  return {
+    bottle: lux ? pick(BOTTLES).id : pick(BOTTLES.filter((b) => b.id !== 'gold')).id,
+    shape: lux ? pick(SHAPES).id : pick(SHAPES.filter((x) => x.id !== 'baroque')).id,
+    bg,
+    pattern: lux ? pick(PATTERNS).id : pick(PATTERNS.filter((x) => x.id !== 'artdeco')).id,
+    patternColor,
+    emblem: pick(EMBLEMS.filter((x) => x.id !== 'gem' || lux)).id,
+    textColor: DARK_BG.has(bg) ? '#f6ecd6' : '#1b1424',
+    font: pick(FONTS).id,
+  };
+}
+
+/** La bière d'une brasserie rivale, tirée au hasard. */
+export function rivalLook(rng: Rng, tier: ContestTier, taken: Set<string> = new Set()): { beer: string; label: Label } {
+  let beer: string = pick(rng, RIVAL_BEERS);
+  for (let i = 0; i < 8 && taken.has(beer); i++) beer = pick(rng, RIVAL_BEERS);
+  taken.add(beer);
+  return { beer, label: randomLabel(rng, tier === 2) };
+}
+const pick = <T,>(rng: Rng, list: readonly T[]) => list[Math.floor(rng.next() * list.length)]!;
+
 export interface Rival {
+  /** La brasserie. */
   name: string;
+  /** Sa bière et son étiquette (absentes des concours d'avant le défilé des bouteilles). */
+  beer?: string;
+  label?: Label;
   /** Note sur 20, au dixième. */
   score: number;
 }
@@ -110,11 +154,12 @@ export const contestFee = (tier: ContestTier, breweryLevel: number) =>
 export function drawContest(rng: Rng, tier: ContestTier, time: number): Contest {
   const cat = TRENDS[Math.floor(rng.next() * TRENDS.length)]!.id;
   const [lo, hi] = CONTEST_TIERS[tier]!.rivals;
-  const names = [...RIVAL_NAMES];
+  const names = [...RIVAL_NAMES[tier]!];
+  const taken = new Set<string>();
   const rivals: Rival[] = [];
   for (let i = 0; i < 3; i++) {
     const name = names.splice(Math.floor(rng.next() * names.length), 1)[0]!;
-    rivals.push({ name, score: Math.round(rng.range(lo, hi) * 10) / 10 });
+    rivals.push({ name, score: Math.round(rng.range(lo, hi) * 10) / 10, ...rivalLook(rng, tier, taken) });
   }
   rivals.sort((a, b) => b.score - a.score);
   return { tier, cat, rivals, closes: time + CONTEST_OPEN_S };

@@ -94,6 +94,19 @@ describe('concours', () => {
     expect(g.contestResults).toEqual([]);
   });
 
+  it('chaque rival présente sa bière : un nom, une bouteille et une étiquette tirés au hasard', () => {
+    const rng = new Rng(11);
+    for (let i = 0; i < 30; i++) {
+      const c = drawContest(rng, 0, 0);
+      const beers = c.rivals.map((r) => r.beer);
+      expect(new Set(beers).size).toBe(3);
+      for (const r of c.rivals) {
+        expect(r.label?.bottle).toBeDefined();
+        expect(r.label?.bottle).not.toBe('gold'); // le luxe est réservé aux rivaux internationaux
+      }
+    }
+  });
+
   it('places et cocardes', () => {
     const rivals = [{ name: 'A', score: 18 }, { name: 'B', score: 17 }, { name: 'C', score: 16 }];
     expect(placeOf(18.5, rivals)).toEqual({ rank: 0, metal: 2 });

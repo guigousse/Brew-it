@@ -2343,7 +2343,7 @@ export class App {
     const podium = h('div', 'podium');
     c.rivals.forEach((r, i) => {
       const line = h('div', 'podium-line');
-      line.append(cocardeCanvas({ tier: c.tier, metal: (2 - i) as 0 | 1 | 2 }, 1, 'cocarde small'), h('span', 'podium-name', r.name), h('span', 'podium-score', r.score.toFixed(1)));
+      line.append(cocardeCanvas({ tier: c.tier, metal: (2 - i) as 0 | 1 | 2 }, 1, 'cocarde small'), h('span', 'podium-name', r.beer ? `${r.beer} · ${r.name}` : r.name), h('span', 'podium-score', r.score.toFixed(1)));
       podium.append(line);
     });
     el.append(h('div', 'letter-sub', tl('À battre')), podium);
@@ -2411,7 +2411,7 @@ export class App {
     const g = this.game();
     const card = this.modalCard(`🏆 ${CONTEST_TIERS[r.tier]!.name}`);
     playCeremony({
-      card, layer: this.modal, result: r,
+      card, layer: this.modal, result: r, brewery: tl('Ta brasserie'),
       label: (r.beerId != null ? g.beer(r.beerId)?.label : undefined) ?? DEFAULT_LABEL,
       onDone: () => {
         g.seenContestResult();
