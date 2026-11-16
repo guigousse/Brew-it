@@ -954,8 +954,9 @@ button:disabled { cursor: default; opacity: .5; }
 @keyframes digits-hold { 50% { opacity: .35; } }
 
 /* le défilé des bouteilles */
-.cer-stage { position: relative; height: 196px; overflow: hidden; background: radial-gradient(ellipse 60% 90% at 50% 0%, #fff4b030, #0000 70%), linear-gradient(#0000 78%, #3a2418 78%, #2a1a12); border: 2px solid var(--ink); }
-.cer-act { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 6px 10px 22px; animation: act-in .55s cubic-bezier(.2, .9, .3, 1.15) both; }
+.cer-stage { position: relative; height: 214px; overflow: hidden; background: radial-gradient(ellipse 60% 90% at 50% 0%, #fff4b030, #0000 70%), linear-gradient(#0000 86%, #3a2418 86%, #2a1a12); border: 2px solid var(--ink); }
+.cer-act { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 14px; padding: 8px 10px 30px; animation: act-in .55s cubic-bezier(.2, .9, .3, 1.15) both; }
+.cer-act .cer-info { align-self: center; margin-bottom: -22px; }
 .cer-act.leave { animation: act-out .42s cubic-bezier(.6, 0, .9, .4) forwards; }
 .cer-bottle { flex-shrink: 0; margin-right: 8px; transform: scale(1.12); transform-origin: 50% 100%; filter: drop-shadow(0 4px 0 #0008); }
 .cer-act.me .cer-bottle { animation: bottle-glow 1.2s steps(4) infinite; }
@@ -968,10 +969,10 @@ button:disabled { cursor: default; opacity: .5; }
 .cer-names { display: grid; min-width: 0; line-height: 1; }
 .cer-brew { font-size: 14px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cer-row .cer-name { font-size: 17px; }
-.out-gold .cer-stage { background: radial-gradient(ellipse 70% 100% at 50% 20%, #fff4b0aa, #f2c14e40 50%, #0000 80%), linear-gradient(#3a2a10 78%, #3a2418 78%, #2a1a12); box-shadow: 0 0 24px #f2c14ea0; }
-.out-silver .cer-stage { background: radial-gradient(ellipse 70% 100% at 50% 20%, #ffffff70, #bcc6d030 50%, #0000 80%), linear-gradient(#262a34 78%, #3a2418 78%, #2a1a12); }
-.out-bronze .cer-stage { background: radial-gradient(ellipse 70% 100% at 50% 20%, #f0b88460, #0000 75%), linear-gradient(#2a1c14 78%, #3a2418 78%, #2a1a12); }
-.out-none .cer-stage { background: linear-gradient(#16121c 78%, #2a1e18 78%, #1e1610); filter: grayscale(.75); }
+.out-gold .cer-stage { background: radial-gradient(ellipse 70% 100% at 50% 20%, #fff4b0aa, #f2c14e40 50%, #0000 80%), linear-gradient(#3a2a10 86%, #3a2418 86%, #2a1a12); box-shadow: 0 0 24px #f2c14ea0; }
+.out-silver .cer-stage { background: radial-gradient(ellipse 70% 100% at 50% 20%, #ffffff70, #bcc6d030 50%, #0000 80%), linear-gradient(#262a34 86%, #3a2418 86%, #2a1a12); }
+.out-bronze .cer-stage { background: radial-gradient(ellipse 70% 100% at 50% 20%, #f0b88460, #0000 75%), linear-gradient(#2a1c14 86%, #3a2418 86%, #2a1a12); }
+.out-none .cer-stage { background: linear-gradient(#16121c 86%, #2a1e18 86%, #1e1610); filter: grayscale(.75); }
 .out-none .cer-act { animation: row-shake .4s steps(4); }
 .out-gold .cer-act .cer-digits { color: #fff4b0; }
 .out-silver .cer-act .cer-digits { color: #ffffff; }
