@@ -1,5 +1,5 @@
 import { GASTON_RECIPE } from './brewing/model';
-import { BAR_MESSAGE, BAR_MESSAGE_MAX, doubleMinimum, Game, simulateOffline } from './game';
+import { BAR_MESSAGE, BAR_MESSAGE_MAX, doubleMinimum, Game, simulateOffline, TUTO_DONE } from './game';
 import { DEFAULT_LABEL } from './label';
 import { AD_EXTEND, adCost, ADS, BAR, kegSpace, PARTY } from './market';
 import { COMPUTERS, WHOLESALE_PRICE, drawOrder, orderGems, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, STARTER_MAX_BOTTLES, fits, type Order } from './orders';
@@ -1125,5 +1125,18 @@ describe('pubs récompensées', () => {
     // le compteur du jour est sauvegardé
     const back = Game.fromJSON(JSON.parse(JSON.stringify(g)));
     expect(back.adLeft('prospect')).toBe(2);
+  });
+});
+
+describe('visite guidée', () => {
+  it('une nouvelle partie commence la visite ; une partie qui avait fini l\'ancien tuto ne la refait pas', () => {
+    expect(new Game().tips).toBe(0);
+    const old = JSON.parse(JSON.stringify(new Game()));
+    delete old.tour;
+    old.tips = 4;
+    expect(Game.fromJSON(old).tips).toBe(TUTO_DONE);
+    // une partie en cours de nouvelle visite garde son étape
+    const mid = JSON.parse(JSON.stringify(Object.assign(new Game(), { tips: 6 })));
+    expect(Game.fromJSON(mid).tips).toBe(6);
   });
 });

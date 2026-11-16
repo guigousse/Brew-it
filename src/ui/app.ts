@@ -1,6 +1,6 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { AD_DAILY, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
+import { AD_DAILY, TUTO_DONE, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
 import { stars, trendById, trendsOf } from '../core/trends';
@@ -21,6 +21,7 @@ import { drawGaston } from './gaston';
 import { createKnob } from './knob';
 import { sfx } from '../platform/audio';
 import { showRewardedAd } from '../platform/ads';
+import { Tour, type TourTarget, type TourView } from './tutorial';
 import { compact, countdown, dialTime } from './format';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
@@ -362,13 +363,13 @@ export class App {
   private shelfSel: number | null = null;
   private sheet = h('section', 'sheet hidden');
   private modal = h('div', 'modal hidden');
-  private mentor = h('div', 'mentor hidden');
   private toasts = h('div', 'toasts');
   private openSheet: SheetState | null = null;
   /** Assistant « Brasser » : étape en cours et choix faits (null : la file des brassins). */
   private wiz: { step: 'beer' | 'format' | 'count' | 'trial'; beerId: number | null; format: Format; count: number } | null = null;
   private sheetKey = '';
-  private mentorKey = '';
+  /** La visite guidée de Gaston (tuto d'introduction). */
+  private tour!: Tour;
   private scale = 2;
   /** Appelé quand une première bouteille d'essai est prête (haptique). */
   onTasteReady?: () => void;
@@ -498,9 +499,6 @@ export class App {
     this.setBottom();
 
     // Gaston
-    const av = h('canvas', 'mentor-avatar');
-    drawGaston(av);
-    this.mentor.append(av, h('div', 'mentor-body'));
 
     root.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest<HTMLElement>('[data-cost]');
@@ -511,7 +509,35 @@ export class App {
       e.preventDefault();
       this.toast(`Il te manque ${moneyInt(Math.ceil(missing))}`, 'bad');
     }, true);
-    root.append(this.header, this.stage, this.fabs, this.harvests, this.boostHud, this.mentor, this.sheet, this.dock, this.modal, this.toasts);
+    // Gaston fait visiter la brasserie : le doigt montre, la surbrillance isole, la bulle explique
+    const tourTargets: Record<string, () => HTMLElement | HTMLElement[] | null | undefined> = {
+      computer: () => this.computerHit,
+      display: () => this.roomHits.find((x) => x.el.getAttribute('aria-label')?.startsWith('Présentoir'))?.el,
+      officePlaque: () => this.officePlaque,
+      mill: () => this.overlays.get('mill')?.label,
+      mash: () => this.overlays.get('mash')?.btn,
+      brewBtn: () => this.brewBtn,
+      racks: () => this.roomHits.find((x) => x.el.getAttribute('aria-label') === 'Rayonnages')?.el,
+      counter: () => this.roomHits.find((x) => x.el.getAttribute('aria-label') === 'Comptoir')?.el,
+      barBtns: () => [this.eventsBtn, this.barmanBtn],
+      money: () => [this.gemsPill, this.moneyPill],
+      taste: () => (this.tasteBtn.classList.contains('hidden') ? null : this.tasteBtn),
+    };
+    this.tour = new Tour({
+      game: () => this.game(),
+      view: () => this.view as TourView,
+      goView: (v) => this.goView(v),
+      target: (t: TourTarget) => (t.startsWith('nav:') ? this.navTabs.get(t.slice(4) as View)?.btn ?? null : tourTargets[t]?.() ?? null),
+      busy: () => this.modalOpen || !!this.openSheet,
+      sheet: () => this.openSheet?.kind ?? null,
+      avatar: () => {
+        const av = h('canvas', 'mentor-avatar');
+        drawGaston(av);
+        return av;
+      },
+      tap: () => sfx.play('pop'),
+    }, root);
+    root.append(this.header, this.stage, this.fabs, this.harvests, this.boostHud, this.sheet, this.dock, this.modal, this.toasts);
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }
@@ -563,6 +589,7 @@ export class App {
 
   frame(t: number): void {
     const g = this.game();
+    this.tour.frame();
     if (this.moneyAnim) {
       const a = this.moneyAnim;
       const k = Math.max(0, Math.min(1, (performance.now() - a.start) / 900)); // le compteur attend que les pièces arrivent
@@ -703,7 +730,7 @@ export class App {
     const trial = g.tastable;
     // pastilles des boutons d'action : l'essentiel en un coup d'œil ; « ready » = il y a quelque chose à faire
     // la brasserie à l'arrêt se voit partout (après le tutoriel) : « 0 » en rouge sur Brasser, « ! » sur l'onglet Atelier, et une notification
-    const stopped = g.stopped && g.tips >= 4;
+    const stopped = g.stopped && g.tips >= TUTO_DONE;
     setFab(this.brewBtn, g.planned ? String(g.planned) : stopped ? '0' : '', can.ok && !g.planned ? 'ready' : '',
       g.planned ? `Brasser : ${g.planned} programmé${g.planned > 1 ? 's' : ''}` : stopped ? 'Brasser : la brasserie est à l\'arrêt' : 'Brasser');
     this.brewBtn.querySelector('.fab-badge')!.classList.toggle('stop', stopped);
@@ -741,7 +768,6 @@ export class App {
     const sheetTop = this.openSheet ? this.sheet.getBoundingClientRect().top : 0;
     this.root.style.setProperty('--toast-bottom', sheetTop ? `${Math.round(window.innerHeight - sheetTop)}px` : 'var(--bottom-h, 70px)');
     // le tutoriel montre le bouton dont il parle
-    this.brewBtn.classList.toggle('tuto', g.tips === 2);
     setPlaque(this.plaque, `★ ${g.breweryLevel} · ${g.breweryName}`, stationUp, 'amélioration');
     setPlaque(this.storagePlaque, `▣ ${STORAGE[g.storageLevel - 1]!.name}`, !!nextStore && g.money >= nextStore.cost, 'agrandissement');
     setPlaque(this.officePlaque, `▣ ${COMPUTERS[g.computerLevel - 1]!.name}`, !!nextPc && g.money >= nextPc.cost, 'amélioration');
@@ -770,7 +796,6 @@ export class App {
     }
     this.refreshComputer();
     this.renderSheet();
-    this.renderMentor();
     // La barre du bas change de hauteur une fois remplie / les polices chargées : on recadre.
     const key = `${this.header.getBoundingClientRect().bottom}|${this.dock.getBoundingClientRect().top}|${window.innerWidth}`;
     if (key !== this.laidOut) this.layout();
@@ -784,7 +809,6 @@ export class App {
     this.scene.selected = this.openSheet?.kind === 'station' ? this.openSheet.id : null;
     this.sheetKey = '';
     this.wiz = null;
-    if (this.openSheet?.kind === 'station' && this.game().tips === 1) this.game().tips = 2;
     this.renderSheet();
   }
 
@@ -908,7 +932,7 @@ export class App {
     }
     body.append(knobs);
     // pendant le tutoriel, la fiche ne parle que des réglages : les achats viennent après la première bière
-    if (g.tips < 4) return;
+    if (g.tips < TUTO_DONE) return;
     // cuves en parallèle (fermentation, garde)
     const tankCost = g.tankCost(id);
     if (TANK_STAGES.includes(id)) {
@@ -1203,7 +1227,6 @@ export class App {
       const r = g.planBrew(beer.id, f, n);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('pop');
-      if (g.tips === 2 || g.tips === 1) g.tips = 3;
       this.toast(`${n} brassin${n > 1 ? 's' : ''} programmé${n > 1 ? 's' : ''}`, 'good');
       this.wizGo(null);
     });
@@ -1230,7 +1253,6 @@ export class App {
       const r = busy ? g.queueBrew() : g.brew();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('pop');
-      if (g.tips === 2 || g.tips === 1) g.tips = 3;
       if (busy) this.toast('En file d\'attente', 'good');
       this.close();
     });
@@ -2385,7 +2407,6 @@ export class App {
         const r = g.keepTrial(name, label);
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('pickup');
-        if (g.tips <= 4) g.tips = 4;
         this.closeModal();
         this.toast('Nouvelle bière dans ta gamme !', 'good');
         this.sheetKey = '';
@@ -2406,7 +2427,7 @@ export class App {
       }
     }
     // le premier essai, guidé par Gaston, ne se jette pas
-    if (!g.beers.length && g.tips < 4) return void card.append(keep);
+    if (!g.beers.length && g.tips < TUTO_DONE) return void card.append(keep);
     card.append(keep, this.confirmBtn('btn bad', 'Jeter', 'Jeter ce brassin ? Toucher pour confirmer', () => {
       g.discardTrial();
       this.closeModal();
@@ -3333,33 +3354,6 @@ export class App {
   }
 
   // ------------------------------------------------------------------ Gaston
-
-  private renderMentor(): void {
-    const g = this.game();
-    const tips: Record<number, { text: string; action?: string }> = {
-      0: { text: 'Salut, moi c\'est Gaston ! Le malt entre en haut, la bière sort en bas. J\'ai réglé les machines pour ma blonde.', action: 'Continuer' },
-      1: { text: 'Touche une machine pour la régler : leurs noms brillent.' },
-      2: { text: 'Touche la cuve de cuivre, en bas à droite, pour lancer ton premier brassin.' },
-      3: { text: 'Je t\'aide pour celui-ci : ça ira vite. On goûte à la première bouteille !' },
-      4: { text: 'Glisse l\'écran : au bureau, touche l\'ordinateur pour les commandes et les nouvelles ; au bar, touche les fûts pour les brancher. Bonne brasse !', action: 'Compris' },
-    };
-    const tip = this.modalOpen || this.openSheet?.kind === 'brew' || !isRoom(this.view) ? undefined : tips[g.tips];
-    this.mentor.classList.toggle('hidden', !tip);
-    // la bulle ne cache pas ce dont elle parle : en bas quand elle montre le haut de l'atelier (étapes 0 et 1)
-    this.mentor.classList.toggle('low', !!tip && this.view === 'workshop' && g.tips <= 1);
-    for (const o of this.overlays.values()) o.label.classList.toggle('tuto', !!tip && g.tips === 1);
-    if (!tip) return;
-    const key = `${g.tips}`;
-    if (key === this.mentorKey) return;
-    this.mentorKey = key;
-    const body = this.mentor.querySelector('.mentor-body')!;
-    body.replaceChildren(h('strong', 'mentor-name', 'Gaston'), h('p', 'mentor-text', tip.text));
-    if (tip.action) body.append(this.btn('btn primary small', tip.action, () => {
-      g.tips++;
-      this.mentorKey = '';
-      this.renderMentor();
-    }));
-  }
 
   // ------------------------------------------------------------------ notifications
 

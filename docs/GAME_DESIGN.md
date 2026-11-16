@@ -322,6 +322,14 @@ Aucune régie n'est encore branchée : `src/platform/ads.ts` montre une pub de t
 Voir [BALANCE.md](BALANCE.md) : l'audit, les objectifs de rythme et le joueur simulé (`npm run balance`).
 
 ## Accompagnement
-Gaston accueille le joueur, l'invite à toucher une machine, à lancer son premier brassin avec sa recette de blonde préréglée, puis à l'ajouter à sa gamme. Enfin, il explique que les bouteilles vont au stockage pour remplir les commandes, et que pour le bar il faut brasser en fûts puis les brancher dans la cave. Il invite alors à glisser l'écran pour visiter les pièces.
+**La visite guidée** (`src/ui/tutorial.ts`). Gaston fait visiter la brasserie, pièce par pièce, en phrases courtes. Un **doigt en pixel art** se déplace jusqu'à l'élément dont il parle, mis en **surbrillance** (cadre doré, le reste de l'écran assombri) ; sa bulle se place en haut ou en bas pour ne pas le cacher.
+
+1. **Bureau** : l'ordinateur (commandes, grossiste, tendances), le présentoir (la gamme), le nom de la pièce (ses améliorations), puis « Touche Atelier ».
+2. **Atelier** : le chemin du grain de machine en machine ; toucher une machine pour voir ses réglages ; les réglages de Gaston sont gardés pour la blonde ; lancer le premier brassin (Brasser).
+3. **Stockage** (pendant que la bière descend) : les caisses arrivent sur les rayonnages, le surplus part chez le grossiste.
+4. **Bar** : le comptoir (les fûts branchés sur les tireuses), les soirées et le barman, puis l'onglet du magasin (déco, boosts, étiquettes) et, en haut, l'argent et les diamants.
+5. **Retour à l'atelier** : goûter la première bouteille dès qu'elle sort, la garder dans la gamme ; Gaston montre le bureau pour livrer les commandes.
+
+Certaines étapes attendent un geste (toucher un onglet, ouvrir une machine, brasser, goûter) ; les autres avancent avec « Suivant ». Hors de la pièce de l'étape, Gaston montre l'onglet pour y revenir. « Passer la visite » l'arrête. Une étape déjà accomplie passe toute seule. Les parties qui avaient fini l'ancien tuto ne refont pas la visite.
 
 Si le joueur n'a plus d'argent et que rien ne peut en rapporter (aucun brassin en cours, aucun fût qui coule, aucune commande remplissable avec le stock), Gaston avance les ingrédients, y compris pour les brassins programmés.

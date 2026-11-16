@@ -38,6 +38,8 @@ export const WHOLESALE_QUOTA = { base: 4, pop: 20 } as const;
 /** Pubs vidéo récompensées : chaque usage est limité à 3 par jour (jour local). */
 export type AdReward = 'double' | 'prospect';
 export const AD_DAILY = 3;
+/** `tips` vaut TUTO_DONE quand la visite guidée de Gaston est finie (ou passée). En dessous : l'étape en cours. */
+export const TUTO_DONE = 100;
 /**
  * Contre le spam de la proposition « Doubler tes gains ? » : il faut une absence d'au moins 15 min, et 30 min
  * depuis la dernière proposition (regardée, refusée ou fermée). Le plafond de 3 pubs par jour s'y ajoute.
@@ -1836,7 +1838,7 @@ export class Game {
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
-      nextId: this.nextId, tips: this.tips, offline: this.offline, announced: [...this.announced],
+      nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
     };
   }
 
@@ -1899,6 +1901,8 @@ export class Game {
     g.wall ??= 0;
     g.quotaDay ??= localDay(g.wall);
     g.adViews ??= { day: 0, double: 0, prospect: 0 };
+    // l'ancien tuto s'arrêtait à 4 : une partie qui l'avait fini n'a pas à refaire la nouvelle visite
+    if ((g.tips ?? 0) >= 4 && g.tips < TUTO_DONE && !(s as { tour?: boolean }).tour) g.tips = TUTO_DONE;
     g.doubleOfferAt ??= 0;
     g.autoWholesale ??= true;
     g.computerLevel ??= 1;
