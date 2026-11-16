@@ -961,5 +961,18 @@ const dict: Record<string, string> = {
   "Médaille d'or": "金牌",
   "pour « {0} »": "授予「{0}」",
   "{0} : {1} pour « {2} » !": "{0}：「{2}」获得{1}！",
+  "De justesse !": "险胜！",
+  "Et maintenant, ta bière…": "现在轮到你的啤酒…",
+  "Haut la main !": "轻松夺冠！",
+  "Le jury goûte": "评委正在品尝",
+  "Le jury proclame les résultats…": "评委公布结果…",
+  "Le podium": "领奖台",
+  "Le verdict": "结果",
+  "Les brasseries rivales": "对手酒厂",
+  "Note exceptionnelle : le jury est sous le charme !": "超凡分数：评委为之倾倒！",
+  "Passer ▸▸": "跳过 ▸▸",
+  "{0}e place": "第 {0} 名",
+  "À {0} point de la marche du dessus.": "距上一名仅差 {0} 分。",
+  "À {0} point du podium…": "距领奖台仅差 {0} 分…",
 };
 export default dict;

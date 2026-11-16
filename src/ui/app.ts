@@ -14,7 +14,7 @@ import { decorLayout } from '../render/decorLayout';
 import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
-import { drawCocarde } from '../render/cocarde';
+import { cocardeCanvas, medalName, playCeremony } from './ceremony';
 import { bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
@@ -227,17 +227,6 @@ const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
 interface Message { at: number; text: string; kind: 'good' | 'bad' | 'info'; icon: IconId; read: boolean }
 const MAX_MESSAGES = 60;
 type SheetState = { kind: 'station'; id: StationId } | { kind: 'brew' | 'range' | 'storage' | 'storageUp' | 'bar' | 'barUp' };
-
-/** Une cocarde de concours, en pixel art. */
-const cocardeCanvas = (m: Pick<Medal, 'tier' | 'metal'>, scale = 2, cls = 'cocarde') => {
-  const c = h('canvas', `${cls} t${m.tier}`);
-  drawCocarde(c, m.tier, m.metal, scale);
-  c.setAttribute('role', 'img');
-  c.setAttribute('aria-label', medalName(m));
-  return c;
-};
-/** « Or · Concours national ». */
-const medalName = (m: Pick<Medal, 'tier' | 'metal'>) => `${METALS[m.metal]} · ${CONTEST_TIERS[m.tier]!.name}`;
 
 const starText = (p: number) => {
   const n = stars(p);
@@ -2417,43 +2406,19 @@ export class App {
     return tl('Programme un brassin en bouteilles.');
   }
 
-  /** La cérémonie : le classement se dévoile, et la médaille vient se poser sur la bouteille. */
+  /** La proclamation des résultats : les rivaux, le suspense de la note, puis la révélation (voir ceremony.ts). */
   private openContestResult(r: ContestResult): void {
     const g = this.game();
-    const tier = CONTEST_TIERS[r.tier]!;
-    const card = this.modalCard(`🏆 ${tier.name}`);
-    card.classList.add('ceremony');
-    card.append(h('p', 'hint', tl('Catégorie : {0}', contestCategory(r.cat)?.text ?? r.cat)));
-    const rows = [...r.rivals.map((x) => ({ name: x.name, score: x.score, me: false })), { name: r.beerName, score: r.score ?? 0, me: true }];
-    rows.sort((a, b) => b.score - a.score || (a.me ? -1 : 1));
-    const list = h('div', 'podium ceremony-list');
-    // du dernier au premier : chaque ligne apparaît à son tour
-    rows.forEach((x, i) => {
-      const line = h('div', `podium-line${x.me ? ' me' : ''}`);
-      line.style.animationDelay = `${(rows.length - 1 - i) * 0.5}s`;
-      const metal = i <= 2 ? ((2 - i) as 0 | 1 | 2) : null;
-      line.append(h('span', 'podium-rank', `${i + 1}`), metal != null ? cocardeCanvas({ tier: r.tier, metal }, 1, 'cocarde small') : h('span', 'cocarde small'), h('span', 'podium-name', x.name), h('span', 'podium-score', x.score.toFixed(1)));
-      list.append(line);
+    const card = this.modalCard(`🏆 ${CONTEST_TIERS[r.tier]!.name}`);
+    playCeremony({
+      card, layer: this.modal, result: r,
+      label: (r.beerId != null ? g.beer(r.beerId)?.label : undefined) ?? DEFAULT_LABEL,
+      onDone: () => {
+        g.seenContestResult();
+        this.closeModal();
+        this.sheetKey = '';
+      },
     });
-    card.append(list);
-    const verdict = h('div', 'ceremony-verdict');
-    verdict.style.animationDelay = `${rows.length * 0.5}s`;
-    if (r.metal != null) {
-      const big = cocardeCanvas({ tier: r.tier, metal: r.metal }, 4, 'cocarde big');
-      verdict.append(big, h('strong', 'ceremony-title', MEDALS[r.metal]), h('span', 'ceremony-beer', tl('pour « {0} »', r.beerName)),
-        h('p', 'hint', tl('Sa cocarde : +{0} % de ventes et de prix.', Math.round(COCARDE_BONUS[r.tier * 3 + r.metal]! * 100))));
-      sfx.play('levelUp');
-    } else {
-      verdict.append(h('strong', 'ceremony-title', tl('Pas de médaille cette fois.')));
-      sfx.play('paper');
-    }
-    if (r.tip) verdict.append(h('p', 'note', tl('Gaston : « Pour plus de finesse : {0} »', r.tip)));
-    card.append(verdict);
-    card.append(this.btn('btn primary', tl('Continuer'), () => {
-      g.seenContestResult();
-      this.closeModal();
-      this.sheetKey = '';
-    }));
   }
 
   /** Le grossiste : il reprend bouteilles et fûts à tout moment, à petit prix, dans la limite d'un quota par bière (en litres, rechargé à minuit). */

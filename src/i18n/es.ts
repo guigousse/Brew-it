@@ -961,5 +961,18 @@ const dict: Record<string, string> = {
   "Médaille d'or": "Medalla de oro",
   "pour « {0} »": "para «{0}»",
   "{0} : {1} pour « {2} » !": "{0}: ¡{1} para «{2}»!",
+  "De justesse !": "¡Por los pelos!",
+  "Et maintenant, ta bière…": "Y ahora, tu cerveza…",
+  "Haut la main !": "¡Con holgura!",
+  "Le jury goûte": "El jurado está probando",
+  "Le jury proclame les résultats…": "El jurado anuncia los resultados…",
+  "Le podium": "El podio",
+  "Le verdict": "El veredicto",
+  "Les brasseries rivales": "Las cervecerías rivales",
+  "Note exceptionnelle : le jury est sous le charme !": "Nota excepcional: ¡el jurado está encantado!",
+  "Passer ▸▸": "Saltar ▸▸",
+  "{0}e place": "Puesto {0}",
+  "À {0} point de la marche du dessus.": "A {0} puntos del escalón de arriba.",
+  "À {0} point du podium…": "A {0} puntos del podio…",
 };
 export default dict;
