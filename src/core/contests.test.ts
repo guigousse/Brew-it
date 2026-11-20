@@ -109,6 +109,19 @@ describe('concours', () => {
     }
   });
 
+  it('popularité exigée : 60, 80 puis 90 points (l\'international n\'exige pas 100)', () => {
+    const { g, b } = setup(5);
+    until(g, () => g.contest?.tier === 2, 10 * 86400);
+    const c = g.contest!;
+    c.cat = TRENDS.find((t) => t.test(b.tasting))!.id;
+    b.tasting = { ...b.tasting, quality: 0.9 }; // 40 points de qualité
+    b.week.fill(150_000 / 28); // 50 points de ventes
+    g.step();
+    expect(g.popBreakdown(b).total * 20).toBeGreaterThanOrEqual(90);
+    expect(g.contestChecks(b).every((x) => x.ok)).toBe(true);
+    expect(g.contestChecks(b)[1]!.text).toContain('90');
+  });
+
   it('places et cocardes', () => {
     const rivals = [{ name: 'A', score: 18 }, { name: 'B', score: 17 }, { name: 'C', score: 16 }];
     expect(placeOf(18.5, rivals)).toEqual({ rank: 0, metal: 2 });

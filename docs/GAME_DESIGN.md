@@ -262,11 +262,12 @@ Les concours donnent un but au-delà des étoiles : une **médaille**, portée e
 
 | Concours | S'ouvre avec | Popularité exigée | Notes des rivaux | Cocarde |
 |---|---|---|---|---|
-| Régional | la microbrasserie (★3) | 3 ★ | 14 à 17/20 | médaillon sur collerette et ruban rouges |
-| National | l'usine (★4) | 4 ★ | 16 à 18,5/20 | collerette et ruban bleu-blanc-rouge, étoile frappée |
-| International | le labo du futur (★5) | 5 ★ | 18 à 19,8/20 | collerette pourpre bordée d'or, rayons d'or, étoile brillante |
+| Régional | la microbrasserie (★3) | 3 ★ (60 points) | 14 à 17/20 | médaillon sur collerette et ruban rouges |
+| National | l'usine (★4) | 4 ★ (80 points) | 16 à 18,5/20 | collerette et ruban bleu-blanc-rouge, étoile frappée |
+| International | le labo du futur (★5) | 4½ ★ (90 points) | 18 à 19,8/20 | collerette pourpre bordée d'or, rayons d'or, étoile brillante |
 
 - **Un concours à la fois**, annoncé par une lettre (Messages, toast). Tant que les inscriptions sont ouvertes, une **coupe dorée** se tient en haut à droite de l'écran, avec les effets actifs : son cadran se vide jusqu'à la clôture, le temps qui reste s'affiche au centre, une pastille « ! » rouge dit qu'aucune bière n'est inscrite (« ✓ » verte une fois inscrite), et la toucher ouvre l'app Concours. Le premier concours arrive 10 min après l'ouverture des concours, les suivants 4 à 8 h après la clôture du précédent. Les concours ouverts se succèdent à tour de rôle, du plus prestigieux au plus modeste.
+- **L'exigence de popularité de l'international est de 90 points**, et non 100 : une bière Excellente (40 points de qualité) très vendue (50 points de ventes) l'atteint, ou une bière un peu moins vendue qui suit une tendance. 100 points pile restaient quasi impossibles même en fin de partie.
 - **Une catégorie** par concours : un style ou un caractère, les mêmes que les tendances (IPA, ≥ 7 %, limpide…). Il faut souvent brasser une recette exprès.
 - **Les rivaux sont connus d'avance** : trois brasseries et leurs notes. Battre la 3e donne le bronze, la 2e l'argent, la 1re l'or (à égalité, le joueur passe devant).
 - **Inscription** (application **Concours** de l'ordinateur, inscriptions ouvertes 12 h) : une bière de la catégorie, avec les étoiles exigées et 6 bouteilles pour le jury, plus un droit d'entrée (4 % d'une journée de revenus typique au niveau de la brasserie : 3 600 € à la microbrasserie, 20 000 € à l'usine, 72 000 € au labo du futur). Une seule bière par concours. Chaque condition s'affiche cochée ou non, avec le conseil pour la remplir.

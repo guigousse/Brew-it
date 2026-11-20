@@ -18,8 +18,8 @@ export type Metal = 0 | 1 | 2;
 
 export interface ContestTierDef {
   name: string;
-  /** Étoiles de popularité exigées de la bière inscrite. */
-  stars: number;
+  /** Popularité exigée de la bière inscrite (score sur 100 ; 20 points = 1 ★). */
+  points: number;
   /** Niveau de la brasserie qui ouvre ce concours. */
   level: number;
   /** Notes des rivaux (sur 20) : de la plus basse à la plus haute. */
@@ -29,10 +29,16 @@ export interface ContestTierDef {
 }
 
 export const CONTEST_TIERS: readonly ContestTierDef[] = [
-  { name: tl('Concours régional'), stars: 3, level: 3, rivals: [14, 17], feeShare: 0.04 },
-  { name: tl('Concours national'), stars: 4, level: 4, rivals: [16, 18.5], feeShare: 0.04 },
-  { name: tl('Concours international'), stars: 5, level: 5, rivals: [18, 19.8], feeShare: 0.04 },
+  { name: tl('Concours régional'), points: 60, level: 3, rivals: [14, 17], feeShare: 0.04 },
+  { name: tl('Concours national'), points: 80, level: 4, rivals: [16, 18.5], feeShare: 0.04 },
+  { name: tl('Concours international'), points: 90, level: 5, rivals: [18, 19.8], feeShare: 0.04 },
 ];
+
+/** Une exigence en étoiles : 90 points → « 4½ ». */
+export const pointsAsStars = (points: number) => {
+  const h = Math.floor(points / 10) / 2;
+  return h % 1 ? `${Math.floor(h)}½` : String(h);
+};
 
 export const METALS = [tl('Bronze'), tl('Argent'), tl('Or')] as const;
 export const MEDALS = [tl('Médaille de bronze'), tl('Médaille d\'argent'), tl('Médaille d\'or')] as const;

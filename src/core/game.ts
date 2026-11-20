@@ -10,7 +10,7 @@ import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelC
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
-import { CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
+import { pointsAsStars, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
 import { PARTNER_DAYS, PARTNER_POP_WEIGHT, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
 import { tl } from '../i18n';
 
@@ -1337,10 +1337,10 @@ export class Game {
   contestChecks(b: Beer): ContestCheck[] {
     const c = this.contest;
     if (!c) return [];
-    const need = CONTEST_TIERS[c.tier]!.stars;
+    const need = CONTEST_TIERS[c.tier]!.points;
     return [
       { ok: inCategory(c, b.tasting), text: tl('Dans la catégorie') },
-      { ok: stars(b.pop) >= need, text: tl('{0} ★ de popularité ({1} points)', need, need * 20) },
+      { ok: popScore(b.pop) >= need, text: tl('{0} ★ de popularité ({1} points)', pointsAsStars(need), need) },
       { ok: b.stock >= CONTEST_BOTTLES, text: tl('{0} bouteilles pour le jury', CONTEST_BOTTLES) },
     ];
   }

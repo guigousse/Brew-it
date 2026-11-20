@@ -914,7 +914,7 @@ const dict: Record<string, string> = {
   "Concours": "比赛",
   "Qualité {0}": "品质：{0}",
   "🔒 Les concours s'ouvrent avec la microbrasserie": "🔒 升级到精酿厂后开放比赛",
-  "Régional (3 ★), national avec l'usine (4 ★), international avec le labo du futur (5 ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "地区赛（3 ★），工厂级开放全国赛（4 ★），未来实验室开放国际赛（5 ★）。奖牌会以徽章形式挂在瓶身：啤酒卖得更多、更贵。",
+  "Régional (3 ★), national avec l'usine (4 ★), international avec le labo du futur (4½ ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "地区赛（3 ★），工厂级开放全国赛（4 ★），未来实验室开放国际赛（5 ★）。奖牌会以徽章形式挂在瓶身：啤酒卖得更多、更贵。",
   "Prochain concours": "下一场比赛",
   "Une lettre arrivera au bureau. Prépare des bières excellentes et populaires : le jury goûte le dernier lot.": "办公室会收到来信。准备好优秀又受欢迎的啤酒：评委品尝的是最新一批。",
   "Cocardes": "徽章",

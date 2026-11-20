@@ -16,7 +16,7 @@ import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { cocardeCanvas, medalName, playCeremony } from './ceremony';
 import { PARTNER_DAYS, partnerById, PARTNERS } from '../core/partners';
-import { bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
+import { pointsAsStars, bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { GEMSTONES, BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
@@ -2447,7 +2447,7 @@ export class App {
     if (!tiers.length) {
       const el = h('div', 'card locked');
       el.append(h('div', 'beer-name', tl('🔒 Les concours s\'ouvrent avec la microbrasserie')),
-        h('p', 'hint', tl('Régional (3 ★), national avec l\'usine (4 ★), international avec le labo du futur (5 ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.')));
+        h('p', 'hint', tl('Régional (3 ★), national avec l\'usine (4 ★), international avec le labo du futur (4½ ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.')));
       card.append(el);
     } else if (!g.contest) {
       const el = h('div', 'card');
@@ -2465,7 +2465,7 @@ export class App {
     const grid = h('div', 'cocarde-grid');
     CONTEST_TIERS.forEach((t, tier) => {
       const row = h('div', `cocarde-row${tiers.includes(tier as 0 | 1 | 2) ? '' : ' locked'}`);
-      row.append(h('span', 'cocarde-tier', tl('{0} · {1} ★ ({2} points)', t.name, t.stars, t.stars * 20)));
+      row.append(h('span', 'cocarde-tier', tl('{0} · {1} ★ ({2} points)', t.name, pointsAsStars(t.points), t.points)));
       for (const metal of [0, 1, 2] as const) {
         const cell = h('span', 'cocarde-cell');
         cell.append(cocardeCanvas({ tier: tier as 0 | 1 | 2, metal }, 2), h('span', '', `+${Math.round(COCARDE_BONUS[tier * 3 + metal]! * 100)} %`));
@@ -2566,8 +2566,8 @@ export class App {
     if (miss === cat?.text) return tl('Elle n\'entre pas dans la catégorie : brasse une recette exprès.');
     if (miss === starsOk?.text) {
       const p = g.popBreakdown(b);
-      const need = CONTEST_TIERS[g.contest!.tier]!.stars;
-      const missing = Math.max(1, need * 20 - popScore(b.pop));
+      const need = CONTEST_TIERS[g.contest!.tier]!.points;
+      const missing = Math.max(1, need - popScore(b.pop));
       if (p.next) return tl('Il lui manque {0} points : vends-en davantage ({1} sur 7 jours donnent {2} / 50) ou suis une tendance (+10).', missing, liters(p.next.liters), Math.round(p.next.stars * 20));
       return tl('Il lui manque {0} points : suis une tendance (+10) ou améliore la qualité.', missing);
     }

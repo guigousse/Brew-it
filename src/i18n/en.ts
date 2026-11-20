@@ -914,7 +914,7 @@ const dict: Record<string, string> = {
   "Concours": "Competitions",
   "Qualité {0}": "Quality: {0}",
   "🔒 Les concours s'ouvrent avec la microbrasserie": "🔒 Competitions open with the microbrewery",
-  "Régional (3 ★), national avec l'usine (4 ★), international avec le labo du futur (5 ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "Regional (3 ★), national with the factory (4 ★), international with the lab of the future (5 ★). A medal is worn as a rosette on the bottle: the beer sells more, and for more.",
+  "Régional (3 ★), national avec l'usine (4 ★), international avec le labo du futur (4½ ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "Regional (3 ★), national with the factory (4 ★), international with the lab of the future (4½ ★). A medal is worn as a rosette on the bottle: the beer sells more, and for more.",
   "Prochain concours": "Next competition",
   "Une lettre arrivera au bureau. Prépare des bières excellentes et populaires : le jury goûte le dernier lot.": "A letter will arrive at the office. Get excellent, popular beers ready: the judges taste the latest batch.",
   "Cocardes": "Rosettes",
