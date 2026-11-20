@@ -9,7 +9,7 @@
 | Visites où l'on peut acheter quelque chose | au moins 1 sur 2 | **82 %** (94 % à 2 visites/jour) |
 | Plus longue période sans rien acheter | 1 journée au plus | **3 visites** (1 à 2 visites/jour) |
 | Premier jour | beaucoup de récompenses | ~20 achats, niveau 2 en 4 h 30 de jeu (inchangé) |
-| Machines (4 visites/jour) | des paliers réguliers | niveau 3 à J4, niveau 4 à J10, niveau 5 à J18 |
+| Machines (4 visites/jour) | des paliers réguliers | avec les 5 niveaux par palier : palier 3 de J4 à J7, palier 4 de J9 à J14, palier 5 de J18 à J24 ; fin de partie vers J33-34 (environ 180 achats de machines au lieu de 28) |
 
 Avant ce rééquilibrage, le joueur simulé réparé mettait **plus de 120 jours** (voir « Rééquilibrage de novembre 2026 », en fin de document).
 

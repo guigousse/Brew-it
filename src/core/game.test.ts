@@ -16,6 +16,11 @@ const run = (g: Game, seconds: number) => {
 const runUntil = (g: Game, cond: () => boolean, max = 3000) => {
   for (let i = 0; i < max * 20 && !cond(); i++) g.step();
 };
+/** Monte un appareil jusqu'à la machine suivante (les 4 niveaux du palier, puis le changement de machine). */
+const nextTier = (g: Game, id: (typeof STATION_ORDER)[number]) => {
+  for (let i = 0; i < 5; i++) g.upgrade(id);
+};
+
 /** Une bière très vendue cette semaine (150 000 L : le sommet des ventes). */
 const famous = (b: { week: number[] }) => b.week.fill(150_000 / SALES_SLOTS);
 
@@ -630,19 +635,57 @@ describe('jeu', () => {
     expect(g.keepTrial('Ratée', DEFAULT_LABEL).ok).toBe(false);
   });
 
-  it('5 niveaux : on améliore même pendant un brassin ; chaque appareil amélioré grossit déjà les brassins', () => {
+  it('5 paliers : on améliore même pendant un brassin ; chaque machine du palier suivant grossit déjà les brassins', () => {
     const g = new Game();
-    g.money = 1e9;
+    g.money = 1e12;
     g.brew();
     expect(g.upgrade('mill').ok).toBe(true); // appareil occupé : pas besoin d'attendre
+    expect(g.level('mill')).toBe(1); // un niveau du palier : même machine
+    expect(g.levelNumber('mill')).toBe(2);
+    expect(g.batchLiters).toBe(5);
+    for (let i = 0; i < 4; i++) g.upgrade('mill');
+    expect(g.level('mill')).toBe(2); // niveau 6 : la machine suivante
+    expect(g.levelNumber('mill')).toBe(6);
     expect(g.batchLiters).toBe(7); // 5 L + 1/7 du palier suivant (20 L)
-    for (const id of STATION_ORDER.slice(1)) g.upgrade(id);
-    expect(g.batchLiters).toBe(20); // les 7 au niveau 2
+    for (const id of STATION_ORDER.slice(1)) nextTier(g, id);
+    expect(g.batchLiters).toBe(20); // les 7 au palier 2
     for (const lv of [60, 200, 600]) {
-      for (const id of STATION_ORDER) g.upgrade(id);
+      for (const id of STATION_ORDER) nextTier(g, id);
       expect(g.batchLiters).toBe(lv);
     }
-    expect(g.upgrade('mill').ok).toBe(false); // niveau 5 = maximum
+    expect(g.levelNumber('mill')).toBe(21);
+    for (let i = 0; i < 4; i++) g.upgrade('mill');
+    expect(g.levelNumber('mill')).toBe(25);
+    expect(g.upgrade('mill').ok).toBe(true); // au-delà du 25e : sans fin
+    expect(g.levelNumber('mill')).toBe(26);
+    expect(g.level('mill')).toBe(5);
+  });
+
+  it('niveaux du palier : plus rapides (+5 % chacun), plus précis ; au-delà du 25e, +3 % et un prix ×1,6', () => {
+    const g = new Game();
+    g.money = 1e15;
+    const r = g.recipe;
+    const t0 = g.stationTime('mash', r, 5);
+    g.upgrade('mash');
+    g.upgrade('mash');
+    expect(g.stationTime('mash', r, 5)).toBeCloseTo(t0 / 1.1, 6);
+    // le prix monte à chaque niveau du palier, et le changement de machine coûte le plus cher
+    const costs: number[] = [];
+    const s = new Game();
+    s.money = 1e15;
+    for (let i = 0; i < 5; i++) {
+      costs.push(s.upgradeCost('mash'));
+      s.upgrade('mash');
+    }
+    for (let i = 1; i < costs.length; i++) expect(costs[i]!).toBeGreaterThan(costs[i - 1]!);
+    expect(s.nextIsTier('mash')).toBe(false);
+    for (let i = 0; i < 19; i++) s.upgrade('mash');
+    expect(s.levelNumber('mash')).toBe(25);
+    const c1 = s.upgradeCost('mash');
+    const before = s.stationTime('mash', r, 5);
+    s.upgrade('mash');
+    expect(s.upgradeCost('mash') / c1).toBeCloseTo(1.6, 1);
+    expect(s.stationTime('mash', r, 5)).toBeCloseTo(before / 1.03, 6);
   });
 
   it('des cuves en parallèle : plusieurs brassins fermentent en même temps', () => {
@@ -748,6 +791,15 @@ describe('jeu', () => {
     expect(loaded.money).toBeCloseTo(before + report.earned);
   });
 
+  it('les sauvegardes d\'avant les niveaux intermédiaires : un appareil de niveau 3 est au début du palier 3 (niveau 11)', () => {
+    const g = new Game();
+    const old = JSON.parse(JSON.stringify(g.toJSON()));
+    for (const id of STATION_ORDER) old.stations[id] = { level: 3 };
+    const loaded = Game.fromJSON(old);
+    expect(loaded.levelNumber('mill')).toBe(11);
+    expect(loaded.breweryLevel).toBe(3);
+  });
+
   it('les anciennes sauvegardes (3 niveaux) passent aux niveaux 2 à 4', () => {
     const g = new Game();
     const old = { ...g.toJSON(), version: 3, stations: { ...g.stations, mill: { level: 3 } } };
@@ -778,8 +830,10 @@ describe('jeu', () => {
     g.events.on((e) => e.type === 'breweryLevel' && levels.push(e.level));
     expect(g.breweryLevel).toBe(1);
     expect(openTypes(g.breweryLevel, 1).some((c) => c.id === 'caviste')).toBe(false); // il faut le niveau 2
-    for (const id of STATION_ORDER.slice(0, 6)) g.upgrade(id);
-    expect(g.breweryLevel).toBe(1); // l'embouteillage est encore au niveau 1
+    for (const id of STATION_ORDER.slice(0, 6)) nextTier(g, id);
+    expect(g.breweryLevel).toBe(1); // l'embouteillage est encore au palier 1
+    for (let i = 0; i < 4; i++) g.upgrade('bottling');
+    expect(g.breweryLevel).toBe(1); // ses niveaux du palier ne changent pas la machine
     g.upgrade('bottling');
     expect(g.breweryLevel).toBe(2);
     expect(g.breweryName).toBe('Garage');
@@ -909,7 +963,7 @@ describe('diamants', () => {
     g.orders = [{ ...drawOrder(998, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'classic', qty: 12, minQuality: 0, tip: true } as Order];
     expect(g.fulfill(998, [g.beers[0]!.id]).ok).toBe(true);
     expect(g.gems).toBe(GEMS.start + 1); // commande classique avec pourboire
-    for (const id of STATION_ORDER) g.upgrade(id);
+    for (const id of STATION_ORDER) nextTier(g, id);
     expect(g.breweryLevel).toBe(2);
     expect(g.gems).toBe(GEMS.start + 1 + GEMS.breweryLevel[2]!);
   });

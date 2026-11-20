@@ -1023,3 +1023,10 @@ button:disabled { cursor: default; opacity: .5; }
 .partner-chip .boost-chip-dial { background: conic-gradient(#3f88d4 0 calc(var(--left, 0) * 360deg), #120c18 0); }
 .partner-chip.full .boost-chip-dial { background: #2c8a4a; }
 .partner-flag { background: #8cd0ff; }
+
+/* paliers des machines : 5 niveaux par machine */
+.tier-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tier-name { font-size: 18px; color: var(--text); min-width: 0; }
+.tier-pips { display: flex; gap: 3px; flex-shrink: 0; }
+.tier-pip { width: 14px; height: 14px; background: #1b1424; border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px #4a3a5a; }
+.tier-pip.on { background: var(--good); box-shadow: inset 2px 2px 0 #c8ffc8; }

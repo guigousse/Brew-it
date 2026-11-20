@@ -50,11 +50,63 @@ export const INFECTION = [0, 0.1, 0.06, 0.02, 0, 0] as const;
 /** Pénalité d'oxydation selon le niveau de l'embouteillage. */
 export const OXIDATION = [0, 0.08, 0.05, 0.02, 0, 0] as const;
 /** Multiplicateur de prix pour passer au niveau n (index = niveau visé). */
-export const TIER_COST = [0, 0, 1, 40, 400, 2000] as const;
+export const TIER_COST = [0, 0, 1, 34, 340, 1700] as const;
 
 export function upgradeCost(id: StationId, toLevel: number): number {
   return STATIONS[id].baseCost * (TIER_COST[toLevel] ?? Infinity);
 }
+
+/**
+ * Chaque appareil a 5 paliers (les 5 machines : de la verrerie d'alchimiste au labo du futur) de 5 niveaux chacun,
+ * puis des niveaux sans fin. Les 4 niveaux intermédiaires d'un palier rendent la machine plus rapide (+5 % chacun)
+ * et plus précise (elle se rapproche de la précision du palier suivant) ; passer au palier suivant change la machine,
+ * son volume et son dessin. Après le niveau 25, chaque niveau donne +3 % de cadence et coûte 1,6 fois le précédent.
+ */
+export const STEPS_PER_TIER = 5;
+/** Vitesse en plus par niveau intermédiaire. */
+export const STEP_SPEED = 0.05;
+/** Cadence en plus par niveau au-delà du 25e. */
+export const EXTRA_SPEED = 0.03;
+/** Prix de chaque niveau intermédiaire (2 à 5 du palier), en part du prix du palier suivant. */
+export const STEP_SHARE = [0.02, 0.03, 0.04, 0.06] as const;
+/** Au dernier palier, il n'y a plus de machine suivante : ses niveaux se paient comme si elle coûtait 4 fois le palier 5. */
+const LAST_TIER_REF = TIER_COST[5] * 4;
+/** Les niveaux au-delà du 25e : le premier coûte autant que le dernier niveau du palier 5, puis ×1,6 à chaque fois. */
+export const EXTRA_GROWTH = 1.6;
+
+/** État d'un appareil : son palier (1 à 5), son niveau dans le palier (0 à 4) et ses niveaux au-delà du 25e. */
+export interface StationState {
+  level: number;
+  step?: number;
+  extra?: number;
+}
+
+/** Numéro de niveau affiché (1 à 25, puis 26, 27…). */
+export const levelNumber = (s: StationState) => (s.level - 1) * STEPS_PER_TIER + (s.step ?? 0) + 1 + (s.extra ?? 0);
+
+/** Arrondi à deux chiffres significatifs (prix lisibles). */
+const round2 = (v: number) => {
+  if (v < 100) return Math.max(1, Math.round(v));
+  const p = Math.pow(10, Math.floor(Math.log10(v)) - 1);
+  return Math.round(v / p) * p;
+};
+
+/** Prix du prochain niveau d'un appareil (pour une seule cuve). */
+export function nextLevelCost(id: StationId, s: StationState): number {
+  const base = STATIONS[id].baseCost;
+  const step = s.step ?? 0;
+  const ref = s.level < MAX_LEVEL ? TIER_COST[s.level + 1]! : LAST_TIER_REF;
+  // au premier palier, la machine suivante ne coûte presque rien : ses niveaux se paient comme si elle valait 5 fois plus
+  if (step < STEPS_PER_TIER - 1) return round2(base * Math.max(5, ref) * STEP_SHARE[step]!);
+  if (s.level < MAX_LEVEL) return base * ref; // la machine suivante
+  return round2(base * ref * STEP_SHARE[STEPS_PER_TIER - 2]! * Math.pow(EXTRA_GROWTH, (s.extra ?? 0) + 1));
+}
+
+/** Vitesse de l'appareil due à ses niveaux (1 = début du palier). */
+export const levelSpeed = (s: StationState) => (1 + STEP_SPEED * (s.step ?? 0)) * Math.pow(1 + EXTRA_SPEED, s.extra ?? 0);
+
+/** Précision « fractionnaire » : chaque niveau du palier rapproche de la précision du palier suivant. */
+export const precisionLevel = (s: StationState) => Math.min(MAX_LEVEL, s.level + (s.step ?? 0) / STEPS_PER_TIER);
 
 /** Secondes de jeu pour une « journée » de fermentation ou de garde. */
 export const DAY_S = 30;

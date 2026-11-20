@@ -1022,5 +1022,18 @@ const dict: Record<string, string> = {
   "✓ Tout est livré pour aujourd'hui.": "✓ Todo entregado por hoy.",
   "Qualité minimale : {0} · gagné : {1} · toutes les journées remplies : +{2} 💎": "Calidad mínima: {0} · ganado: {1} · todos los días completos: +{2} 💎",
   "Qualité minimale : {0}": "Calidad mínima: {0}",
+  "+{0} % de cadence, sans limite (le prix grimpe à chaque niveau)": "+{0} % de ritmo, sin límite (el precio sube en cada nivel)",
+  "+{0} % de vitesse": "+{0} % de velocidad",
+  ", plus précise": ", más precisa",
+  "Actuelle": "Actual",
+  "Grâce à ses niveaux : {0} % plus rapide{1}": "Gracias a sus niveles: {0} % más rápida{1}",
+  "Niveau {0}": "Nivel {0}",
+  "Passer à : {0} · {1}": "Pasar a: {0} · {1}",
+  "Plus précise : elle se rapproche de « {0} »": "Más precisa: se acerca a «{0}»",
+  "{0} +{1}": "{0} +{1}",
+  "{0} : niveau {1}": "{0}: nivel {1}",
+  "{0} : {1}": "{0}: {1}",
+  "{0} · niveau {1}": "{0} · nivel {1}",
+  "{0} · palier {1}/{2}": "{0} · etapa {1}/{2}",
 };
 export default dict;

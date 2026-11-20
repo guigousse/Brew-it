@@ -4,7 +4,7 @@ import { AD_DAILY, TUTO_DONE, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS,
 import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
 import { popScore, SALES_STEPS, stars, trendById, trendsOf } from '../core/trends';
-import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
+import { BREWERY_NAMES, EXTRA_SPEED, levelSpeed, MAX_LEVEL, STATION_ORDER, STATIONS, STEP_SPEED, STEPS_PER_TIER, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
@@ -780,7 +780,7 @@ export class App {
     setFab(this.barmanBtn, g.barmanOn ? (left >= 3600 ? `${Math.ceil(left / 3600)} h` : tl('{0} min', Math.ceil(left / 60))) : '',
       g.barmanOn ? 'alert' : emptyTap && kegsReady ? 'ready' : '', g.barmanOn ? tl('Barman en renfort : encore {0}', duration(left)) : tl('Embaucher un barman'));
     // améliorations possibles : la flèche brille
-    const stationUp = STATION_ORDER.some((id) => g.level(id) < MAX_LEVEL && g.money >= g.upgradeCost(id));
+    const stationUp = STATION_ORDER.some((id) => g.money >= g.upgradeCost(id));
     const nextStore = STORAGE[g.storageLevel];
     const nextPc = COMPUTERS[g.computerLevel];
     // l'ordinateur (l'enveloppe est dessinée sur son écran) : son nom dit les commandes en attente
@@ -849,7 +849,7 @@ export class App {
     this.fabs.classList.toggle('hidden', !!s || !isRoom(this.view));
     if (!s) return;
     const key = JSON.stringify([
-      s, g.level(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer,
+      s, g.levelNumber(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer,
       g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.planCap, this.wiz, g.selectedBeer, g.beers.map((b) => b.kegs.length), this.planStatus(g)] : 0,
       s.kind === 'storage' || s.kind === 'storageUp' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
     ]);
@@ -934,7 +934,7 @@ export class App {
     const def = STATIONS[id];
     const lv = g.level(id);
     const body = this.frameSheet(`${def.names[lv - 1]}`, stationCanvas(id, lv));
-    body.append(h('div', 'step-tag', tl('{0} · niveau {1}/{2}', def.step, lv, MAX_LEVEL)));
+    body.append(h('div', 'step-tag', tl('{0} · niveau {1}', def.step, g.levelNumber(id))));
     const batch = g.batchAt(id);
     if (def.strain) {
       const row = h('div', 'chips');
@@ -974,32 +974,64 @@ export class App {
       }
       body.append(row);
     }
-    // amélioration
+    body.append(this.upgradeCard(g, id));
+  }
+
+  /**
+   * Améliorer un appareil : où il en est dans son palier (5 cases), ce que donne le prochain niveau (plus rapide,
+   * plus précis), ou la machine suivante au bout du palier, puis des niveaux sans fin après le 25e.
+   */
+  private upgradeCard(g: Game, id: StationId): HTMLElement {
+    const def = STATIONS[id];
+    const st = g.stations[id];
+    const lv = st.level;
+    const step = st.step ?? 0;
+    const extra = st.extra ?? 0;
     const up = h('div', 'card upgrade');
     up.append(h('div', 'section-title', tl('Améliorer')));
-    // On ne dévoile que le palier suivant : la surprise reste entière pour les niveaux d'après.
-    const levels = h('div', 'levels');
-    const cell = (i: number, tag: string, cls: string) => {
-      const c = h('div', `level ${cls}`);
-      c.append(h('div', 'section-title', tag), img(stationCanvas(id, i), 'pix level-pic'), h('div', 'level-name', def.names[i - 1]!), h('div', 'level-perk', def.perks[i - 1]!));
-      return c;
-    };
-    levels.append(cell(lv, tl('Actuel · niv. {0}', lv), 'done'));
-    if (lv < MAX_LEVEL) levels.append(h('div', 'level-arrow', '➜'), cell(lv + 1, tl('Suivant · niv. {0}', lv + 1), 'current'));
-    up.append(levels);
-    if (lv < MAX_LEVEL) {
-      const cost = g.upgradeCost(id);
-      const b = this.btn('btn primary', tl('Améliorer · {0}', moneyInt(cost)), () => {
-        const r = g.upgrade(id);
-        if (!r.ok) return this.toast(r.reason!, 'bad');
-        sfx.play('upgrade');
-        this.toast(tl('{0} installé !', def.names[lv]), 'good');
-        this.sheetKey = '';
-      });
-      this.costGate(b, cost);
-      up.append(b);
-    } else up.append(h('p', 'note', tl('Niveau maximal')));
-    body.append(up);
+    // le palier : 5 cases, celles déjà acquises en vert
+    const tier = h('div', 'tier-line');
+    tier.append(h('span', 'tier-name', extra ? tl('{0} +{1}', def.names[lv - 1], extra) : tl('{0} · palier {1}/{2}', def.names[lv - 1], lv, MAX_LEVEL)));
+    const pips = h('span', 'tier-pips');
+    for (let i = 0; i < STEPS_PER_TIER; i++) pips.append(h('span', `tier-pip${i <= step ? ' on' : ''}`));
+    tier.append(pips);
+    up.append(tier);
+    const speed = Math.round((levelSpeed(st) - 1) * 100);
+    if (speed > 0) up.append(h('p', 'hint', tl('Grâce à ses niveaux : {0} % plus rapide{1}', speed, step ? tl(', plus précise') : '')));
+    const cost = g.upgradeCost(id);
+    const tierUp = g.nextIsTier(id);
+    let label: string;
+    if (tierUp) {
+      // la machine suivante : on ne dévoile que celle-ci, la surprise reste entière pour les suivantes
+      const levels = h('div', 'levels');
+      const cell = (i: number, tag: string, cls: string) => {
+        const c = h('div', `level ${cls}`);
+        c.append(h('div', 'section-title', tag), img(stationCanvas(id, i), 'pix level-pic'), h('div', 'level-name', def.names[i - 1]!), h('div', 'level-perk', def.perks[i - 1]!));
+        return c;
+      };
+      levels.append(cell(lv, tl('Actuelle'), 'done'), h('div', 'level-arrow', '➜'), cell(lv + 1, tl('Niveau {0}', g.levelNumber(id) + 1), 'current'));
+      up.append(levels);
+      label = tl('Passer à : {0} · {1}', def.names[lv]!, moneyShort(cost));
+    } else {
+      const next = h('ul', 'ad-perks');
+      if (lv < MAX_LEVEL || step < STEPS_PER_TIER - 1) {
+        next.append(h('li', '', tl('+{0} % de vitesse', Math.round(STEP_SPEED * 100))));
+        if (lv < MAX_LEVEL) next.append(h('li', '', tl('Plus précise : elle se rapproche de « {0} »', def.names[lv]!)));
+      } else next.append(h('li', '', tl('+{0} % de cadence, sans limite (le prix grimpe à chaque niveau)', Math.round(EXTRA_SPEED * 100))));
+      up.append(h('div', 'section-title', tl('Niveau {0}', g.levelNumber(id) + 1)), next);
+      label = tl('Améliorer · {0}', moneyShort(cost));
+    }
+    const b = this.btn('btn primary', label, () => {
+      const r = g.upgrade(id);
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play(tierUp ? 'upgrade' : 'repair');
+      this.toast(tierUp ? tl('{0} installé !', def.names[lv]) : tl('{0} : niveau {1}', def.step, g.levelNumber(id)), 'good');
+      this.sheetKey = '';
+    });
+    b.setAttribute('aria-label', tl('{0} : {1}', label, moneyInt(cost)));
+    this.costGate(b, cost);
+    up.append(b);
+    return up;
   }
 
   // --- Brasser : la file des brassins programmés, et un assistant en 3 étapes pour en ajouter

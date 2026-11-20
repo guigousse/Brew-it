@@ -86,7 +86,7 @@ const brandByDay: number[] = [];
 /** Prix du prochain achat (comme dans shop()) : une campagne ou un événement ne doit pas manger l'épargne. */
 function nextCost(): number {
   const c: number[] = [];
-  for (const id of STATION_ORDER) if (g.level(id) < MAX_LEVEL) c.push(g.upgradeCost(id));
+  for (const id of STATION_ORDER) if (g.levelNumber(id) < 25) c.push(g.upgradeCost(id));
   for (const id of ['fermenter', 'conditioning'] as const) {
     const t = g.tankCost(id);
     if (t != null) c.push(t);
@@ -144,9 +144,10 @@ function shop() {
   for (let k = 0; k < 200; k++) {
     const options: { cost: number; label: string; act: () => boolean }[] = [];
     for (const id of STATION_ORDER) {
-      const lv = g.level(id);
-      if (lv >= MAX_LEVEL) continue;
-      options.push({ cost: g.upgradeCost(id), label: `${id} → ${lv + 1}`, act: () => g.upgrade(id).ok });
+      // les 25 niveaux (5 paliers de 5) ; les niveaux sans fin d'après ne comptent pas dans « tout débloquer »
+      const n = g.levelNumber(id);
+      if (n >= 25) continue;
+      options.push({ cost: g.upgradeCost(id), label: `${id} → ${n + 1}${g.nextIsTier(id) ? ` (palier ${g.level(id) + 1})` : ''}`, act: () => g.upgrade(id).ok });
     }
     // la décoration du bar s'achète dans l'ordre de sa piste
     const decor = g.nextDecor;

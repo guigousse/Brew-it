@@ -6,7 +6,7 @@ import { AD_EXTEND, AD_REF, adById, adCost, ADS, BAR, BAR_BASE_SHARE, BAR_MIN_QU
 import { orderGems, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, PRESTIGE_QUALITY, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
-import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
+import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelCost, precisionLevel, STATION_ORDER, stationDuration, STEPS_PER_TIER, upgradeCost, type StationId, type StationState } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
@@ -179,7 +179,6 @@ export interface OfflineReport {
   doubled?: boolean;
 }
 
-type StationState = { level: number };
 
 /** D'où vient l'argent : le bar, les commandes ou le grossiste. */
 export type SaleSource = 'bar' | 'orders' | 'wholesale';
@@ -206,7 +205,7 @@ export class Game {
   gems: number = GEMS.start;
   rng = new Rng(0xbee12);
   readonly events = new EventBus();
-  stations: Record<StationId, StationState> = Object.fromEntries(STATION_ORDER.map((id) => [id, { level: 1 }])) as Record<StationId, StationState>;
+  stations: Record<StationId, StationState> = Object.fromEntries(STATION_ORDER.map((id) => [id, { level: 1, step: 0, extra: 0 }])) as Record<StationId, StationState>;
   /** Réglages actuels des appareils (la recette en cours de mise au point). */
   recipe: Recipe = { ...GASTON_RECIPE };
   /** Bière de la gamme dont les réglages sont chargés (null = réglages modifiés : on brasse un essai). */
@@ -330,8 +329,19 @@ export class Game {
 
   // ------------------------------------------------------------------ lectures
 
+  /** Palier de l'appareil (1 à 5 : la machine, son volume, son dessin). */
   level(id: StationId): number {
     return this.stations[id].level;
+  }
+
+  /** Numéro de niveau de l'appareil (1 à 25, puis au-delà). */
+  levelNumber(id: StationId): number {
+    return levelNumber(this.stations[id]);
+  }
+
+  /** Durée d'une étape pour cet appareil, ses niveaux compris (plus rapide à chaque niveau). */
+  stationTime(id: StationId, r: Recipe, liters: number): number {
+    return stationDuration(id, r, this.level(id), liters) / levelSpeed(this.stations[id]);
   }
 
   get levels(): Levels {
@@ -369,9 +379,15 @@ export class Game {
     return upgradeCost(id, Math.min(MAX_LEVEL, this.level(id) + 1)) * this.tankCount(id);
   }
 
-  /** Prix de l'amélioration d'un appareil : toutes ses cuves sont améliorées ensemble. */
+  /** Prix du prochain niveau d'un appareil : toutes ses cuves sont améliorées ensemble. */
   upgradeCost(id: StationId): number {
-    return upgradeCost(id, this.level(id) + 1) * this.tankCount(id);
+    return nextLevelCost(id, this.stations[id]) * this.tankCount(id);
+  }
+
+  /** Le prochain niveau change-t-il de machine (palier suivant) ? */
+  nextIsTier(id: StationId): boolean {
+    const s = this.stations[id];
+    return s.level < MAX_LEVEL && (s.step ?? 0) >= STEPS_PER_TIER - 1;
   }
 
   /** Ajoute une cuve de fermentation ou de garde. */
@@ -653,7 +669,7 @@ export class Game {
     const liters = this.batchLiters;
     const dur = (r: Recipe, f: Format, l: number, s: number) => {
       const id = STATION_ORDER[s]!;
-      const d = stationDuration(id, r, this.level(id), l);
+      const d = this.stationTime(id, r, l);
       return id === 'bottling' && f === 'keg' ? d * 0.5 : d;
     };
     type Slot = { stage: number; left: number; r: Recipe; f: Format; l: number; mine?: boolean };
@@ -715,15 +731,23 @@ export class Game {
     return { ok: true };
   }
 
+  /**
+   * Monte l'appareil d'un niveau : un niveau du palier (plus rapide, plus précis), la machine suivante au bout
+   * des 5 niveaux d'un palier, puis des niveaux sans fin au-delà du 25e.
+   */
   upgrade(id: StationId): CommandResult {
-    const lv = this.level(id);
-    if (lv >= MAX_LEVEL) return { ok: false, reason: tl('Niveau maximal') };
+    const s = this.stations[id];
     const cost = this.upgradeCost(id);
     if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     const before = this.breweryLevel;
     this.money -= cost;
-    this.stations[id].level = lv + 1;
-    this.events.emit({ type: 'upgraded', station: id, level: lv + 1 });
+    const step = s.step ?? 0;
+    if (step < STEPS_PER_TIER - 1) s.step = step + 1;
+    else if (s.level < MAX_LEVEL) {
+      s.level++;
+      s.step = 0;
+    } else s.extra = (s.extra ?? 0) + 1;
+    this.events.emit({ type: 'upgraded', station: id, level: levelNumber(s) });
     if (this.breweryLevel > before) {
       this.events.emit({ type: 'breweryLevel', level: this.breweryLevel });
       this.earnGems(GEMS.breweryLevel[this.breweryLevel] ?? 0, 'level');
@@ -811,7 +835,7 @@ export class Game {
   /** Cadence maximale de la ligne (bouteilles/min) : un brassin par passage dans l'appareil le plus lent. */
   productionRate(r: Recipe = this.lowestStockBeer()?.recipe ?? this.recipe): number {
     const liters = this.batchLiters;
-    const slowest = Math.max(...STATION_ORDER.map((id) => stationDuration(id, r, this.level(id), liters) / this.tankCount(id)));
+    const slowest = Math.max(...STATION_ORDER.map((id) => this.stationTime(id, r, liters) / this.tankCount(id)));
     return (Math.floor(liters / BOTTLE_L) / slowest) * 60;
   }
 
@@ -1839,7 +1863,7 @@ export class Game {
     const r = b.recipe;
     // L'appareil exécute l'étape avec sa précision. Le tout premier brassin, Gaston veille au grain : tout est exact.
     const guided = this.batchesDone === 0 && this.beers.length === 0 && !this.trial;
-    executeStep(id, r, lv, () => this.rng.next(), b.actual, guided);
+    executeStep(id, r, precisionLevel(this.stations[id]), () => this.rng.next(), b.actual, guided);
     b.stage = stage;
     b.elapsed = 0;
     b.waiting = false;
@@ -1854,8 +1878,8 @@ export class Game {
     }
     // un fût se remplit deux fois plus vite que le même volume en bouteilles
     b.duration = b.format === 'keg' && id === 'bottling'
-      ? stationDuration(id, r, lv, (b.kegs ?? 0) * ((b.kegGlasses ?? 20) * 0.25)) * 0.5
-      : stationDuration(id, r, lv, b.bottles != null ? b.bottles * BOTTLE_L : b.liters);
+      ? this.stationTime(id, r, (b.kegs ?? 0) * ((b.kegGlasses ?? 20) * 0.25)) * 0.5
+      : this.stationTime(id, r, b.bottles != null ? b.bottles * BOTTLE_L : b.liters);
     // Premier brassin du tutoriel : Gaston donne un coup de main, tout va 4 fois plus vite.
     if (this.batchesDone === 0 && this.beers.length === 0 && this.batches.length <= 1) b.duration *= 0.25;
     this.events.emit({ type: 'stage', batchId: b.id, stage });
@@ -2230,6 +2254,11 @@ export class Game {
       }
     }
     for (const b of g.beers) b.week ??= new Array(SALES_SLOTS).fill(0);
+    // avant les niveaux intermédiaires, un appareil de niveau n est au début de son palier n
+    for (const id of STATION_ORDER) {
+      g.stations[id].step ??= 0;
+      g.stations[id].extra ??= 0;
+    }
     g.partner ??= null;
     g.partnersDone ??= {};
     return g;

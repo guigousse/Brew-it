@@ -15,6 +15,14 @@ export const CRUSH_SPREAD = [0, 2.5, 1.2, 0.5, 0.2, 0] as const;
 /** Petits défauts du matériel à chaque étape (pénalité maximale de qualité). */
 export const ROUGH = [0, 0.022, 0.017, 0.015, 0.006, 0] as const;
 
+/** Valeur d'un tableau par niveau, pour un niveau fractionnaire (entre deux paliers, on interpole). */
+function at(table: readonly number[], level: number): number {
+  const lo = Math.floor(level);
+  const hi = Math.min(table.length - 1, lo + 1);
+  const k = level - lo;
+  return (table[lo] ?? 0) * (1 - k) + (table[hi] ?? table[lo] ?? 0) * k;
+}
+
 /** Écart aléatoire « en cloche » (triangulaire) dans [-spread, spread] : les gros écarts sont plus rares. */
 const bell = (rand: () => number, spread: number) => (rand() + rand() - 1) * spread;
 
@@ -23,16 +31,16 @@ const bell = (rand: () => number, spread: number) => (rand() + rand() - 1) * spr
  * `exact` : aucune imprécision (premier brassin guidé par Gaston).
  */
 export function executeStep(id: StationId, r: Recipe, level: number, rand: () => number, a: Partial<Actual>, exact = false): void {
-  const t = exact ? 0 : TEMP_SPREAD[level] ?? 0;
-  const d = exact ? 0 : DOSE_SPREAD[level] ?? 0;
+  const t = exact ? 0 : at(TEMP_SPREAD, level);
+  const d = exact ? 0 : at(DOSE_SPREAD, level);
   // « Bon ou mauvais jour » : tiré une fois par brassin, il rend les petits défauts plus ou moins marqués partout.
   if (a.luck == null) a.luck = rand();
   if (exact) a.guided = true;
-  a.rough = (a.rough ?? 0) + (exact ? 0 : (ROUGH[level] ?? 0) * 2 * a.luck * (0.75 + 0.5 * rand()));
+  a.rough = (a.rough ?? 0) + (exact ? 0 : at(ROUGH, level) * 2 * a.luck * (0.75 + 0.5 * rand()));
   switch (id) {
     case 'mill':
       a.grainKg = Math.max(0.5, r.grainKg * (1 + bell(rand, d)));
-      a.crush = Math.min(10, Math.max(1, Math.round(r.crush + bell(rand, exact ? 0 : CRUSH_SPREAD[level] ?? 0))));
+      a.crush = Math.min(10, Math.max(1, Math.round(r.crush + bell(rand, exact ? 0 : at(CRUSH_SPREAD, level)))));
       break;
     case 'mash':
       a.mashTemp = r.mashTemp + bell(rand, t);

@@ -1022,5 +1022,18 @@ const dict: Record<string, string> = {
   "✓ Tout est livré pour aujourd'hui.": "✓ Everything is delivered for today.",
   "Qualité minimale : {0} · gagné : {1} · toutes les journées remplies : +{2} 💎": "Minimum quality: {0} · earned: {1} · every day filled: +{2} 💎",
   "Qualité minimale : {0}": "Minimum quality: {0}",
+  "+{0} % de cadence, sans limite (le prix grimpe à chaque niveau)": "+{0} % output rate, no limit (the price climbs with every level)",
+  "+{0} % de vitesse": "+{0} % speed",
+  ", plus précise": ", more precise",
+  "Actuelle": "Current",
+  "Grâce à ses niveaux : {0} % plus rapide{1}": "Thanks to its levels: {0} % faster{1}",
+  "Niveau {0}": "Level {0}",
+  "Passer à : {0} · {1}": "Move up to: {0} · {1}",
+  "Plus précise : elle se rapproche de « {0} »": "More precise: closer to “{0}”",
+  "{0} +{1}": "{0} +{1}",
+  "{0} : niveau {1}": "{0}: level {1}",
+  "{0} : {1}": "{0}: {1}",
+  "{0} · niveau {1}": "{0} · level {1}",
+  "{0} · palier {1}/{2}": "{0} · tier {1}/{2}",
 };
 export default dict;
