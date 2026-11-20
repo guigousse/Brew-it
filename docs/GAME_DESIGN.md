@@ -288,15 +288,17 @@ L'application Concours montre aussi le barème des cocardes et le **palmarès** 
 ## Partenariats (`src/core/partners.ts`)
 Pour la fin de partie, quand l'argent s'accumule : la brasserie **sponsorise un club ou un événement pendant 7 jours de jeu** (application **Partenariats** de l'ordinateur). Chaque jour, une **jauge de litres à livrer** se remplit à nouveau ; ce qui n'est pas livré dans la journée est perdu. Un seul partenariat à la fois.
 
-| Partenaire | S'ouvre avec | Par jour | Qualité minimale | Payé | Contrat | Prime |
-|---|---|---|---|---|---|---|
-| Club de rugby du village | le garage (★2) | 150 L | Correcte | ×1,5 grossiste | 1 500 € | 10 💎 |
-| Festival Rock en Fût | la microbrasserie (★3) | 1 500 L | Correcte | ×1,5 | 15 000 € | 15 💎 |
-| FC des Remparts | la microbrasserie (★3) | 2 500 L | Bonne | ×1,6 | 30 000 € | 20 💎 |
-| Finale de la Coupe au Grand Stade | l'usine (★4) | 8 000 L | Bonne | ×1,7 | 120 000 € | 30 💎 |
-| Festival des Mille Fûts | le labo du futur (★5) | 30 000 L | Bonne | ×1,8 | 500 000 € | 50 💎 |
-| **Jeux mondiaux** (l'événement ultime) | le labo du futur, marque à 90 / 100 et une médaille au concours international | 70 000 L | Excellente | ×2 | 2 M€ | 100 💎 |
+| Partenaire | Brasserie | Marque | Par jour | Qualité minimale | Payé | Contrat | Prime |
+|---|---|---|---|---|---|---|---|
+| Club de rugby du village | garage | 30 / 100 | 150 L | Correcte | ×1,5 grossiste | 1 500 € | 10 💎 |
+| Festival Rock en Fût | microbrasserie | 50 / 100 | 1 500 L | Correcte | ×1,5 | 15 000 € | 15 💎 |
+| FC des Remparts | microbrasserie | 60 / 100 | 2 500 L | Bonne | ×1,6 | 30 000 € | 20 💎 |
+| Finale de la Coupe au Grand Stade | usine | 70 / 100 | 8 000 L | Bonne | ×1,7 | 120 000 € | 30 💎 |
+| Festival des Mille Fûts | labo du futur | 80 / 100 | 30 000 L | Bonne | ×1,8 | 500 000 € | 50 💎 |
+| **Jeux mondiaux** (l'événement ultime) | labo du futur + une médaille au concours international | 90 / 100 | 70 000 L | Excellente | ×2 | 2 M€ | 100 💎 |
 
+- **Deux conditions pour signer** : le niveau de la brasserie (pour pouvoir fournir le volume) et un **palier de popularité de la marque** (30, 50, 60, 70, 80 puis 90 sur 100). Le score de la marque compte **sans la campagne de pub en cours** : on ne signe pas un grand partenaire sur un coup de pub. L'app affiche le score de la marque en haut, et pour chaque partenaire fermé ses conditions cochées ou non (« ✓ Brasserie : Usine », « 🔒 Marque à 70 / 100 au moins (sans la pub) »).
+- Mesure du joueur simulé : le club de rugby s'ouvre au 3e jour (marque 38), le festival rock et le FC des Remparts au 8e (63), la finale de la Coupe au 15e (72), le festival des Mille Fûts au 29e (82). Sa marque plafonne à 84 : les Jeux mondiaux demandent de très bonnes bières, des tendances suivies et beaucoup de ventes.
 - Les volumes sont calés sur la production du joueur simulé : un partenaire demande à peu près le tiers de ce que produit une brasserie de son niveau (400 L par jour au garage, 2 000 à 5 000 L à la microbrasserie, 10 000 à 25 000 L à l'usine, 50 000 à 130 000 L au labo du futur).
 - **Livrer** prend ce qu'il reste à livrer aujourd'hui dans le stock, bouteilles puis fûts entiers, en commençant par les bières assez bonnes qui ont le plus de stock. C'est payé tout de suite, au prix du grossiste multiplié par celui du partenaire (et le bonus de la cocarde), et compté avec les commandes dans le tableau de bord.
 - Les litres livrés **comptent double** dans les ventes de la semaine : le public découvre les bières.

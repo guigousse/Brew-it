@@ -1035,3 +1035,5 @@ button:disabled { cursor: default; opacity: .5; }
 .machine-stat-label { font-size: 15px; color: var(--dim); }
 .machine-stat-value { font-size: 22px; line-height: 1; color: var(--text); }
 .machine-stat-next { font-size: 16px; color: var(--good); }
+.partner-checks { display: grid; gap: 1px; font-size: 16px; color: #ffb4a4; }
+.partner-check.ok { color: var(--good); }

@@ -1831,7 +1831,7 @@ export class App {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
-      app === 'partners' ? [g.partner ? [g.partner.id, g.partnerDay, Math.floor(g.partnerLeft), Math.floor(g.partnerStock)] : null, PARTNERS.map((p) => [g.partnerLock(p), g.money >= p.fee]), g.staffOn('courier')] : 0,
+      app === 'partners' ? [g.partner ? [g.partner.id, g.partnerDay, Math.floor(g.partnerLeft), Math.floor(g.partnerStock)] : null, PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase), g.staffOn('courier')] : 0,
       app === 'contests' ? [g.contest, g.contestNext > g.time ? Math.ceil((g.contestNext - g.time) / 60) : 0, g.breweryLevel, g.money >= g.contestFee, g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
       app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
   }
@@ -2350,6 +2350,7 @@ export class App {
    * du club du village aux Jeux mondiaux.
    */
   private partnersTab(g: Game, card: HTMLElement): void {
+    card.append(h('div', 'stats-line strong', tl('Ta marque : {0} · {1} / 100', starText(g.brandBase), popScore(g.brandBase))));
     card.append(h('p', 'hint', tl('Sponsorise un club ou un événement pendant une semaine. Chaque jour, une jauge de bière à livrer se remplit : ce qui n\'est pas livré dans la journée est perdu. Bien payé, et le public découvre tes bières (elles comptent double dans les ventes de la semaine).')));
     const ship = g.partner;
     const cur = ship && partnerById(ship.id);
@@ -2418,7 +2419,12 @@ export class App {
         tl('Toutes les journées remplies : +{0} 💎', p.gems),
       ]) perks.append(h('li', '', t));
       el.append(perks);
-      if (lock) el.append(h('span', 'ad-note', `🔒 ${lock}`));
+      if (lock) {
+        // les conditions, cochées ou non
+        const checks = h('div', 'partner-checks');
+        for (const c of g.partnerChecks(p)) checks.append(h('div', `partner-check${c.ok ? ' ok' : ''}`, `${c.ok ? '✓' : '🔒'} ${c.text}`));
+        el.append(checks);
+      }
       else if (ship) el.append(h('span', 'ad-note', tl('Disponible après le partenariat en cours · {0}', moneyShort(p.fee))));
       else {
         const sign = this.btn('btn primary', tl('Signer · {0}', moneyShort(p.fee)), () => {

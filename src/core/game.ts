@@ -9,7 +9,7 @@ import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelCost, precisionLevel, STATION_ORDER, stationDuration, STEPS_PER_TIER, upgradeCost, type StationId, type StationState } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
-import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
+import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
 import { PARTNER_DAYS, PARTNER_POP_WEIGHT, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
 import { tl } from '../i18n';
@@ -880,6 +880,11 @@ export class Game {
     return brandPopularity(this.beers.map((b) => b.pop));
   }
 
+  /** Popularité de la marque sans la campagne de pub en cours (paliers des partenariats). */
+  get brandBase(): number {
+    return brandPopularity(this.beers.map((b) => popParts(b.tasting, this.trends, this.weekLiters(b)).total / 5));
+  }
+
   /** Clients par minute : 1 toutes les 10 minutes au début, plus avec la popularité, le niveau du bar et la variété. */
   get barRate(): number {
     const beers = new Set(this.flowing.map((t) => t.beerId)).size;
@@ -1406,12 +1411,19 @@ export class Game {
 
   // ------------------------------------------------------------------ partenariats
 
+  /** Les conditions pour signer avec un partenaire : niveau de la brasserie, popularité de la marque, médaille. */
+  partnerChecks(p: PartnerDef): ContestCheck[] {
+    const out: ContestCheck[] = [
+      { ok: this.breweryLevel >= p.level, text: tl('Brasserie : {0}', BREWERY_NAMES[p.level - 1]) },
+      { ok: popScore(this.brandBase) >= p.brand, text: tl('Marque à {0} / 100 au moins (sans la pub)', p.brand) },
+    ];
+    if (p.medal) out.push({ ok: this.beers.some((b) => b.medals?.some((m) => m.tier === 2)), text: tl('Une médaille au concours international') });
+    return out;
+  }
+
   /** Ce qui manque pour signer avec ce partenaire, ou null s'il est ouvert. */
   partnerLock(p: PartnerDef): string | null {
-    if (this.breweryLevel < p.level) return tl('Avec la brasserie : {0}', BREWERY_NAMES[p.level - 1]);
-    if (p.brand && this.brand < p.brand) return tl('Marque à {0} / 100 au moins', Math.round(p.brand * 100));
-    if (p.medal && !this.beers.some((b) => b.medals?.some((m) => m.tier === 2))) return tl('Une médaille au concours international');
-    return null;
+    return this.partnerChecks(p).find((c) => !c.ok)?.text ?? null;
   }
 
   /** La journée en cours du partenariat (0 à 6). */

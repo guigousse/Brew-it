@@ -984,7 +984,6 @@ const dict: Record<string, string> = {
   "80 000 places, la finale et toute la semaine de fête autour.": "8 万个座位，决赛和前后一整周的庆典。",
   "Aucun partenariat en cours": "目前没有合作",
   "Aucune bière assez bonne en stock": "库存中没有足够好的啤酒",
-  "Avec la brasserie : {0}": "酒厂达到：{0}",
   "Club de rugby du village": "村里的橄榄球俱乐部",
   "Disponible après le partenariat en cours · {0}": "当前合作结束后可签 · {0}",
   "FC des Remparts": "城墙足球俱乐部",
@@ -999,7 +998,6 @@ const dict: Record<string, string> = {
   "Le plus grand festival de bière du monde.": "世界上最大的啤酒节。",
   "Les athlètes du monde entier, des millions de spectateurs : la bière officielle des Jeux.": "来自世界各地的运动员、数百万观众：运动会官方啤酒。",
   "Livrer · {0}": "送货 · {0}",
-  "Marque à {0} / 100 au moins": "品牌至少 {0} / 100",
   "Nouvelle jauge dans ": "新进度还有 ",
   "Partenaire inconnu": "未知合作方",
   "Partenariat signé : {0}": "已签约：{0}",
@@ -1033,5 +1031,7 @@ const dict: Record<string, string> = {
   "Vitesse": "速度",
   "Précision": "精度",
   "Sans limite : le prix grimpe à chaque niveau.": "没有上限：每级价格都会上涨。",
+  "Brasserie : {0}": "酒厂：{0}",
+  "Marque à {0} / 100 au moins (sans la pub)": "品牌至少 {0} / 100（不计广告）",
 };
 export default dict;

@@ -984,7 +984,6 @@ const dict: Record<string, string> = {
   "80 000 places, la finale et toute la semaine de fête autour.": "80,000 seats, the final and a whole week of celebrations around it.",
   "Aucun partenariat en cours": "No partnership running",
   "Aucune bière assez bonne en stock": "No beer good enough in stock",
-  "Avec la brasserie : {0}": "With the brewery: {0}",
   "Club de rugby du village": "Village rugby club",
   "Disponible après le partenariat en cours · {0}": "Available after the current partnership · {0}",
   "FC des Remparts": "FC des Remparts",
@@ -999,7 +998,6 @@ const dict: Record<string, string> = {
   "Le plus grand festival de bière du monde.": "The biggest beer festival in the world.",
   "Les athlètes du monde entier, des millions de spectateurs : la bière officielle des Jeux.": "Athletes from all over the world, millions of spectators: the official beer of the Games.",
   "Livrer · {0}": "Deliver · {0}",
-  "Marque à {0} / 100 au moins": "Brand at {0} / 100 or more",
   "Nouvelle jauge dans ": "New gauge in ",
   "Partenaire inconnu": "Unknown partner",
   "Partenariat signé : {0}": "Partnership signed: {0}",
@@ -1033,5 +1031,7 @@ const dict: Record<string, string> = {
   "Vitesse": "Speed",
   "Précision": "Precision",
   "Sans limite : le prix grimpe à chaque niveau.": "No limit: the price climbs with every level.",
+  "Brasserie : {0}": "Brewery: {0}",
+  "Marque à {0} / 100 au moins (sans la pub)": "Brand at {0} / 100 or more (without ads)",
 };
 export default dict;

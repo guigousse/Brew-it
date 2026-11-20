@@ -14,6 +14,7 @@ function setup(level: number) {
   for (const id of STATION_ORDER) g.stations[id] = { level };
   const b = g.beers[0]!;
   b.tasting = { ...b.tasting, quality: 0.8 };
+  b.week.fill(150_000 / 28); // très vendue : la marque est connue
   return { g, b };
 }
 
@@ -25,12 +26,26 @@ describe('partenariats', () => {
     for (const id of STATION_ORDER) g.stations[id] = { level: 5 };
     expect(g.partnerLock(partnerById('festival')!)).toBeNull();
     const games = partnerById('games')!;
-    b.pop = 1;
+    b.tasting = { ...b.tasting, quality: 0.95 };
     expect(g.partnerLock(games)).not.toBeNull(); // pas de médaille internationale
     b.medals = [{ tier: 2, metal: 0, cat: 'ipa', score: 18.5 }];
     expect(g.partnerLock(games)).toBeNull();
-    b.pop = 0.5;
-    expect(g.partnerLock(games)).not.toBeNull(); // marque trop faible
+    b.week.fill(0);
+    expect(g.partnerLock(games)).not.toBeNull(); // marque trop faible sans ventes
+  });
+
+  it('paliers de popularité : la marque doit être assez connue, la pub en cours ne compte pas', () => {
+    const { g, b } = setup(3);
+    b.week.fill(0); // qualité seule : 37,5 points (+10 par tendance)
+    const rock = partnerById('rock')!;
+    if (g.brandBase * 100 < 50) {
+      expect(g.partnerLock(rock)).toContain('50');
+      g.advertise('flyers'); // +10 points tant qu'elle dure, sans effet sur les paliers
+      expect(g.partnerLock(rock)).not.toBeNull();
+    }
+    b.week.fill(10_000 / 28); // 30 points de ventes
+    expect(g.partnerLock(rock)).toBeNull();
+    expect(g.partnerChecks(rock).every((c) => c.ok)).toBe(true);
   });
 
   it('signer coûte le prix du contrat ; un seul partenariat à la fois', () => {
@@ -73,8 +88,9 @@ describe('partenariats', () => {
     const { g, b } = setup(3);
     g.signPartner('rock');
     b.stock = 3000;
+    const before = g.weekLiters(b);
     const r = g.deliverPartner();
-    expect(g.weekLiters(b)).toBeCloseTo(r.liters! * 2, 5);
+    expect(g.weekLiters(b) - before).toBeCloseTo(r.liters! * 2, 5);
   });
 
   it('toutes les journées remplies : prime en diamants ; le livreur s\'en charge pendant l\'absence', () => {
