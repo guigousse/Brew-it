@@ -196,6 +196,25 @@ const GRIDS = {
     '.kkkkkkkkkkkkkk.',
     '................',
   ],
+  // fanion des partenariats (club, festival, stade)
+  pennant: [
+    '................',
+    '.kk.............',
+    '.kSkkkkkkk......',
+    '.kSkrrrrrrkkk...',
+    '.kSkrwwrrrrrrkk.',
+    '.kSkrwwrrrrrRRk.',
+    '.kSkrrrrrrRRkk..',
+    '.kSkrrrrRRkk....',
+    '.kSkRRRRkk......',
+    '.kSkkkkk........',
+    '.kSk............',
+    '.kSk............',
+    '.kSk............',
+    '.kSk............',
+    'kkkkk...........',
+    'kSSSk...........',
+  ],
   // coupe des concours
   trophy: [
     '................',

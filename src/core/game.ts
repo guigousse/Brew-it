@@ -11,6 +11,7 @@ import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
+import { PARTNER_DAYS, PARTNER_POP_WEIGHT, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
 import { tl } from '../i18n';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -321,6 +322,10 @@ export class Game {
   contestResults: ContestResult[] = [];
   /** Tranche de 6 h en cours, pour le compte des ventes sur 7 jours. */
   salesSlot = 0;
+  /** Partenariat en cours (un seul à la fois). */
+  partner: Partnership | null = null;
+  /** Partenariats menés à leur terme, par partenaire. */
+  partnersDone: Partial<Record<PartnerId, number>> = {};
   private announced = new Set<string>();
 
   // ------------------------------------------------------------------ lectures
@@ -1004,6 +1009,8 @@ export class Game {
         const r = this.fulfill(o.id, this.autoPick(o));
         if (r.ok) this.events.emit({ type: 'autoSent', client: o.client, amount: r.amount! });
       }
+      // le livreur remplit aussi la jauge du partenaire
+      if (this.partner && this.partnerLeft > 0 && this.partnerStock > 0) this.deliverPartner();
     }
     if (this.staffOn('apprentice') && (this.apprenticeClock += dt) >= APPRENTICE_CHECK_S) {
       this.apprenticeClock = 0;
@@ -1070,7 +1077,7 @@ export class Game {
     return { ok: true, gems: pack.gems };
   }
 
-  earnGems(n: number, why: 'order' | 'level' | 'purchase' | 'contest'): void {
+  earnGems(n: number, why: 'order' | 'level' | 'purchase' | 'contest' | 'partner'): void {
     if (n <= 0) return;
     this.gems += n;
     this.events.emit({ type: 'gems', amount: n, why });
@@ -1371,6 +1378,121 @@ export class Game {
   /** La cérémonie a été vue. */
   seenContestResult(): void {
     this.contestResults.shift();
+  }
+
+  // ------------------------------------------------------------------ partenariats
+
+  /** Ce qui manque pour signer avec ce partenaire, ou null s'il est ouvert. */
+  partnerLock(p: PartnerDef): string | null {
+    if (this.breweryLevel < p.level) return tl('Avec la brasserie : {0}', BREWERY_NAMES[p.level - 1]);
+    if (p.brand && this.brand < p.brand) return tl('Marque à {0} / 100 au moins', Math.round(p.brand * 100));
+    if (p.medal && !this.beers.some((b) => b.medals?.some((m) => m.tier === 2))) return tl('Une médaille au concours international');
+    return null;
+  }
+
+  /** La journée en cours du partenariat (0 à 6). */
+  get partnerDay(): number {
+    return this.partner ? Math.min(PARTNER_DAYS - 1, Math.floor((this.time - this.partner.start) / 86400)) : 0;
+  }
+
+  /** Litres qu'il reste à livrer aujourd'hui au partenaire. */
+  get partnerLeft(): number {
+    const p = this.partner && partnerById(this.partner.id);
+    if (!p) return 0;
+    return Math.max(0, p.daily - (this.partner!.delivered[this.partnerDay] ?? 0));
+  }
+
+  /** Les bières qu'accepte le partenaire en cours (assez bonnes). */
+  partnerBeers(): Beer[] {
+    const p = this.partner && partnerById(this.partner.id);
+    return p ? this.beers.filter((b) => b.tasting.quality >= p.minQuality) : [];
+  }
+
+  /** Litres en stock que le partenaire accepte. */
+  get partnerStock(): number {
+    return this.partnerBeers().reduce((s, b) => s + b.stock * BOTTLE_L + b.kegs.reduce((k, g) => k + g * GLASS_L, 0), 0);
+  }
+
+  /** Signe un partenariat d'une semaine. */
+  signPartner(id: PartnerId): CommandResult {
+    const p = partnerById(id);
+    if (!p) return { ok: false, reason: tl('Partenaire inconnu') };
+    if (this.partner) return { ok: false, reason: tl('Un partenariat est déjà en cours') };
+    const lock = this.partnerLock(p);
+    if (lock) return { ok: false, reason: lock };
+    if (this.money < p.fee) return { ok: false, reason: tl('Pas assez d\'argent') };
+    this.money -= p.fee;
+    this.partner = { id, start: this.time, delivered: new Array(PARTNER_DAYS).fill(0), earned: 0 };
+    return { ok: true };
+  }
+
+  /**
+   * Livre au partenaire ce qu'il reste à livrer aujourd'hui, avec les bières assez bonnes (celles qui ont le plus de
+   * stock d'abord) : bouteilles puis fûts entiers. Payé tout de suite, plus que le grossiste.
+   */
+  deliverPartner(): CommandResult & { liters?: number; amount?: number } {
+    const ship = this.partner;
+    const p = ship && partnerById(ship.id);
+    if (!ship || !p) return { ok: false, reason: tl('Aucun partenariat en cours') };
+    let left = this.partnerLeft;
+    if (left <= 0) return { ok: false, reason: tl('Tout est livré pour aujourd\'hui') };
+    const stockL = (b: Beer) => b.stock * BOTTLE_L + b.kegs.reduce((k, g) => k + g * GLASS_L, 0);
+    let liters = 0;
+    let amount = 0;
+    let units = 0;
+    for (const beer of this.partnerBeers().sort((a, b) => stockL(b) - stockL(a))) {
+      if (left < BOTTLE_L) break;
+      let l = 0;
+      const n = Math.min(beer.stock, Math.floor(left / BOTTLE_L + 1e-9));
+      beer.stock -= n;
+      l += n * BOTTLE_L;
+      units += n;
+      beer.kegs.sort((a, b) => b - a);
+      for (let i = 0; i < beer.kegs.length; ) {
+        const kl = beer.kegs[i]! * GLASS_L;
+        if (kl <= left - l + 1e-9) {
+          beer.kegs.splice(i, 1);
+          l += kl;
+          units++;
+        } else i++;
+      }
+      if (l <= 0) continue;
+      const price = (l / BOTTLE_L) * wholesalePrice(beer.tasting) * p.pay * (1 + this.medalBonus(beer));
+      beer.liters += l;
+      beer.sold += n;
+      beer.revenue += price;
+      this.countSales(beer, l, PARTNER_POP_WEIGHT);
+      left -= l;
+      liters += l;
+      amount += price;
+    }
+    if (liters <= 0) return { ok: false, reason: tl('Aucune bière assez bonne en stock') };
+    ship.delivered[this.partnerDay] = (ship.delivered[this.partnerDay] ?? 0) + liters;
+    ship.earned += amount;
+    this.totalSold += units;
+    this.totalLiters += liters;
+    this.totalRevenue += amount;
+    this.ordersRevenue += amount;
+    this.recordSale('orders', amount);
+    this.money += amount;
+    this.events.emit({ type: 'sale', amount });
+    return { ok: true, liters, amount };
+  }
+
+  /** Fin de la semaine : prime si toutes les journées ont été remplies. */
+  private tickPartner(): void {
+    const ship = this.partner;
+    if (!ship || this.time < ship.start + PARTNER_DAYS * 86400) return;
+    const p = partnerById(ship.id);
+    this.partner = null;
+    if (!p) return;
+    const full = ship.delivered.every((l) => l >= p.daily - 0.5);
+    const days = ship.delivered.filter((l) => l >= p.daily - 0.5).length;
+    if (full) {
+      this.partnersDone[p.id] = (this.partnersDone[p.id] ?? 0) + 1;
+      this.earnGems(p.gems, 'partner');
+    }
+    this.events.emit({ type: 'partnerEnd', id: p.id, days, earned: ship.earned, gems: full ? p.gems : 0 });
   }
 
   /** Les tendances que suit une bière. */
@@ -1677,6 +1799,7 @@ export class Game {
     }
     this.tickTrends();
     this.tickContests();
+    this.tickPartner();
     this.rollSales();
     this.updatePop();
     this.announce();
@@ -1982,7 +2105,7 @@ export class Game {
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
-      contest: this.contest, contestNext: this.contestNext, contestCount: this.contestCount, contestResults: this.contestResults, salesSlot: this.salesSlot,
+      contest: this.contest, contestNext: this.contestNext, contestCount: this.contestCount, contestResults: this.contestResults, salesSlot: this.salesSlot, partner: this.partner, partnersDone: this.partnersDone,
     };
   }
 
@@ -2107,6 +2230,8 @@ export class Game {
       }
     }
     for (const b of g.beers) b.week ??= new Array(SALES_SLOTS).fill(0);
+    g.partner ??= null;
+    g.partnersDone ??= {};
     return g;
   }
 }

@@ -10,6 +10,7 @@ import { createStorage } from './platform/storage';
 import { sfx } from './platform/audio';
 import { App } from './ui/app';
 import { CONTEST_TIERS, contestName, MEDALS, type ContestTier, type Metal } from './core/contests';
+import { partnerById } from './core/partners';
 import { locale, tl } from './i18n';
 
 const AUTOSAVE_SECONDS = 20;
@@ -121,6 +122,13 @@ async function boot() {
       if (e.type === 'contestResult' && e.beerId != null) {
         const name = CONTEST_TIERS[e.tier]!.name;
         app.log(e.metal != null ? tl('{0} : {1} pour « {2} » !', name, MEDALS[e.metal as Metal], beerName(e.beerId)) : tl('{0} : « {1} » repart sans médaille', name, beerName(e.beerId)), e.metal != null ? 'good' : 'info', 'trophy');
+      }
+      if (e.type === 'partnerEnd') {
+        const p = partnerById(e.id);
+        const msg = e.gems ? tl('{0} : partenariat réussi, {1} journées sur 7 remplies, +{2} 💎', p?.name, e.days, e.gems) : tl('{0} : partenariat terminé, {1} journées sur 7 remplies', p?.name, e.days);
+        app.toast(msg, e.gems ? 'good' : 'info');
+        app.log(msg, e.gems ? 'good' : 'info', 'pennant');
+        if (e.gems) sfx.play('levelUp');
       }
       if (e.type === 'orderExpired') app.log(tl('Commande expirée : {0}', e.client), 'bad', 'clipboard');
     });

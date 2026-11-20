@@ -15,6 +15,7 @@ import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/room
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { cocardeCanvas, medalName, playCeremony } from './ceremony';
+import { PARTNER_DAYS, partnerById, PARTNERS } from '../core/partners';
 import { bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
@@ -215,7 +216,7 @@ const SOURCE: Record<SaleSource, { name: string; color: string }> = {
 };
 
 /** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
-export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'wholesale' | 'contests';
+export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'wholesale' | 'contests' | 'partners';
 const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'dashboard', name: tl('Tableau de bord'), icon: 'chart' },
   { id: 'messages', name: tl('Messages'), icon: 'bubble' },
@@ -224,6 +225,7 @@ const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'trends', name: tl('Tendances'), icon: 'trend' },
   { id: 'wholesale', name: tl('Grossiste'), icon: 'truck' },
   { id: 'contests', name: tl('Concours'), icon: 'trophy' },
+  { id: 'partners', name: tl('Partenariats'), icon: 'pennant' },
 ];
 /** Un message reçu au bureau (commandes, tendances, brassins…), daté en temps de jeu. */
 interface Message { at: number; text: string; kind: 'good' | 'bad' | 'info'; icon: IconId; read: boolean }
@@ -1787,6 +1789,7 @@ export class App {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
+      app === 'partners' ? [g.partner ? [g.partner.id, g.partnerDay, Math.floor(g.partnerLeft), Math.floor(g.partnerStock)] : null, PARTNERS.map((p) => [g.partnerLock(p), g.money >= p.fee]), g.staffOn('courier')] : 0,
       app === 'contests' ? [g.contest, g.contestNext > g.time ? Math.ceil((g.contestNext - g.time) / 60) : 0, g.breweryLevel, g.money >= g.contestFee, g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
       app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
   }
@@ -1858,6 +1861,7 @@ export class App {
     else if (st.app === 'staff') this.staffTab(g, body);
     else if (st.app === 'trends') this.trendsTab(g, body);
     else if (st.app === 'contests') this.contestsTab(g, body);
+    else if (st.app === 'partners') this.partnersTab(g, body);
     else this.wholesaleTab(g, body);
     body.scrollTop = scroll;
   }
@@ -1873,6 +1877,7 @@ export class App {
       staff: { text: `${g.staffBusy}/${g.staffSlots}`, hot: false },
       trends: { text: '', hot: false },
       wholesale: { text: '', hot: false },
+      partners: { text: g.partner && g.partnerLeft > 0 ? '!' : '', hot: !!g.partner && g.partnerLeft > 0 && g.partnerStock >= 1 },
       contests: { text: g.contest && !g.contest.entry ? '!' : '', hot: !!g.contest && !g.contest.entry && g.beers.some((b) => g.contestChecks(b).every((x) => x.ok)) },
     };
     const grid = h('div', 'pc-apps');
@@ -2294,6 +2299,96 @@ export class App {
       const thumb = h('canvas', 'label-thumb');
       drawLabel(thumb, b.label, b.name);
       el.append(thumb, h('span', 'stock-name', b.name), h('span', 'pop-stars', starText(b.pop)));
+      card.append(el);
+    }
+  }
+
+  /**
+   * Partenariats : le contrat en cours (la jauge du jour, les 7 journées, livrer), puis les partenaires à signer,
+   * du club du village aux Jeux mondiaux.
+   */
+  private partnersTab(g: Game, card: HTMLElement): void {
+    card.append(h('p', 'hint', tl('Sponsorise un club ou un événement pendant une semaine. Chaque jour, une jauge de bière à livrer se remplit : ce qui n\'est pas livré dans la journée est perdu. Bien payé, et le public découvre tes bières (elles comptent double dans les ventes de la semaine).')));
+    const ship = g.partner;
+    const cur = ship && partnerById(ship.id);
+    if (ship && cur) {
+      const el = h('div', 'card partner-live');
+      const head = h('div', 'beer-head');
+      head.append(h('span', 'beer-name', cur.name), h('span', 'order-time', tl('Jour {0} / {1}', g.partnerDay + 1, PARTNER_DAYS)));
+      el.append(head);
+      // les 7 journées : remplie, manquée, en cours, à venir
+      const days = h('div', 'partner-days');
+      for (let d = 0; d < PARTNER_DAYS; d++) {
+        const full = (ship.delivered[d] ?? 0) >= cur.daily - 0.5;
+        const cls = full ? 'full' : d < g.partnerDay ? 'missed' : d === g.partnerDay ? 'today' : '';
+        days.append(h('span', `partner-day ${cls}`, full ? '✓' : d < g.partnerDay ? '✗' : String(d + 1)));
+      }
+      el.append(days);
+      // la jauge du jour
+      const done = ship.delivered[g.partnerDay] ?? 0;
+      const gauge = h('div', 'partner-gauge');
+      const fill = h('div', 'partner-gauge-fill');
+      fill.style.width = `${Math.min(100, (done / cur.daily) * 100)}%`;
+      gauge.append(fill, h('span', 'partner-gauge-text', tl('{0} / {1} aujourd\'hui', liters(done), liters(cur.daily))));
+      el.append(gauge);
+      const next = h('span', 'order-time');
+      const end = ship.start + (g.partnerDay + 1) * 86400;
+      next.dataset.expires = String(end);
+      next.textContent = `⏳ ${duration(end - g.time)}`;
+      const line = h('div', 'stats-line');
+      line.append(h('span', '', g.partnerDay + 1 < PARTNER_DAYS ? tl('Nouvelle jauge dans ') : tl('Fin du contrat dans ')), next);
+      el.append(line);
+      const left = g.partnerLeft;
+      const stock = g.partnerStock;
+      if (left > 0) {
+        const send = Math.min(left, stock);
+        const go = this.btn('btn primary', send >= 1 ? tl('Livrer · {0}', liters(send)) : tl('Pas de bière assez bonne en stock'), () => {
+          const r = g.deliverPartner();
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('crate');
+          this.onSent?.();
+          this.toast(tl('{0} livrés · +{1}', liters(r.liters!), moneyInt(r.amount!)), 'good');
+          this.renderComputer();
+        });
+        if (send < 1) go.disabled = true;
+        el.append(go);
+      } else el.append(h('p', 'note', tl('✓ Tout est livré pour aujourd\'hui.')));
+      el.append(h('p', 'hint', tl('Qualité minimale : {0} · gagné : {1} · toutes les journées remplies : +{2} 💎', tl(verdictOf(cur.minQuality)), moneyInt(ship.earned), cur.gems)));
+      if (!g.staffOn('courier')) el.append(h('p', 'hint', tl('Le livreur (application Personnel) remplit la jauge tout seul, même pendant ton absence.')));
+      card.append(el);
+    }
+    for (const p of PARTNERS) {
+      if (cur?.id === p.id) continue;
+      const lock = g.partnerLock(p);
+      const el = h('div', `card partner${lock ? ' locked' : ''}`);
+      const head = h('div', 'beer-head');
+      const title = h('span', 'beer-name');
+      title.append(iconCanvas('pennant', 1, 'partner-icon'), document.createTextNode(` ${p.name}`));
+      head.append(title);
+      const done = g.partnersDone[p.id];
+      if (done) head.append(h('span', 'partner-done', `✓ ×${done}`));
+      el.append(head, h('p', 'hint', p.text));
+      const perks = h('ul', 'ad-perks');
+      for (const t of [
+        tl('{0} par jour pendant {1} jours', liters(p.daily), PARTNER_DAYS),
+        tl('Qualité minimale : {0}', tl(verdictOf(p.minQuality))),
+        tl('Payé {0} fois le prix du grossiste', p.pay.toLocaleString(locale)),
+        tl('Toutes les journées remplies : +{0} 💎', p.gems),
+      ]) perks.append(h('li', '', t));
+      el.append(perks);
+      if (lock) el.append(h('span', 'ad-note', `🔒 ${lock}`));
+      else if (ship) el.append(h('span', 'ad-note', tl('Disponible après le partenariat en cours · {0}', moneyShort(p.fee))));
+      else {
+        const sign = this.btn('btn primary', tl('Signer · {0}', moneyShort(p.fee)), () => {
+          const r = g.signPartner(p.id);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('paper');
+          this.toast(tl('Partenariat signé : {0}', p.name), 'good');
+          this.renderComputer();
+        });
+        this.costGate(sign, p.fee);
+        el.append(sign);
+      }
       card.append(el);
     }
   }
@@ -3260,12 +3355,14 @@ export class App {
     });
     // le concours en cours a sa case, dorée, avec le temps qui reste avant la clôture des inscriptions
     const contest = g.contest;
-    const hide = (!live.length && !contest) || this.view === 'shop' || this.modalOpen || !!this.openSheet;
+    const ship = g.partner;
+    const shipDef = ship && partnerById(ship.id);
+    const hide = (!live.length && !contest && !ship) || this.view === 'shop' || this.modalOpen || !!this.openSheet;
     this.boostHud.classList.toggle('hidden', hide);
     this.boostHud.classList.toggle('below-harvest', !this.harvest.classList.contains('hidden') || !this.harvestGems.classList.contains('hidden'));
     if (hide) return;
     const mult = (id: string) => BOOSTS.find((x) => x.id === id)?.mult ?? 1;
-    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|') + (contest ? `|contest:${contest.tier}:${!!contest.entry}` : '');
+    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|') + (contest ? `|contest:${contest.tier}:${!!contest.entry}` : '') + (ship ? `|partner:${ship.id}:${g.partnerDay}` : '');
     if (key !== this.boostHudKey) {
       this.boostHudKey = key;
       this.boostHud.replaceChildren();
@@ -3290,6 +3387,25 @@ export class App {
         el.onclick = () => this.openComputer('contests');
         this.boostHud.append(el);
       }
+      if (ship) {
+        // le partenariat : la jauge du jour se remplit dans le cadran, le jour du contrat dans un coin
+        const el = h('button', 'boost-chip partner-chip');
+        const face = h('span', 'boost-chip-face');
+        face.append(h('span', 'boost-chip-dial'), iconCanvas('pennant', 2), h('span', 'boost-chip-time'));
+        el.append(face, h('span', 'boost-chip-mult partner-flag', `${g.partnerDay + 1}/${PARTNER_DAYS}`));
+        el.onclick = () => this.openComputer('partners');
+        this.boostHud.append(el);
+      }
+    }
+    if (ship && shipDef) {
+      const el = this.boostHud.querySelector<HTMLElement>('.partner-chip')!;
+      const done = ship.delivered[g.partnerDay] ?? 0;
+      el.style.setProperty('--left', Math.min(1, done / shipDef.daily).toFixed(4));
+      el.classList.toggle('full', done >= shipDef.daily - 0.5);
+      const t = done >= shipDef.daily - 0.5 ? '✓' : `${Math.floor((done / shipDef.daily) * 100)}%`;
+      const span = el.querySelector('.boost-chip-time')!;
+      if (span.textContent !== t) span.textContent = t;
+      el.setAttribute('aria-label', tl('{0} : jour {1} sur {2}, {3} livrés sur {4}', shipDef.name, g.partnerDay + 1, PARTNER_DAYS, liters(done), liters(shipDef.daily)));
     }
     if (contest) {
       const el = this.boostHud.querySelector<HTMLElement>('.contest-chip')!;
@@ -3300,7 +3416,7 @@ export class App {
       if (span.textContent !== t) span.textContent = t;
       el.setAttribute('aria-label', tl('{0} : {1}, encore {2}', CONTEST_TIERS[contest.tier]!.name, contest.entry ? tl('bière inscrite') : tl('inscriptions ouvertes'), duration(left)));
     }
-    this.boostHud.querySelectorAll<HTMLElement>('.boost-chip:not(.contest-chip)').forEach((el, i) => {
+    this.boostHud.querySelectorAll<HTMLElement>('.boost-chip:not(.contest-chip):not(.partner-chip)').forEach((el, i) => {
       const b = live[i]!;
       const left = Math.max(0, b.until - g.time);
       el.style.setProperty('--left', g.boostLeftShare(b.ch).toFixed(4));

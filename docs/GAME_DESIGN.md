@@ -28,7 +28,7 @@ L'onglet **Bureau** de la barre du bas affiche une **enveloppe ✉** seulement q
 - Les délais avant un événement s'écrivent comme des délais, jamais comme une heure : « dans 45 s », « dans 19 min », « dans 1 h 05 » (prochaine lettre). L'heure du jeu reste réservée à l'horloge.
 - La vitesse du « mode test » n'apparaît que pendant le développement.
 
-- **L'ordinateur du bureau** : un écran de **taille fixe**, quel que soit le téléphone. Le fond d'écran (l'atelier) est **flouté** ; par-dessus, le **menu** de « Brew OS » : une icône par application (**Tableau de bord, Messages, Commandes, Personnel, Tendances, Grossiste**), avec leur pastille (messages non lus, commandes en attente, dorée quand une commande peut partir). La dernière nouvelle s'affiche sous les icônes. Chaque application s'ouvre dans une fenêtre, avec « ‹ » pour revenir au menu ; le bouton ⏻ éteint l'ordinateur.
+- **L'ordinateur du bureau** : un écran de **taille fixe**, quel que soit le téléphone. Le fond d'écran (l'atelier) est **flouté** ; par-dessus, le **menu** de « Brew OS » : une icône par application (**Tableau de bord, Messages, Commandes, Personnel, Tendances, Grossiste, Concours, Partenariats**), avec leur pastille (messages non lus, commandes en attente, dorée quand une commande peut partir). La dernière nouvelle s'affiche sous les icônes. Chaque application s'ouvre dans une fenêtre, avec « ‹ » pour revenir au menu ; le bouton ⏻ éteint l'ordinateur.
 - **Messages** : la boîte de réception de la brasserie, la plus récente en haut (60 au plus) : commandes reçues et expirées, tendances, nouveaux clients, brassins terminés ou ratés, niveaux de la brasserie, bilan d'une absence. Les non-lus sont encadrés ; ouvrir la boîte les marque comme lus. Elle n'est pas sauvegardée : elle repart d'un mot de Gaston à chaque lancement.
 - **Tableau de bord** (application de l'ordinateur) : un aperçu des ventes en direct. On y trouve les recettes de la dernière heure et les recettes totales, la marque et les brassins. Un graphique montre les ventes minute par minute sur 60 min, réparties entre bar, commandes et grossiste. Viennent ensuite la répartition des recettes depuis le début, l'état de la brasserie (chaque brassin avec son temps restant, le stockage, le bar, les commandes) et la gamme classée par recettes.
 - **Personnel** (application de l'ordinateur) : des postes selon le niveau de la brasserie (1 aux niveaux ★1 et ★2, 2 aux niveaux ★3 et ★4, 3 au niveau ★5). Chaque employé signe un contrat de **8 h**, que l'on prolonge jusqu'à 24 h d'avance ; un nouveau demande un poste libre. **Barman** (rebranche les fûts vides, prix selon le niveau du bar), **Livreur** (envoie toutes les 30 s les commandes que le stock peut remplir, même pendant l'absence ; 40 € à 30 k€ selon le niveau de la brasserie), **Apprenti brasseur** (quand la file est vide, il reprogramme le dernier brassin ; 30 € à 25 k€). Le bouton du barman au bar partage ces postes.
@@ -275,6 +275,27 @@ Les concours donnent un but au-delà des étoiles : une **médaille**, portée e
 | International | +30 % | +40 % | +50 % |
 
 L'application Concours montre aussi le barème des cocardes et le **palmarès** de la brasserie. Les commandes ne changent pas : leur paiement est annoncé d'avance.
+
+## Partenariats (`src/core/partners.ts`)
+Pour la fin de partie, quand l'argent s'accumule : la brasserie **sponsorise un club ou un événement pendant 7 jours de jeu** (application **Partenariats** de l'ordinateur). Chaque jour, une **jauge de litres à livrer** se remplit à nouveau ; ce qui n'est pas livré dans la journée est perdu. Un seul partenariat à la fois.
+
+| Partenaire | S'ouvre avec | Par jour | Qualité minimale | Payé | Contrat | Prime |
+|---|---|---|---|---|---|---|
+| Club de rugby du village | le garage (★2) | 150 L | Correcte | ×1,5 grossiste | 1 500 € | 10 💎 |
+| Festival Rock en Fût | la microbrasserie (★3) | 1 500 L | Correcte | ×1,5 | 15 000 € | 15 💎 |
+| FC des Remparts | la microbrasserie (★3) | 2 500 L | Bonne | ×1,6 | 30 000 € | 20 💎 |
+| Finale de la Coupe au Grand Stade | l'usine (★4) | 8 000 L | Bonne | ×1,7 | 120 000 € | 30 💎 |
+| Festival des Mille Fûts | le labo du futur (★5) | 30 000 L | Bonne | ×1,8 | 500 000 € | 50 💎 |
+| **Jeux mondiaux** (l'événement ultime) | le labo du futur, marque à 90 / 100 et une médaille au concours international | 70 000 L | Excellente | ×2 | 2 M€ | 100 💎 |
+
+- Les volumes sont calés sur la production du joueur simulé : un partenaire demande à peu près le tiers de ce que produit une brasserie de son niveau (400 L par jour au garage, 2 000 à 5 000 L à la microbrasserie, 10 000 à 25 000 L à l'usine, 50 000 à 130 000 L au labo du futur).
+- **Livrer** prend ce qu'il reste à livrer aujourd'hui dans le stock, bouteilles puis fûts entiers, en commençant par les bières assez bonnes qui ont le plus de stock. C'est payé tout de suite, au prix du grossiste multiplié par celui du partenaire (et le bonus de la cocarde), et compté avec les commandes dans le tableau de bord.
+- Les litres livrés **comptent double** dans les ventes de la semaine : le public découvre les bières.
+- **Le livreur** (Personnel) remplit aussi la jauge, même pendant l'absence.
+- **Toutes les journées remplies** : la prime en diamants, et le partenaire est coché « ✓ ×n » dans la liste.
+- Dans l'app : le contrat en cours (les 7 journées, ✓ remplie, ✗ manquée, la jauge du jour, « Nouvelle jauge dans … », Livrer), puis chaque partenaire avec ses conditions et « Signer · prix ».
+- En haut à droite, avec les effets actifs, une **case bleue au fanion** : son cadran se remplit avec la jauge du jour (pourcentage au centre, ✓ une fois remplie), le jour du contrat dans un coin (« 3/7 ») ; la toucher ouvre l'application.
+- Les Jeux mondiaux s'appellent ainsi plutôt que « Jeux olympiques », nom et symboles protégés.
 
 ## Commandes
 L'ordinateur du bureau rassemble les applications **Commandes**, **Tendances** et **Grossiste** (avec le Tableau de bord et les Messages).
