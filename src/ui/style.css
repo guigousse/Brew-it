@@ -987,3 +987,20 @@ button:disabled { cursor: default; opacity: .5; }
 .pop-next { display: grid; gap: 2px; font-size: 15px; color: var(--dim); }
 .pop-next-bar { height: 5px; background: #1b1424; border: 1px solid var(--ink); }
 .pop-next-fill { height: 100%; background: #5fb4f0; }
+
+/* le concours en cours, parmi les effets actifs : cadre doré, coupe, temps avant la clôture */
+.contest-chip { background: linear-gradient(135deg, #fff4b0, #f2c14e 40%, #a8742a 60%, #f2c14e); background-size: 200% 200%; animation: rainbow-flow 4s linear infinite; box-shadow: 0 0 8px #f2c14e88, 0 2px 0 #0008; }
+.contest-chip .boost-chip-dial { background: conic-gradient(#c8902a 0 calc(var(--left, 1) * 360deg), #120c18 0); }
+.contest-flag { background: var(--bad); color: #fff; min-width: 11px; text-align: center; }
+.contest-flag.in { background: var(--good); color: var(--ink); }
+
+/* campagnes de pub : à quoi elles servent, une ligne par effet */
+.ad-intro { padding: 0 8px 6px; font-size: 16px; }
+.ad-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.ad-duration { font-size: 15px; color: var(--dim); }
+.ad-left { font-size: 16px; color: var(--good); }
+.ad-perks { margin: 2px 0 0; padding: 0 0 0 14px; font-size: 16px; line-height: 1.1; color: var(--dim); }
+.ad-perks li::marker { color: var(--accent); }
+.ad-row.locked { opacity: .6; }
+.ad-row.locked .ad-perks { display: none; }
+.ad-note { grid-column: 2; font-size: 15px; color: var(--dim); }

@@ -3,7 +3,7 @@ import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { AD_DAILY, TUTO_DONE, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
-import { SALES_STEPS, stars, trendById, trendsOf } from '../core/trends';
+import { popScore, SALES_STEPS, stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
@@ -15,7 +15,7 @@ import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/room
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { cocardeCanvas, medalName, playCeremony } from './ceremony';
-import { bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
+import { bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { GEMSTONES, BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
@@ -55,24 +55,19 @@ function fab(icon: IconId, label: string): HTMLButtonElement {
 /** Icône de chaque campagne de pub. */
 const AD_ICON: Record<AdId, IconId> = { flyers: 'poster', paper: 'clipboard', radio: 'bubble', tv: 'tv', national: 'trend' };
 
-/** Une part d'étoiles en demi-étoiles : 1,5 → « 1½ », 0,5 → « ½ », 2 → « 2 ». */
-const halfStars = (x: number) => {
-  const h = Math.round(x * 2) / 2;
-  const whole = Math.floor(h);
-  return h % 1 ? `${whole || ''}½` : String(whole);
-};
-
-/** L'effet d'une campagne en une ligne : « 6 h · lettres ×2 · popularité +½ ★ · une lettre tout de suite ». */
-export function adEffect(ad: AdDef): string {
+/** Ce que fait une campagne, en phrases simples, une par effet. */
+export function adPerks(ad: AdDef): string[] {
   const fr = (x: number) => x.toLocaleString(locale);
-  const nb = '\u00a0'; // espace insécable : « +10 % » ne se coupe pas
-  const parts = [`${ad.duration / 3600}${nb}h`, tl('lettres{0}×{1}', nb, fr(ad.orderBoost)), tl('popularité +{0}{1}★', halfStars(ad.stars), nb)];
-  if (ad.letters === 1) parts.push(tl('une lettre tout de suite'));
-  else if (ad.letters > 1) parts.push(tl('emplacements remplis'));
-  if (ad.pay !== 1) parts.push(tl('commandes +{0}{1}%', Math.round((ad.pay - 1) * 100), nb));
-  if (ad.prestige) parts.push(tl('une commande de prestige'));
-  if (ad.bar !== 1) parts.push(tl('bar +{0}{1}% de clients', Math.round((ad.bar - 1) * 100), nb));
-  return parts.join(' · ');
+  const out = [
+    tl('Toute ta gamme : +{0} points de popularité', Math.round(ad.stars * 20)),
+    tl('Les commandes arrivent {0} fois plus vite', fr(ad.orderBoost)),
+  ];
+  if (ad.letters === 1) out.push(tl('Une commande arrive tout de suite'));
+  else if (ad.letters > 1) out.push(tl('Chaque place libre du tableau reçoit une commande tout de suite'));
+  if (ad.pay !== 1) out.push(tl('Les commandes reçues sont payées {0} % de plus', Math.round((ad.pay - 1) * 100)));
+  if (ad.prestige) out.push(tl('Une commande de prestige (s\'il y a une bière Excellente)'));
+  if (ad.bar !== 1) out.push(tl('{0} % de clients en plus au bar', Math.round((ad.bar - 1) * 100)));
+  return out;
 }
 
 /** Nom de la pièce en haut à gauche : un bouton qui ouvre son amélioration. Quand on peut se l'offrir,
@@ -1528,7 +1523,7 @@ export class App {
     const box = h('div', 'pop-box');
     const p = g.popBreakdown(b);
     const line = h('div', 'pop-line');
-    line.append(h('span', 'pop-stars', starText(b.pop)), h('span', 'pop-total', `${(Math.round(p.total * 10) / 10).toLocaleString(locale)} / 5`));
+    line.append(h('span', 'pop-stars', starText(b.pop)), h('span', 'pop-total', tl('{0} / 100', popScore(b.pop))));
     const best = bestMedal(b.medals);
     if (best) line.append(h('span', 'medal-chip', `${METALS[best.metal]} +${Math.round(g.medalBonus(b) * 100)} %`));
     box.append(line);
@@ -1546,11 +1541,13 @@ export class App {
     // les parts, une ligne chacune
     const why = h('div', 'pop-why');
     const row = (cls: string, label: string, value: string) => why.append(h('span', `pop-dot ${cls}`), h('span', 'pop-why-label', label), h('span', 'pop-why-value', value));
-    row('q', tl('Qualité {0}', tl(verdictOf(b.tasting.quality))), `${halfStars(p.quality)} ★`);
+    // chaque part en points : 1 ★ = 20 points
+    const pts = (x: number) => Math.round(x * 20);
+    row('q', tl('Qualité {0}', tl(verdictOf(b.tasting.quality))), `${pts(p.quality)} / 50`);
     const followed = trendsOf(b.tasting, g.trends).map((t) => t.short);
-    row('t', followed.length ? tl('Tendances : {0}', followed.join(', ')) : tl('Aucune tendance suivie'), `+${halfStars(p.trends)} ★`);
-    row('s', tl('Ventes sur 7 jours : {0}', liters(p.liters)), `${halfStars(p.sales)} ★`);
-    if (p.ad) row('a', tl('Campagne de pub en cours'), `+${halfStars(p.ad)} ★`);
+    row('t', followed.length ? tl('Tendances : {0}', followed.join(', ')) : tl('Aucune tendance suivie'), `+${pts(p.trends)}`);
+    row('s', tl('Ventes sur 7 jours : {0}', liters(p.liters)), `${pts(p.sales)} / 50`);
+    if (p.ad) row('a', tl('Campagne de pub en cours'), `+${pts(p.ad)}`);
     box.append(why);
     if (p.next) {
       // la marche suivante des ventes
@@ -1561,14 +1558,14 @@ export class App {
       const fill = h('div', 'pop-next-fill');
       fill.style.width = `${Math.max(0, Math.min(1, k)) * 100}%`;
       bar.append(fill);
-      step.append(h('span', 'pop-next-text', tl('Prochaine ½ ★ : {0} sur 7 jours', liters(p.next.liters))), bar);
+      step.append(h('span', 'pop-next-text', tl('Ventes : {0} / 50 à {1} sur 7 jours', Math.round(p.next.stars * 20), liters(p.next.liters))), bar);
       box.append(step);
     }
     // le levier le plus utile
     const tip = p.total >= 5 ? ''
-      : p.quality < 1.25 ? tl('Gaston : « Une meilleure bière, c\'est jusqu\'à 2,5 ★ : soigne la recette et le matériel. »')
+      : p.quality < 1.25 ? tl('Gaston : « Une meilleure bière, c\'est jusqu\'à 50 points : soigne la recette et le matériel. »')
         : p.next ? tl('Gaston : « Vends-la : bar, commandes et grossiste comptent tous. Plus elle se vend, plus elle est connue. »')
-          : tl('Gaston : « Suis une tendance : +½ ★ par tendance. »');
+          : tl('Gaston : « Suis une tendance : +10 points par tendance. »');
     if (tip) box.append(h('p', 'hint pop-tip', tip));
     return box;
   }
@@ -2207,32 +2204,43 @@ export class App {
   }
 
   /** Les campagnes de pub : une par niveau de l'ordinateur, une seule à la fois ; celle en cours se prolonge en diamants. */
+  /**
+   * Les campagnes de pub : une phrase qui dit à quoi elles servent, la campagne en cours (ce qu'elle fait, le temps
+   * qui reste, la prolonger), puis chaque campagne avec sa durée, son prix et ses effets, une ligne par effet.
+   */
   private adsBox(g: Game): HTMLElement {
     const cur = g.ad;
     const box = h('div', `post${cur ? ' live' : ''}`);
     const head = h('div', 'post-head');
     head.append(h('span', 'post-name', tl('Campagnes de pub')));
-    if (cur) {
-      const left = h('span', '', duration(g.adUntil - g.time));
-      left.dataset.expires = String(g.adUntil);
-      head.append(h('span', 'post-state on', ''));
-      head.lastElementChild!.append(left);
-    }
     box.append(head);
-    for (const ad of ADS) {
+    box.append(h('p', 'hint ad-intro', tl('Une seule à la fois. Tant qu\'elle dure, ta gamme est plus populaire et les commandes arrivent plus vite. Le prix suit la taille de ta brasserie.')));
+    const perks = (ad: AdDef) => {
+      const list = h('ul', 'ad-perks');
+      for (const p of adPerks(ad)) list.append(h('li', '', p));
+      return list;
+    };
+    // la campagne en cours d'abord
+    for (const ad of [...ADS].sort((a, b) => Number(b.id === cur?.id) - Number(a.id === cur?.id))) {
       const mine = cur?.id === ad.id;
-      const row = h('div', `boost-row ad-row${mine ? ' mine' : ''}`);
+      const row = h('div', `boost-row ad-row${mine ? ' mine' : ''}${g.adUnlocked(ad.id) ? '' : ' locked'}`);
       const icon = h('div', 'boost-icon');
       icon.append(iconCanvas(AD_ICON[ad.id], 2));
       const text = h('div', 'boost-text');
-      text.append(h('span', 'boost-name', ad.name), h('span', 'boost-effect', adEffect(ad)));
+      const when = mine ? h('span', 'ad-left') : h('span', 'ad-duration', tl('pendant {0} h', ad.duration / 3600));
+      if (mine) {
+        when.dataset.expires = String(g.adUntil);
+        when.textContent = `⏳ ${duration(g.adUntil - g.time)}`;
+      }
+      const title = h('div', 'ad-title');
+      title.append(h('span', 'boost-name', mine ? tl('En cours : {0}', ad.name) : ad.name), when);
+      text.append(title, perks(ad));
       const cost = g.adCost(ad.id);
-      let b: HTMLButtonElement;
+      let b: HTMLElement;
       if (!g.adUnlocked(ad.id)) {
-        const pc = COMPUTERS[ad.computer - 1]!;
-        b = this.btn('btn price lock', `🔒 ${pc.name}`, () => this.toast(tl('{0} : avec l\'ordinateur « {1} »', ad.name, pc.name), 'info'));
+        b = h('span', 'ad-note', tl('🔒 avec l\'ordinateur « {0} »', COMPUTERS[ad.computer - 1]!.name));
       } else if (mine) {
-        b = this.gemsBtn(`+${AD_EXTEND.hours} h`, AD_EXTEND.gems, () => {
+        b = this.gemsBtn(tl('Prolonger de {0} h', AD_EXTEND.hours), AD_EXTEND.gems, () => {
           const r = g.extendAd();
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('newspaper');
@@ -2243,9 +2251,9 @@ export class App {
         });
         b.setAttribute('aria-label', tl('Prolonger {0} de {1} heures : {2}', ad.name, AD_EXTEND.hours, gemsText(AD_EXTEND.gems)));
       } else if (cur) {
-        b = this.btn('btn price lock', tl('occupé'), () => this.toast(tl('{0} est en cours : une seule campagne à la fois', cur.name), 'info'));
+        b = h('span', 'ad-note', tl('Disponible après la campagne en cours · {0}', moneyShort(cost)));
       } else {
-        b = this.btn('btn primary price', moneyShort(cost), () => {
+        const go = this.btn('btn primary price', tl('Lancer · {0}', moneyShort(cost)), () => {
           const r = g.advertise(ad.id);
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('newspaper');
@@ -2253,8 +2261,9 @@ export class App {
           this.computer!.key = '';
           this.refreshComputer();
         });
-        b.setAttribute('aria-label', tl('Lancer {0} : {1}', ad.name, moneyInt(cost)));
-        this.costGate(b, cost);
+        go.setAttribute('aria-label', tl('Lancer {0} : {1}', ad.name, moneyInt(cost)));
+        this.costGate(go, cost);
+        b = go;
       }
       row.append(icon, text, b);
       box.append(row);
@@ -2264,7 +2273,7 @@ export class App {
 
   /** La popularité de la marque et les tendances du moment. */
   private trendsTab(g: Game, card: HTMLElement): void {
-    card.append(h('div', 'stats-line strong', tl('Ta marque : {0}', starText(g.brand))));
+    card.append(h('div', 'stats-line strong', tl('Ta marque : {0} · {1} / 100', starText(g.brand), popScore(g.brand))));
     card.append(this.adsBox(g));
     for (const tr of g.trends) {
       const def = trendById(tr.id);
@@ -2313,7 +2322,7 @@ export class App {
     const grid = h('div', 'cocarde-grid');
     CONTEST_TIERS.forEach((t, tier) => {
       const row = h('div', `cocarde-row${tiers.includes(tier as 0 | 1 | 2) ? '' : ' locked'}`);
-      row.append(h('span', 'cocarde-tier', `${t.name} · ${t.stars} ★`));
+      row.append(h('span', 'cocarde-tier', tl('{0} · {1} ★ ({2} points)', t.name, t.stars, t.stars * 20)));
       for (const metal of [0, 1, 2] as const) {
         const cell = h('span', 'cocarde-cell');
         cell.append(cocardeCanvas({ tier: tier as 0 | 1 | 2, metal }, 2), h('span', '', `+${Math.round(COCARDE_BONUS[tier * 3 + metal]! * 100)} %`));
@@ -2415,9 +2424,9 @@ export class App {
     if (miss === starsOk?.text) {
       const p = g.popBreakdown(b);
       const need = CONTEST_TIERS[g.contest!.tier]!.stars;
-      const missing = halfStars(Math.max(0.5, need - p.total));
-      if (p.next) return tl('Il lui manque {0} ★ : vends-en davantage (prochaine ½ ★ à {1} sur 7 jours) ou suis une tendance (+½ ★).', missing, liters(p.next.liters));
-      return tl('Il lui manque {0} ★ : suis une tendance (+½ ★) ou améliore la qualité.', missing);
+      const missing = Math.max(1, need * 20 - popScore(b.pop));
+      if (p.next) return tl('Il lui manque {0} points : vends-en davantage ({1} sur 7 jours donnent {2} / 50) ou suis une tendance (+10).', missing, liters(p.next.liters), Math.round(p.next.stars * 20));
+      return tl('Il lui manque {0} points : suis une tendance (+10) ou améliore la qualité.', missing);
     }
     return tl('Programme un brassin en bouteilles.');
   }
@@ -3249,12 +3258,14 @@ export class App {
       const b = p.id ? g.boostOf(p.id) : null;
       return b && p.id ? [{ ch: p.id, ...b }] : [];
     });
-    const hide = !live.length || this.view === 'shop' || this.modalOpen;
+    // le concours en cours a sa case, dorée, avec le temps qui reste avant la clôture des inscriptions
+    const contest = g.contest;
+    const hide = (!live.length && !contest) || this.view === 'shop' || this.modalOpen || !!this.openSheet;
     this.boostHud.classList.toggle('hidden', hide);
     this.boostHud.classList.toggle('below-harvest', !this.harvest.classList.contains('hidden') || !this.harvestGems.classList.contains('hidden'));
     if (hide) return;
     const mult = (id: string) => BOOSTS.find((x) => x.id === id)?.mult ?? 1;
-    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|');
+    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|') + (contest ? `|contest:${contest.tier}:${!!contest.entry}` : '');
     if (key !== this.boostHudKey) {
       this.boostHudKey = key;
       this.boostHud.replaceChildren();
@@ -3270,8 +3281,26 @@ export class App {
         el.onclick = () => this.openShop('boosts');
         this.boostHud.append(el);
       }
+      if (contest) {
+        const el = h('button', `boost-chip contest-chip t${contest.tier}`);
+        const face = h('span', 'boost-chip-face');
+        face.append(h('span', 'boost-chip-dial'), iconCanvas('trophy', 2), h('span', 'boost-chip-time'));
+        // inscrite : une coche ; pas encore : un point d'exclamation
+        el.append(face, h('span', `boost-chip-mult contest-flag${contest.entry ? ' in' : ''}`, contest.entry ? '✓' : '!'));
+        el.onclick = () => this.openComputer('contests');
+        this.boostHud.append(el);
+      }
     }
-    this.boostHud.querySelectorAll<HTMLElement>('.boost-chip').forEach((el, i) => {
+    if (contest) {
+      const el = this.boostHud.querySelector<HTMLElement>('.contest-chip')!;
+      const left = Math.max(0, contest.closes - g.time);
+      el.style.setProperty('--left', (left / CONTEST_OPEN_S).toFixed(4));
+      const t = dialTime(left);
+      const span = el.querySelector('.boost-chip-time')!;
+      if (span.textContent !== t) span.textContent = t;
+      el.setAttribute('aria-label', tl('{0} : {1}, encore {2}', CONTEST_TIERS[contest.tier]!.name, contest.entry ? tl('bière inscrite') : tl('inscriptions ouvertes'), duration(left)));
+    }
+    this.boostHud.querySelectorAll<HTMLElement>('.boost-chip:not(.contest-chip)').forEach((el, i) => {
       const b = live[i]!;
       const left = Math.max(0, b.until - g.time);
       el.style.setProperty('--left', g.boostLeftShare(b.ch).toFixed(4));

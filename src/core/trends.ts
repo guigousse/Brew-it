@@ -149,5 +149,7 @@ export function brandPopularity(pops: readonly number[]): number {
   return pops.reduce((s, p) => s + p * p, 0) / sum;
 }
 
-/** En étoiles, pour l'affichage (0 à 5). */
-export const stars = (p: number) => Math.round(clamp01(p) * 10) / 2;
+/** Score de popularité sur 100 (le chiffre de la fiche). */
+export const popScore = (p: number) => Math.round(clamp01(p) * 100);
+/** En étoiles (0 à 5, par demi-étoile) : une demi-étoile tous les 10 points, arrondie vers le bas (4 ★ = 80 points). */
+export const stars = (p: number) => Math.floor(popScore(p) / 10) / 2;

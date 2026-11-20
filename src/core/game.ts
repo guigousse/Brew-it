@@ -1304,7 +1304,7 @@ export class Game {
     const need = CONTEST_TIERS[c.tier]!.stars;
     return [
       { ok: inCategory(c, b.tasting), text: tl('Dans la catégorie') },
-      { ok: stars(b.pop) >= need, text: tl('{0} ★ de popularité', need) },
+      { ok: stars(b.pop) >= need, text: tl('{0} ★ de popularité ({1} points)', need, need * 20) },
       { ok: b.stock >= CONTEST_BOTTLES, text: tl('{0} bouteilles pour le jury', CONTEST_BOTTLES) },
     ];
   }
