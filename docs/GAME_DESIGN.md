@@ -205,38 +205,46 @@ L'objet d'un événement n'apparaît que pendant cet événement, toujours au m�
 - **Tournoi de fléchettes** : la cible est montée sur un panneau (liège, bois sombre, puis blanc laqué), et les fléchettes s'y plantent.
 
 ## Popularité et tendances
-**Popularité d'une bière (0 à 5 ★).** Chaque verre servi au bar (+0,4 % de l'écart à la cible) et chaque bouteille livrée sur commande (vingt fois moins) rapprochent sa popularité d'une **cible**. Cette cible dépend fortement de la qualité : ((qualité − 0,3) / 0,7) puissance 1,6, +10 % par tendance suivie.
+**Popularité d'une bière (0 à 5 ★).** C'est la somme de trois parts que le joueur voit dans la fiche de la bière (Ma gamme), chacune avec sa couleur dans une jauge sur 5 ★ :
 
-| Verdict | Cible |
-|---|---|
-| Correcte (0,6) | 1 ★ environ |
-| Bonne (0,75) | 2 ★ environ |
-| Excellente (0,9) | 4 ★ environ |
-| Parfaite (1) | 5 ★ |
+| Part | Étoiles | Comment |
+|---|---|---|
+| **Qualité** | jusqu'à 2,5 ★ | rien en dessous de Médiocre, ½ ★ pour Correcte (0,6), 1¼ ★ pour Bonne (0,75), 2 ★ pour Excellente (0,9), 2,5 ★ pour une bière parfaite |
+| **Tendances** | +½ ★ par tendance suivie | jusqu'à 3 tendances à la fois |
+| **Ventes des 7 derniers jours** | jusqu'à 2,5 ★ | litres vendus (bar, commandes et grossiste), par paliers |
 
-- **La notoriété de la brasserie plafonne la cible** : 1,5 ★ au labo d'alchimiste, puis 2,5 ★ au garage, 3 ★ en microbrasserie, 4 ★ à l'usine et 5 ★ au labo du futur.
-- **Sans ventes, la popularité s'érode** : elle perd la moitié de sa valeur en 2 jours de jeu.
+| Ventes sur 7 jours | 100 L | 1 000 L | 10 000 L | 50 000 L | 150 000 L |
+|---|---|---|---|---|---|
+| Étoiles | ½ ★ | 1 ★ | 1½ ★ | 2 ★ | 2½ ★ |
+
+- Entre deux paliers, les étoiles montent en douceur (échelle logarithmique). La fiche donne le palier suivant et une petite barre de progression : « Prochaine ½ ★ : 50 000 L sur 7 jours ».
+- Le barème vient du joueur simulé : une bière vend environ 20 L la première semaine, 3 000 à 15 000 L à la microbrasserie, 20 000 à 40 000 L à l'usine, et jusqu'à 150 000 L en fin de partie. Le maximum des ventes ne s'atteint donc qu'en fin de partie.
+- Les ventes se comptent par tranches de 6 h sur 7 jours glissants : sans ventes, la part « ventes » redescend d'elle-même, et rien n'est compté au-delà de 7 jours.
+- Ce qui fait davantage parler compte plus : un verre servi pendant le tournoi de fléchettes compte 3 fois (1,5 fois pendant une fête), les plantes vertes font compter les verres du bar 20 % de plus, une commande de prestige compte ses bouteilles 5 fois.
+- **Une campagne de pub** ajoute des étoiles à toute la gamme tant qu'elle dure : +½ ★ (affiches, journal), +1 ★ (radio, télé), +1½ ★ (campagne nationale).
+- Le total ne dépasse jamais 5 ★. Une bière parfaite très vendue l'atteint sans tendance ; une Excellente a besoin d'une tendance ou de la pub.
+- Gaston donne le levier le plus utile : la qualité tant qu'elle reste sous Bonne, sinon les ventes, sinon les tendances.
+- Il n'y a plus de plafond selon le niveau de la brasserie : c'est le volume des ventes, qui grandit avec la brasserie, qui fait monter les étoiles.
+- Les anciennes parties gardent leur popularité : à la reprise, les ventes de la semaine sont reconstituées pour la justifier.
 
 **Popularité de la marque** : c'est la moyenne de la gamme pondérée par la popularité de chaque bière ; une nouvelle bière inconnue ne la fait donc pas chuter. Elle fixe :
 - l'affluence du bar ;
 - le paiement des commandes (×0,8 à ×1,2) et leur fréquence (jusqu'à 1,5 fois plus souvent) ;
 - l'arrivée de nouveaux profils de clients.
 
-**Tendances.** Trois tendances sont actives à la fois. Chacune dure de 8 à 16 h de jeu, puis une autre la remplace. Elles portent sur un style (IPA, lager, saison, blonde, pale ale, bières d'abbaye, fruitée) ou un caractère (léger < 5 %, fort ≥ 7 %, amer, doux, aromatique, limpide, ambré). Une bière dans la tendance vise une popularité plus haute, attire plus de clients au bar et s'y vend 15 % plus cher par tendance suivie.
-
-**La popularité expliquée** (fiche d'une bière, dans Ma gamme). Sous les étoiles : « ▲ vise ★★★★ » (ou « ▼ redescend vers… », ou « ✓ au sommet »), une **jauge** dorée avec un trait pour la cible et, hachuré en rouge, ce qui dépasse le plafond de la brasserie. Dessous, d'où vient la cible : la qualité (ses étoiles), les tendances suivies (+x ★) et le **plafond** du niveau de la brasserie, en rouge quand c'est lui qui bloque. Gaston dit le geste utile : agrandir la brasserie (plafond atteint), servir la bière au bar (elle monte encore), la mettre en fût (elle n'est pas au bar), ou faire une meilleure bière.
+**Tendances.** Trois tendances sont actives à la fois. Chacune dure de 8 à 16 h de jeu, puis une autre la remplace. Elles portent sur un style (IPA, lager, saison, blonde, pale ale, bières d'abbaye, fruitée) ou un caractère (léger < 5 %, fort ≥ 7 %, amer, doux, aromatique, limpide, ambré). Une bière dans la tendance gagne ½ ★ de popularité par tendance, attire plus de clients au bar et s'y vend 15 % plus cher par tendance suivie.
 
 L'application **Tendances** de l'ordinateur montre la popularité de la marque, les tendances du moment (avec les bières de la gamme qui les suivent) et la popularité de chaque bière. Les commandes « style recherché » reprennent souvent une tendance du moment. La fiche d'une bière de la gamme affiche aussi ses étoiles et ses tendances.
 
-**Campagnes de pub** (application Tendances de l'ordinateur, payées en euros). **Chaque niveau de l'ordinateur débloque une campagne**, plus chère et plus forte. **Une seule campagne à la fois** : les autres affichent « occupé ». Au lancement, toute la gamme gagne en popularité ; pendant la campagne, les lettres arrivent plus vite.
+**Campagnes de pub** (application Tendances de l'ordinateur, payées en euros). **Chaque niveau de l'ordinateur débloque une campagne**, plus chère et plus forte. **Une seule campagne à la fois** : les autres affichent « occupé ». Pendant la campagne, toute la gamme gagne des étoiles et les lettres arrivent plus vite.
 
 | Ordinateur | Campagne | Durée | Effet | Prix (part d'une journée de revenus) |
 |---|---|---|---|---|
-| Vieux minitel | Affiches au marché | 3 h | lettres ×1,5 · popularité +5 % | 4 % |
-| PC d'occasion | Annonce dans le journal | 6 h | lettres ×2 · popularité +10 % · une lettre tout de suite | 6 % |
-| Poste de bureau | Spot à la radio | 6 h | lettres ×2 · popularité +15 % · tous les emplacements libres reçoivent une lettre · commandes payées +10 % | 8 % |
-| Logiciel de gestion | Pub télé | 8 h | lettres ×2,5 · popularité +20 % · emplacements remplis · commandes +20 % · une commande de prestige (si une bière de la gamme est Excellente) | 10 % |
-| Intelligence logistique | Campagne nationale | 12 h | lettres ×3 · popularité +25 % · emplacements remplis · commandes +30 % · +50 % de clients au bar | 13 % |
+| Vieux minitel | Affiches au marché | 3 h | lettres ×1,5 · popularité +½ ★ | 4 % |
+| PC d'occasion | Annonce dans le journal | 6 h | lettres ×2 · popularité +½ ★ · une lettre tout de suite | 6 % |
+| Poste de bureau | Spot à la radio | 6 h | lettres ×2 · popularité +1 ★ · tous les emplacements libres reçoivent une lettre · commandes payées +10 % | 8 % |
+| Logiciel de gestion | Pub télé | 8 h | lettres ×2,5 · popularité +1 ★ · emplacements remplis · commandes +20 % · une commande de prestige (si une bière de la gamme est Excellente) | 10 % |
+| Intelligence logistique | Campagne nationale | 12 h | lettres ×3 · popularité +1½ ★ · emplacements remplis · commandes +30 % · +50 % de clients au bar | 13 % |
 
 Le prix dépend du niveau de la brasserie : c'est une part d'une journée de revenus typique à ce niveau (1 500 €, 12 000 €, 90 000 €, 500 000 €, puis 1,8 M€ ; `AD_REF`). Au niveau 3, les affiches coûtent 3 600 € et la campagne nationale 12 000 €. **Prolonger** la campagne en cours : +3 h pour 5 diamants, jusqu'à 24 h d'avance (la seule place des diamants dans la pub). Mesure (24 h, livraisons toutes les 30 min) : une campagne rapporte environ 1,2 à 4,5 fois son prix à partir du niveau 2 de la brasserie ; pour un joueur qui ne passe que 4 fois par jour, elle est à peu près neutre, car les lettres attendent sa visite. Elle récompense le joueur actif.
 

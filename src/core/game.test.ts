@@ -4,7 +4,7 @@ import { DEFAULT_LABEL } from './label';
 import { AD_EXTEND, adCost, ADS, BAR, kegSpace, PARTY } from './market';
 import { COMPUTERS, WHOLESALE_PRICE, drawOrder, orderGems, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, STARTER_MAX_BOTTLES, fits, type Order } from './orders';
 import { Rng } from './rng';
-import { popTarget, TREND_COUNT, TRENDS } from './trends';
+import { popParts, SALES_SLOTS, TREND_COUNT, TRENDS } from './trends';
 import { MemoryStorage, SaveManager } from './save';
 import { GEM_PACKS, GEMS } from './shop';
 import { STATION_ORDER } from './stations';
@@ -16,6 +16,9 @@ const run = (g: Game, seconds: number) => {
 const runUntil = (g: Game, cond: () => boolean, max = 3000) => {
   for (let i = 0; i < max * 20 && !cond(); i++) g.step();
 };
+/** Une bière très vendue cette semaine (150 000 L : le sommet des ventes). */
+const famous = (b: { week: number[] }) => b.week.fill(150_000 / SALES_SLOTS);
+
 /** Partie avec une première bière gardée dans la gamme. */
 const withBeer = (money = 250) => {
   const g = new Game();
@@ -166,21 +169,23 @@ describe('jeu', () => {
     expect(beer.kegs).toEqual([20]); // le plus gros fût est branché
     expect(g.taps[0]).toEqual({ beerId: beer.id, glasses: 40, capacity: 40 });
     beer.pop = 0;
-    expect(g.barRate).toBeCloseTo(0.1, 1);
+    expect(g.barRate).toBeCloseTo(0.1, 1); // une marque inconnue : 1 client toutes les 10 min
+    g.step();
+    const rate = g.barRate; // la bière a déjà les étoiles de sa qualité
     const money = g.money;
     run(g, 3600); // 1 h
     const served = 40 - g.taps[0]!.glasses;
-    expect(served).toBeGreaterThanOrEqual(5);
-    expect(served).toBeLessThanOrEqual(10);
+    expect(served).toBeGreaterThanOrEqual(Math.floor(rate * 60 * 0.6));
+    expect(served).toBeLessThanOrEqual(Math.ceil(rate * 60 * 1.4));
     expect(g.money).toBeGreaterThan(money);
-    expect(beer.pop).toBeGreaterThan(0); // chaque verre fait connaître la bière
+    expect(g.weekLiters(beer)).toBeCloseTo(served * 0.25); // chaque verre compte dans les ventes de la semaine
     g.taps[0]!.glasses = 1;
     run(g, 3600);
     expect(g.taps[0]!.glasses).toBe(0);
     expect(g.barServing).toBe(false); // le fût est vide : il faut le changer à la main
   });
 
-  it('la popularité fait venir du monde ; elle s\'érode sans ventes', () => {
+  it('la popularité fait venir du monde ; les ventes de plus de 7 jours ne comptent plus', () => {
     const g = withBeer(1e4);
     const beer = g.beers[0]!;
     beer.kegs = [20];
@@ -191,9 +196,30 @@ describe('jeu', () => {
     expect(g.brand).toBeCloseTo(1);
     expect(g.barRate).toBeCloseTo(low * 10);
     g.taps[0]!.glasses = 0;
-    simulateOffline(g, 8 * 3600);
-    expect(beer.pop).toBeLessThan(0.95);
-    expect(beer.pop).toBeGreaterThan(0.8);
+    famous(beer);
+    g.step();
+    const parts = g.popBreakdown(beer);
+    expect(parts.sales).toBe(2.5);
+    expect(beer.pop).toBeCloseTo(parts.total / 5);
+    // sans aucune vente pendant 3,5 jours, la moitié de la semaine sort du compte ; après 7 jours, plus rien
+    simulateOffline(g, 3.5 * 86400, 1e9);
+    expect(g.weekLiters(beer)).toBeCloseTo(75_000, -3);
+    simulateOffline(g, 3.6 * 86400, 1e9);
+    expect(g.weekLiters(beer)).toBe(0);
+    expect(g.popBreakdown(beer).sales).toBe(0);
+  });
+
+  it('popularité : la qualité (2,5 ★ au plus), ½ ★ par tendance, et les ventes sur 7 jours (2,5 ★ au plus)', () => {
+    const t = { ...withBeer().beers[0]!.tasting, quality: 1 };
+    expect(popParts(t, [], 0).total).toBe(2.5);
+    expect(popParts({ ...t, quality: 0.9 }, [], 0).quality).toBeCloseTo(2);
+    expect(popParts({ ...t, quality: 0.5 }, [], 0).quality).toBe(0);
+    const followed = TRENDS.filter((d) => d.test(t)).slice(0, 2).map((d) => ({ id: d.id, until: 1e9 }));
+    expect(popParts(t, followed, 0).trends).toBe(0.5 * followed.length);
+    expect(popParts(t, [], 100).sales).toBeCloseTo(0.5);
+    expect(popParts(t, [], 10_000).sales).toBeCloseTo(1.5);
+    expect(popParts(t, [], 150_000).total).toBe(5);
+    expect(popParts(t, followed, 150_000).total).toBe(5); // jamais plus de 5 ★
   });
 
   it('trois tendances à la fois, qui changent avec le temps ; une bière dans la tendance vise plus haut', () => {
@@ -206,7 +232,7 @@ describe('jeu', () => {
     expect(g.trends.map((t) => t.id)).not.toEqual(first);
     const t = g.beers[0]!.tasting;
     const def = TRENDS.find((d) => d.test(t))!;
-    expect(popTarget(t, [{ id: def.id, until: 1e9 }])).toBeGreaterThan(popTarget(t, []));
+    expect(popParts(t, [{ id: def.id, until: 1e9 }], 0).total).toBe(popParts(t, [], 0).total + 0.5);
   });
 
   it('agrandir le bar ajoute des tireuses', () => {
@@ -509,12 +535,14 @@ describe('jeu', () => {
     expect(g.barmanOn).toBe(false);
   });
 
-  it('une campagne de pub rend la gamme plus populaire ; une seule à la fois', () => {
+  it('une campagne de pub donne des étoiles à toute la gamme tant qu\'elle dure ; une seule à la fois', () => {
     const g = withBeer(1e6);
     const beer = g.beers[0]!;
-    beer.pop = 0.2;
+    g.step();
+    const before = beer.pop;
     expect(g.advertise('flyers').ok).toBe(true);
-    expect(beer.pop).toBeCloseTo(0.25);
+    g.step();
+    expect(beer.pop).toBeCloseTo(before + 0.5 / 5, 2);
     expect(g.ad?.id).toBe('flyers');
     expect(g.advertise('flyers').ok).toBe(false); // une seule campagne à la fois
   });
@@ -704,7 +732,8 @@ describe('jeu', () => {
     runUntil(g, () => g.batches.length === 0);
     g.beers[0]!.kegs = [60];
     g.swapKeg(0, g.beers[0]!.id);
-    g.beers[0]!.pop = 1;
+    g.beers[0]!.tasting = { ...g.beers[0]!.tasting, quality: 1 };
+    famous(g.beers[0]!);
     const money = g.money;
     const report = simulateOffline(g, 3600)!;
     expect(report.sold).toBeGreaterThan(50); // 1 client/min pour une marque au sommet

@@ -863,18 +863,9 @@ button:disabled { cursor: default; opacity: .5; }
 
 /* ---------------------------------------------------------------- popularité expliquée */
 .pop-box { display: grid; gap: 4px; }
-.pop-dir { font-size: 16px; white-space: nowrap; }
-.pop-dir.up { color: var(--good); }
-.pop-dir.down { color: #ffb4a4; }
-.pop-dir.flat { color: var(--dim); }
 .medal-chip { font-size: 15px; padding: 0 5px; color: var(--ink); background: var(--accent); border: 1px solid var(--ink); white-space: nowrap; }
-.pop-gauge { position: relative; height: 10px; background: #1b1424; border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px #4a3a5a; }
-.pop-fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#ffe08a, var(--accent) 50%, var(--accent-dark)); }
-.pop-goal { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: #fff4b0; box-shadow: 0 0 0 1px var(--ink); }
-.pop-cap { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(135deg, #0000 0 3px, #e8553a55 3px 5px); }
-.pop-why { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; font-size: 16px; color: var(--dim); }
+.pop-gauge { display: flex; height: 10px; background: #1b1424; border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px #4a3a5a; }
 .pop-why-value { color: var(--accent); text-align: right; white-space: nowrap; }
-.pop-why .limit { color: #ffb4a4; }
 .pop-tip { font-size: 16px; }
 
 /* ---------------------------------------------------------------- concours et cocardes */
@@ -982,3 +973,17 @@ button:disabled { cursor: default; opacity: .5; }
 @keyframes act-in { from { transform: translateX(110%); } }
 @keyframes act-out { to { transform: translateX(-115%); opacity: .4; } }
 @keyframes bottle-glow { 50% { filter: drop-shadow(0 4px 0 #0008) drop-shadow(0 0 6px #f2c14e80); } }
+
+/* popularité : trois parts (qualité, tendances, ventes) et la pub */
+.pop-total { font-size: 16px; color: var(--dim); }
+.pop-seg { height: 100%; transition: width .4s; }
+.pop-seg.q, .pop-dot.q { background: var(--accent); }
+.pop-seg.t, .pop-dot.t { background: var(--good); }
+.pop-seg.s, .pop-dot.s { background: #5fb4f0; }
+.pop-seg.a, .pop-dot.a { background: #d45c8e; }
+.pop-why { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 1px 6px; font-size: 16px; color: var(--dim); }
+.pop-dot { width: 8px; height: 8px; box-shadow: 0 0 0 1px var(--ink); }
+.pop-why-label { min-width: 0; overflow-wrap: anywhere; }
+.pop-next { display: grid; gap: 2px; font-size: 15px; color: var(--dim); }
+.pop-next-bar { height: 5px; background: #1b1424; border: 1px solid var(--ink); }
+.pop-next-fill { height: 100%; background: #5fb4f0; }

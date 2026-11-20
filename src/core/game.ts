@@ -9,7 +9,7 @@ import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, MAX_LEVEL, STATION_ORDER, stationDuration, upgradeCost, type StationId } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
-import { brandPopularity, gainPop, POP_CAP, stars, POP_DECAY, POP_PER_BOTTLE, POP_PER_GLASS, popTarget, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
+import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
 import { tl } from '../i18n';
 
@@ -104,6 +104,8 @@ export interface Beer {
   wsToday: number;
   /** Médailles gagnées en concours (la plus prestigieuse se porte en cocarde). */
   medals?: Medal[];
+  /** Litres vendus par tranche de 6 h, sur 7 jours glissants (la plus récente à la fin) : la part « ventes » de la popularité. */
+  week: number[];
 }
 
 /** Une condition d'inscription à un concours, cochée ou non. */
@@ -112,18 +114,10 @@ export interface ContestCheck {
   text: string;
 }
 
-/** D'où vient la popularité visée par une bière : sa qualité, les tendances, et le plafond de la brasserie. */
-export interface PopBreakdown {
-  /** Ce que vise la qualité seule (0 à 1). */
-  quality: number;
-  /** Ce qu'ajoutent les tendances suivies. */
-  trends: number;
-  /** Plafond de notoriété de la brasserie. */
-  cap: number;
-  /** Cible finale. */
-  target: number;
-  /** Ce qui limite la cible. */
-  limit: 'cap' | 'quality';
+/** D'où vient la popularité d'une bière : sa qualité, les tendances suivies, ses ventes sur 7 jours (et la pub). */
+export interface PopBreakdown extends PopParts {
+  /** Prochain palier de ventes (litres sur 7 jours et étoiles), ou null au sommet. */
+  next: { liters: number; stars: number } | null;
 }
 
 /** Diamants offerts pour une médaille, selon le concours (régional, national, international) et le métal. */
@@ -325,6 +319,8 @@ export class Game {
   contestCount = 0;
   /** Résultats pas encore vus par le joueur (la cérémonie s'affiche au retour). */
   contestResults: ContestResult[] = [];
+  /** Tranche de 6 h en cours, pour le compte des ventes sur 7 jours. */
+  salesSlot = 0;
   private announced = new Set<string>();
 
   // ------------------------------------------------------------------ lectures
@@ -771,7 +767,7 @@ export class Game {
     if (this.beers.length >= this.rangeSlots) return { ok: false, reason: tl('Ta gamme est pleine : achète une nouvelle place ou retire une bière') };
     const beer: Beer = {
       id: this.nextId++, name: name.trim() || tl('Bière n°{0}', this.beers.length + 1), recipe: b.recipe, tasting: b.tasting,
-      stock: 0, kegs: [], sold: 0, revenue: 0, label: { ...label }, pop: 0, liters: 0, wsToday: 0,
+      stock: 0, kegs: [], sold: 0, revenue: 0, label: { ...label }, pop: 0, liters: 0, wsToday: 0, week: new Array(SALES_SLOTS).fill(0),
     };
     this.beers.push(beer);
     b.beerId = beer.id;
@@ -1227,7 +1223,6 @@ export class Game {
     this.adId = id;
     this.adUntil = this.time + ad.duration;
     this.adPrestige = ad.prestige;
-    for (const b of this.beers) b.pop = Math.max(b.pop, Math.min(this.popCap, b.pop + ad.pop));
     this.syncSlots();
     // des lettres tout de suite : les emplacements libres les plus proches (au moins un, dans la minute)
     const order = this.orderWaits.map((w, i) => [w, i] as const).sort((a, b) => a[0] - b[0]);
@@ -1256,22 +1251,38 @@ export class Game {
   }
 
   /** Notoriété maximale de la brasserie (selon son niveau). */
-  get popCap(): number {
-    return POP_CAP[this.breweryLevel - 1] ?? 1;
+  /** Litres vendus par une bière sur les 7 derniers jours. */
+  weekLiters(b: Beer): number {
+    return b.week.reduce((a, x) => a + x, 0);
   }
 
-  /** Popularité que peut viser une bière de la gamme. */
-  popTarget(b: Beer): number {
-    return popTarget(b.tasting, this.trends, this.popCap);
-  }
-
-  /** D'où vient la popularité visée par une bière. */
+  /** D'où vient la popularité d'une bière : qualité, tendances, ventes sur 7 jours, et la pub en cours. */
   popBreakdown(b: Beer): PopBreakdown {
-    const quality = popTarget(b.tasting, [], 1);
-    const raw = popTarget(b.tasting, this.trends, 1);
-    const cap = this.popCap;
-    const target = Math.min(cap, raw);
-    return { quality, trends: raw - quality, cap, target, limit: raw > cap ? 'cap' : 'quality' };
+    const liters = this.weekLiters(b);
+    return { ...popParts(b.tasting, this.trends, liters, this.ad?.stars ?? 0), next: nextSalesStep(liters) };
+  }
+
+  /** Compte une vente pour la popularité ; `weight` > 1 quand elle fait davantage parler (événement du bar, prestige). */
+  private countSales(b: Beer, liters: number, weight = 1): void {
+    b.week[b.week.length - 1]! += liters * weight;
+  }
+
+  /** Les tranches de 6 h avancent : la plus ancienne sort des 7 jours. */
+  private rollSales(): void {
+    const slot = Math.floor(this.time / SALES_SLOT_S);
+    if (slot === this.salesSlot) return;
+    const shift = Math.min(SALES_SLOTS, slot - this.salesSlot);
+    this.salesSlot = slot;
+    for (const b of this.beers) {
+      for (let i = 0; i < shift; i++) b.week.push(0);
+      b.week.splice(0, b.week.length - SALES_SLOTS);
+    }
+  }
+
+  /** La popularité suit la qualité, les tendances, les ventes de la semaine et la pub en cours. */
+  private updatePop(): void {
+    const ad = this.ad?.stars ?? 0;
+    for (const b of this.beers) b.pop = popParts(b.tasting, this.trends, this.weekLiters(b), ad).total / 5;
   }
 
   /** Bonus de notoriété d'une bière médaillée (prix et ventes), de 0 à 0,5. */
@@ -1460,7 +1471,7 @@ export class Game {
       beer.sold += n;
       beer.revenue += (n / units) * o.reward;
       // une commande fait connaître la bière (une commande de prestige, beaucoup)
-      beer.pop = gainPop(beer.pop, this.popTarget(beer), o.kind === 'prestige' ? 60 : o.kind === 'keg' ? n * 40 : n, POP_PER_BOTTLE);
+      this.countSales(beer, l, o.kind === 'prestige' ? 5 : 1); // une commande de prestige fait beaucoup parler
     }
     this.totalSold += units;
     this.totalLiters += liters;
@@ -1666,9 +1677,8 @@ export class Game {
     }
     this.tickTrends();
     this.tickContests();
-    // sans ventes, la popularité s'érode doucement
-    const keep = Math.exp(-POP_DECAY * dt);
-    for (const b of this.beers) b.pop *= keep;
+    this.rollSales();
+    this.updatePop();
     this.announce();
   }
 
@@ -1788,7 +1798,7 @@ export class Game {
       beer.liters += GLASS_L;
       this.totalLiters += GLASS_L;
       beer.revenue += price;
-      beer.pop = gainPop(beer.pop, this.popTarget(beer), (this.partying ? this.barEvent.popMult : 1) * this.furnitureMult('pop'), POP_PER_GLASS);
+      this.countSales(beer, GLASS_L, (this.partying ? this.barEvent.popMult : 1) * this.furnitureMult('pop'));
       this.totalSold++;
       this.totalRevenue += price;
       this.barSold++;
@@ -1972,7 +1982,7 @@ export class Game {
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
-      contest: this.contest, contestNext: this.contestNext, contestCount: this.contestCount, contestResults: this.contestResults,
+      contest: this.contest, contestNext: this.contestNext, contestCount: this.contestCount, contestResults: this.contestResults, salesSlot: this.salesSlot,
     };
   }
 
@@ -2087,6 +2097,16 @@ export class Game {
     g.contestNext ??= 0;
     g.contestCount ??= 0;
     g.contestResults ??= [];
+    // avant les ventes sur 7 jours, la popularité montait vers une cible : on reprend les ventes qui la justifient
+    if ((s as { salesSlot?: number }).salesSlot == null) {
+      g.salesSlot = Math.floor(g.time / SALES_SLOT_S);
+      for (const b of g.beers) {
+        const parts = popParts(b.tasting, g.trends, 0);
+        const per = litersForSales(b.pop * 5 - parts.quality - parts.trends) / SALES_SLOTS;
+        b.week = new Array(SALES_SLOTS).fill(per);
+      }
+    }
+    for (const b of g.beers) b.week ??= new Array(SALES_SLOTS).fill(0);
     return g;
   }
 }

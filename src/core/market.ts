@@ -125,8 +125,8 @@ export const barEventById = (id: string) => BAR_EVENTS.find((e) => e.id === id);
 
 /**
  * Campagnes de pub. Chaque niveau de l'ordinateur en débloque une nouvelle, plus chère mais plus rentable.
- * Une seule campagne à la fois. Pendant la campagne, les lettres arrivent plus vite (orderBoost) ; au lancement,
- * toute la gamme gagne en popularité (pop) et des lettres arrivent tout de suite (letters : nombre d'emplacements
+ * Une seule campagne à la fois. Pendant la campagne, les lettres arrivent plus vite (orderBoost) et
+ * toute la gamme gagne des étoiles de popularité (stars) ; au lancement, des lettres arrivent tout de suite (letters : nombre d'emplacements
  * libres remplis, Infinity = tous). Les commandes reçues pendant la campagne sont mieux payées (pay) ; la télé fait
  * venir une commande de prestige ; la campagne nationale amène aussi du monde au bar (bar).
  */
@@ -138,7 +138,8 @@ export interface AdDef {
   computer: number;
   duration: number;
   orderBoost: number;
-  pop: number;
+  /** Étoiles de popularité en plus pour toute la gamme, tant que la campagne dure. */
+  stars: number;
   letters: number;
   pay: number;
   prestige: boolean;
@@ -147,11 +148,11 @@ export interface AdDef {
   share: number;
 }
 export const ADS: readonly AdDef[] = [
-  { id: 'flyers', name: tl('Affiches au marché'), computer: 1, duration: 3 * 3600, orderBoost: 1.5, pop: 0.05, letters: 0, pay: 1, prestige: false, bar: 1, share: 0.04 },
-  { id: 'paper', name: tl('Annonce dans le journal'), computer: 2, duration: 6 * 3600, orderBoost: 2, pop: 0.1, letters: 1, pay: 1, prestige: false, bar: 1, share: 0.06 },
-  { id: 'radio', name: tl('Spot à la radio'), computer: 3, duration: 6 * 3600, orderBoost: 2, pop: 0.15, letters: Infinity, pay: 1.1, prestige: false, bar: 1, share: 0.08 },
-  { id: 'tv', name: tl('Pub télé'), computer: 4, duration: 8 * 3600, orderBoost: 2.5, pop: 0.2, letters: Infinity, pay: 1.2, prestige: true, bar: 1, share: 0.1 },
-  { id: 'national', name: tl('Campagne nationale'), computer: 5, duration: 12 * 3600, orderBoost: 3, pop: 0.25, letters: Infinity, pay: 1.3, prestige: false, bar: 1.5, share: 0.13 },
+  { id: 'flyers', name: tl('Affiches au marché'), computer: 1, duration: 3 * 3600, orderBoost: 1.5, stars: 0.5, letters: 0, pay: 1, prestige: false, bar: 1, share: 0.04 },
+  { id: 'paper', name: tl('Annonce dans le journal'), computer: 2, duration: 6 * 3600, orderBoost: 2, stars: 0.5, letters: 1, pay: 1, prestige: false, bar: 1, share: 0.06 },
+  { id: 'radio', name: tl('Spot à la radio'), computer: 3, duration: 6 * 3600, orderBoost: 2, stars: 1, letters: Infinity, pay: 1.1, prestige: false, bar: 1, share: 0.08 },
+  { id: 'tv', name: tl('Pub télé'), computer: 4, duration: 8 * 3600, orderBoost: 2.5, stars: 1, letters: Infinity, pay: 1.2, prestige: true, bar: 1, share: 0.1 },
+  { id: 'national', name: tl('Campagne nationale'), computer: 5, duration: 12 * 3600, orderBoost: 3, stars: 1.5, letters: Infinity, pay: 1.3, prestige: false, bar: 1.5, share: 0.13 },
 ];
 export const adById = (id: string) => ADS.find((a) => a.id === id);
 /** Revenu d'une journée typique selon le niveau de la brasserie (mesuré par le joueur simulé) : la base du prix des campagnes. */

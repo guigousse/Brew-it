@@ -16,8 +16,8 @@ function setup(level: number) {
   for (const id of STATION_ORDER) g.stations[id] = { level };
   const b = g.beers[0]!;
   b.stock = 100;
-  b.pop = 1;
   b.tasting = { ...b.tasting, quality: 0.95 };
+  b.week.fill(150_000 / 28); // très vendue cette semaine : 2,5 ★ de ventes
   return { g, b };
 }
 const until = (g: Game, cond: () => boolean, max = 24 * 3600) => {
@@ -64,9 +64,11 @@ describe('concours', () => {
       expect(g.enterContest(b.id).ok).toBe(false);
       c.cat = TRENDS.find((t) => t.test(b.tasting))!.id;
     }
-    b.pop = 0.5; // 2,5 ★ : il en faut 3
-    expect(g.enterContest(b.id).ok).toBe(false);
-    b.pop = 0.6;
+    b.week.fill(0);
+    g.step(); // qualité seule : 2,25 ★ (+ ½ par tendance), il en faut 3
+    if (g.popBreakdown(b).total < 2.75) expect(g.enterContest(b.id).ok).toBe(false);
+    b.week.fill(150_000 / 28);
+    g.step();
     const money = g.money;
     const stock = b.stock;
     expect(g.enterContest(b.id).ok).toBe(true);
@@ -134,13 +136,15 @@ describe('concours', () => {
     expect(sell()).toBeCloseTo(plain * 1.5, 5);
   });
 
-  it('popularité expliquée : la qualité, les tendances et le plafond de la brasserie', () => {
+  it('popularité expliquée : qualité, tendances, ventes sur 7 jours, et le palier suivant', () => {
     const { g, b } = setup(2);
+    b.week.fill(0);
+    b.week[b.week.length - 1] = 2_000;
+    g.step();
     const p = g.popBreakdown(b);
-    expect(p.cap).toBe(0.5);
-    expect(p.limit).toBe('cap');
-    expect(p.target).toBe(0.5);
-    expect(p.target).toBeCloseTo(g.popTarget(b), 10);
+    expect(p.liters).toBeCloseTo(2_000, 0);
+    expect(p.next).toEqual({ liters: 10_000, stars: 1.5 });
+    expect(b.pop).toBeCloseTo(p.total / 5, 5);
   });
 
   it('le concours en cours, l\'inscription et les médailles se sauvegardent', async () => {

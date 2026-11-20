@@ -3,7 +3,7 @@ import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { AD_DAILY, TUTO_DONE, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
-import { stars, trendById, trendsOf } from '../core/trends';
+import { SALES_STEPS, stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, STATION_ORDER, STATIONS, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
@@ -55,11 +55,18 @@ function fab(icon: IconId, label: string): HTMLButtonElement {
 /** Icône de chaque campagne de pub. */
 const AD_ICON: Record<AdId, IconId> = { flyers: 'poster', paper: 'clipboard', radio: 'bubble', tv: 'tv', national: 'trend' };
 
-/** L'effet d'une campagne en une ligne : « 6 h · lettres ×2 · popularité +10 % · une lettre tout de suite ». */
+/** Une part d'étoiles en demi-étoiles : 1,5 → « 1½ », 0,5 → « ½ », 2 → « 2 ». */
+const halfStars = (x: number) => {
+  const h = Math.round(x * 2) / 2;
+  const whole = Math.floor(h);
+  return h % 1 ? `${whole || ''}½` : String(whole);
+};
+
+/** L'effet d'une campagne en une ligne : « 6 h · lettres ×2 · popularité +½ ★ · une lettre tout de suite ». */
 export function adEffect(ad: AdDef): string {
   const fr = (x: number) => x.toLocaleString(locale);
   const nb = '\u00a0'; // espace insécable : « +10 % » ne se coupe pas
-  const parts = [`${ad.duration / 3600}${nb}h`, tl('lettres{0}×{1}', nb, fr(ad.orderBoost)), tl('popularité +{0}{1}%', Math.round(ad.pop * 100), nb)];
+  const parts = [`${ad.duration / 3600}${nb}h`, tl('lettres{0}×{1}', nb, fr(ad.orderBoost)), tl('popularité +{0}{1}★', halfStars(ad.stars), nb)];
   if (ad.letters === 1) parts.push(tl('une lettre tout de suite'));
   else if (ad.letters > 1) parts.push(tl('emplacements remplis'));
   if (ad.pay !== 1) parts.push(tl('commandes +{0}{1}%', Math.round((ad.pay - 1) * 100), nb));
@@ -1513,47 +1520,55 @@ export class App {
   }
 
   /**
-   * Popularité d'une bière : ses étoiles, une jauge vers la popularité qu'elle vise, et d'où vient cette cible
-   * (qualité, tendances, plafond de la brasserie), avec ce qui la limite et le geste qui la fait monter.
+   * Popularité d'une bière : ses étoiles, puis d'où elles viennent, chacune avec sa part dans une jauge sur 5 ★ :
+   * la qualité (jusqu'à 2,5 ★), les tendances suivies (+½ ★ chacune), les ventes des 7 derniers jours (jusqu'à 2,5 ★,
+   * avec le palier suivant) et la pub en cours. Gaston dit le levier le plus utile.
    */
   private popLine(g: Game, b: Beer): HTMLElement {
     const box = h('div', 'pop-box');
     const p = g.popBreakdown(b);
     const line = h('div', 'pop-line');
-    const rising = p.target - b.pop > 0.01;
-    const falling = b.pop - p.target > 0.01;
-    line.append(h('span', 'pop-stars', starText(b.pop)), h('span', `pop-dir ${rising ? 'up' : falling ? 'down' : 'flat'}`, rising ? tl('▲ vise {0}', starText(p.target)) : falling ? tl('▼ redescend vers {0}', starText(p.target)) : tl('✓ au sommet')));
-    for (const tr of trendsOf(b.tasting, g.trends)) line.append(h('span', 'trend-chip', `↗ ${tr.short}`));
+    line.append(h('span', 'pop-stars', starText(b.pop)), h('span', 'pop-total', `${(Math.round(p.total * 10) / 10).toLocaleString(locale)} / 5`));
     const best = bestMedal(b.medals);
     if (best) line.append(h('span', 'medal-chip', `${METALS[best.metal]} +${Math.round(g.medalBonus(b) * 100)} %`));
     box.append(line);
-    // la jauge : la popularité actuelle, la cible (trait doré) et le plafond de la brasserie (cadenas)
+    // la jauge sur 5 ★ : une couleur par part
     const gauge = h('div', 'pop-gauge');
-    const fill = h('div', 'pop-fill');
-    fill.style.width = `${Math.min(100, b.pop * 100)}%`;
-    const goal = h('div', 'pop-goal');
-    goal.style.left = `${p.target * 100}%`;
-    gauge.append(fill, goal);
-    if (p.cap < 1) {
-      const cap = h('div', 'pop-cap');
-      cap.style.left = `${p.cap * 100}%`;
-      gauge.append(cap);
+    let room = 5; // le total ne dépasse pas 5 ★ : la dernière part s'arrête au bout
+    for (const [cls, v] of [['q', p.quality], ['t', p.trends], ['s', p.sales], ['a', p.ad]] as const) {
+      const w = Math.min(v, room);
+      room -= w;
+      const seg = h('div', `pop-seg ${cls}`);
+      seg.style.width = `${(w / 5) * 100}%`;
+      gauge.append(seg);
     }
     box.append(gauge);
-    // pourquoi cette cible
+    // les parts, une ligne chacune
     const why = h('div', 'pop-why');
-    const row = (label: string, value: string, cls = '') => why.append(h('span', `pop-why-label ${cls}`, label), h('span', `pop-why-value ${cls}`, value));
-    row(tl('Qualité {0}', tl(verdictOf(b.tasting.quality))), starText(p.quality));
-    if (p.trends > 0.005) row(tl('Tendances suivies'), `+${(p.trends * 5).toFixed(1)} ★`);
-    row(tl('🔒 Plafond : {0}', g.breweryName), starText(p.cap), p.limit === 'cap' ? 'limit' : '');
+    const row = (cls: string, label: string, value: string) => why.append(h('span', `pop-dot ${cls}`), h('span', 'pop-why-label', label), h('span', 'pop-why-value', value));
+    row('q', tl('Qualité {0}', tl(verdictOf(b.tasting.quality))), `${halfStars(p.quality)} ★`);
+    const followed = trendsOf(b.tasting, g.trends).map((t) => t.short);
+    row('t', followed.length ? tl('Tendances : {0}', followed.join(', ')) : tl('Aucune tendance suivie'), `+${halfStars(p.trends)} ★`);
+    row('s', tl('Ventes sur 7 jours : {0}', liters(p.liters)), `${halfStars(p.sales)} ★`);
+    if (p.ad) row('a', tl('Campagne de pub en cours'), `+${halfStars(p.ad)} ★`);
     box.append(why);
-    const tip = p.limit === 'cap' && p.cap < 1
-      ? tl('Gaston : « Elle ne montera plus ici. Agrandis la brasserie pour qu\'on la connaisse au-delà. »')
-      : !rising
-        ? p.quality < 1 ? tl('Gaston : « Pour viser plus haut, il faut une meilleure bière, ou suivre une tendance. »') : ''
-        : b.kegs.length || g.taps.some((t) => t.beerId === b.id)
-          ? tl('Gaston : « Chaque verre servi au bar la fait connaître (vingt fois plus qu\'une bouteille livrée). »')
-          : tl('Gaston : « Mets-la en fût et sers-la au bar : c\'est là qu\'on la découvre. »');
+    if (p.next) {
+      // la marche suivante des ventes
+      const step = h('div', 'pop-next');
+      const prev = [...[{ liters: 10, stars: 0 }], ...SALES_STEPS].filter((x) => x.liters <= p.next!.liters).slice(-2)[0]!;
+      const k = p.liters <= prev.liters ? 0 : Math.log(p.liters / prev.liters) / Math.log(p.next.liters / prev.liters);
+      const bar = h('div', 'pop-next-bar');
+      const fill = h('div', 'pop-next-fill');
+      fill.style.width = `${Math.max(0, Math.min(1, k)) * 100}%`;
+      bar.append(fill);
+      step.append(h('span', 'pop-next-text', tl('Prochaine ½ ★ : {0} sur 7 jours', liters(p.next.liters))), bar);
+      box.append(step);
+    }
+    // le levier le plus utile
+    const tip = p.total >= 5 ? ''
+      : p.quality < 1.25 ? tl('Gaston : « Une meilleure bière, c\'est jusqu\'à 2,5 ★ : soigne la recette et le matériel. »')
+        : p.next ? tl('Gaston : « Vends-la : bar, commandes et grossiste comptent tous. Plus elle se vend, plus elle est connue. »')
+          : tl('Gaston : « Suis une tendance : +½ ★ par tendance. »');
     if (tip) box.append(h('p', 'hint pop-tip', tip));
     return box;
   }
@@ -2400,8 +2415,9 @@ export class App {
     if (miss === starsOk?.text) {
       const p = g.popBreakdown(b);
       const need = CONTEST_TIERS[g.contest!.tier]!.stars;
-      if (stars(p.target) < need) return p.limit === 'cap' ? tl('Ta brasserie plafonne sa popularité à {0} : agrandis-la.', starText(p.cap)) : tl('Sa qualité ne la mène qu\'à {0} : améliore la recette ou le matériel.', starText(p.target));
-      return tl('Sers-la au bar pour la faire connaître : elle vise {0}.', starText(p.target));
+      const missing = halfStars(Math.max(0.5, need - p.total));
+      if (p.next) return tl('Il lui manque {0} ★ : vends-en davantage (prochaine ½ ★ à {1} sur 7 jours) ou suis une tendance (+½ ★).', missing, liters(p.next.liters));
+      return tl('Il lui manque {0} ★ : suis une tendance (+½ ★) ou améliore la qualité.', missing);
     }
     return tl('Programme un brassin en bouteilles.');
   }
