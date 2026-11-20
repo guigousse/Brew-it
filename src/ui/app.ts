@@ -4,7 +4,7 @@ import { AD_DAILY, TUTO_DONE, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS,
 import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
 import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
 import { popScore, SALES_STEPS, stars, trendById, trendsOf } from '../core/trends';
-import { BREWERY_NAMES, EXTRA_SPEED, levelSpeed, MAX_LEVEL, STATION_ORDER, STATIONS, STEP_SPEED, STEPS_PER_TIER, upgradeCost, type StationId } from '../core/stations';
+import { BREWERY_NAMES, MAX_LEVEL, precisionPct, speedFactor, STATION_ORDER, STATIONS, STEPS_PER_TIER, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
 import { stationCanvas } from '../render/sprites';
 import { drawLabel } from '../render/labelArt';
@@ -996,8 +996,22 @@ export class App {
     for (let i = 0; i < STEPS_PER_TIER; i++) pips.append(h('span', `tier-pip${i <= step ? ' on' : ''}`));
     tier.append(pips);
     up.append(tier);
-    const speed = Math.round((levelSpeed(st) - 1) * 100);
-    if (speed > 0) up.append(h('p', 'hint', tl('Grâce à ses niveaux : {0} % plus rapide{1}', speed, step ? tl(', plus précise') : '')));
+    // ses statistiques : vitesse (par rapport au début du palier) et précision
+    const speedOf = (x: typeof st) => {
+      const f = speedFactor(id, x);
+      return `×${(f < 10 ? Math.round(f * 100) / 100 : Math.round(f * 10) / 10).toLocaleString(locale)}`;
+    };
+    const after = { ...st, ...(g.nextIsTier(id) ? { level: lv + 1, step: 0 } : step < STEPS_PER_TIER - 1 ? { step: step + 1 } : { extra: extra + 1 }) };
+    const stats = h('div', 'machine-stats');
+    const stat = (label: string, now: string, next: string) => {
+      const el = h('div', 'machine-stat');
+      el.append(h('span', 'machine-stat-label', label), h('span', 'machine-stat-value', now));
+      if (next !== now) el.append(h('span', 'machine-stat-next', `➜ ${next}`));
+      stats.append(el);
+    };
+    stat(tl('Vitesse'), speedOf(st), speedOf(after));
+    stat(tl('Précision'), `${precisionPct(st)} %`, `${precisionPct(after)} %`);
+    up.append(stats);
     const cost = g.upgradeCost(id);
     const tierUp = g.nextIsTier(id);
     let label: string;
@@ -1013,12 +1027,8 @@ export class App {
       up.append(levels);
       label = tl('Passer à : {0} · {1}', def.names[lv]!, moneyShort(cost));
     } else {
-      const next = h('ul', 'ad-perks');
-      if (lv < MAX_LEVEL || step < STEPS_PER_TIER - 1) {
-        next.append(h('li', '', tl('+{0} % de vitesse', Math.round(STEP_SPEED * 100))));
-        if (lv < MAX_LEVEL) next.append(h('li', '', tl('Plus précise : elle se rapproche de « {0} »', def.names[lv]!)));
-      } else next.append(h('li', '', tl('+{0} % de cadence, sans limite (le prix grimpe à chaque niveau)', Math.round(EXTRA_SPEED * 100))));
-      up.append(h('div', 'section-title', tl('Niveau {0}', g.levelNumber(id) + 1)), next);
+      up.append(h('div', 'section-title', tl('Niveau {0}', g.levelNumber(id) + 1)));
+      if (lv >= MAX_LEVEL && step >= STEPS_PER_TIER - 1) up.append(h('p', 'hint', tl('Sans limite : le prix grimpe à chaque niveau.')));
       label = tl('Améliorer · {0}', moneyShort(cost));
     }
     const b = this.btn('btn primary', label, () => {

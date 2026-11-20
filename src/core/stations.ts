@@ -105,6 +105,22 @@ export function nextLevelCost(id: StationId, s: StationState): number {
 /** Vitesse de l'appareil due à ses niveaux (1 = début du palier). */
 export const levelSpeed = (s: StationState) => (1 + STEP_SPEED * (s.step ?? 0)) * Math.pow(1 + EXTRA_SPEED, s.extra ?? 0);
 
+/** Vitesse de l'appareil comparée à la toute première machine (×1), paliers et niveaux compris. */
+export function speedFactor(id: StationId, s: StationState): number {
+  const tier = id === 'bottling' ? BOTTLE_S[1] / BOTTLE_S[s.level]! : SPEED[1] / SPEED[s.level]!;
+  return tier * levelSpeed(s);
+}
+
+/** Précision affichée de chaque palier (%), la même que dans la fiche des machines. */
+export const PRECISION_PCT = [0, 40, 65, 85, 95, 100] as const;
+/** Précision affichée d'un appareil, ses niveaux compris : entre celle de son palier et celle du suivant. */
+export function precisionPct(s: StationState): number {
+  const p = Math.min(MAX_LEVEL, s.level + (s.step ?? 0) / STEPS_PER_TIER);
+  const lo = Math.floor(p);
+  const hi = Math.min(MAX_LEVEL, lo + 1);
+  return Math.round(PRECISION_PCT[lo]! + (PRECISION_PCT[hi]! - PRECISION_PCT[lo]!) * (p - lo));
+}
+
 /** Précision « fractionnaire » : chaque niveau du palier rapproche de la précision du palier suivant. */
 export const precisionLevel = (s: StationState) => Math.min(MAX_LEVEL, s.level + (s.step ?? 0) / STEPS_PER_TIER);
 
