@@ -1046,5 +1046,18 @@ const dict: Record<string, string> = {
   "En tournée encore {0}.": "On the road for {0} more.",
   "{0} à livrer": "{0} ready",
   "Partenaires": "Partners",
+  "Vendre": "Sell",
+  "stock {0} %": "stock {0} %",
+  "Il reprend tout, à tout moment, et vide tout seul le surplus quand le stockage est plein. Son prix baisse au fil de la journée (plein prix jusqu'à {0}) et revient à minuit. Ses ventes ne font pas connaître tes bières.": "He takes everything, at any time, and clears the surplus by himself when storage is full. His price drops over the day (full price up to {0}) and comes back at midnight. His sales don't make your beers known.",
+  "{0} / {1} btl": "{0} / {1} btl",
+  "Prix du jour": "Today's price",
+  "Rien en stock.": "Nothing in stock.",
+  "{0} le litre": "{0} per liter",
+  "Moitié": "Half",
+  "Tout": "All",
+  "1 caisse": "1 crate",
+  "1 fût": "1 keg",
+  "Vendre au grossiste": "Sell to the wholesaler",
+  "Prix du jour : {0} %. Il baisse au fil de la journée et revient à minuit.": "Today's price: {0} %. It drops over the day and comes back at midnight.",
 };
 export default dict;

@@ -376,7 +376,7 @@ export class App {
   private editing = new Set<number>();
   private picks = new Map<number, number[]>();
   /** Onglet ouvert dans Commandes : les commandes ou les grands partenaires. */
-  private ordersView: 'orders' | 'partners' = 'orders';
+  private ordersView: 'orders' | 'partners' | 'wholesale' = 'orders';
   /** Bières dont le détail de popularité est déplié. */
   private popOpen = new Set<number>();
   /** Bière choisie pour le concours en cours. */
@@ -1559,6 +1559,7 @@ export class App {
       this.sheetKey = '';
     }));
     actions.append(this.btn('btn small', tl('Fiche'), () => this.openTastingView(b.name, t)));
+    if (g.wholesaleSellable(b, 'bottle') + g.wholesaleSellable(b, 'keg') > 0) actions.append(this.btn('btn small', tl('Vendre'), () => this.openWholesale(b)));
     actions.append(this.btn('btn small', tl('Étiquette'), () => this.openLabelEditor(b.name, b.label, (name, label) => {
       b.name = name.trim() || b.name;
       g.setLabel(b.id, label);
@@ -2009,10 +2010,13 @@ export class App {
     for (const id of this.picks.keys()) if (!g.orders.some((o) => o.id === id)) this.picks.delete(id);
     const ready = new Set(g.readyOrders.map((o) => o.id));
     const sorted = [...g.orders].sort((a, b) => Number(ready.has(b.id)) - Number(ready.has(a.id)) || a.expires - b.expires);
-    // deux onglets une fois les partenariats ouverts : les commandes, les grands partenaires
-    if (g.hasFeature('partners')) {
-      const tabs = h('div', 'contest-tabs two');
-      const tab = (id: 'orders' | 'partners', name: string, state: string, hot: boolean) => {
+    // les onglets : les commandes, les grands partenaires (une fois ouverts), le grossiste
+    {
+      const partners = g.hasFeature('partners');
+      if (!partners && this.ordersView === 'partners') this.ordersView = 'orders';
+      const tabs = h('div', 'contest-tabs');
+      tabs.style.gridTemplateColumns = `repeat(${partners ? 3 : 2}, 1fr)`;
+      const tab = (id: 'orders' | 'partners' | 'wholesale', name: string, state: string, hot: boolean) => {
         const t = this.btn(`contest-tab${this.ordersView === id ? ' active' : ''}${hot ? ' hot' : ''}`, '', () => {
           this.ordersView = id;
           this.renderComputer();
@@ -2021,12 +2025,11 @@ export class App {
         tabs.append(t);
       };
       tab('orders', tl('Commandes'), ready.size ? tl('{0} à livrer', ready.size) : String(g.orders.length), ready.size > 0 && this.ordersView !== 'orders');
-      tab('partners', tl('Partenaires'), `${g.partners.length} / ${g.partnerSlots}`, false);
+      if (partners) tab('partners', tl('Partenaires'), `${g.partners.length} / ${g.partnerSlots}`, false);
+      tab('wholesale', tl('Grossiste'), tl('stock {0} %', Math.round((g.stored / g.storageCap) * 100)), g.storageFull && this.ordersView !== 'wholesale');
       card.append(tabs);
-      if (this.ordersView === 'partners') {
-        this.partnersTab(g, card);
-        return;
-      }
+      if (this.ordersView === 'partners') return this.partnersTab(g, card);
+      if (this.ordersView === 'wholesale') return this.wholesaleTab(g, card);
     }
     card.append(this.courierLine(g));
     for (const o of sorted) card.append(this.orderCard(g, o));
@@ -2048,11 +2051,90 @@ export class App {
       foot.append(b);
     }
     card.append(foot);
-    // le grossiste : plus rien à faire, il reprend le surplus tout seul
-    const ws = h('div', 'ws-line');
+  }
+
+  /**
+   * Le grossiste : il reprend tout seul le surplus quand le stockage est plein, et on peut lui vendre à la main pour
+   * faire de la place. Le remplissage du stockage, le prix du jour, puis chaque bière avec « 1 caisse », « Moitié », « Tout ».
+   */
+  private wholesaleTab(g: Game, card: HTMLElement): void {
+    card.append(h('p', 'hint', tl('Il reprend tout, à tout moment, et vide tout seul le surplus quand le stockage est plein. Son prix baisse au fil de la journée (plein prix jusqu\'à {0}) et revient à minuit. Ses ventes ne font pas connaître tes bières.', liters(g.wholesaleFull))));
+    const gauge = (label: string, value: string, pct: number, cls: string) => {
+      const box = h('div', 'ws-price');
+      const head = h('div', 'stock-line');
+      head.append(h('span', 'stock-name', label), h('span', `ws-quota ${cls}`, value));
+      const bar = h('div', 'ws-bar');
+      const fill = h('div', `ws-fill ${cls}`);
+      fill.style.width = `${Math.round(Math.max(0, Math.min(1, pct)) * 100)}%`;
+      bar.append(fill);
+      box.append(head, bar);
+      return box;
+    };
+    const fillPct = g.stored / g.storageCap;
+    card.append(gauge(tl('Stockage'), tl('{0} / {1} btl', count(g.stored), count(g.storageCap)), fillPct, fillPct >= 0.9 ? 'full' : ''));
     const rate = g.wholesaleRate;
-    ws.append(iconCanvas('truck', 1, 'ws-line-icon'), h('span', 'hint', tl('Grossiste : quand le stockage est plein, il reprend le surplus tout seul. Prix du jour : {0} % (plein prix jusqu\'à {1}, puis il baisse jusqu\'à minuit).', Math.round(rate * 100), liters(g.wholesaleFull))));
-    card.append(ws);
+    card.append(gauge(tl('Prix du jour'), `${Math.round(rate * 100)} %`, rate, rate < 0.999 ? 'low' : ''));
+    const beers = g.beers.filter((b) => g.wholesaleSellable(b, 'bottle') + g.wholesaleSellable(b, 'keg') > 0);
+    if (!beers.length) card.append(h('p', 'hint', tl('Rien en stock.')));
+    for (const b of beers) card.append(this.wholesaleBeer(g, b, () => {
+      this.computer!.key = '';
+      this.refreshComputer();
+    }));
+  }
+
+  /** Une bière chez le grossiste : son prix au litre du moment, et de quoi vendre une caisse, la moitié ou tout. */
+  private wholesaleBeer(g: Game, b: Beer, after: () => void): HTMLElement {
+    const box = h('div', 'ws-beer');
+    const head = h('div', 'stock-line');
+    const thumb = h('canvas', 'label-thumb');
+    drawLabel(thumb, b.label, b.name);
+    head.append(thumb, h('span', 'stock-name', b.name), h('span', 'ws-quota', tl('{0} le litre', money(Math.round(g.wholesaleQuote(b, 1) * 100) / 100))));
+    box.append(head);
+    const row = (format: Format, have: number, what: string, one: string, litersOf: (n: number) => number) => {
+      if (have <= 0) return;
+      const el = h('div', 'ws-row');
+      el.append(h('span', 'ws-have', what));
+      const sell = (n: number, label: string) => {
+        const btn = this.btn('btn small ws-sell', '', () => {
+          const r = g.sellWholesale(b.id, n, format);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('cash');
+          this.gainToast(r.amount!);
+          this.sheetKey = '';
+          after();
+        });
+        btn.append(h('span', 'ws-sell-what', label), h('span', 'ws-sell-gain', moneyShort(g.wholesaleQuote(b, litersOf(n)))));
+        el.append(btn);
+      };
+      const unit = format === 'bottle' ? CRATE : 1;
+      if (have > unit) sell(unit, one);
+      else el.append(h('span'));
+      if (Math.floor(have / 2) > unit) sell(Math.floor(have / 2), tl('Moitié'));
+      else el.append(h('span'));
+      sell(have, tl('Tout'));
+      box.append(el);
+    };
+    row('bottle', g.wholesaleSellable(b, 'bottle'), tl('{0} btl', count(b.stock)), tl('1 caisse'), (n) => n * BOTTLE_L);
+    const kegL = b.kegs.length ? (b.kegs.reduce((s2, k) => s2 + k, 0) * GLASS_L) / b.kegs.length : 0;
+    row('keg', g.wholesaleSellable(b, 'keg'), tl('{0} fût{1}', b.kegs.length, b.kegs.length > 1 ? 's' : ''), tl('1 fût'), (n) => n * kegL);
+    return box;
+  }
+
+  /** Vendre une bière au grossiste depuis sa fiche, sans passer par le bureau. */
+  private openWholesale(b: Beer): void {
+    const g = this.game();
+    const card = this.modalCard(tl('Vendre au grossiste'));
+    const fill = () => {
+      card.querySelector('.ws-beer, .ws-empty')?.remove();
+      const cur = g.beer(b.id);
+      const has = cur && g.wholesaleSellable(cur, 'bottle') + g.wholesaleSellable(cur, 'keg') > 0;
+      const el = has ? this.wholesaleBeer(g, cur, fill) : h('p', 'hint ws-empty', tl('Rien en stock.'));
+      card.insertBefore(el, card.querySelector('.ws-close'));
+    };
+    card.append(h('p', 'hint', tl('Prix du jour : {0} %. Il baisse au fil de la journée et revient à minuit.', Math.round(g.wholesaleRate * 100))));
+    const close = this.btn('btn ws-close', tl('Fermer'), () => this.closeModal());
+    card.append(close);
+    fill();
   }
 
   /** Le livreur : un contrat de 8 h, et les commandes prêtes partent toutes seules, même en ton absence. */

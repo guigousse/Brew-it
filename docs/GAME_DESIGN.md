@@ -317,7 +317,7 @@ L'application Concours montre aussi le barème des cocardes et le **palmarès** 
 - Les Jeux mondiaux s'appellent ainsi plutôt que « Jeux olympiques », nom et symboles protégés.
 
 ## Commandes
-L'app **Commandes** rassemble tout ce qui fait partir la bière : le livreur en haut, les commandes, et une ligne sur le grossiste en bas. Une fois le premier partenaire ouvert, deux onglets en haut : **Commandes** (le nombre, ou « 2 à livrer ») et **Partenaires** (« 2 / 3 » contrats). Refuser une commande : une croix (« Refuser ? » au premier appui). Les grands nombres s'abrègent pour tenir sur les boutons : 269 k€ au-delà de 100 000 €, 41k bouteilles au-delà de 10 000, 240k L au-delà de 100 000 L.
+L'app **Commandes** rassemble tout ce qui fait partir la bière : le livreur en haut, les commandes, avec des onglets en haut : **Commandes** (le nombre, ou « 2 à livrer »), **Partenaires** (« 2 / 3 » contrats, une fois le premier partenaire ouvert) et **Grossiste** (« stock 90 % »). Refuser une commande : une croix (« Refuser ? » au premier appui). Les grands nombres s'abrègent pour tenir sur les boutons : 269 k€ au-delà de 100 000 €, 41k bouteilles au-delà de 10 000, 240k L au-delà de 100 000 L.
 
 **Le tableau des commandes.** Il compte un nombre limité d'**emplacements** : 2 au début, 6 au plus, un de plus par amélioration de l'ordinateur. **Chaque emplacement a son propre délai** : quand une commande en part (envoyée, refusée ou expirée), son emplacement attend la lettre suivante 30 à 60 minutes de jeu (un peu moins quand la marque est connue, plus vite pendant une campagne de pub, selon la campagne). Un emplacement gagné avec un nouvel ordinateur reçoit sa première lettre en 3 minutes ; au début de la partie, la première lettre arrive en 3 minutes et la seconde 30 minutes plus tard.
 
@@ -374,7 +374,7 @@ L'app **Commandes** rassemble tout ce qui fait partir la bière : le livreur en 
 - **Pour les gros volumes, les partenariats paient bien mieux** : c'est leur rôle.
 - **Vente automatique** (cochée par défaut) : quand le stockage plein bloque la production, il reprend de quoi la débloquer ; la file de brassins n'est alors plus limitée par le stockage.
 - **Boosts** : Grossiste généreux (+50 % pendant 4 h, 8 💎) ; **Grossiste au prix fort** (plein prix toute la journée pendant 4 h, 50 💎).
-- **Plus d'app Grossiste** : il reprend tout seul le surplus quand le stockage est plein. Une ligne en bas de Commandes donne le prix du jour (« Prix du jour : 64 % »).
+- **Onglet Grossiste** (dans Commandes, toujours visible ; l'onglet affiche « stock 90 % » et s'allume quand le stockage est plein) : il reprend tout seul le surplus quand le stockage est plein, et on peut lui vendre à la main pour faire de la place. Le remplissage du stockage (« 108 / 120 btl »), le prix du jour (jauge en %), puis chaque bière avec son prix au litre et, pour les bouteilles comme pour les fûts, trois boutons sur deux lignes : « 1 caisse / 21 € », « Moitié / 64 € », « Tout / 129 € ». Le même bloc s'ouvre depuis la fiche d'une bière (Ma gamme), bouton **Vendre**.
 - Équilibrage : sans partenariat, le surplus part au grossiste de moins en moins cher ; le joueur simulé, qui signe les partenaires dès qu'il le peut, finit la partie vers le 33e jour.
 
 ## Gamme : l'étagère

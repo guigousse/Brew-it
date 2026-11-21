@@ -1046,5 +1046,18 @@ const dict: Record<string, string> = {
   "En tournée encore {0}.": "还会配送 {0}。",
   "{0} à livrer": "{0} 个可交付",
   "Partenaires": "合作伙伴",
+  "Vendre": "出售",
+  "stock {0} %": "库存 {0} %",
+  "Il reprend tout, à tout moment, et vide tout seul le surplus quand le stockage est plein. Son prix baisse au fil de la journée (plein prix jusqu'à {0}) et revient à minuit. Ses ventes ne font pas connaître tes bières.": "他随时收购一切，仓库满了会自动清走多余的货。他的价格随一天下降（{0} 以内全价），午夜恢复。他的收购不会让你的啤酒出名。",
+  "{0} / {1} btl": "{0} / {1} 瓶",
+  "Prix du jour": "今日价格",
+  "Rien en stock.": "没有库存。",
+  "{0} le litre": "每升 {0}",
+  "Moitié": "一半",
+  "Tout": "全部",
+  "1 caisse": "1 箱",
+  "1 fût": "1 桶",
+  "Vendre au grossiste": "卖给批发商",
+  "Prix du jour : {0} %. Il baisse au fil de la journée et revient à minuit.": "今日价格：{0} %。随一天下降，午夜恢复。",
 };
 export default dict;

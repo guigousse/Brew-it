@@ -1114,3 +1114,10 @@ button:disabled { cursor: default; opacity: .5; }
 .dash-beer-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .dash-beer-top { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .dash-beer-top .pop-stars { flex: none; }
+.ws-row { display: grid; grid-template-columns: 52px repeat(3, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.ws-have { font-size: 14px; line-height: 1.1; align-self: center; overflow-wrap: anywhere; }
+.btn.ws-sell { display: grid; justify-items: center; gap: 1px; min-width: 0; padding: 3px 2px; line-height: 1.05; }
+.ws-sell-what { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ws-sell-gain { font-size: 15px; color: var(--accent); white-space: nowrap; }
+.ws-beer .stock-line { min-width: 0; }
+.ws-beer .ws-quota { font-size: 14px; }
