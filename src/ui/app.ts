@@ -2433,6 +2433,11 @@ export class App {
     return true;
   }
 
+  /** Une pluie de confettis dorés (passage de niveau, contrat rempli). */
+  celebrate(): void {
+    if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) confetti(document.body, 'gold', 60);
+  }
+
   /** Récolte la mission : pièces et diamants volent vers le compteur, confettis. */
   private claimMission(): void {
     const g = this.game();

@@ -178,7 +178,7 @@ Aujourd'hui, le moulin lance un brassin dès qu'il est libre. Les brassins s'acc
 ## Objets en série, barman en renfort
 
 - Les objets du magasin s'achètent dans l'ordre : cible (300 €), télé (5 000 €), boule à facettes (60 000 €), au rythme des agrandissements du bar (400 €, 6 000 €, 120 000 €). La fête devient l'événement le plus fort (45 min, ×60 clients, ×1,5 le prix de référence).
-- Barman en renfort : 8 h à rebrancher les fûts, de 40 € à 150 000 € selon le bar. Le joueur simulé l'embauche avant de partir quand il a des fûts et dix fois son prix ; il lance le meilleur événement débloqué.
+- (Supprimé depuis : les fûts se changent seuls.) Barman en renfort : 8 h à rebrancher les fûts, de 40 € à 150 000 € selon le bar. Le joueur simulé l'embauche avant de partir quand il a des fûts et dix fois son prix ; il lance le meilleur événement débloqué.
 - Le joueur simulé finit en J34 (J32 avant) : au début, il n'a plus que le tournoi de fléchettes, plus faible que l'ancienne fête bon marché.
 
 ### Prix du barman
@@ -283,10 +283,19 @@ Mesures (`npm run balance 120`, puis `SESSIONS=8,20 npm run balance 150`) : voir
 
 ## Grossiste dégressif et partenariats (novembre 2026)
 
-Le grossiste n'a plus de quota : plein prix jusqu'à 100 / 300 / 1 500 / 7 000 / 35 000 L par jour selon le niveau de la brasserie, puis un prix qui baisse comme (plein / litres)² jusqu'à 35 %. Les partenariats deviennent le grand débouché (voir GAME_DESIGN.md).
+Le grossiste n'a plus de quota : plein prix jusqu'à 100 / 300 / 1 500 / 7 000 / 35 000 L par jour selon le niveau de la brasserie, puis un prix qui baisse comme (plein / litres)² jusqu'à 35 % (33 % depuis les automatismes, voir plus bas). Les partenariats deviennent le grand débouché (voir GAME_DESIGN.md).
 
 Leçons du calage (`WS_FULL=… WS_FLOOR=… PARTNER_SCALE=… npm run balance` pour essayer d'autres réglages) :
 - **Le plancher doit couvrir le coût des ingrédients** (environ 30 % du plein prix). À 20 %, chaque brassin vendu au grossiste perd de l'argent et la partie s'effondre dès le premier jour.
 - **Un grossiste sans limite au-dessus de ce coût fait exploser les revenus** : avec une baisse en plein / litres (et non son carré) ou un plein prix calé sur la production, la partie se finissait au 13e-22e jour. La production dépasse de loin la demande (environ 1 million de litres par jour au labo du futur) : les volumes à plein prix doivent rester de l'ordre de l'ancien quota.
 - **Les partenaires sont calés sur ces volumes, pas sur la production** : quelques fois le plein prix du grossiste, payés 1,2 à 1,6 fois plus, contrat d'une demi-journée de revenus.
 - Résultat : fin vers le 33e jour (comme avant), 14 à 19 % de visites sans achat.
+
+## Simplification : automatismes et missions (novembre 2026)
+
+Après la visite guidée, les fûts vides se changent seuls (le barman payant disparaît) et la file de brassins se reprogramme seule (l'apprenti disparaît). Le joueur simulé finit maintenant la visite au bout de sa première session et récolte ses missions à chaque visite.
+
+- Ces automatismes avancent la fin d'environ deux jours (J30½ au lieu de J32½) : le bar ne reste plus jamais à sec entre deux visites.
+- Les missions rapportent peu d'argent (≈ 75 k€ en tout, surtout au début) : leur effet sur le rythme est négligeable ; leurs diamants (≈ 400 en tout) vont aux boosts et aux cosmétiques.
+- Recalage : plancher du grossiste de 35 % à **33 %**. Le plancher reste le réglage le plus sensible (30 % : J37, 34 % : J30) ; à 33 %, fin à **J32½**, 21 % de visites sans achat, pire série sans achat : 2.
+- Le joueur simulé ne s'inscrit pas aux concours : ses missions s'arrêtent à « Gagne une médaille en concours » (la 12e), comme un joueur qui ignorerait les concours.

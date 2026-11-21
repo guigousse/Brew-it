@@ -99,6 +99,7 @@ async function boot() {
         sfx.play('levelUp');
         app.scene.flash();
         app.openBrewery(true);
+        app.celebrate();
         tapFeedback(true);
         app.log(tl('La brasserie passe au niveau {0} !', e.level), 'good', 'up');
       }
@@ -131,7 +132,10 @@ async function boot() {
         const msg = e.gems ? tl('{0} : partenariat réussi, {1} journées sur 7 remplies, +{2} 💎', p?.name, e.days, e.gems) : tl('{0} : partenariat terminé, {1} journées sur 7 remplies', p?.name, e.days);
         app.toast(msg, e.gems ? 'good' : 'info');
         app.log(msg, e.gems ? 'good' : 'info', 'pennant');
-        if (e.gems) sfx.play('levelUp');
+        if (e.gems) {
+          sfx.play('levelUp');
+          app.celebrate();
+        }
       }
       if (e.type === 'orderExpired') app.log(tl('Commande expirée : {0}', e.client), 'bad', 'clipboard');
     });
