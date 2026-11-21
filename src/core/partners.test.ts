@@ -55,8 +55,27 @@ describe('partenariats', () => {
     expect(g.signPartner('rock', 999).ok).toBe(false); // pas de bière
     expect(g.signPartner('rock', b.id).ok).toBe(true);
     expect(g.money).toBe(money - partnerById('rock')!.fee);
-    expect(g.partner!.beerId).toBe(b.id);
-    expect(g.signPartner('foot', b.id).ok).toBe(false);
+    expect(g.partners[0]!.beerId).toBe(b.id);
+    expect(g.signPartner('foot', b.id).ok).toBe(false); // une seule place à la microbrasserie
+    expect(g.signPartner('rock', b.id).ok).toBe(false); // déjà en cours
+  });
+
+  it('plusieurs contrats en parallèle : 2 à l\'usine, 3 au labo du futur ; les jauges se remplissent dans l\'ordre de signature', () => {
+    const { g, b } = setup(4);
+    expect(g.partnerSlots).toBe(2);
+    b.stock = 0;
+    expect(g.signPartner('rock', b.id).ok).toBe(true);
+    expect(g.signPartner('foot', b.id).ok).toBe(true);
+    expect(g.signPartner('rugby', b.id).ok).toBe(false); // plus de place
+    b.stock = Math.ceil(10_000 / 0.33); // de quoi remplir le premier (9 000 L), pas le second
+    g.step(1);
+    expect(g.partnerReady(g.partners[0]!)).toBe(true);
+    expect(g.partnerReady(g.partners[1]!)).toBe(false);
+    // la bière officielle des deux contrats cumule leur visibilité
+    expect(g.partnerVisibility(b)).toBe(partnerById('rock')!.visibility + partnerById('foot')!.visibility);
+    for (const id of STATION_ORDER) g.stations[id] = { level: 5 };
+    expect(g.partnerSlots).toBe(3);
+    expect(g.signPartner('rugby', b.id).ok).toBe(true);
   });
 
   it('la jauge se remplit toute seule depuis le stock ; pleine, on livre au prix annoncé ; puis on attend le lendemain', () => {
@@ -64,25 +83,25 @@ describe('partenariats', () => {
     const p = partnerById('rock')!;
     b.stock = 100_000; // 33 000 L
     g.signPartner('rock', b.id);
-    expect(g.deliverPartner().ok).toBe(false); // jauge vide
+    expect(g.deliverPartner(g.partners[0]!.id).ok).toBe(false); // jauge vide
     g.step(1); // la jauge se remplit tout de suite
-    expect(g.partnerReady).toBe(true);
-    expect(g.partnerGauge).toBeGreaterThan(p.daily - 0.34);
+    expect(g.partnerReady(g.partners[0]!)).toBe(true);
+    expect(g.partnerGauge(g.partners[0]!)).toBeGreaterThan(p.daily - 0.34);
     expect(b.stock).toBeLessThan(100_000); // les bières mises de côté quittent le stock
     const money = g.money;
-    const value = g.partnerValue;
-    expect(value).toBeCloseTo(g.partnerGauge * (wholesalePrice(b.tasting) / 0.33) * p.pay, 3);
-    const r = g.deliverPartner();
+    const value = g.partnerValue(g.partners[0]!);
+    expect(value).toBeCloseTo(g.partnerGauge(g.partners[0]!) * (wholesalePrice(b.tasting) / 0.33) * p.pay, 3);
+    const r = g.deliverPartner(g.partners[0]!.id);
     expect(r.ok).toBe(true);
     expect(g.money - money).toBeCloseTo(value, 3);
-    expect(g.partner!.deliveries).toBe(1);
+    expect(g.partners[0]!.deliveries).toBe(1);
     // le lendemain seulement, la jauge se remplit de nouveau
     g.step(3600);
-    expect(g.partnerGauge).toBe(0);
-    expect(g.partnerWait).toBeGreaterThan(0);
+    expect(g.partnerGauge(g.partners[0]!)).toBe(0);
+    expect(g.partnerWait(g.partners[0]!)).toBeGreaterThan(0);
     g.step(86400);
     g.step(60);
-    expect(g.partnerReady).toBe(true);
+    expect(g.partnerReady(g.partners[0]!)).toBe(true);
   });
 
   it('la bière officielle part d\'abord, puis les autres assez bonnes ; les fûts comptent', () => {
@@ -98,9 +117,9 @@ describe('partenariats', () => {
     g.step(1);
     expect(b.kegs).toHaveLength(0);
     expect(other.stock).toBeLessThan(100_000);
-    expect(g.partner!.gauge[0]!.beerId).toBe(b.id);
+    expect(g.partners[0]!.gauge[0]!.beerId).toBe(b.id);
     // une bière trop faible ne part pas
-    g.deliverPartner();
+    g.deliverPartner(g.partners[0]!.id);
     const weak = g.beers.find((x) => x.id === 99)!;
     weak.tasting = { ...weak.tasting, quality: 0.65 };
     weak.stock = 5000;
@@ -119,7 +138,7 @@ describe('partenariats', () => {
     const parts = g.popBreakdown(b);
     expect(parts.partner * 20).toBe(partnerById('rugby')!.visibility);
     expect(parts.total).toBeGreaterThan(before);
-    g.deliverPartner();
+    g.deliverPartner(g.partners[0]!.id);
     expect(g.weekLiters(b)).toBeGreaterThan(0);
   });
 
@@ -132,10 +151,10 @@ describe('partenariats', () => {
     for (let d = 0; d < PARTNER_DAYS; d++) {
       b.stock = 100_000;
       g.step(60);
-      expect(g.deliverPartner().ok).toBe(true);
+      expect(g.deliverPartner(g.partners[0]!.id).ok).toBe(true);
       g.step(86400);
     }
-    expect(g.partner).toBeNull();
+    expect(g.partners).toHaveLength(0);
     expect(g.partnersDone.rock).toBe(1);
     expect(ends).toEqual([expect.objectContaining({ days: PARTNER_DAYS, gems: p.gems })]);
   });
@@ -145,11 +164,11 @@ describe('partenariats', () => {
     b.stock = 1000;
     g.signPartner('rock', b.id);
     g.step(1);
-    expect(g.partner!.gauge.length).toBeGreaterThan(0);
+    expect(g.partners[0]!.gauge.length).toBeGreaterThan(0);
     const saves = new SaveManager(new MemoryStorage());
     await saves.save(g);
     const back = (await saves.load())!.game;
-    expect(back.partner).toEqual(g.partner);
+    expect(back.partners).toEqual(g.partners);
     expect(PARTNERS.length).toBe(6);
   });
 });

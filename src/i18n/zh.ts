@@ -984,7 +984,6 @@ const dict: Record<string, string> = {
   "Partenariat signé : {0}": "已签约：{0}",
   "Partenariats": "合作赞助",
   "Signer · {0}": "签约 · {0}",
-  "Un partenariat est déjà en cours": "已有合作在进行中",
   "Une médaille au concours international": "一枚国际比赛奖牌",
   "Une semaine de concerts en plein air.": "一周的露天音乐会。",
   "{0} : partenariat réussi, {1} journées sur 7 remplies, +{2} 💎": "{0}：合作成功，7 天中完成 {1} 天，+{2} 💎",
@@ -1033,5 +1032,9 @@ const dict: Record<string, string> = {
   "{0} : prêt à livrer": "{0}：可以送货了",
   "{0} : {1} livraisons sur {2}": "{0}：已送 {1}/{2} 次",
   "{0} par livraison · ×{1}": "每次 {0} · ×{1}",
+  "Ce partenariat est déjà en cours": "该合作已在进行中",
+  "Contrats : {0} / {1}": "合同：{0} / {1}",
+  "Pas de place pour un partenariat de plus : agrandis la brasserie": "没有空位签更多合作：扩建酒厂吧",
+  "🔒 Plus de place : agrandis la brasserie": "🔒 没有空位：扩建酒厂",
 };
 export default dict;

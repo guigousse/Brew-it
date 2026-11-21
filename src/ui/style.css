@@ -1063,3 +1063,6 @@ button:disabled { cursor: default; opacity: .5; }
 .partner-row-lock { font-size: 14px; color: #ffb4a4; }
 .fly-bottle { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
 .partner-chip.full .boost-chip-dial { background: #2c8a4a; }
+.partner-pic { width: 88px; height: 88px; padding: 2px; background: #1b1424; border: 3px solid var(--ink); box-shadow: inset 0 0 0 2px var(--accent-dark), 0 2px 0 #0008; }
+.partner-pic.small { width: 48px; height: 48px; padding: 2px; box-shadow: inset 0 0 0 1px var(--accent-dark); }
+.partner-art { display: block; width: 100%; height: 100%; image-rendering: pixelated; }

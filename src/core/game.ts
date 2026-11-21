@@ -11,7 +11,7 @@ import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { pointsAsStars, QUALIFY_METAL, type ContestTier, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
-import { PARTNER_COOLDOWN_S, PARTNER_DAYS, PARTNER_ROUND_S, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
+import { PARTNER_COOLDOWN_S, PARTNER_DAYS, PARTNER_ROUND_S, PARTNER_SLOTS, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
 import { tl } from '../i18n';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -318,8 +318,8 @@ export class Game {
   contestResults: ContestResult[] = [];
   /** Tranche de 6 h en cours, pour le compte des ventes sur 7 jours. */
   salesSlot = 0;
-  /** Partenariat en cours (un seul à la fois). */
-  partner: Partnership | null = null;
+  /** Contrats en cours, dans l'ordre de signature (leurs jauges se remplissent dans cet ordre). */
+  partners: Partnership[] = [];
   /** Minuteur de la livraison automatique au partenaire. */
   private partnerClock = 0;
   /** Partenariats menés à leur terme, par partenaire. */
@@ -485,8 +485,12 @@ export class Game {
    * (le brassin est gratuit) pour que le joueur puisse toujours repartir.
    */
   get broke(): boolean {
-    // rien ne peut rapporter d'argent : ni brassin en cours, ni fût qui coule, ni commande à remplir avec le stock
-    return this.money < this.brewCost(this.recipe, this.batchLiters, this.brewFormat) && this.batches.length === 0 && !this.barServing && this.readyOrders.length === 0;
+    // rien ne peut rapporter d'argent : ni brassin en cours, ni fût qui coule, ni commande à remplir avec le stock,
+    // et pas de quoi payer le prochain brassin (celui de la file s'il y en a un, sinon la recette chargée)
+    const next = this.plan[0];
+    const planned = next && this.beer(next.beerId);
+    const cost = planned ? this.brewCost(planned.recipe, this.batchLiters, next.format) : this.brewCost(this.recipe, this.batchLiters, this.brewFormat);
+    return this.money < cost && this.batches.length === 0 && !this.barServing && this.readyOrders.length === 0;
   }
 
   /** Bouteilles d'une bière encore sur la ligne (pas encore rangées). */
@@ -1443,40 +1447,54 @@ export class Game {
     return this.partnerChecks(p).find((c) => !c.ok)?.text ?? null;
   }
 
-  /** Litres déjà dans la jauge du partenariat en cours. */
-  get partnerGauge(): number {
-    return this.partner ? this.partner.gauge.reduce((s, x) => s + x.liters, 0) : 0;
+  /** Contrats qu'on peut tenir en même temps : 1 jusqu'à la microbrasserie, 2 à l'usine, 3 au labo du futur. */
+  get partnerSlots(): number {
+    return PARTNER_SLOTS[this.breweryLevel - 1] ?? 1;
+  }
+
+  /** Le contrat en cours avec ce partenaire. */
+  partnerOf(id: PartnerId): Partnership | undefined {
+    return this.partners.find((x) => x.id === id);
+  }
+
+  /** Litres déjà dans la jauge d'un contrat. */
+  partnerGauge(ship: Partnership): number {
+    return ship.gauge.reduce((s, x) => s + x.liters, 0);
   }
 
   /** Litres qu'il manque dans la jauge pour pouvoir livrer. */
-  get partnerLeft(): number {
-    const p = this.partner && partnerById(this.partner.id);
-    return p ? Math.max(0, p.daily - this.partnerGauge) : 0;
+  partnerLeft(ship: Partnership): number {
+    const p = partnerById(ship.id);
+    return p ? Math.max(0, p.daily - this.partnerGauge(ship)) : 0;
   }
 
   /** La jauge est pleine : on peut livrer. */
-  get partnerReady(): boolean {
-    return !!this.partner && this.partnerLeft < BOTTLE_L;
+  partnerReady(ship: Partnership): boolean {
+    return this.partnerLeft(ship) < BOTTLE_L;
+  }
+
+  /** Un contrat au moins peut livrer. */
+  get anyPartnerReady(): boolean {
+    return this.partners.some((x) => this.partnerReady(x));
   }
 
   /** Temps avant que la jauge se remplisse de nouveau (0 : elle se remplit). */
-  get partnerWait(): number {
-    return this.partner ? Math.max(0, this.partner.readyAt - this.time) : 0;
+  partnerWait(ship: Partnership): number {
+    return Math.max(0, ship.readyAt - this.time);
   }
 
-  /** Les bières qu'accepte le partenaire en cours (assez bonnes) : la bière officielle d'abord. */
-  partnerBeers(): Beer[] {
-    const ship = this.partner;
-    const p = ship && partnerById(ship.id);
-    if (!ship || !p) return [];
+  /** Les bières qu'accepte un partenaire (assez bonnes) : sa bière officielle d'abord. */
+  partnerBeers(ship: Partnership): Beer[] {
+    const p = partnerById(ship.id);
+    if (!p) return [];
     const ok = this.beers.filter((b) => b.tasting.quality >= p.minQuality);
     const stockL = (b: Beer) => b.stock * BOTTLE_L + b.kegs.reduce((k, g) => k + g * GLASS_L, 0);
     return ok.sort((a, b) => Number(b.id === ship.beerId) - Number(a.id === ship.beerId) || stockL(b) - stockL(a));
   }
 
-  /** Litres en stock que le partenaire accepte. */
-  get partnerStock(): number {
-    return this.partnerBeers().reduce((s, b) => s + b.stock * BOTTLE_L + b.kegs.reduce((k, g) => k + g * GLASS_L, 0), 0);
+  /** Litres en stock qu'un partenaire accepte. */
+  partnerStock(ship: Partnership): number {
+    return this.partnerBeers(ship).reduce((s, b) => s + b.stock * BOTTLE_L + b.kegs.reduce((k, g) => k + g * GLASS_L, 0), 0);
   }
 
   /** Prix payé par le partenaire au litre pour une bière (le grossiste à plein prix × celui du partenaire). */
@@ -1484,17 +1502,17 @@ export class Game {
     return (wholesalePrice(b.tasting) / BOTTLE_L) * p.pay * (1 + this.medalBonus(b));
   }
 
-  /** Points de popularité qu'apporte le partenariat en cours à une bière (la bière officielle seulement). */
+  /** Points de popularité qu'apportent les contrats en cours à une bière (celle dont elle est la bière officielle). */
   partnerVisibility(b: Beer): number {
-    const ship = this.partner;
-    return ship && ship.beerId === b.id ? partnerById(ship.id)?.visibility ?? 0 : 0;
+    return this.partners.reduce((s, x) => s + (x.beerId === b.id ? partnerById(x.id)?.visibility ?? 0 : 0), 0);
   }
 
-  /** Signe un partenariat d'une semaine, avec sa bière officielle. */
+  /** Signe un contrat, avec sa bière officielle (tant qu'il reste une place). */
   signPartner(id: PartnerId, beerId: number): CommandResult {
     const p = partnerById(id);
     if (!p) return { ok: false, reason: tl('Partenaire inconnu') };
-    if (this.partner) return { ok: false, reason: tl('Un partenariat est déjà en cours') };
+    if (this.partnerOf(id)) return { ok: false, reason: tl('Ce partenariat est déjà en cours') };
+    if (this.partners.length >= this.partnerSlots) return { ok: false, reason: tl('Pas de place pour un partenariat de plus : agrandis la brasserie') };
     const lock = this.partnerLock(p);
     if (lock) return { ok: false, reason: lock };
     const beer = this.beer(beerId);
@@ -1502,15 +1520,15 @@ export class Game {
     if (beer.tasting.quality < p.minQuality) return { ok: false, reason: tl('Bière pas assez bonne pour ce partenaire') };
     if (this.money < p.fee) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= p.fee;
-    this.partner = { id, beerId, start: this.time, deliveries: 0, gauge: [], readyAt: this.time, earned: 0 };
+    this.partners.push({ id, beerId, start: this.time, deliveries: 0, gauge: [], readyAt: this.time, earned: 0 });
     this.partnerClock = PARTNER_ROUND_S; // la jauge commence à se remplir tout de suite
     return { ok: true };
   }
 
-  /** Change la bière officielle du partenariat en cours. */
-  setPartnerBeer(beerId: number): CommandResult {
-    const ship = this.partner;
-    const p = ship && partnerById(ship.id);
+  /** Change la bière officielle d'un contrat. */
+  setPartnerBeer(id: PartnerId, beerId: number): CommandResult {
+    const ship = this.partnerOf(id);
+    const p = partnerById(id);
     const beer = this.beer(beerId);
     if (!ship || !p || !beer) return { ok: false, reason: tl('Aucun partenariat en cours') };
     if (beer.tasting.quality < p.minQuality) return { ok: false, reason: tl('Bière pas assez bonne pour ce partenaire') };
@@ -1519,56 +1537,57 @@ export class Game {
   }
 
   /**
-   * Remplit la jauge depuis le stock (la bière officielle d'abord, puis les autres assez bonnes), bouteilles puis fûts
-   * entiers, jusqu'au volume d'une livraison. Les bières mises de côté quittent le stock.
+   * Remplit les jauges depuis le stock, dans l'ordre de signature : pour chaque contrat, sa bière officielle d'abord,
+   * puis les autres assez bonnes, bouteilles puis fûts entiers. Les bières mises de côté quittent le stock.
    */
-  private fillPartner(): void {
-    const ship = this.partner;
-    if (!ship || this.partnerWait > 0) return;
-    let left = this.partnerLeft;
-    for (const beer of this.partnerBeers()) {
-      if (left < BOTTLE_L) break;
-      let l = 0;
-      const n = Math.min(beer.stock, Math.floor(left / BOTTLE_L + 1e-9));
-      beer.stock -= n;
-      l += n * BOTTLE_L;
-      beer.kegs.sort((a, b) => b - a);
-      for (let i = 0; i < beer.kegs.length; ) {
-        const kl = beer.kegs[i]! * GLASS_L;
-        if (kl <= left - l + 1e-9) {
-          beer.kegs.splice(i, 1);
-          l += kl;
-        } else i++;
+  private fillPartners(): void {
+    for (const ship of this.partners) {
+      if (this.partnerWait(ship) > 0) continue;
+      let left = this.partnerLeft(ship);
+      for (const beer of this.partnerBeers(ship)) {
+        if (left < BOTTLE_L) break;
+        let l = 0;
+        const n = Math.min(beer.stock, Math.floor(left / BOTTLE_L + 1e-9));
+        beer.stock -= n;
+        l += n * BOTTLE_L;
+        beer.kegs.sort((a, b) => b - a);
+        for (let i = 0; i < beer.kegs.length; ) {
+          const kl = beer.kegs[i]! * GLASS_L;
+          if (kl <= left - l + 1e-9) {
+            beer.kegs.splice(i, 1);
+            l += kl;
+          } else i++;
+        }
+        if (l <= 0) continue;
+        const slot = ship.gauge.find((x) => x.beerId === beer.id);
+        if (slot) slot.liters += l;
+        else ship.gauge.push({ beerId: beer.id, liters: l });
+        left -= l;
       }
-      if (l <= 0) continue;
-      const slot = ship.gauge.find((x) => x.beerId === beer.id);
-      if (slot) slot.liters += l;
-      else ship.gauge.push({ beerId: beer.id, liters: l });
-      left -= l;
     }
   }
 
-  /** Ce que rapporterait la jauge si on la livrait maintenant. */
-  get partnerValue(): number {
-    const p = this.partner && partnerById(this.partner.id);
+  /** Ce que rapporterait la jauge d'un contrat si on la livrait maintenant. */
+  partnerValue(ship: Partnership): number {
+    const p = partnerById(ship.id);
     if (!p) return 0;
-    return this.partner!.gauge.reduce((s, x) => {
+    return ship.gauge.reduce((s, x) => {
       const b = this.beer(x.beerId);
       return s + (b ? x.liters * this.partnerPricePerL(p, b) : 0);
     }, 0);
   }
 
   /**
-   * Livre la jauge pleine : payée au prix du partenaire, elle compte dans les ventes de la semaine. La jauge se
-   * remplira de nouveau le lendemain ; au bout de 7 livraisons, le contrat est rempli (prime en diamants).
+   * Livre la jauge pleine d'un contrat : payée au prix du partenaire, elle compte dans les ventes de la semaine. La
+   * jauge se remplira de nouveau le lendemain ; au bout de 7 livraisons, le contrat est rempli (prime en diamants).
    */
-  deliverPartner(): CommandResult & { liters?: number; amount?: number } {
-    const ship = this.partner;
-    const p = ship && partnerById(ship.id);
+  deliverPartner(id: PartnerId): CommandResult & { liters?: number; amount?: number } {
+    const ship = this.partnerOf(id);
+    const p = partnerById(id);
     if (!ship || !p) return { ok: false, reason: tl('Aucun partenariat en cours') };
-    if (!this.partnerReady) return { ok: false, reason: tl('La jauge n\'est pas encore pleine') };
-    const amount = this.partnerValue;
-    const liters = this.partnerGauge;
+    if (!this.partnerReady(ship)) return { ok: false, reason: tl('La jauge n\'est pas encore pleine') };
+    const amount = this.partnerValue(ship);
+    const liters = this.partnerGauge(ship);
     for (const x of ship.gauge) {
       const b = this.beer(x.beerId);
       if (!b) continue;
@@ -1590,7 +1609,7 @@ export class Game {
     this.money += amount;
     this.events.emit({ type: 'sale', amount });
     if (ship.deliveries >= PARTNER_DAYS) {
-      this.partner = null;
+      this.partners = this.partners.filter((x) => x !== ship);
       this.partnersDone[p.id] = (this.partnersDone[p.id] ?? 0) + 1;
       this.earnGems(p.gems, 'partner');
       this.events.emit({ type: 'partnerEnd', id: p.id, days: ship.deliveries, earned: ship.earned, gems: p.gems });
@@ -1598,11 +1617,11 @@ export class Game {
     return { ok: true, liters, amount };
   }
 
-  /** La jauge se remplit toute seule depuis le stock, toutes les 30 s. */
+  /** Les jauges se remplissent toutes seules depuis le stock, toutes les 30 s. */
   private tickPartner(dt: number): void {
-    if (this.partner && (this.partnerClock += dt) >= PARTNER_ROUND_S) {
+    if (this.partners.length && (this.partnerClock += dt) >= PARTNER_ROUND_S) {
       this.partnerClock = 0;
-      this.fillPartner();
+      this.fillPartners();
     }
   }
 
@@ -2212,7 +2231,7 @@ export class Game {
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
-      contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, partner: this.partner, partnersDone: this.partnersDone,
+      contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, partners: this.partners, partnersDone: this.partnersDone,
     };
   }
 
@@ -2220,7 +2239,7 @@ export class Game {
     const s = raw as Omit<ReturnType<Game['toJSON']>, 'version'> & { version: number };
     if (!s || s.version < 2 || s.version > 7) throw new Error(tl('Sauvegarde incompatible'));
     const g = new Game();
-    const { demand: _d, signed: _s, deals: _dl, orderTimers: _t, contest: _c, contestNext: _cn, contestCount: _cc, ...rest } = s as typeof s & { demand?: unknown; signed?: unknown; deals?: unknown; orderTimers?: unknown; contest?: unknown; contestNext?: unknown; contestCount?: unknown };
+    const { demand: _d, signed: _s, deals: _dl, orderTimers: _t, contest: _c, contestNext: _cn, contestCount: _cc, partner: _p, ...rest } = s as typeof s & { demand?: unknown; signed?: unknown; deals?: unknown; orderTimers?: unknown; contest?: unknown; contestNext?: unknown; contestCount?: unknown; partner?: unknown };
     Object.assign(g, { ...rest, rng: new Rng(s.rng), announced: new Set(s.announced) });
     // Sauvegardes v2 : places de gamme liées aux distributeurs, pas encore de stockage.
     if (s.version === 2) {
@@ -2351,17 +2370,22 @@ export class Game {
       g.stations[id].step ??= 0;
       g.stations[id].extra ??= 0;
     }
-    g.partner ??= null;
-    // avant la bière officielle : celle qui a le plus de stock
-    if (g.partner && g.partner.beerId == null) g.partner.beerId = [...g.beers].sort((a, b) => b.stock - a.stock)[0]?.id ?? 0;
-    // avant la jauge à livrer : les journées remplies comptent comme des livraisons
-    if (g.partner && g.partner.gauge == null) {
-      const old = g.partner as unknown as { delivered?: number[] };
-      const p = partnerById(g.partner.id);
-      g.partner.deliveries = (old.delivered ?? []).filter((l) => p && l >= p.daily - 0.5).length;
-      g.partner.gauge = [];
-      g.partner.readyAt = g.time;
-      delete old.delivered;
+    // avant les contrats en parallèle, un seul partenariat : il devient le premier contrat
+    const oldShip = (s as { partner?: Partnership & { delivered?: number[] } | null }).partner;
+    if (!(s as { partners?: unknown }).partners) g.partners = oldShip ? [oldShip] : [];
+    delete (g as unknown as { partner?: unknown }).partner;
+    for (const ship of g.partners) {
+      // avant la bière officielle : celle qui a le plus de stock
+      ship.beerId ??= [...g.beers].sort((a, b) => b.stock - a.stock)[0]?.id ?? 0;
+      // avant la jauge à livrer : les journées remplies comptent comme des livraisons
+      if (ship.gauge == null) {
+        const old = ship as Partnership & { delivered?: number[] };
+        const p = partnerById(ship.id);
+        ship.deliveries = (old.delivered ?? []).filter((l) => p && l >= p.daily - 0.5).length;
+        ship.gauge = [];
+        ship.readyAt = g.time;
+        delete old.delivered;
+      }
     }
     g.partnersDone ??= {};
     return g;

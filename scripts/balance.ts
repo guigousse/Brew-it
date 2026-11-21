@@ -28,6 +28,8 @@ if (process.env.WS_FULL) WHOLESALE.full = process.env.WS_FULL.split(',').map(Num
 if (process.env.WS_FLOOR) WHOLESALE.floor = Number(process.env.WS_FLOOR);
 // volumes des partenaires à tester : PARTNER_SCALE=2 (×2)
 if (process.env.PARTNER_SCALE) for (const p of PARTNERS) (p as { daily: number }).daily *= Number(process.env.PARTNER_SCALE);
+if (process.env.PARTNER_FEE) for (const p of PARTNERS) (p as { fee: number }).fee *= Number(process.env.PARTNER_FEE);
+if (process.env.PARTNER_PAY) for (const p of PARTNERS) (p as { pay: number }).pay = 1 + (p.pay - 1) * Number(process.env.PARTNER_PAY);
 
 const DAYS = Number(process.argv[2] ?? 45);
 const SESSIONS = (process.env.SESSIONS ?? "8,12.5,18.5,22.5").split(",").map(Number);
@@ -50,7 +52,7 @@ const buy = (what: string, cost: number) => log.push({ t: clock, what, cost });
 
 /** Remplit toutes les commandes possibles avec les bières qui conviennent (les plus en stock d'abord). */
 function deliver() {
-  if (g.partnerReady) g.deliverPartner();
+  for (const x of [...g.partners]) if (g.partnerReady(x)) g.deliverPartner(x.id);
   for (const o of [...g.orders]) {
     const r = g.fulfill(o.id, g.autoPick(o));
     if (r.ok) delivered += r.amount!;
@@ -214,15 +216,15 @@ function spendGems() {
 
 /** Le meilleur partenaire ouvert dont le contrat ne mange pas plus de 60 % de la caisse, avec la bière la plus populaire. */
 function signPartner() {
-  if (g.partner || !g.beers.length) return;
+  if (!g.beers.length) return;
   for (const p of [...PARTNERS].reverse()) {
-    if (g.partnerLock(p) || p.fee > g.money) continue;
+    if (g.partners.length >= g.partnerSlots) return;
+    if (g.partnerOf(p.id) || g.partnerLock(p) || p.fee > g.money) continue;
     const beer = g.beers.filter((b) => b.tasting.quality >= p.minQuality).sort((a, b) => b.pop - a.pop)[0];
     if (beer && g.signPartner(p.id, beer.id).ok) {
       buy(`Partenariat ${p.id}`, p.fee);
       partnersSigned.push(`${fmt(clock)} ${p.id}`);
     }
-    return;
   }
 }
 const partnersSigned: string[] = [];

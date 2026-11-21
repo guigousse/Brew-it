@@ -984,7 +984,6 @@ const dict: Record<string, string> = {
   "Partenariat signé : {0}": "Partnership signed: {0}",
   "Partenariats": "Partnerships",
   "Signer · {0}": "Sign · {0}",
-  "Un partenariat est déjà en cours": "A partnership is already running",
   "Une médaille au concours international": "A medal at the international competition",
   "Une semaine de concerts en plein air.": "A week of open-air concerts.",
   "{0} : partenariat réussi, {1} journées sur 7 remplies, +{2} 💎": "{0}: partnership completed, {1} days out of 7 filled, +{2} 💎",
@@ -1033,5 +1032,9 @@ const dict: Record<string, string> = {
   "{0} : prêt à livrer": "{0}: ready to deliver",
   "{0} : {1} livraisons sur {2}": "{0}: {1} deliveries out of {2}",
   "{0} par livraison · ×{1}": "{0} per delivery · ×{1}",
+  "Ce partenariat est déjà en cours": "This partnership is already running",
+  "Contrats : {0} / {1}": "Contracts: {0} / {1}",
+  "Pas de place pour un partenariat de plus : agrandis la brasserie": "No room for another partnership: grow the brewery",
+  "🔒 Plus de place : agrandis la brasserie": "🔒 No room left: grow the brewery",
 };
 export default dict;

@@ -15,7 +15,8 @@ import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/room
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { cocardeCanvas, medalName, playCeremony } from './ceremony';
-import { PARTNER_DAYS, partnerById, PARTNERS } from '../core/partners';
+import { PARTNER_DAYS, partnerById, PARTNERS, type Partnership } from '../core/partners';
+import { drawPartnerScene } from '../render/partnerArt';
 import { type ContestTier, pointsAsStars, bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
@@ -217,8 +218,6 @@ const SOURCE: Record<SaleSource, { name: string; color: string }> = {
 
 /** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
 export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'marketing' | 'wholesale' | 'contests' | 'partners';
-/** Image de chaque partenaire. */
-const PARTNER_ICON: Record<'rugby' | 'rock' | 'foot' | 'stadium' | 'festival' | 'games', IconId> = { rugby: 'p_rugby', rock: 'p_rock', foot: 'p_foot', stadium: 'p_stadium', festival: 'p_festival', games: 'p_games' };
 
 const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'dashboard', name: tl('Tableau de bord'), icon: 'chart' },
@@ -1600,7 +1599,7 @@ export class App {
     row('t', followed.length ? tl('Tendances : {0}', followed.join(', ')) : tl('Aucune tendance suivie'), `+${pts(p.trends)}`);
     row('s', tl('Ventes sur 7 jours : {0}', liters(p.liters)), `${pts(p.sales)} / 50`);
     if (p.ad) row('a', tl('Campagne de pub en cours'), `+${pts(p.ad)}`);
-    if (p.partner && g.partner) row('a', tl('Bière officielle : {0}', partnerById(g.partner.id)?.name ?? ''), `+${pts(p.partner)}`);
+    if (p.partner) row('a', tl('Bière officielle : {0}', g.partners.filter((x) => x.beerId === b.id).map((x) => partnerById(x.id)?.name).join(', ')), `+${pts(p.partner)}`);
     box.append(why);
     if (p.next) {
       // la marche suivante des ventes
@@ -1840,7 +1839,7 @@ export class App {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
-      app === 'partners' ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partner ? [g.partner.id, g.partner.beerId, g.partner.deliveries, g.partnerReady, g.partnerWait > 0, Math.floor(g.partnerGauge / 100)] : null, PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
+      app === 'partners' ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerReady(x), g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
       app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
       app === 'trends' || app === 'marketing' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(g.wsToday / 100)]), [...this.picks]] : 0]);
   }
@@ -1930,7 +1929,7 @@ export class App {
       trends: { text: '', hot: false },
       marketing: { text: g.advertising ? '●' : '', hot: false },
       wholesale: { text: '', hot: false },
-      partners: { text: g.partnerReady ? '!' : '', hot: g.partnerReady },
+      partners: { text: g.anyPartnerReady ? '!' : '', hot: g.anyPartnerReady },
       contests: (() => {
         const open = ([0, 1, 2] as ContestTier[]).filter((t) => g.contestOf(t) && !g.contestOf(t)!.entry);
         return { text: open.length ? '!' : '', hot: open.some((t) => g.beers.some((b) => g.contestChecks(t, b).every((x) => x.ok))) };
@@ -2370,82 +2369,25 @@ export class App {
    * on attend le lendemain. Sept livraisons remplissent le contrat. Dessous, les partenaires à signer, une ligne chacun.
    */
   private partnersTab(g: Game, card: HTMLElement): void {
-    card.append(h('div', 'stats-line strong', tl('Ta marque : {0} · {1} / 100', starText(g.brandBase), popScore(g.brandBase))));
-    const ship = g.partner;
-    const cur = ship && partnerById(ship.id);
-    if (ship && cur) {
-      const el = h('div', 'card partner-live');
-      const row = h('div', 'partner-main');
-      const pic = h('div', 'partner-pic');
-      pic.append(iconCanvas(PARTNER_ICON[cur.id], 4));
-      const side = h('div', 'partner-side');
-      side.append(h('div', 'partner-name', cur.name));
-      // la zone de la jauge : la jauge qui se remplit, le bouton Livrer, ou l'attente du lendemain
-      const zone = h('div', 'partner-zone');
-      if (g.partnerWait > 0) {
-        const wait = h('span', 'partner-wait');
-        wait.dataset.expires = String(ship.readyAt);
-        wait.textContent = `⏳ ${duration(g.partnerWait)}`;
-        zone.append(h('span', 'partner-wait-label', tl('Prochaine livraison')), wait);
-      } else if (g.partnerReady) {
-        const go = this.btn('btn primary partner-go', tl('Livrer · {0}', moneyShort(g.partnerValue)), () => {
-          const r = g.deliverPartner();
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          sfx.play('crate');
-          this.onSent?.();
-          // les bières filent vers le partenaire, puis l'argent arrive
-          this.fly(zone, pic, 8, () => iconCanvas('range', 1, 'fly fly-bottle'));
-          window.setTimeout(() => {
-            sfx.play('cash');
-            this.gainToast(r.amount!);
-            if (this.computer?.app === 'partners') this.renderComputer();
-          }, 800);
-        });
-        zone.append(go);
-      } else {
-        const gauge = h('div', 'partner-gauge');
-        const fill = h('div', 'partner-gauge-fill');
-        fill.style.width = `${Math.min(100, (g.partnerGauge / cur.daily) * 100)}%`;
-        gauge.append(fill, h('span', 'partner-gauge-text', `${liters(g.partnerGauge)} / ${liters(cur.daily)}`));
-        zone.append(gauge);
-        if (g.partnerStock < 1) zone.append(h('span', 'partner-empty', tl('Stock vide : brasse !')));
-      }
-      side.append(zone);
-      // les 7 livraisons
-      const pips = h('div', 'partner-pips');
-      for (let d = 0; d < PARTNER_DAYS; d++) pips.append(h('span', `partner-pip${d < ship.deliveries ? ' on' : ''}`));
-      side.append(pips);
-      row.append(pic, side);
-      el.append(row);
-      // la bière officielle : la toucher passe à la suivante (parmi celles assez bonnes)
-      const official = g.beer(ship.beerId);
-      const ok = g.beers.filter((b) => b.tasting.quality >= cur.minQuality);
-      const pick = this.btn('partner-official', '', () => {
-        const next = ok[(ok.findIndex((b) => b.id === ship.beerId) + 1) % ok.length];
-        if (next) g.setPartnerBeer(next.id);
-        this.renderComputer();
-      });
-      if (official) {
-        const thumb = h('canvas', 'label-thumb');
-        drawLabel(thumb, official.label, official.name);
-        pick.append(thumb, h('span', 'partner-official-name', official.name), h('span', 'partner-official-pop', `+${cur.visibility} ★`));
-      }
-      pick.setAttribute('aria-label', tl('Bière officielle : {0}', official?.name ?? ''));
-      el.append(pick);
-      card.append(el);
-    }
+    card.append(h('div', 'stats-line strong', tl('Ta marque : {0} · {1} / 100', starText(g.brandBase), popScore(g.brandBase))),
+      h('div', 'stats-line', tl('Contrats : {0} / {1}', g.partners.length, g.partnerSlots)));
+    for (const ship of g.partners) card.append(this.partnerCard(g, ship));
+    const full = g.partners.length >= g.partnerSlots;
     for (const p of PARTNERS) {
-      if (cur?.id === p.id) continue;
+      if (g.partnerOf(p.id)) continue;
       const lock = g.partnerLock(p);
       const el = h('div', `partner-row${lock ? ' locked' : ''}`);
       const pic = h('div', 'partner-pic small');
-      pic.append(iconCanvas(PARTNER_ICON[p.id], 2));
+      const art = h('canvas', 'partner-art');
+      drawPartnerScene(art, p.id, 1);
+      pic.append(art);
       const text = h('div', 'partner-row-text');
       const done = g.partnersDone[p.id];
       text.append(h('span', 'partner-name', `${p.name}${done ? ` ✓×${done}` : ''}`), h('span', 'partner-row-info', tl('{0} par livraison · ×{1}', liters(p.daily), p.pay.toLocaleString(locale))));
       if (lock) text.append(h('span', 'partner-row-lock', `🔒 ${lock}`));
+      else if (full) text.append(h('span', 'partner-row-lock', tl('🔒 Plus de place : agrandis la brasserie')));
       el.append(pic, text);
-      if (!lock && !ship) {
+      if (!lock && !full) {
         const best = g.beers.filter((b) => b.tasting.quality >= p.minQuality).sort((a, b) => b.pop - a.pop)[0];
         const sign = this.btn('btn primary small', moneyShort(p.fee), () => {
           if (!best) return this.toast(tl('Aucune bière assez bonne dans ta gamme'), 'bad');
@@ -2461,6 +2403,76 @@ export class App {
       }
       card.append(el);
     }
+  }
+
+  /**
+   * Un contrat en cours, en un coup d'œil : la scène du partenaire dans son cadre, et à sa droite la jauge de bière
+   * qui se remplit toute seule depuis le stock. Pleine, elle laisse la place au bouton « Livrer » (les bières volent
+   * vers le partenaire) ; puis on attend le lendemain. Sept livraisons remplissent le contrat.
+   */
+  private partnerCard(g: Game, ship: Partnership): HTMLElement {
+    const cur = partnerById(ship.id)!;
+    const el = h('div', 'card partner-live');
+    const row = h('div', 'partner-main');
+    const pic = h('div', 'partner-pic');
+    const art = h('canvas', 'partner-art');
+    drawPartnerScene(art, cur.id, 2);
+    pic.append(art);
+    const side = h('div', 'partner-side');
+    side.append(h('div', 'partner-name', cur.name));
+    // la zone de la jauge : la jauge qui se remplit, le bouton Livrer, ou l'attente du lendemain
+    const zone = h('div', 'partner-zone');
+    if (g.partnerWait(ship) > 0) {
+      const wait = h('span', 'partner-wait');
+      wait.dataset.expires = String(ship.readyAt);
+      wait.textContent = `⏳ ${duration(g.partnerWait(ship))}`;
+      zone.append(h('span', 'partner-wait-label', tl('Prochaine livraison')), wait);
+    } else if (g.partnerReady(ship)) {
+      const go = this.btn('btn primary partner-go', tl('Livrer · {0}', moneyShort(g.partnerValue(ship))), () => {
+        const r = g.deliverPartner(ship.id);
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('crate');
+        this.onSent?.();
+        // les bières filent vers le partenaire, puis l'argent arrive
+        this.fly(zone, pic, 8, () => iconCanvas('range', 1, 'fly fly-bottle'));
+        window.setTimeout(() => {
+          sfx.play('cash');
+          this.gainToast(r.amount!);
+          if (this.computer?.app === 'partners') this.renderComputer();
+        }, 800);
+      });
+      zone.append(go);
+    } else {
+      const gauge = h('div', 'partner-gauge');
+      const fill = h('div', 'partner-gauge-fill');
+      fill.style.width = `${Math.min(100, (g.partnerGauge(ship) / cur.daily) * 100)}%`;
+      gauge.append(fill, h('span', 'partner-gauge-text', `${liters(g.partnerGauge(ship))} / ${liters(cur.daily)}`));
+      zone.append(gauge);
+      if (g.partnerStock(ship) < 1) zone.append(h('span', 'partner-empty', tl('Stock vide : brasse !')));
+    }
+    side.append(zone);
+    // les 7 livraisons
+    const pips = h('div', 'partner-pips');
+    for (let d = 0; d < PARTNER_DAYS; d++) pips.append(h('span', `partner-pip${d < ship.deliveries ? ' on' : ''}`));
+    side.append(pips);
+    row.append(pic, side);
+    el.append(row);
+    // la bière officielle : la toucher passe à la suivante (parmi celles assez bonnes)
+    const official = g.beer(ship.beerId);
+    const ok = g.beers.filter((b) => b.tasting.quality >= cur.minQuality);
+    const pick = this.btn('partner-official', '', () => {
+      const next = ok[(ok.findIndex((b) => b.id === ship.beerId) + 1) % ok.length];
+      if (next) g.setPartnerBeer(ship.id, next.id);
+      this.renderComputer();
+    });
+    if (official) {
+      const thumb = h('canvas', 'label-thumb');
+      drawLabel(thumb, official.label, official.name);
+      pick.append(thumb, h('span', 'partner-official-name', official.name), h('span', 'partner-official-pop', `+${cur.visibility} ★`));
+    }
+    pick.setAttribute('aria-label', tl('Bière officielle : {0}', official?.name ?? ''));
+    el.append(pick);
+    return el;
   }
 
   /** Les concours : le concours en cours (une lettre à cachet de cire), l'inscription, puis le palmarès. */
@@ -3443,14 +3455,19 @@ export class App {
     });
     // le concours en cours a sa case, dorée, avec le temps qui reste avant la clôture des inscriptions
     const contest = g.contest;
-    const ship = g.partner;
+    // les partenariats : une seule case, qui montre le contrat le plus avancé (prêt à livrer, sinon la jauge la plus pleine)
+    const ships = g.partners;
+    const ship = [...ships].sort((a, b) => {
+      const score = (x: Partnership) => (g.partnerReady(x) ? 2 : g.partnerWait(x) > 0 ? -g.partnerWait(x) / 1e6 : g.partnerGauge(x) / (partnerById(x.id)?.daily ?? 1));
+      return score(b) - score(a);
+    })[0];
     const shipDef = ship && partnerById(ship.id);
     const hide = (!live.length && !contest && !ship) || this.view === 'shop' || this.modalOpen || !!this.openSheet;
     this.boostHud.classList.toggle('hidden', hide);
     this.boostHud.classList.toggle('below-harvest', !this.harvest.classList.contains('hidden') || !this.harvestGems.classList.contains('hidden'));
     if (hide) return;
     const mult = (id: string) => BOOSTS.find((x) => x.id === id)?.mult ?? 1;
-    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|') + (contest ? `|contest:${contest.tier}:${g.contests.map((c) => (c ? (c.entry ? 'e' : 'o') : '-')).join('')}` : '') + (ship ? `|partner:${ship.id}:${ship.deliveries}` : '');
+    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|') + (contest ? `|contest:${contest.tier}:${g.contests.map((c) => (c ? (c.entry ? 'e' : 'o') : '-')).join('')}` : '') + (ship ? `|partner:${ships.length}` : '');
     if (key !== this.boostHudKey) {
       this.boostHudKey = key;
       this.boostHud.replaceChildren();
@@ -3496,14 +3513,18 @@ export class App {
     if (ship && shipDef) {
       const el = this.boostHud.querySelector<HTMLElement>('.partner-chip')!;
       // le cadran : la jauge qui se remplit ; pleine, « Livrer ! » ; en attente, le temps avant la suivante
-      const done = g.partnerGauge;
-      const wait = g.partnerWait;
+      const done = g.partnerGauge(ship);
+      const wait = g.partnerWait(ship);
+      const ready = g.partnerReady(ship);
       el.style.setProperty('--left', (wait > 0 ? 0 : Math.min(1, done / shipDef.daily)).toFixed(4));
-      el.classList.toggle('full', g.partnerReady);
-      const t = wait > 0 ? dialTime(wait) : g.partnerReady ? '!' : `${Math.floor((done / shipDef.daily) * 100)}%`;
+      el.classList.toggle('full', ready);
+      const t = wait > 0 ? dialTime(wait) : ready ? '!' : `${Math.floor((done / shipDef.daily) * 100)}%`;
       const span = el.querySelector('.boost-chip-time')!;
       if (span.textContent !== t) span.textContent = t;
-      el.setAttribute('aria-label', g.partnerReady ? tl('{0} : prêt à livrer', shipDef.name) : tl('{0} : {1} livraisons sur {2}', shipDef.name, ship.deliveries, PARTNER_DAYS));
+      const corner = el.querySelector('.partner-flag');
+      const c = ships.length > 1 ? `×${ships.length}` : `${ship.deliveries}/${PARTNER_DAYS}`;
+      if (corner && corner.textContent !== c) corner.textContent = c;
+      el.setAttribute('aria-label', ready ? tl('{0} : prêt à livrer', shipDef.name) : tl('{0} : {1} livraisons sur {2}', shipDef.name, ship.deliveries, PARTNER_DAYS));
     }
     if (contest) {
       const el = this.boostHud.querySelector<HTMLElement>('.contest-chip')!;

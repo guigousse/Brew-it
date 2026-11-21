@@ -294,23 +294,26 @@ L'application Concours montre aussi le barème des cocardes et le **palmarès** 
 1. **La jauge se remplit toute seule** depuis le stock, toutes les 30 s : la bière officielle d'abord, puis les autres assez bonnes, bouteilles puis fûts entiers. Les bières mises de côté quittent le stock.
 2. **Pleine, elle laisse la place au bouton « Livrer · montant »** : les bouteilles volent vers l'image du partenaire, puis l'argent arrive.
 3. **Ensuite, il faut attendre le lendemain** (24 h de jeu) : un minuteur « Prochaine livraison » remplace la jauge.
-4. **7 livraisons remplissent le contrat** : la prime en diamants. Pas de date limite, pas de journée manquée. Un seul partenariat à la fois.
+4. **7 livraisons remplissent le contrat** : la prime en diamants. Pas de date limite, pas de journée manquée.
+
+**Plusieurs contrats en parallèle** : 1 jusqu'à la microbrasserie, 2 à l'usine, 3 au labo du futur (« Contrats : 2 / 3 »), chaque partenaire une seule fois à la fois. Les jauges se remplissent dans l'ordre de signature (la plus ancienne d'abord) ; chaque contrat a sa bière officielle, et une bière officielle de plusieurs contrats cumule leur visibilité. Sans place libre, les autres partenaires affichent « 🔒 Plus de place : agrandis la brasserie ».
 
 | Partenaire | Brasserie | Marque | Par jour | Qualité minimale | Payé (× plein prix du grossiste) | Bière officielle | Contrat | Prime |
 |---|---|---|---|---|---|---|---|---|
-| Club de rugby du village | garage | 30 / 100 | 1 800 L | Correcte | ×1,2 | +5 points | 5 000 € | 10 💎 |
-| Festival Rock en Fût | microbrasserie | 50 / 100 | 9 000 L | Correcte | ×1,25 | +10 | 20 000 € | 15 💎 |
-| FC des Remparts | microbrasserie | 60 / 100 | 15 000 L | Bonne | ×1,3 | +10 | 40 000 € | 20 💎 |
-| Finale de la Coupe au Grand Stade | usine | 70 / 100 | 60 000 L | Bonne | ×1,4 | +15 | 150 000 € | 30 💎 |
-| Festival des Mille Fûts | labo du futur | 80 / 100 | 240 000 L | Bonne | ×1,5 | +20 | 600 000 € | 50 💎 |
-| **Jeux mondiaux** | labo du futur + une médaille au concours international | 90 / 100 | 450 000 L | Excellente | ×1,6 | +25 | 2 M€ | 100 💎 |
+| Club de rugby du village | garage | 30 / 100 | 1 800 L | Correcte | ×1,2 | +5 points | 10 000 € | 10 💎 |
+| Festival Rock en Fût | microbrasserie | 50 / 100 | 9 000 L | Correcte | ×1,25 | +10 | 40 000 € | 15 💎 |
+| FC des Remparts | microbrasserie | 60 / 100 | 15 000 L | Bonne | ×1,3 | +10 | 80 000 € | 20 💎 |
+| Finale de la Coupe au Grand Stade | usine | 70 / 100 | 60 000 L | Bonne | ×1,4 | +15 | 300 000 € | 30 💎 |
+| Festival des Mille Fûts | labo du futur | 80 / 100 | 240 000 L | Bonne | ×1,5 | +20 | 1,2 M€ | 50 💎 |
+| **Jeux mondiaux** | labo du futur + une médaille au concours international | 90 / 100 | 450 000 L | Excellente | ×1,6 | +25 | 4 M€ | 100 💎 |
 
 - **Deux conditions pour signer** : le niveau de la brasserie et un palier de popularité de la marque (sans la pub en cours). Un partenaire fermé affiche la première condition qui manque (« 🔒 Marque à 70 / 100 au moins »).
-- **L'app, en un coup d'œil** : la marque (« Ta marque : ★★★★½ · 94 / 100 ») ; le contrat en cours : l'**image en pixel art du partenaire** (poteaux de rugby, guitare, ballon, stade, chapiteau, flamme sur le podium) et à sa droite la jauge (« 19 800 L / 60 000 L »), le bouton Livrer ou le minuteur, 7 cases pour les livraisons ; dessous, la bière officielle avec son bonus (« +15 ★ ») : la toucher passe à la suivante parmi celles assez bonnes. Puis chaque partenaire sur une ligne : image, nom, « 60 000 L par livraison · ×1,4 » et le bouton du prix pour signer.
+- **L'app, en un coup d'œil** : la marque (« Ta marque : ★★★★½ · 94 / 100 ») ; chaque contrat en cours : la **scène du partenaire en pixel art** (40 × 40 px, affichée ×2 dans un cadre doré, `src/render/partnerArt.ts`) : le terrain de rugby du village avec ses poteaux et sa petite tribune, la scène rock de nuit et ses projecteurs, la pelouse de foot avec le rond central et le but, le grand stade de nuit plein à craquer, le chapiteau rayé du festival au soleil couchant, le podium or-argent-bronze des Jeux sous la flamme et les feux d'artifice et à sa droite la jauge (« 19 800 L / 60 000 L »), le bouton Livrer ou le minuteur, 7 cases pour les livraisons ; dessous, la bière officielle avec son bonus (« +15 ★ ») : la toucher passe à la suivante parmi celles assez bonnes. Puis chaque partenaire sur une ligne : sa scène en petit, nom, « 60 000 L par livraison · ×1,4 » et le bouton du prix pour signer.
 - **La bière officielle** gagne des points de popularité tant que le contrat dure, et les litres livrés comptent dans ses ventes de la semaine.
 - **Le prix** : le plein prix du grossiste pour la qualité de la bière, multiplié par celui du partenaire (et le bonus de la cocarde).
-- En haut à droite, avec les effets actifs, une **case bleue au fanion** : la jauge dans son cadran (en %), « ! » quand on peut livrer, le temps qui reste pendant l'attente, et les livraisons faites dans un coin (« 3/7 ») ; la toucher ouvre l'application.
-- **Calage** (joueur simulé, qui livre à chaque visite) : club de rugby vers le 5e jour, festival rock vers le 13e, FC des Remparts vers le 21e, finale de la Coupe vers le 29e ; fin de partie vers le 33e jour.
+- En haut à droite, avec les effets actifs, une **case bleue au fanion** : la jauge dans son cadran (en %), « ! » quand on peut livrer, le temps qui reste pendant l'attente, et les livraisons faites dans un coin (« 3/7 », ou « ×2 » avec plusieurs contrats) ; elle suit le contrat le plus avancé (prêt à livrer, sinon la jauge la plus pleine). La toucher ouvre l'application.
+- **Calage** (joueur simulé, qui livre à chaque visite et remplit ses places) : contrats deux fois plus chers qu'avec un seul contrat à la fois ; club de rugby vers le 7e jour, festival rock vers le 15e, FC des Remparts vers le 22e, finale de la Coupe vers le 30e, festival des Mille Fûts vers le 33e ; fin de partie vers le 33e jour.
+- **Gaston avance les ingrédients** quand le prochain brassin de la file coûte plus que la caisse et que rien ne peut rapporter d'argent (avant, il regardait la recette chargée : une jauge de partenaire qui avait pris tout le stock pouvait bloquer la partie).
 - Les Jeux mondiaux s'appellent ainsi plutôt que « Jeux olympiques », nom et symboles protégés.
 
 ## Commandes

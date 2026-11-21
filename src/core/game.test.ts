@@ -822,6 +822,20 @@ describe('jeu', () => {
   });
 });
 
+describe('à court d\'argent', () => {
+  it('Gaston avance les ingrédients quand le prochain brassin de la file coûte plus que la caisse (même si la recette chargée est moins chère)', () => {
+    const g = withBeer(1e5);
+    runUntil(g, () => g.batches.length === 0);
+    const beer = g.beers[0]!;
+    beer.recipe = { ...beer.recipe, grainKg: 10, hopsBitter: 200 };
+    beer.stock = 0;
+    g.plan = [{ beerId: beer.id, format: 'bottle', count: 1 }];
+    g.money = g.brewCost(g.recipe, g.batchLiters, 'bottle') + 1; // assez pour la recette chargée, pas pour celle de la file
+    expect(g.money).toBeLessThan(g.brewCost(beer.recipe, g.batchLiters, 'bottle'));
+    expect(g.broke).toBe(true);
+  });
+});
+
 describe('boosts', () => {
   it('cadence ×2 : les machines finissent leur étape deux fois plus vite', () => {
     const slow = withBeer(1e6);
