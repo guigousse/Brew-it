@@ -920,7 +920,6 @@ const dict: Record<string, string> = {
   "La meilleure médaille d'une bière fait vendre plus, et plus cher (bar et grossiste).": "La mejor medalla de una cerveza hace que se venda más, y más cara (bar y mayorista).",
   "Palmarès": "Palmarés",
   "Catégorie : {0}": "Categoría: {0}",
-  "À battre": "A batir",
   "✓ « {0} » est inscrite. Le jury goûte son lot à la clôture.": "✓ «{0}» está inscrita. El jurado prueba su lote al cierre.",
   "Garde une bière dans ta gamme pour l'inscrire.": "Guarda una cerveza en tu gama para inscribirla.",
   "Ta candidate": "Tu candidata",
@@ -1041,5 +1040,7 @@ const dict: Record<string, string> = {
   "Régional": "Regional",
   "National": "Nacional",
   "International": "Internacional",
+  "En compétition": "En competición",
+  "Les notes du jury restent secrètes jusqu'à la proclamation. À ce niveau, les rivaux notent entre {0} et {1} / 20.": "Las notas del jurado son secretas hasta la proclamación. A este nivel, los rivales sacan entre {0} y {1} / 20.",
 };
 export default dict;

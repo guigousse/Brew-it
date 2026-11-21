@@ -920,7 +920,6 @@ const dict: Record<string, string> = {
   "La meilleure médaille d'une bière fait vendre plus, et plus cher (bar et grossiste).": "啤酒的最高奖牌让它卖得更多、更贵（酒吧和批发商）。",
   "Palmarès": "荣誉榜",
   "Catégorie : {0}": "类别：{0}",
-  "À battre": "需要击败",
   "✓ « {0} » est inscrite. Le jury goûte son lot à la clôture.": "✓「{0}」已报名。截止时评委会品尝这批酒。",
   "Garde une bière dans ta gamme pour l'inscrire.": "先把一款啤酒加入产品线才能报名。",
   "Ta candidate": "你的参赛酒",
@@ -1041,5 +1040,7 @@ const dict: Record<string, string> = {
   "Régional": "地区",
   "National": "全国",
   "International": "国际",
+  "En compétition": "参赛者",
+  "Les notes du jury restent secrètes jusqu'à la proclamation. À ce niveau, les rivaux notent entre {0} et {1} / 20.": "评委打分在公布前保密。在这一级别，对手得分在 {0} 到 {1} / 20 之间。",
 };
 export default dict;

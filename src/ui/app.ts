@@ -2536,14 +2536,17 @@ export class App {
     el.append(head);
     this.paintTimer(time, g.time);
     el.append(h('div', 'letter-ask', tl('Catégorie : {0}', cat?.text ?? c.cat)));
-    // les rivaux, du 1er au 3e : la note à battre pour chaque médaille
+    // les rivaux, sans leurs notes (elles ne se dévoilent qu'à la proclamation), dans l'ordre alphabétique pour ne rien
+    // trahir du classement ; seul le niveau du concours est annoncé
     const podium = h('div', 'podium');
-    c.rivals.forEach((r, i) => {
+    for (const r of [...c.rivals].sort((a, b) => a.name.localeCompare(b.name))) {
       const line = h('div', 'podium-line');
-      line.append(cocardeCanvas({ tier: c.tier, metal: (2 - i) as 0 | 1 | 2 }, 1, 'cocarde small'), h('span', 'podium-name', r.beer ? `${r.beer} · ${r.name}` : r.name), h('span', 'podium-score', r.score.toFixed(1)));
+      line.append(iconCanvas('range', 1, 'rival-icon'), h('span', 'podium-name', r.beer ? `${r.beer} · ${r.name}` : r.name), h('span', 'podium-score hidden-score', '?'));
       podium.append(line);
-    });
-    el.append(h('div', 'letter-sub', tl('À battre')), podium);
+    }
+    const [lo, hi] = tier.rivals;
+    el.append(h('div', 'letter-sub', tl('En compétition')), podium,
+      h('p', 'letter-status', tl('Les notes du jury restent secrètes jusqu\'à la proclamation. À ce niveau, les rivaux notent entre {0} et {1} / 20.', lo.toLocaleString(locale), hi.toLocaleString(locale))));
     if (c.entry) {
       const b = g.beer(c.entry.beerId);
       el.append(h('p', 'letter-status ok', tl('✓ « {0} » est inscrite. Le jury goûte son lot à la clôture.', b?.name ?? '?')));
