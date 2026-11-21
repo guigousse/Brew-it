@@ -1044,5 +1044,7 @@ const dict: Record<string, string> = {
   "Ici, lance des soirées : plus de clients, plus de ventes. Les fûts vides se changent tout seuls.": "Aquí, organiza fiestas: más clientes, más ventas. Los barriles vacíos se cambian solos.",
   "Envoie seul les commandes prêtes.": "Envía solo los pedidos listos.",
   "En tournée encore {0}.": "De ruta {0} más.",
+  "{0} à livrer": "{0} listos",
+  "Partenaires": "Socios",
 };
 export default dict;

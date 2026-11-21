@@ -1097,3 +1097,20 @@ button:disabled { cursor: default; opacity: .5; }
 .courier-name { font-weight: bold; }
 .ws-line { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; padding-top: 10px; border-top: 2px dashed #5c4a6e; }
 .ws-line .hint { margin: 0; }
+
+/* rien ne dépasse du cadre : boutons et lignes rétrécissent, le texte se coupe */
+.contest-tabs.two { grid-template-columns: repeat(2, 1fr); margin-bottom: 8px; }
+.letter .row > .btn.order-send { min-width: 0; }
+.letter .row > .letter-decline { flex: none; }
+.order-send-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-body { overflow-x: hidden; }
+.pc-body > * { max-width: 100%; min-width: 0; box-sizing: border-box; }
+.letter-status { min-width: 0; }
+.letter-status-text { min-width: 0; overflow-wrap: anywhere; }
+.partner-row, .courier-line { min-width: 0; }
+.partner-row-text, .courier-info { min-width: 0; overflow-wrap: anywhere; }
+.letter .row > .letter-decline { min-width: 40px; padding: 0 10px; font-size: 18px; }
+.letter .row > .letter-decline.armed { font-size: 15px; }
+.dash-beer-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.dash-beer-top { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.dash-beer-top .pop-stars { flex: none; }

@@ -2356,7 +2356,8 @@ export class Game {
     // l'ancien tuto s'arrêtait à 4 : une partie qui l'avait fini n'a pas à refaire la nouvelle visite
     if ((g.tips ?? 0) >= 4 && g.tips < TUTO_DONE && !(s as { tour?: boolean }).tour) g.tips = TUTO_DONE;
     g.doubleOfferAt ??= 0;
-    g.autoWholesale ??= true;
+    // plus d'app Grossiste ni de case à cocher : la vente automatique est toujours active (sinon le stockage plein bloquerait la production)
+    g.autoWholesale = true;
     g.computerLevel ??= 1;
     delete (g as unknown as { autoBrew?: unknown }).autoBrew; // le brassage continu a disparu : tout passe par la file
     g.ordersRevenue ??= 0;

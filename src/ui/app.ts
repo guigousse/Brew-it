@@ -40,10 +40,13 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 /** Couleur de la bière (« Blonde » est aussi un style : la couleur a sa propre traduction). */
 const colorName = (c: string) => tl(c === 'Blonde' ? 'Blonde (couleur)' : c);
 const money = (v: number) => `${v.toLocaleString(locale, { maximumFractionDigits: 2, minimumFractionDigits: v % 1 ? 2 : 0 })} €`;
-const moneyInt = (v: number) => `${Math.floor(v).toLocaleString(locale)} €`;
+/** Un montant en euros ; les grands montants en abrégé (269 k€, 4,8 M€) pour tenir sur les boutons. */
+const moneyInt = (v: number): string => (Math.abs(v) >= 1e5 ? moneyShort(v) : `${Math.floor(v).toLocaleString(locale)} €`);
+/** Un nombre (bouteilles, fûts…) ; abrégé au-delà de 10 000 (41k). */
+const count = (v: number) => (v >= 1e4 ? compact(v) : Math.floor(v).toLocaleString(locale));
 /** Un volume en litres : une décimale sous 10 L. */
-const liters = (v: number) => `${v < 10 ? (Math.round(v * 10) / 10).toLocaleString(locale) : Math.round(v).toLocaleString(locale)} L`;
-const moneyShort = (v: number) => (v >= 1e6 ? `${(v / 1e6).toLocaleString(locale, { maximumFractionDigits: 1 })} M€` : v >= 1e4 ? `${Math.round(v / 1000)} k€` : moneyInt(v));
+const liters = (v: number) => `${v < 10 ? (Math.round(v * 10) / 10).toLocaleString(locale) : v >= 1e5 ? compact(v) : Math.round(v).toLocaleString(locale)} L`;
+const moneyShort = (v: number): string => (v >= 1e6 ? `${(v / 1e6).toLocaleString(locale, { maximumFractionDigits: 1 })} M€` : v >= 1e4 ? `${Math.round(v / 1000)} k€` : moneyInt(v));
 const fmtRate = (v: number) => v.toLocaleString(locale, { maximumFractionDigits: v < 10 ? 1 : 0 });
 const VERDICT_CLASS: Record<string, string> = { Imbuvable: 'v-bad', Médiocre: 'v-meh', Correcte: 'v-ok', Bonne: 'v-good', Excellente: 'v-top' };
 
@@ -372,6 +375,8 @@ export class App {
   /** Commandes dont on modifie le choix des bières. */
   private editing = new Set<number>();
   private picks = new Map<number, number[]>();
+  /** Onglet ouvert dans Commandes : les commandes ou les grands partenaires. */
+  private ordersView: 'orders' | 'partners' = 'orders';
   /** Bières dont le détail de popularité est déplié. */
   private popOpen = new Set<number>();
   /** Bière choisie pour le concours en cours. */
@@ -1337,7 +1342,7 @@ export class App {
 
   /** Ce que donnent n brassins : bouteilles, ou fûts de x verres. */
   private batchOutput(g: Game, f: Format, n: number): string {
-    if (f === 'bottle') return tl('{0} btl', (Math.floor(g.batchLiters / 0.33) * n).toLocaleString(locale));
+    if (f === 'bottle') return tl('{0} btl', count(Math.floor(g.batchLiters / 0.33) * n));
     const kl = kegLiters(g.batchLiters);
     const k = Math.floor(g.batchLiters / kl) * n;
     return tl('{0} fût{1} de {2} verres', k.toLocaleString(locale), k > 1 ? 's' : '', kegGlasses(kl));
@@ -1440,7 +1445,7 @@ export class App {
       items.push(item);
       return item;
     };
-    for (const b of g.beers) slot('beer', tl('{0} btl', b.stock), () => {
+    for (const b of g.beers) slot('beer', tl('{0} btl', count(b.stock)), () => {
       this.shelfSel = b.id;
       this.sheetKey = '';
     }, b);
@@ -1503,7 +1508,7 @@ export class App {
         const line = h('div', 'stock-line');
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tl('{0} btl{1}', b.stock, b.kegs.length ? tl(' · {0} fûts', b.kegs.length) : '')));
+        line.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', tl('{0} btl{1}', count(b.stock), b.kegs.length ? tl(' · {0} fûts', b.kegs.length) : '')));
         list.append(line);
       }
       body.append(list);
@@ -1546,7 +1551,7 @@ export class App {
     const card = h('div', 'card beer');
     const head = h('div', 'beer-head');
     head.append(h('span', 'beer-name', b.name), h('span', `verdict ${VERDICT_CLASS[v]}`, tl(v)));
-    card.append(head, h('div', 'stats-line', tl('{0} · {1} % · {2} btl{3}', tl(t.style), t.abv.toFixed(1), b.stock, b.kegs.length ? tl(' · {0} fûts', b.kegs.length) : '')));
+    card.append(head, h('div', 'stats-line', tl('{0} · {1} % · {2} btl{3}', tl(t.style), t.abv.toFixed(1), count(b.stock), b.kegs.length ? tl(' · {0} fûts', b.kegs.length) : '')));
     card.append(this.popLine(g, b));
     const actions = h('div', 'row');
     actions.append(this.btn('btn small', b.id === g.selectedBeer ? tl('✓ Chargée') : tl('Charger'), () => {
@@ -1796,9 +1801,9 @@ export class App {
     chin.lastElementChild!.setAttribute('aria-label', tl('Éteindre l\'ordinateur'));
     pc.append(screen, chin);
     this.modal.append(pc);
+    if (app === 'orders') this.ordersView = toPartners ? 'partners' : 'orders';
     this.computer = { app, key: '', ui };
     this.renderComputer();
-    if (toPartners) ui.querySelector('.partners-section')?.scrollIntoView({ block: 'start' });
   }
 
   private get unread(): number {
@@ -1826,7 +1831,7 @@ export class App {
   private computerKey(g: Game): string {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
-      app === 'orders' ? [g.staffOn('courier'), Math.ceil((g.staffEnd('courier') - g.time) / 600), g.money >= g.staffCost('courier'), Math.round(g.wholesaleRate * 20), g.hasFeature('partners'),
+      app === 'orders' ? [this.ordersView, g.staffOn('courier'), Math.ceil((g.staffEnd('courier') - g.time) / 600), g.money >= g.staffCost('courier'), Math.round(g.wholesaleRate * 20), g.hasFeature('partners'),
         g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
       0 ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
       app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
@@ -2004,6 +2009,25 @@ export class App {
     for (const id of this.picks.keys()) if (!g.orders.some((o) => o.id === id)) this.picks.delete(id);
     const ready = new Set(g.readyOrders.map((o) => o.id));
     const sorted = [...g.orders].sort((a, b) => Number(ready.has(b.id)) - Number(ready.has(a.id)) || a.expires - b.expires);
+    // deux onglets une fois les partenariats ouverts : les commandes, les grands partenaires
+    if (g.hasFeature('partners')) {
+      const tabs = h('div', 'contest-tabs two');
+      const tab = (id: 'orders' | 'partners', name: string, state: string, hot: boolean) => {
+        const t = this.btn(`contest-tab${this.ordersView === id ? ' active' : ''}${hot ? ' hot' : ''}`, '', () => {
+          this.ordersView = id;
+          this.renderComputer();
+        });
+        t.append(h('span', 'contest-tab-name', name), h('span', 'contest-tab-state', state));
+        tabs.append(t);
+      };
+      tab('orders', tl('Commandes'), ready.size ? tl('{0} à livrer', ready.size) : String(g.orders.length), ready.size > 0 && this.ordersView !== 'orders');
+      tab('partners', tl('Partenaires'), `${g.partners.length} / ${g.partnerSlots}`, false);
+      card.append(tabs);
+      if (this.ordersView === 'partners') {
+        this.partnersTab(g, card);
+        return;
+      }
+    }
     card.append(this.courierLine(g));
     for (const o of sorted) card.append(this.orderCard(g, o));
     g.slotWaits.forEach((w, i) => card.append(this.emptySlot(g, w, i)));
@@ -2024,13 +2048,6 @@ export class App {
       foot.append(b);
     }
     card.append(foot);
-    // les grands partenaires, une fois le premier ouvert
-    if (g.hasFeature('partners')) {
-      const sec = h('div', 'pc-section partners-section');
-      sec.append(h('h3', 'pc-section-title', tl('Grands partenaires')));
-      card.append(sec);
-      this.partnersTab(g, card);
-    }
     // le grossiste : plus rien à faire, il reprend le surplus tout seul
     const ws = h('div', 'ws-line');
     const rate = g.wholesaleRate;
@@ -2044,7 +2061,7 @@ export class App {
     const left = g.staffEnd('courier') - g.time;
     const el = h('div', `courier-line${on ? ' on' : ''}`);
     const info = h('div', 'courier-info');
-    info.append(h('span', 'courier-name', tl('Livreur')), h('span', 'hint', on ? tl('En tournée encore {0} : les commandes prêtes partent toutes seules.', duration(left)) : tl('Envoie seul les commandes prêtes.')));
+    info.append(h('span', 'courier-name', tl('Livreur')), h('span', 'hint', on ? tl('En tournée encore {0}.', duration(left)) : tl('Envoie seul les commandes prêtes.')));
     el.append(iconCanvas('courier', 2, 'courier-icon'), info);
     const cost = g.staffCost('courier');
     const tooLong = on && left + STAFF_CONTRACT.duration > STAFF_CONTRACT.maxAhead;
@@ -2135,7 +2152,7 @@ export class App {
     if (o.kind !== 'classic') ask.append(h('span', `ask-kind${o.kind === 'urgent' ? ' urgent' : ''}`, KIND_LABEL[o.kind]));
     ask.append(iconCanvas(o.kind === 'keg' ? 'keg' : 'range', 1, 'ask-icon'));
     const want = o.want ? trendById(o.want) : undefined;
-    const parts = [`${o.qty}${o.kind === 'keg' ? tl(' fût{0}', o.qty > 1 ? 's' : '') : ''}`];
+    const parts = [`${count(o.qty)}${o.kind === 'keg' ? tl(' fût{0}', o.qty > 1 ? 's' : '') : ''}`];
     if (o.mix) parts.push(tl('{0} bières', o.mix));
     if (want) parts.push(want.short);
     ask.append(h('span', 'ask-text', parts.join(' · ')));
@@ -2162,7 +2179,7 @@ export class App {
       const chips = h('div', 'chips');
       for (const b of ok) {
         const on = pick.includes(b.id);
-        const chip = h('button', `chip${on ? ' active' : ''}`, `${b.name} · ${avail(b)}`);
+        const chip = h('button', `chip${on ? ' active' : ''}`, `${b.name} · ${count(avail(b))}`);
         chip.disabled = !on && avail(b) <= 0;
         chip.onclick = () => {
           this.picks.set(o.id, on ? pick.filter((x) => x !== b.id) : [...pick, b.id]);
@@ -2192,12 +2209,15 @@ export class App {
     if (gems > 0) gain.append(h('span', 'order-gain-sep', '+'), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(gems)));
     send.append(h('span', 'order-send-label', tl('Envoyer')), gain);
     send.setAttribute('aria-label', tl('Envoyer : {0}{1}', moneyInt(o.reward), gems > 0 ? tl(' et {0}', gemsText(gems)) : ''));
-    row.append(send, this.confirmBtn('btn small letter-decline', tl('Refuser'), tl('Refuser ?'), () => {
+    // refuser : une croix (« Refuser ? » au premier appui), pour laisser la place au gain
+    const decline = this.confirmBtn('btn small letter-decline', '✕', tl('Refuser ?'), () => {
       g.declineOrder(o.id);
       this.picks.delete(o.id);
       this.computer!.key = '';
       this.refreshComputer();
-    }));
+    });
+    decline.setAttribute('aria-label', tl('Refuser'));
+    row.append(send, decline);
     card.append(row);
     return card;
   }
@@ -3366,7 +3386,12 @@ export class App {
         const el = h('div', 'stock-line');
         const thumb = h('canvas', 'label-thumb');
         drawLabel(thumb, b.label, b.name);
-        el.append(thumb, h('span', 'stock-name', b.name), h('span', 'stock-qty', `${liters(b.liters)} · ${moneyShort(b.revenue)}`), h('span', 'pop-stars', starText(b.pop)));
+        // deux lignes : le nom et les étoiles, puis les litres vendus et la recette (rien ne dépasse sur un petit écran)
+        const info = h('div', 'dash-beer-info');
+        const top1 = h('div', 'dash-beer-top');
+        top1.append(h('span', 'stock-name', b.name), h('span', 'pop-stars', starText(b.pop)));
+        info.append(top1, h('span', 'stock-qty', `${liters(b.liters)} · ${moneyShort(b.revenue)}`));
+        el.append(thumb, info);
         list.append(el);
       }
       top.append(list);
