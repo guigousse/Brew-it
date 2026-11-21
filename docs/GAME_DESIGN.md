@@ -123,7 +123,7 @@ Effet des niveaux (1 → 5) :
 
 Une plaque en haut à gauche de la scène montre le niveau. La toucher ouvre la fiche de la brasserie : quels appareils il reste à améliorer, et ce que débloquera le niveau suivant. Le passage de niveau déclenche un éclair et cette fiche.
 
-Le tout premier brassin du tutoriel va bien plus vite (10× pour l'essai, 40× pour les deux premiers fûts programmés pendant la visite, voir « Accompagnement »), ne peut pas être infecté ni oxydé : Gaston donne un coup de main, et la dégustation n'affiche aucun défaut. Ce premier essai ne propose pas « Jeter ». Pendant le tutoriel, la fiche d'une machine ne montre que ses réglages : l'amélioration et les cuves apparaissent une fois la première bière gardée. La partie ne peut jamais se bloquer (voir « Accompagnement »).
+Le tout premier brassin du tutoriel va bien plus vite (25× pendant la visite, voir « Accompagnement »), ne peut pas être infecté ni oxydé : Gaston donne un coup de main, et la dégustation n'affiche aucun défaut. Ce premier essai ne propose pas « Jeter ». Pendant le tutoriel, la fiche d'une machine ne montre que ses réglages : l'amélioration et les cuves apparaissent une fois la première bière gardée. La partie ne peut jamais se bloquer (voir « Accompagnement »).
 
 ## Précision du matériel et qualité
 Chaque appareil exécute ta recette avec sa propre précision (`src/core/brewing/execution.ts`). La bière obtenue s'écarte donc plus ou moins de ce que tu as réglé.
@@ -443,18 +443,29 @@ Voir [BALANCE.md](BALANCE.md) : l'audit, les objectifs de rythme et le joueur si
 
 **Seul ce que montre Gaston répond au doigt** : des caches transparents couvrent le reste de l'écran (onglets, boutons, décor, notifications), pour que le joueur ne se perde pas en touchant n'importe où. Toucher ailleurs fait trembler la bulle et taper le doigt. Sur une étape à « Suivant », l'élément montré n'est pas touchable non plus : seul « Suivant » fait avancer. « Passer la visite » reste toujours possible.
 
-0. **Accueil** : « Bienvenue chez toi ! Moi c'est Gaston, vieux maître brasseur. Cette petite brasserie est la tienne, et je te le dis : on va en faire la meilleure du pays ! », puis « Pas de panique : je te guide pas à pas. Touche simplement ce que je te montre du doigt. »
-1. **Bureau** : l'ordinateur (le tableau de bord, les commandes), le présentoir (la gamme), le nom de la pièce (ses améliorations), puis « Touche Atelier ».
-2. **Atelier** : le chemin du grain de machine en machine ; toucher une machine pour voir ses réglages (la bulle reste au-dessus de la fiche) ; les réglages de Gaston sont gardés pour la blonde ; lancer le premier brassin (Brasser, puis « Brasser l'essai » dans la fiche). **Cadeau de Gaston** : 30 min de « Plein régime » offertes (machines 3× plus vite ; des diamants à la place si un autre boost des machines tourne déjà), puis il montre où s'affichent les boosts en cours.
-3. **Stockage** (pendant que la bière descend) : les caisses arrivent sur les rayonnages, le surplus part chez le grossiste.
-4. **Bar** : le comptoir (on y branchera bientôt un fût), les soirées, puis l'onglet du magasin (déco, boosts, étiquettes) et, en haut, l'argent et les diamants.
-5. **Retour à l'atelier** : goûter la première bouteille dès qu'elle sort, la garder (« Garder cette bière »), puis l'étiquette (toute la carte reste touchable pour la personnaliser, et « Valider l'étiquette »).
-6. **Programmer des brassins** : le doigt suit l'assistant Brasser écran par écran (« + Programmer des brassins », la bière, « Fûts », « + » jusqu'à 2, « Programmer » ; avec « Bouteilles », Gaston fait revenir en arrière), puis montre la file.
-7. **La première commande**, pendant que les fûts se remplissent : une lettre arrive tout de suite au bureau (une commande de démarrage, que la blonde suffit à remplir). Le doigt montre l'ordinateur, l'application Commandes, puis « Envoyer ». Gaston félicite et referme l'ordinateur.
-8. **Brancher le premier fût** : au bar, du comptoir à la tireuse et au choix de la bière. Il présente le barman (Personnel).
-9. **Le cadeau de fin** : « Tu as fait le tour… voici 25 diamants » ; « 🎁 Récupérer 25 💎 » fait voler les diamants vers le compteur. **Le joueur part de 0 diamant** : ce sont ses premiers. Passer la visite les donne aussi ; une seule fois par partie (les anciennes parties, qui les avaient reçus au départ, n'en ont pas de seconds).
+**Une visite courte** (8 bulles, une minute environ) : seulement l'essentiel, brasser, goûter, vendre. Le reste vient plus tard, avec les leçons.
 
-Pour que la visite ne fasse pas attendre, Gaston donne un coup de main à l'essai (machines 10× plus vite) et aux deux premiers brassins programmés (les fûts, 40× plus vite) : la première bouteille sort pendant la visite du stockage et du bar, et le premier fût est prêt quand on revient de livrer la commande. Pas d'attente devant le bar.
+1. **Accueil** : « Bienvenue chez toi ! Moi c'est Gaston, vieux maître brasseur. Cette brasserie est la tienne, et on va en faire la meilleure du pays ! Touche simplement ce que je te montre du doigt. »
+2. **Atelier** : « Touche Atelier », puis Brasser et « Brasser l'essai » dans la fiche.
+3. **Le cadeau arrive tout seul** pendant que la bière descend la chaîne : 30 min de « Plein régime » (machines 3× plus vite ; des diamants à la place si un autre boost des machines tourne déjà), annoncé dans la bulle. Puis goûter la première bouteille, la garder, l'étiquette (toute la carte reste touchable pour la personnaliser).
+4. **La première commande** : une lettre arrive tout de suite au bureau (une commande de démarrage, que la blonde suffit à remplir) ; l'ordinateur, Commandes, « Envoyer ».
+5. **Le cadeau de fin** : 25 diamants, le doigt sur les compteurs (« le magasin les échange contre des boosts… je repasserai t'apprendre la suite »). **Le joueur part de 0 diamant.** Passer la visite les donne aussi ; une seule fois par partie (les anciennes parties, qui les avaient reçus au départ, n'en ont pas de seconds).
+
+Pour que la visite ne fasse pas attendre, Gaston donne un coup de main à l'essai (25× plus vite) : la première bouteille sort quelques secondes après le lancement.
+
+**Les leçons de Gaston** (`LESSONS`, dans `src/ui/tutorial.ts`) : après la visite, chaque chose est présentée quand elle devient utile, en 2 à 5 bulles, avec le même doigt et le même écran verrouillé. « Passer » la referme pour de bon. Une leçon ne démarre que si rien n'est ouvert à l'écran, et jamais moins de 45 s après la précédente. La pièce dont elle parle porte une pastille **« Nouveau »** dans la barre du bas. Les onglets ne sont jamais verrouillés : on peut tout explorer, mais rien n'est expliqué avant d'être utile.
+
+| Leçon | Déclencheur | Contenu |
+|---|---|---|
+| La file de brassins | 2e commande livrée | la brasserie tourne sans toi : programmer 3 brassins en bouteilles, la file |
+| Améliorer | assez d'argent pour la première amélioration | la machine la moins chère, son bouton, la flèche verte |
+| Le bar | mission « Sers 20 verres au bar » | le comptoir, programmer 2 brassins en fûts |
+| Brancher un fût | un fût plein au stockage, aucune tireuse branchée (après la leçon du bar) | comptoir, tireuse, bière ; le barman (Personnel) |
+| Le stockage | stockage rempli à 80 %, ou première reprise du surplus par le grossiste | le grossiste rachète le surplus à petit prix ; agrandir |
+| Une nouvelle recette | mission « Garde une 2e bière dans ta gamme » | les réglages d'une machine, « Nouvel essai » |
+| Les événements | achat de la cible de fléchettes | lancer un tournoi, prévoir des fûts |
+
+Les parties qui avaient fini l'ancienne visite (plus longue) n'ont pas de leçon à rattraper ; une partie arrêtée au milieu de l'ancienne visite la termine (avec les 25 diamants).
 
 Certaines étapes attendent un geste (toucher un onglet, ouvrir une machine, brasser, goûter, programmer, livrer, brancher) ; les autres avancent avec « Suivant ». Hors de la pièce de l'étape, Gaston montre l'onglet pour y revenir. Une étape déjà accomplie passe toute seule. Les parties qui avaient fini l'ancien tuto ne refont pas la visite.
 

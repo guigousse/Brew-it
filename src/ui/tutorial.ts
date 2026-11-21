@@ -18,6 +18,7 @@
  * L'étape en cours est `game.tips` (sauvegardée) ; TUTO_DONE quand la visite est finie ou passée.
  */
 import { TUTO_DONE, type Game } from '../core/game';
+import { STATION_ORDER } from '../core/stations';
 import { tl } from '../i18n';
 
 export type TourView = 'office' | 'workshop' | 'storage' | 'bar' | 'shop';
@@ -26,7 +27,7 @@ export type TourView = 'office' | 'workshop' | 'storage' | 'bar' | 'shop';
 export type TourTarget =
   | 'computer' | 'display' | 'officePlaque' | 'mill' | 'mash' | 'brewBtn' | 'racks' | 'counter' | 'barBtns'
   | 'money' | 'taste' | 'boost' | 'planAdd' | 'planList' | 'wizBeer' | 'wizKeg' | 'wizBack' | 'wizPlus' | 'wizGo'
-  | 'tapLine' | 'kegBeer' | 'pcOrders' | 'orderSend' | 'trialGo' | 'tasteKeep' | 'labelCard' | `nav:${TourView}`;
+  | 'tapLine' | 'kegBeer' | 'pcOrders' | 'orderSend' | 'trialGo' | 'tasteKeep' | 'labelCard' | 'wizBottle' | 'cheapMachine' | 'stationUp' | 'storagePlaque' | `nav:${TourView}`;
 
 /** L'assistant « Brasser » ouvert : son étape et le format choisi. */
 export interface TourWiz { step: 'beer' | 'format' | 'count' | 'trial'; format: 'bottle' | 'keg'; count: number }
@@ -70,6 +71,9 @@ interface Step {
   sheets?: readonly string[];
   modals?: readonly string[];
 }
+
+/** Pause entre deux leçons (s) : on ne les enchaîne pas. */
+const LESSON_REST = 45;
 
 const ROOM_NAME: Record<TourView, string> = { office: tl('au bureau'), workshop: tl('à l\'atelier'), storage: tl('au stockage'), bar: tl('au bar'), shop: tl('au magasin') };
 
@@ -138,70 +142,163 @@ const orderText = (g: Game, h: TourHost): string => {
   return tl('Ta bière convient : touche « Envoyer ». Le client paie tout de suite.');
 };
 
+/** Programmer des brassins en bouteilles (la leçon de la file) : l'assistant « Brasser », écran après écran. */
+const QUEUE_BREWS = 3;
+/** Le joueur a réglé ses 3 brassins dans l'assistant : la leçon attend qu'il les programme. */
+let queueArmed = false;
+const queueTarget = (g: Game, h: TourHost): TourTarget | undefined => {
+  if (h.sheet() !== 'brew') return 'brewBtn';
+  const w = h.wiz();
+  if (!w) return 'planAdd';
+  if (w.step === 'beer') return 'wizBeer';
+  if (w.step === 'format') return 'wizBottle';
+  if (w.step === 'count' && w.format === 'bottle') {
+    queueArmed = w.count >= QUEUE_BREWS;
+    return queueArmed ? 'wizGo' : 'wizPlus';
+  }
+  queueArmed = false;
+  return 'wizBack';
+};
+/** Les brassins sont programmés : l'assistant s'est refermé sur la file, après les 3 brassins réglés. */
+const queued = (_: Game, h: TourHost) => queueArmed && h.sheet() === 'brew' && !h.wiz();
+const queueText = (g: Game, h: TourHost): string => {
+  if (h.sheet() !== 'brew') return tl('Touche « Brasser ».');
+  const w = h.wiz();
+  if (!w) return tl('Touche « + Programmer des brassins ».');
+  if (w.step === 'beer') return tl('Choisis ta bière.');
+  if (w.step === 'format') return tl('Choisis « Bouteilles » : c\'est ce que livrent tes commandes.');
+  if (w.step === 'count' && w.format === 'bottle') {
+    return w.count < QUEUE_BREWS ? tl('Touche « + » : on en programme {0} d\'un coup.', QUEUE_BREWS) : tl('Puis « Programmer ».');
+  }
+  return tl('Reviens en arrière et choisis « Bouteilles ».');
+};
+
+/** Somme des niveaux des machines (pour voir qu'une amélioration a eu lieu). */
+const machineLevels = (g: Game) => STATION_ORDER.reduce((n, id) => n + g.levelNumber(id), 0);
+
+/**
+ * La visite d'accueil : l'essentiel, en une minute. Brasser un essai, le goûter, livrer sa première commande,
+ * puis le cadeau de 25 diamants. Le reste vient plus tard, avec les leçons.
+ */
 export const TOUR: readonly Step[] = [
-  // ---- le bureau
-  { view: 'office', text: tl('Bienvenue chez toi ! Moi c\'est Gaston, vieux maître brasseur. Cette petite brasserie est la tienne, et je te le dis : on va en faire la meilleure du pays ! Suis-moi, je te montre tout.'), next: tl('C\'est parti !') },
-  { view: 'office', text: tl('Pas de panique : je te guide pas à pas. Touche simplement ce que je te montre du doigt.'), next: tl('Suivant') },
-  { view: 'office', target: 'computer', text: tl('L\'ordinateur : ton tableau de bord y suit tes ventes en direct, et tes clients y envoient leurs commandes.'), next: tl('Suivant') },
-  { view: 'office', target: 'display', text: tl('Le présentoir montre ta gamme : les bières que tu as créées.'), next: tl('Suivant') },
-  { view: 'office', target: 'officePlaque', text: tl('Chaque pièce s\'améliore : touche son nom, en haut, pour voir ce que tu peux acheter.'), next: tl('Suivant') },
-  { view: 'office', target: 'nav:workshop', text: tl('Allons à l\'atelier, là où naît la bière. Touche « Atelier ».'), done: (_, h) => h.view() === 'workshop' },
-  // ---- l'atelier
-  { view: 'workshop', target: 'mill', text: tl('Le grain entre en haut et passe de machine en machine jusqu\'à la bouteille, en bas.'), next: tl('Suivant') },
-  { view: 'workshop', target: 'mash', text: tl('Touche une machine pour voir ses réglages.'), done: (_, h) => h.sheet() === 'station' },
-  { view: 'workshop', sheets: ['station'], text: tl('Les réglages changent le goût de la bière. J\'ai tout réglé pour ma blonde : garde-les pour l\'instant.'), next: tl('Suivant'), action: (_, h) => h.close() },
+  { view: 'office', text: tl('Bienvenue chez toi ! Moi c\'est Gaston, vieux maître brasseur. Cette brasserie est la tienne, et on va en faire la meilleure du pays ! Touche simplement ce que je te montre du doigt.'), next: tl('C\'est parti !') },
+  { view: 'office', target: 'nav:workshop', text: tl('Allons à l\'atelier, là où naît la bière.'), done: (_, h) => h.view() === 'workshop' },
   {
     view: 'workshop', sheets: ['brew'], done: brewed,
     target: (_, h) => (h.sheet() === 'brew' ? 'trialGo' : 'brewBtn'),
-    text: (_, h) => (h.sheet() === 'brew' ? tl('Un essai, avec les réglages de ma blonde : touche « Brasser l\'essai ».') : tl('Lance ton premier brassin avec ce bouton.')),
+    text: (_, h) => (h.sheet() === 'brew' ? tl('Un essai, avec les réglages de ma blonde : touche « Brasser l\'essai ».') : tl('Ici, le grain passe de machine en machine jusqu\'à la bouteille. Lance ton premier brassin !')),
   },
-  // ---- le cadeau de Gaston : un boost des machines
-  {
-    view: 'workshop', text: tl('Bravo ! Pour fêter ton premier brassin, je t\'offre un cadeau : 30 min de « Plein régime », tes machines tournent 3× plus vite.'),
-    next: tl('🎁 Ouvrir le cadeau'), action: (_, h) => h.gift(), done: (g) => g.giftTaken,
-  },
-  { view: 'workshop', target: 'boost', text: tl('Les boosts en cours s\'affichent ici, avec le temps qui reste. Le magasin en vend d\'autres, contre des diamants.'), next: tl('Suivant') },
-  { view: 'workshop', target: 'nav:storage', text: tl('La bière descend de machine en machine. Pendant ce temps, allons voir le stockage.'), done: (_, h) => h.view() === 'storage' },
-  // ---- le stockage
-  { view: 'storage', target: 'racks', text: tl('Tes bouteilles arrivent ici, en caisses. Le surplus part chez le grossiste, qui te le rachète.'), next: tl('Suivant') },
-  { view: 'storage', target: 'nav:bar', text: tl('Maintenant, le bar !'), done: (_, h) => h.view() === 'bar' },
-  // ---- le bar
-  { view: 'bar', target: 'counter', text: tl('Au bar, tes clients boivent ta bière en fût. Tout à l\'heure, on y branchera ton premier fût.'), next: tl('Suivant') },
-  { view: 'bar', target: 'barBtns', text: tl('Ici, lance des soirées : plus de clients, plus de ventes.'), next: tl('Suivant') },
-  { view: 'bar', target: 'nav:shop', text: tl('Au magasin : de la déco pour le bar, des boosts et de nouvelles étiquettes.'), next: tl('Suivant') },
-  { target: 'money', text: tl('En haut, ton argent et tes diamants. Les commandes livrées rapportent des diamants.'), next: tl('Suivant') },
-  // ---- la première bière
-  { target: 'nav:workshop', text: tl('Retournons à l\'atelier : ta bière va bientôt sortir !'), done: (_, h) => h.view() === 'workshop' },
   {
     view: 'workshop', modals: ['taste', 'label'], done: (g) => g.beers.length > 0,
-    target: (g, h) => (h.modal() === 'taste' ? 'tasteKeep' : h.modal() === 'label' ? 'labelCard' : g.tastable ? 'taste' : undefined),
+    target: (g, h) => {
+      if (!g.giftTaken) h.gift(); // le cadeau arrive tout seul : 30 min de Plein régime
+      return h.modal() === 'taste' ? 'tasteKeep' : h.modal() === 'label' ? 'labelCard' : g.tastable ? 'taste' : undefined;
+    },
     text: (g, h) => (h.modal() === 'taste' ? tl('Le verdict du jury… euh, le mien ! Garde-la dans ta gamme.')
       : h.modal() === 'label' ? tl('Ton étiquette : choisis un nom et des couleurs si tu veux, puis « Valider l\'étiquette ».')
-      : g.tastable ? tl('Ta première bouteille est sortie : goûte-la !') : tl('Ta bière arrive au bout de la chaîne… encore un instant.')),
+      : g.tastable ? tl('Ta première bouteille est sortie : goûte-la !') : tl('Cadeau : 30 min de « Plein régime », tes machines tournent 3× plus vite ! Ta bière descend déjà la chaîne…')),
   },
-  // ---- programmer plusieurs brassins, en fûts
-  { view: 'workshop', target: planTarget, text: planText, sheets: ['brew'], done: (g) => kegBrews(g) >= KEG_BREWS },
-  {
-    view: 'workshop', target: (_, h) => (h.sheet() === 'brew' && !h.wiz() ? 'planList' : undefined), sheets: ['brew'],
-    text: tl('Voilà ta file : les brassins partent l\'un après l\'autre, sans toi. Plus besoin d\'attendre devant les machines !'), next: tl('Suivant'),
-  },
-  // ---- la première commande, pendant que les fûts se remplissent
-  { target: 'nav:office', sheets: ['brew'], text: tl('Pendant que tes fûts se remplissent, une lettre arrive au bureau. Allons-y !'), done: (_, h) => h.view() === 'office' },
+  { target: 'nav:office', text: (g) => { g.tourLetter(); return tl('Bravo ! Un client t\'a déjà écrit : allons au bureau.'); }, done: (_, h) => h.view() === 'office' },
   { view: 'office', target: orderTarget, text: orderText, modals: ['computer'], done: (g) => g.ordersDone > 0 },
   {
-    modals: ['computer'], text: tl('Première commande livrée, bravo ! Les commandes paient bien mieux que le grossiste : surveille ton ordinateur.'),
+    modals: ['computer'], text: tl('Première commande livrée ! Les commandes paient bien mieux que le grossiste : surveille ton ordinateur.'),
     next: tl('Suivant'), action: (_, h) => h.close(),
   },
-  { target: 'nav:bar', text: tl('Tes fûts sont prêts : allons au bar !'), done: (_, h) => h.view() === 'bar' },
-  // ---- brancher le premier fût
-  { view: 'bar', target: plugTarget, text: plugText, sheets: ['bar'], modals: ['kegSwap'], done: flowing },
-  { view: 'bar', sheets: ['bar'], text: tl('Ta bière coule au bar ! Quand un fût se vide, rebranches-en un ici. Un barman peut le faire pour toi, contre quelques diamants : il est dans « Personnel », sur l\'ordinateur.'), next: tl('Suivant'), action: (_, h) => h.close() },
-  // ---- le cadeau de fin
   {
-    text: tl('Tu as fait le tour, et tu t\'en es très bien sorti ! Pour bien démarrer, voici 25 diamants : boosts, personnel… à toi de choisir. Bonne brasse !'),
+    target: 'money',
+    text: tl('Tu sais l\'essentiel ! Voici 25 diamants, là-haut à côté de ton argent : le magasin les échange contre des boosts. Je repasserai t\'apprendre la suite au bon moment. Bonne brasse !'),
     next: tl('🎁 Récupérer 25 💎'), action: (_, h) => h.finish(),
   },
 ];
+
+/** Une leçon de Gaston : quelques étapes, présentées quand elles deviennent utiles. */
+export interface Lesson {
+  id: string;
+  /** Quand la proposer (la visite d'accueil finie, rien d'ouvert à l'écran). */
+  when: (g: Game) => boolean;
+  steps: readonly Step[];
+}
+
+export const LESSONS: readonly Lesson[] = [
+  {
+    // la brasserie tourne pendant l'absence tant que la file n'est pas vide
+    id: 'queue', when: (g) => g.ordersDone >= 2 && g.beers.length > 0,
+    steps: [
+      { target: 'nav:workshop', text: tl('Ta brasserie peut tourner sans toi, même appli fermée : programme des brassins d\'avance. Allons à l\'atelier.'), done: (_, h) => h.view() === 'workshop' },
+      { view: 'workshop', target: queueTarget, text: queueText, sheets: ['brew'], done: queued },
+      {
+        view: 'workshop', target: (_, h) => (h.sheet() === 'brew' && !h.wiz() ? 'planList' : undefined), sheets: ['brew'],
+        text: tl('Voilà ta file : les brassins partent l\'un après l\'autre, et quand elle est vide, je relance le dernier. Remplis-la avant de partir !'),
+        next: tl('Compris'), action: (_, h) => h.close(),
+      },
+    ],
+  },
+  {
+    // la première amélioration, dès que la caisse le permet
+    id: 'upgrade', when: (g) => g.beers.length > 0 && STATION_ORDER.some((id) => g.money >= g.upgradeCost(id)) && machineLevels(g) === STATION_ORDER.length,
+    steps: [
+      { target: 'nav:workshop', text: tl('Ta caisse permet d\'améliorer une machine ! Allons à l\'atelier.'), done: (_, h) => h.view() === 'workshop' },
+      { view: 'workshop', target: 'cheapMachine', text: tl('Touche cette machine : c\'est l\'amélioration la moins chère.'), done: (_, h) => h.sheet() === 'station' },
+      {
+        view: 'workshop', target: 'stationUp', sheets: ['station'], done: (g) => machineLevels(g) > STATION_ORDER.length,
+        text: tl('Améliore-la : plus de volume, plus vite, plus précis. La flèche verte, sur le nom de la pièce, te dira quand une autre est à ta portée.'),
+      },
+      { view: 'workshop', sheets: ['station'], text: tl('Bien joué ! Améliore toutes les machines pour faire grandir la brasserie.'), next: tl('Compris'), action: (_, h) => h.close() },
+    ],
+  },
+  {
+    // le bar : quand la mission demande d'y servir des verres
+    id: 'bar', when: (g) => g.mission?.def.id === 'bar20',
+    steps: [
+      { target: 'nav:bar', text: tl('Ton bar t\'attend ! Allons-y.'), done: (_, h) => h.view() === 'bar' },
+      { view: 'bar', target: 'counter', text: tl('Au bar, tes clients boivent ta bière en fût : c\'est là que ta marque se fait connaître. Il lui faut des fûts.'), next: tl('Suivant') },
+      { target: 'nav:workshop', text: tl('Les fûts se brassent à l\'atelier.'), done: (_, h) => h.view() === 'workshop' },
+      { view: 'workshop', target: planTarget, text: planText, sheets: ['brew'], done: (g) => kegBrews(g) >= KEG_BREWS },
+      { view: 'workshop', sheets: ['brew'], text: tl('Parfait ! Dès qu\'un fût sort, je te montre comment le brancher.'), next: tl('Compris'), action: (_, h) => h.close() },
+    ],
+  },
+  {
+    // brancher : dès qu'un fût plein attend au stockage
+    id: 'plug', when: (g) => g.lessonsDone.includes('bar') && hasKeg(g) && !g.taps.some((t) => t.beerId != null),
+    steps: [
+      { target: 'nav:bar', text: tl('Ton premier fût est prêt ! Allons le brancher.'), done: (_, h) => h.view() === 'bar' },
+      { view: 'bar', target: plugTarget, text: plugText, sheets: ['bar'], modals: ['kegSwap'], done: flowing },
+      { view: 'bar', sheets: ['bar'], text: tl('Ta bière coule au bar ! Quand un fût se vide, rebranches-en un ici. Un barman peut le faire pour toi, contre quelques diamants : il est dans « Personnel », sur l\'ordinateur.'), next: tl('Compris'), action: (_, h) => h.close() },
+    ],
+  },
+  {
+    // le stockage, quand il commence à déborder
+    // (ou dès que le grossiste a dû reprendre le surplus : le stockage plein, il le vide aussitôt)
+    id: 'storage', when: (g) => g.stored >= g.storageCap * 0.8 || g.wholesaleLiters > 0,
+    steps: [
+      { target: 'nav:storage', text: tl('Ton stockage se remplit ! Allons voir.'), done: (_, h) => h.view() === 'storage' },
+      { view: 'storage', target: 'racks', text: tl('Quand il est plein, le grossiste rachète le surplus tout seul, mais à petit prix. Mieux vaut livrer des commandes.'), next: tl('Suivant') },
+      { view: 'storage', target: 'storagePlaque', text: tl('Pour stocker plus, agrandis-le : touche le nom de la pièce.'), next: tl('Compris') },
+    ],
+  },
+  {
+    // une nouvelle recette, quand la mission demande une 2e bière
+    id: 'recipe', when: (g) => g.mission?.def.id === 'beers2',
+    steps: [
+      { target: 'nav:workshop', text: tl('Et si on créait une nouvelle bière ? Allons à l\'atelier.'), done: (_, h) => h.view() === 'workshop' },
+      { view: 'workshop', target: 'mash', text: tl('Touche une machine pour voir ses réglages.'), done: (_, h) => h.sheet() === 'station' },
+      {
+        view: 'workshop', sheets: ['station'],
+        text: tl('Les réglages changent le goût : plus de houblon, une autre température… Change-en un, puis « Brasser » → « Nouvel essai ». On goûte, et si elle est bonne, elle rejoint ta gamme.'),
+        next: tl('Compris'), action: (_, h) => h.close(),
+      },
+    ],
+  },
+  {
+    // les événements du bar, à l'achat de la cible de fléchettes
+    id: 'events', when: (g) => g.owns('darts'),
+    steps: [
+      { target: 'nav:bar', text: tl('Ta cible de fléchettes est installée ! Allons au bar.'), done: (_, h) => h.view() === 'bar' },
+      { view: 'bar', target: 'barBtns', text: tl('Lance un tournoi ici : beaucoup plus de clients pendant une heure. Prévois des fûts d\'avance !'), next: tl('Compris') },
+    ],
+  },
+];
+export const lessonById = (id: string) => LESSONS.find((l) => l.id === id);
 
 /** Le doigt pixelisé (gant blanc, manchette bleue), pointé vers le haut : le bout de l'index est en (4, 0). */
 const FINGER = [
@@ -323,30 +420,87 @@ export class Tour {
     place(right, r, t, W - r, b - t);
   }
 
+  /** Fin de la dernière leçon (s, horloge de la page) : on laisse souffler le joueur avant la suivante. */
+  private restUntil = 0;
+
+  /** La visite d'accueil, ou une leçon, est en cours. */
   get active(): boolean {
-    return this.host.game().tips < TOUR.length;
+    const g = this.host.game();
+    return g.tips < TOUR.length || !!g.lesson;
+  }
+
+  /** Les étapes en cours (la visite ou la leçon) et l'indice de l'étape. */
+  private seq(): { steps: readonly Step[]; i: number; lesson: boolean } | null {
+    const g = this.host.game();
+    if (g.tips < TOUR.length) return { steps: TOUR, i: g.tips, lesson: false };
+    const l = g.lesson && lessonById(g.lesson.id);
+    if (l && g.lesson) return { steps: l.steps, i: g.lesson.step, lesson: true };
+    return null;
   }
 
   private step(): Step | undefined {
-    return TOUR[this.host.game().tips];
+    const q = this.seq();
+    return q?.steps[q.i];
+  }
+
+  /** Passe à l'étape suivante ; la dernière termine la visite ou la leçon. */
+  private next(): void {
+    const g = this.host.game();
+    const q = this.seq();
+    if (!q) return;
+    this.key = '';
+    if (!q.lesson) {
+      g.tips = g.tips + 1 >= TOUR.length ? TUTO_DONE : g.tips + 1;
+      if (g.tips >= TUTO_DONE) this.restUntil = performance.now() / 1000 + LESSON_REST;
+      return;
+    }
+    if (q.i + 1 < q.steps.length) g.lesson = { id: g.lesson!.id, step: q.i + 1 };
+    else this.endLesson();
+  }
+
+  private endLesson(): void {
+    const g = this.host.game();
+    if (g.lesson && !g.lessonsDone.includes(g.lesson.id)) g.lessonsDone.push(g.lesson.id);
+    g.lesson = null;
+    this.key = '';
+    this.restUntil = performance.now() / 1000 + LESSON_REST;
   }
 
   private advance(): void {
     const g = this.host.game();
     this.step()?.action?.(g, this.host);
-    g.tips = g.tips + 1 >= TOUR.length ? TUTO_DONE : g.tips + 1;
-    this.key = '';
+    this.next();
     this.host.tap();
+  }
+
+  /** Après la visite : la prochaine leçon dont le moment est venu, quand rien n'est ouvert à l'écran. */
+  private pickLesson(): void {
+    const g = this.host.game();
+    if (g.tips < TUTO_DONE || g.lesson || g.lessonsDone.includes('*')) return;
+    if (performance.now() / 1000 < this.restUntil || this.host.modal() || this.host.sheet()) return;
+    const l = LESSONS.find((x) => !g.lessonsDone.includes(x.id) && x.when(g));
+    if (l) g.lesson = { id: l.id, step: 0 };
+  }
+
+  /** La pièce dont parle la leçon en cours (sa pastille « Nouveau » dans la barre du bas), ou null. */
+  get lessonRoom(): TourView | null {
+    const g = this.host.game();
+    if (!g.lesson) return null;
+    const s = this.step();
+    const t = typeof s?.target === 'string' ? s.target : undefined;
+    return t?.startsWith('nav:') ? (t.slice(4) as TourView) : null;
   }
 
   /** À chaque image : avance si l'étape est accomplie, puis place le doigt, la surbrillance et la bulle. */
   frame(): void {
     const g = this.host.game();
+    // une partie arrêtée au milieu de l'ancienne visite, plus longue : elle est finie
+    if (g.tips >= TOUR.length && g.tips < TUTO_DONE) this.host.finish();
+    this.pickLesson();
     let s = this.step();
     // les étapes déjà accomplies passent toutes seules (une ancienne partie, un joueur en avance)
-    while (s?.done && s.done(g, this.host)) {
-      g.tips = g.tips + 1 >= TOUR.length ? TUTO_DONE : g.tips + 1;
-      this.key = '';
+    for (let n = 0; s?.done && s.done(g, this.host) && n < 50; n++) {
+      this.next();
       s = this.step();
     }
     if (!s) return this.hide();
@@ -365,7 +519,7 @@ export class Tour {
       return Array.isArray(e) ? e : e ? [e] : [];
     });
     const el = els.length ? els : null;
-    const key = `${g.tips}|${text}|${away}`;
+    const key = `${g.tips}|${g.lesson?.id}|${g.lesson?.step}|${text}|${away}`;
     if (key !== this.key) {
       this.key = key;
       // dans une fiche qui défile, l'élément montré vient à l'écran
@@ -379,12 +533,16 @@ export class Tour {
         b.onclick = () => this.advance();
         this.actions.append(b);
       }
-      if (g.tips < TOUR.length - 1) {
+      const q = this.seq()!;
+      if (q.i < q.steps.length - 1) {
         const skip = document.createElement('button');
         skip.className = 'tour-skip';
-        skip.textContent = tl('Passer la visite');
+        skip.textContent = q.lesson ? tl('Passer') : tl('Passer la visite');
         skip.onclick = () => {
-          this.host.finish();
+          if (q.lesson) {
+            this.host.close();
+            this.endLesson();
+          } else this.host.finish();
           this.hide();
         };
         this.actions.append(skip);

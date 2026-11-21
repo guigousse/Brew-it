@@ -53,7 +53,7 @@ export const TUTO_GEMS = 25;
 /** Pendant la visite, les fûts vont encore plus vite que le reste : le joueur ne les attend pas. */
 export const TUTO_KEG_RUSH = 0.025;
 /** Pendant la visite, l'essai sort pendant qu'on visite le stockage et le bar. */
-export const TUTO_TRIAL_RUSH = 0.1;
+export const TUTO_TRIAL_RUSH = 0.04;
 /**
  * Contre le spam de la proposition « Doubler tes gains ? » : il faut une absence d'au moins 15 min, et 30 min
  * depuis la dernière proposition (regardée, refusée ou fermée). Le plafond de 3 pubs par jour s'y ajoute.
@@ -329,6 +329,10 @@ export class Game {
   giftTaken = false;
   /** Les diamants de fin de visite ont été offerts. */
   welcomeGems = false;
+  /** Leçons de Gaston déjà vues (après la visite d'accueil, chacune présentée au bon moment). */
+  lessonsDone: string[] = [];
+  /** Leçon en cours et son étape (null : aucune). */
+  lesson: { id: string; step: number } | null = null;
   /** Gains de la dernière absence, en attente de récolte. */
   offline: OfflineReport | null = null;
   /** Les trois concours en cours (régional, national, international), ou null entre deux sessions. */
@@ -2401,7 +2405,7 @@ export class Game {
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, storageStep: this.storageStep, planExtra: this.planExtra, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, eventReadyAt: this.eventReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
-      nextId: this.nextId, tips: this.tips, giftTaken: this.giftTaken, welcomeGems: this.welcomeGems, tour: true, offline: this.offline, announced: [...this.announced],
+      nextId: this.nextId, tips: this.tips, giftTaken: this.giftTaken, welcomeGems: this.welcomeGems, lessonsDone: this.lessonsDone, lesson: this.lesson, tour: true, offline: this.offline, announced: [...this.announced],
       contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, features: this.features, featuresSeen: this.featuresSeen, missionIndex: this.missionIndex, partners: this.partners, partnersDone: this.partnersDone,
     };
   }
@@ -2512,6 +2516,9 @@ export class Game {
     if ((s as { gems?: number }).gems == null) g.gems = oldCaps ?? GEMS.legacyStart;
     // les parties d'avant recevaient leurs diamants au départ : pas de second cadeau en fin de visite
     if ((s as { welcomeGems?: boolean }).welcomeGems == null) g.welcomeGems = g.tips >= TUTO_DONE || g.gems > 0;
+    // les parties d'avant les leçons avaient tout vu pendant l'ancienne visite : pas de leçon à rattraper
+    if ((s as { lessonsDone?: string[] }).lessonsDone == null && g.tips >= TUTO_DONE) g.lessonsDone = ['*'];
+    g.lesson ??= null;
     delete (g as unknown as { caps?: unknown }).caps;
     // la campagne de pub ne se vend plus au magasin (elle reste dans l'ordinateur)
     delete (g.boosts as Record<string, unknown>).ad;

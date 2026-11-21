@@ -559,6 +559,14 @@ export class App {
       officePlaque: () => this.officePlaque,
       mill: () => this.overlays.get('mill')?.label,
       mash: () => this.overlays.get('mash')?.btn,
+      // la machine dont l'amélioration coûte le moins, puis son bouton dans la fiche
+      cheapMachine: () => {
+        const g = this.game();
+        const id = [...STATION_ORDER].sort((a, b) => g.upgradeCost(a) - g.upgradeCost(b))[0]!;
+        return this.overlays.get(id)?.btn;
+      },
+      stationUp: () => this.sheet.querySelector<HTMLElement>('.station-up'),
+      storagePlaque: () => this.storagePlaque,
       brewBtn: () => this.brewBtn,
       racks: () => this.roomHits.find((x) => x.el.dataset.hit === 'racks')?.el,
       counter: () => this.roomHits.find((x) => x.el.dataset.hit === 'counter')?.el,
@@ -571,6 +579,7 @@ export class App {
       planList: () => this.sheet.querySelector<HTMLElement>('.plan-list .plan-card'),
       wizBeer: () => this.sheet.querySelector<HTMLElement>('.pick-card:not(.trial)'),
       wizKeg: () => this.sheet.querySelector<HTMLElement>('.pick-card[data-format="keg"]'),
+      wizBottle: () => this.sheet.querySelector<HTMLElement>('.pick-card[data-format="bottle"]'),
       wizBack: () => this.sheet.querySelector<HTMLElement>('.wiz-back'),
       wizPlus: () => this.sheet.querySelector<HTMLElement>('.count-row .knob-btn:last-child'),
       wizGo: () => this.sheet.querySelector<HTMLElement>('.plan-go'),
@@ -867,12 +876,16 @@ export class App {
       bar: g.partying ? '🎉' : emptyTap && kegsReady ? '!' : '', // un fût à changer, et de quoi le remplacer
     };
     const shopNew = this.view !== 'shop' && this.shopNews(g).length > 0;
+    // une leçon de Gaston appelle vers une pièce : sa pastille « Nouveau »
+    const lessonRoom = this.tour.lessonRoom;
     for (const [id, tab] of this.navTabs) {
-      const badge = isRoom(id) ? badges[id] : shopNew ? '!' : '';
+      const fresh = lessonRoom === id && this.view !== id;
+      const badge = fresh ? tl('Nouveau') : isRoom(id) ? badges[id] : shopNew ? '!' : '';
+      tab.badge.classList.toggle('fresh', fresh);
       tab.btn.classList.toggle('active', id === this.view);
       tab.badge.textContent = badge;
       tab.badge.classList.toggle('hidden', !badge);
-      tab.badge.classList.toggle('hot', id === 'office' ? ready > 0 || this.unreadLetters > 0 : !!badge);
+      tab.badge.classList.toggle('hot', fresh || (id === 'office' ? ready > 0 || this.unreadLetters > 0 : !!badge));
     }
     this.renderShop();
     this.tasteBtn.classList.toggle('hidden', !trial || this.modalOpen || this.view !== 'workshop');
@@ -1095,7 +1108,7 @@ export class App {
       if (lv >= MAX_LEVEL && step >= STEPS_PER_TIER - 1) up.append(h('p', 'hint', tl('Sans limite : le prix grimpe à chaque niveau.')));
       label = tl('Améliorer · {0}', moneyShort(cost));
     }
-    const b = this.btn('btn primary', label, () => {
+    const b = this.btn('btn primary station-up', label, () => {
       const r = g.upgrade(id);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play(tierUp ? 'upgrade' : 'repair');
