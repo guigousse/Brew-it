@@ -21,6 +21,13 @@ import { MAX_LEVEL, STATION_ORDER, upgradeCost } from '../src/core/stations';
 import { boostById, type BoostChannel, type BoostId } from '../src/core/shop';
 import { STORAGE } from '../src/core/warehouse';
 import { BOT_RECIPES } from './recipes';
+import { PARTNERS } from '../src/core/partners';
+import { WHOLESALE } from '../src/core/orders';
+// réglages du grossiste à tester : WS_FULL=100,600,3000,15000,70000 WS_FLOOR=0.3
+if (process.env.WS_FULL) WHOLESALE.full = process.env.WS_FULL.split(',').map(Number);
+if (process.env.WS_FLOOR) WHOLESALE.floor = Number(process.env.WS_FLOOR);
+// volumes des partenaires à tester : PARTNER_SCALE=2 (×2)
+if (process.env.PARTNER_SCALE) for (const p of PARTNERS) (p as { daily: number }).daily *= Number(process.env.PARTNER_SCALE);
 
 const DAYS = Number(process.argv[2] ?? 45);
 const SESSIONS = (process.env.SESSIONS ?? "8,12.5,18.5,22.5").split(",").map(Number);
@@ -204,6 +211,23 @@ function spendGems() {
   }
 }
 
+/** Le meilleur partenaire ouvert dont le contrat ne mange pas plus de 60 % de la caisse, avec la bière la plus populaire. */
+function signPartner() {
+  if (g.partner || !g.beers.length) return;
+  for (const p of [...PARTNERS].reverse()) {
+    if (g.partnerLock(p) || p.fee > g.money) continue;
+    const beer = g.beers.filter((b) => b.tasting.quality >= p.minQuality).sort((a, b) => b.pop - a.pop)[0];
+    if (beer && g.signPartner(p.id, beer.id).ok) {
+      buy(`Partenariat ${p.id}`, p.fee);
+      partnersSigned.push(`${fmt(clock)} ${p.id}`);
+    }
+    return;
+  }
+}
+const partnersSigned: string[] = [];
+let PARTNER_EARNED = 0;
+g.events.on((e) => { if (e.type === 'partnerEnd') PARTNER_EARNED += e.earned; });
+
 function session(minutes: number) {
   if (g.offline) g.collectOffline();
   if (process.env.COURIER) for (let i = 0; i < 3; i++) {
@@ -214,8 +238,9 @@ function session(minutes: number) {
   // SNAP=dossier : garde le dernier état à chaque niveau de brasserie (bN) et de bar (rN), pour scripts/roi.ts
   if (process.env.SNAP && g.beers.length) for (const k of ['b' + g.breweryLevel, 'r' + g.barLevel]) writeFileSync(`${process.env.SNAP}/${k}.json`, JSON.stringify(g.toJSON()));
   deliver();
-  wholesale();
+  if (!g.partner) wholesale(); // avec un partenaire, on garde le stock pour lui (le surplus part tout seul au grossiste)
   tendBar();
+  signPartner();
   shop();
   spendGems();
   while (g.beers.length < g.rangeSlots && newBeer()) buy(`Nouvelle bière (${g.beers.length})`, 0);
@@ -284,12 +309,15 @@ for (const s of sessionStarts) {
 const noBuy = sessionStarts.filter((s) => !log.some((e) => e.t >= s && e.t < s + ACTIVE_MIN * 60 + 1)).length;
 console.log('\n=== Chiffre d\'affaires par jour');
 console.log(revenueByDay.map((r, i) => `J${i + 1} ${Math.round(((revenueByDay[i + 1] ?? g.totalRevenue) - r) / 1000)}k`).join(' · '));
+console.log('\n=== Partenariats');
+console.log(partnersSigned.join(' · '));
 console.log('\n=== Résumé');
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
 console.log('Diamants gagnés (cumul) :', gemsByDay.map((c, i) => `J${i + 1} ${c}`).join(' · '), '· fin', g.gems + gemsSpent - BUY - gift);
 console.log('Diamants dépensés en boosts :', gemsSpent, '· achetés :', BUY, process.env.COURIER ? `· livreur payé ${Math.round(courierPaid)} €` : '');
 console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.round(b * 100)}`).join(' · '));
+console.log('Partenariats :', Math.round(PARTNER_EARNED), '€');
 console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', Math.round(g.wholesaleLiters), 'L,', Math.round(g.wholesaleRevenue), '€');
 console.log('Argent :', Math.round(g.money), '€ · vendues :', g.totalSold, '· niveaux :', STATION_ORDER.map((id) => g.level(id)).join(''), '· stockage', g.storageLevel, '· gamme', g.beers.length, '/', g.rangeSlots);
 if (process.env.DEBUG) {

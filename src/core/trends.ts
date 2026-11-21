@@ -127,16 +127,18 @@ export interface PopParts {
   liters: number;
   /** Bonus de la campagne de pub en cours. */
   ad: number;
+  /** Visibilité de la bière officielle d'un partenariat. */
+  partner: number;
   /** Total, plafonné à 5 ★. */
   total: number;
 }
 
-export function popParts(t: Tasting, active: readonly Trend[], liters: number, ad = 0): PopParts {
+export function popParts(t: Tasting, active: readonly Trend[], liters: number, ad = 0, partner = 0): PopParts {
   const quality = qualityStars(t.quality);
   const trendCount = trendsOf(t, active).length;
   const trends = trendCount * TREND_STARS;
   const sales = salesStars(liters);
-  return { quality, trends, trendCount, sales, liters, ad, total: Math.min(5, quality + trends + sales + ad) };
+  return { quality, trends, trendCount, sales, liters, ad, partner, total: Math.min(5, quality + trends + sales + ad + partner) };
 }
 
 /**

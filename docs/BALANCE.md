@@ -280,3 +280,13 @@ Mesures (`npm run balance 120`, puis `SESSIONS=8,20 npm run balance 150`) : voir
 **Mesurer la rentabilité.** `SNAP=/tmp/snaps npm run balance 45` garde l'état de la partie à chaque niveau, puis `npm run roi /tmp/snaps ev` (événements) ou `npm run roi /tmp/snaps ad` (pubs) rejoue 24 h avec et sans chaque action.
 
 **Joueur simulé.** Il lance la meilleure campagne débloquée dès le niveau 2, quand il a deux fois son prix, et un événement seulement s'il ne retarde pas son prochain achat (au plus un dixième de son prix). Avant ce garde-fou, il enchaînait des fêtes à perte qui mangeaient son épargne.
+
+## Grossiste dégressif et partenariats (novembre 2026)
+
+Le grossiste n'a plus de quota : plein prix jusqu'à 100 / 300 / 1 500 / 7 000 / 35 000 L par jour selon le niveau de la brasserie, puis un prix qui baisse comme (plein / litres)² jusqu'à 35 %. Les partenariats deviennent le grand débouché (voir GAME_DESIGN.md).
+
+Leçons du calage (`WS_FULL=… WS_FLOOR=… PARTNER_SCALE=… npm run balance` pour essayer d'autres réglages) :
+- **Le plancher doit couvrir le coût des ingrédients** (environ 30 % du plein prix). À 20 %, chaque brassin vendu au grossiste perd de l'argent et la partie s'effondre dès le premier jour.
+- **Un grossiste sans limite au-dessus de ce coût fait exploser les revenus** : avec une baisse en plein / litres (et non son carré) ou un plein prix calé sur la production, la partie se finissait au 13e-22e jour. La production dépasse de loin la demande (environ 1 million de litres par jour au labo du futur) : les volumes à plein prix doivent rester de l'ordre de l'ancien quota.
+- **Les partenaires sont calés sur ces volumes, pas sur la production** : quelques fois le plein prix du grossiste, payés 1,2 à 1,6 fois plus, contrat d'une demi-journée de revenus.
+- Résultat : fin vers le 33e jour (comme avant), 14 à 19 % de visites sans achat.

@@ -155,6 +155,35 @@ export const KIND_LABEL: Record<OrderKind, string> = {
 export const WHOLESALE_PRICE = 1.4;
 export const wholesalePrice = (t: Pick<Tasting, 'quality'>) => WHOLESALE_PRICE * (0.6 + 0.8 * t.quality);
 
+/**
+ * Le grossiste, c'est du déstockage : il reprend tout, à tout moment, mais son prix baisse au fil des litres qu'il
+ * a déjà repris dans la journée (toutes bières confondues). Plein prix jusqu'à un volume qui dépend du niveau de la
+ * brasserie (`WHOLESALE.full`, à peu près ce que reprenait l'ancien quota), puis le prix baisse comme (plein / litres)²
+ * jusqu'à `WHOLESALE.floor` du plein prix : à ce prix, on rentre à peine dans le coût des ingrédients.
+ * Il se remet à plein prix à minuit. Pour les gros volumes, les partenariats paient bien mieux.
+ */
+export const WHOLESALE = {
+  /** Litres repris à plein prix chaque jour, par niveau de la brasserie. */
+  full: [100, 300, 1_500, 7_000, 35_000],
+  /** Prix plancher, en part du plein prix. */
+  floor: 0.35,
+};
+
+/** Prix du litre suivant chez le grossiste, en part du plein prix, après `sold` litres repris aujourd'hui. */
+export const wholesaleFactor = (sold: number, full: number) => (sold <= full ? 1 : Math.max(WHOLESALE.floor, (full / sold) ** 2));
+
+/** Somme des parts de prix entre `from` et `to` litres repris aujourd'hui (pour payer une vente d'un coup). */
+export function wholesaleValue(from: number, to: number, full: number): number {
+  // au-delà du plein prix, le prix baisse comme (plein / litres)² jusqu'au plancher
+  const knee = full / Math.sqrt(WHOLESALE.floor);
+  const F = (l: number) => {
+    if (l <= full) return l;
+    if (l <= knee) return full + full * (1 - full / l);
+    return full + full * (1 - full / knee) + WHOLESALE.floor * (l - knee);
+  };
+  return F(to) - F(from);
+}
+
 /** Contexte de la brasserie pour tirer une commande. */
 export interface OrderContext {
   rng: Rng;

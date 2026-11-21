@@ -2,7 +2,7 @@ import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
 import { AD_DAILY, TUTO_DONE, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
-import { CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
+import { WHOLESALE, CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
 import { popScore, SALES_STEPS, stars, trendById, trendsOf } from '../core/trends';
 import { BREWERY_NAMES, MAX_LEVEL, precisionPct, speedFactor, STATION_ORDER, STATIONS, STEPS_PER_TIER, upgradeCost, type StationId } from '../core/stations';
 import { SCENE_H, SCENE_W, Scene } from '../render/scene';
@@ -137,7 +137,7 @@ function boostShort(b: BoostDef): string {
   if (!b.channel) return tl('immédiat');
   if (b.channel === 'bar') return tl('clients ×{0}{1} · {2}', n(b.mult), b.priceMult ? tl(' · verres −{0} %', Math.round((1 - b.priceMult) * 100)) : '', dur);
   if (b.channel === 'wholesale') return tl('prix ×{0} · {1}', n(b.mult), dur);
-  if (b.id === 'openGate') return tl('sans limite · {0}', dur);
+  if (b.id === 'openGate') return tl('plein prix toute la journée · {0}', dur);
   return tl('×{0} · {1}', n(b.mult), dur);
 }
 
@@ -372,6 +372,8 @@ export class App {
   private picks = new Map<number, number[]>();
   /** Bière choisie pour le concours en cours. */
   private contestPick: number | null = null;
+  /** Bière officielle choisie avant de signer un partenariat. */
+  private partnerPick: number | null = null;
   /** Onglet ouvert dans l'app Concours (0 régional, 1 national, 2 international). */
   private contestTier: ContestTier = 0;
   /** Bière choisie sur l'étagère (fiche affichée sous l'étagère). */
@@ -1577,7 +1579,7 @@ export class App {
     // la jauge sur 5 ★ : une couleur par part
     const gauge = h('div', 'pop-gauge');
     let room = 5; // le total ne dépasse pas 5 ★ : la dernière part s'arrête au bout
-    for (const [cls, v] of [['q', p.quality], ['t', p.trends], ['s', p.sales], ['a', p.ad]] as const) {
+    for (const [cls, v] of [['q', p.quality], ['t', p.trends], ['s', p.sales], ['a', p.ad + p.partner]] as const) {
       const w = Math.min(v, room);
       room -= w;
       const seg = h('div', `pop-seg ${cls}`);
@@ -1595,6 +1597,7 @@ export class App {
     row('t', followed.length ? tl('Tendances : {0}', followed.join(', ')) : tl('Aucune tendance suivie'), `+${pts(p.trends)}`);
     row('s', tl('Ventes sur 7 jours : {0}', liters(p.liters)), `${pts(p.sales)} / 50`);
     if (p.ad) row('a', tl('Campagne de pub en cours'), `+${pts(p.ad)}`);
+    if (p.partner && g.partner) row('a', tl('Bière officielle : {0}', partnerById(g.partner.id)?.name ?? ''), `+${pts(p.partner)}`);
     box.append(why);
     if (p.next) {
       // la marche suivante des ventes
@@ -1611,7 +1614,7 @@ export class App {
     // le levier le plus utile
     const tip = p.total >= 5 ? ''
       : p.quality < 1.25 ? tl('Gaston : « Une meilleure bière, c\'est jusqu\'à 50 points : soigne la recette et le matériel. »')
-        : p.next ? tl('Gaston : « Vends-la : bar, commandes et grossiste comptent tous. Plus elle se vend, plus elle est connue. »')
+        : p.next ? tl('Gaston : « Fais-la connaître : le bar, les commandes et les partenariats comptent, pas le grossiste. »')
           : tl('Gaston : « Suis une tendance : +10 points par tendance. »');
     if (tip) box.append(h('p', 'hint pop-tip', tip));
     return box;
@@ -1834,9 +1837,9 @@ export class App {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
-      app === 'partners' ? [g.partner ? [g.partner.id, g.partnerDay, Math.floor(g.partnerLeft), Math.floor(g.partnerStock)] : null, PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase), g.staffOn('courier')] : 0,
+      app === 'partners' ? [this.partnerPick, g.beers.map((b) => [b.id, Math.round(b.pop * 100)]), g.partner ? [g.partner.id, g.partner.beerId, g.partnerDay, Math.floor(g.partnerLeft), Math.floor(g.partnerStock)] : null, PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase), g.staffOn('courier')] : 0,
       app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
-      app === 'trends' || app === 'marketing' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
+      app === 'trends' || app === 'marketing' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(g.wsToday / 100)]), [...this.picks]] : 0]);
   }
 
   /** Reconstruit l'écran quand une commande arrive, expire, ou que le stock change ; le tableau de bord vit en direct. */
@@ -2364,7 +2367,17 @@ export class App {
    */
   private partnersTab(g: Game, card: HTMLElement): void {
     card.append(h('div', 'stats-line strong', tl('Ta marque : {0} · {1} / 100', starText(g.brandBase), popScore(g.brandBase))));
-    card.append(h('p', 'hint', tl('Sponsorise un club ou un événement pendant une semaine. Chaque jour, une jauge de bière à livrer se remplit : ce qui n\'est pas livré dans la journée est perdu. Bien payé, et le public découvre tes bières (elles comptent double dans les ventes de la semaine).')));
+    card.append(h('p', 'hint', tl('Le grand débouché pour tes gros volumes. Sponsorise un club ou un événement pendant une semaine et choisis ta bière officielle : chaque jour, le partenaire en prend une quantité, qui part toute seule de ton stock, bien mieux payée que chez le grossiste. Ta bière officielle gagne en popularité tant que le contrat dure.')));
+    // la bière officielle : choisie à la signature, et modifiable pendant le contrat
+    const officialRow = (current: number | null, onPick: (id: number) => void, minQuality: number) => {
+      const chips = h('div', 'chips');
+      for (const b of g.beers) {
+        const ok = b.tasting.quality >= minQuality;
+        const chip = this.btn(`chip${b.id === current ? ' active' : ''}${ok ? '' : ' locked'}`, b.name, () => (ok ? onPick(b.id) : this.toast(tl('Bière pas assez bonne pour ce partenaire'), 'bad')));
+        chips.append(chip);
+      }
+      return chips;
+    };
     const ship = g.partner;
     const cur = ship && partnerById(ship.id);
     if (ship && cur) {
@@ -2394,23 +2407,19 @@ export class App {
       const line = h('div', 'stats-line');
       line.append(h('span', '', g.partnerDay + 1 < PARTNER_DAYS ? tl('Nouvelle jauge dans ') : tl('Fin du contrat dans ')), next);
       el.append(line);
+      // la bière officielle, et ce que le partenariat lui apporte
+      const official = g.beer(ship.beerId);
+      el.append(h('div', 'section-title', tl('Bière officielle')), officialRow(ship.beerId, (id) => {
+        g.setPartnerBeer(id);
+        this.renderComputer();
+      }, cur.minQuality));
+      if (official) el.append(h('p', 'note', tl('« {0} » : +{1} points de popularité · {2} le litre', official.name, cur.visibility, moneyInt(g.partnerPricePerL(cur, official)))));
+      // la livraison est automatique : on dit seulement si le stock suit
       const left = g.partnerLeft;
-      const stock = g.partnerStock;
-      if (left > 0) {
-        const send = Math.min(left, stock);
-        const go = this.btn('btn primary', send >= 1 ? tl('Livrer · {0}', liters(send)) : tl('Pas de bière assez bonne en stock'), () => {
-          const r = g.deliverPartner();
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          sfx.play('crate');
-          this.onSent?.();
-          this.toast(tl('{0} livrés · +{1}', liters(r.liters!), moneyInt(r.amount!)), 'good');
-          this.renderComputer();
-        });
-        if (send < 1) go.disabled = true;
-        el.append(go);
-      } else el.append(h('p', 'note', tl('✓ Tout est livré pour aujourd\'hui.')));
+      if (left <= 0) el.append(h('p', 'note', tl('✓ Tout est livré pour aujourd\'hui.')));
+      else if (g.partnerStock < 1) el.append(h('p', 'note bad', tl('Plus de bière assez bonne en stock : il manque {0} aujourd\'hui. Brasse !', liters(left))));
+      else el.append(h('p', 'hint', tl('Livraison automatique depuis ton stock, toutes les 30 s.')));
       el.append(h('p', 'hint', tl('Qualité minimale : {0} · gagné : {1} · toutes les journées remplies : +{2} 💎', tl(verdictOf(cur.minQuality)), moneyInt(ship.earned), cur.gems)));
-      if (!g.staffOn('courier')) el.append(h('p', 'hint', tl('Le livreur (application Personnel) remplit la jauge tout seul, même pendant ton absence.')));
       card.append(el);
     }
     for (const p of PARTNERS) {
@@ -2428,7 +2437,8 @@ export class App {
       for (const t of [
         tl('{0} par jour pendant {1} jours', liters(p.daily), PARTNER_DAYS),
         tl('Qualité minimale : {0}', tl(verdictOf(p.minQuality))),
-        tl('Payé {0} fois le prix du grossiste', p.pay.toLocaleString(locale)),
+        tl('Payé {0} fois le plein prix du grossiste', p.pay.toLocaleString(locale)),
+        tl('Bière officielle : +{0} points de popularité', p.visibility),
         tl('Toutes les journées remplies : +{0} 💎', p.gems),
       ]) perks.append(h('li', '', t));
       el.append(perks);
@@ -2440,8 +2450,16 @@ export class App {
       }
       else if (ship) el.append(h('span', 'ad-note', tl('Disponible après le partenariat en cours · {0}', moneyShort(p.fee))));
       else {
+        // la bière officielle à signer : la meilleure par défaut
+        const okBeers = g.beers.filter((b) => b.tasting.quality >= p.minQuality);
+        const pickId = this.partnerPick != null && okBeers.some((b) => b.id === this.partnerPick) ? this.partnerPick : okBeers.sort((a, b) => b.pop - a.pop)[0]?.id ?? null;
+        el.append(h('div', 'section-title', tl('Bière officielle')), officialRow(pickId, (id) => {
+          this.partnerPick = id;
+          this.renderComputer();
+        }, p.minQuality));
         const sign = this.btn('btn primary', tl('Signer · {0}', moneyShort(p.fee)), () => {
-          const r = g.signPartner(p.id);
+          if (pickId == null) return this.toast(tl('Aucune bière assez bonne dans ta gamme'), 'bad');
+          const r = g.signPartner(p.id, pickId);
           if (!r.ok) return this.toast(r.reason!, 'bad');
           sfx.play('paper');
           this.toast(tl('Partenariat signé : {0}', p.name), 'good');
@@ -2633,7 +2651,18 @@ export class App {
     box.checked = g.autoWholesale;
     box.onchange = () => (g.autoWholesale = box.checked);
     auto.append(box, h('span', '', tl('Vendre automatiquement quand le stockage est plein')));
-    card.append(auto, h('p', 'hint', tl('Bouteilles et fûts, à petit prix, dans la limite d\'un quota par bière qui se recharge à minuit. Plus une bière est populaire, plus il en reprend.')));
+    card.append(auto, h('p', 'hint', tl('Le grossiste reprend tout, à tout moment, mais son prix baisse au fil de la journée : il en a déjà trop. Plein prix jusqu\'à {0} par jour, puis jusqu\'à {1} % du prix. Il ne fait pas connaître tes bières. Pour les gros volumes, signe un partenariat.', liters(g.wholesaleFull), Math.round(WHOLESALE.floor * 100))));
+    // le prix du jour : une jauge qui se vide au fil des litres repris
+    const rate = g.wholesaleRate;
+    const priceBox = h('div', 'ws-price');
+    const head = h('div', 'stock-line');
+    head.append(h('span', 'stock-name', tl('Prix du jour')), h('span', `ws-quota${rate < 0.999 ? ' full' : ''}`, `${Math.round(rate * 100)} %`));
+    const bar = h('div', 'ws-bar');
+    const fill = h('div', 'ws-fill');
+    fill.style.width = `${Math.round(rate * 100)}%`;
+    bar.append(fill);
+    priceBox.append(head, bar, h('p', 'hint', tl('{0} repris aujourd\'hui · plein prix à minuit', liters(g.wsToday))));
+    card.append(priceBox);
     const beers = g.beers.filter((b) => (b.stock > 0 || b.kegs.length > 0) && b.tasting.quality >= DRINKABLE_MIN);
     if (!beers.length) card.append(h('p', 'hint', tl('Rien en stock.')));
     for (const b of beers) {
@@ -2641,36 +2670,22 @@ export class App {
       const head = h('div', 'stock-line');
       const thumb = h('canvas', 'label-thumb');
       drawLabel(thumb, b.label, b.name);
-      const quota = g.wholesaleQuota(b);
-      const left = g.wholesaleLeft(b);
-      const open = !Number.isFinite(quota); // grossiste sans limite (boost)
-      head.append(thumb, h('span', 'stock-name', b.name), h('span', `ws-quota${left <= 0 ? ' full' : ''}`, open ? tl('sans limite') : `${liters(quota - left)} / ${liters(quota)}`));
-      const bar = h('div', 'ws-bar');
-      const fill = h('div', 'ws-fill');
-      fill.style.width = `${open ? 0 : Math.min(100, quota ? (100 * (quota - left)) / quota : 100)}%`;
-      bar.append(fill);
-      box.append(head, bar);
-      const perL = wholesalePrice(b.tasting) / BOTTLE_L;
+      head.append(thumb, h('span', 'stock-name', b.name), h('span', 'ws-quota', tl('{0} le litre', moneyInt((wholesalePrice(b.tasting) / BOTTLE_L) * rate))));
+      box.append(head);
       const row = (format: Format, have: number, what: string, one: { n: number; label: string }) => {
         if (have <= 0) return;
-        const can = g.wholesaleSellable(b, format);
         const el = h('div', 'ws-row');
         el.append(h('span', 'ws-have', what));
-        const sell = (n: number, label: string) => {
-          const btn = this.btn('btn small', label, () => {
-            const r = g.sellWholesale(b.id, n, format);
-            if (!r.ok) return this.toast(r.reason!, 'bad');
-            sfx.play('cash');
-            this.gainToast(r.amount!);
-            this.refreshComputer();
-          });
-          btn.disabled = can <= 0;
-          return btn;
-        };
-        if (can > one.n) el.append(sell(one.n, one.label));
-        const kegL = [...b.kegs].sort((x, y) => x - y).slice(0, can).reduce((s, k) => s + k * GLASS_L, 0);
-        const value = (format === 'bottle' ? can * BOTTLE_L : kegL) * perL;
-        el.append(sell(can, can > 0 ? `${can === have ? tl('Tout') : can} · ${moneyInt(value)}` : tl('Quota atteint')));
+        const sell = (n: number, label: string) => this.btn('btn small', label, () => {
+          const r = g.sellWholesale(b.id, n, format);
+          if (!r.ok) return this.toast(r.reason!, 'bad');
+          sfx.play('cash');
+          this.gainToast(r.amount!);
+          this.refreshComputer();
+        });
+        if (have > one.n) el.append(sell(one.n, one.label));
+        const allL = format === 'bottle' ? have * BOTTLE_L : b.kegs.reduce((s2, k) => s2 + k * GLASS_L, 0);
+        el.append(sell(have, `${tl('Tout')} · ${moneyInt(g.wholesaleQuote(b, allL))}`));
         box.append(el);
       };
       row('bottle', b.stock, tl('{0} btl', b.stock), { n: CRATE, label: '1 caisse' });
@@ -3456,7 +3471,7 @@ export class App {
         // le grossiste sans limite : une caisse marquée « ∞ »
         const gate = b.id === 'openGate';
         face.append(h('span', 'boost-chip-dial'), iconCanvas(gate ? 'crate' : EFFECT_ICON[b.ch], 2), h('span', 'boost-chip-time'));
-        el.append(face, h('span', 'boost-chip-mult', gate ? '∞' : tl('×{0}', mult(b.id).toLocaleString(locale))));
+        el.append(face, h('span', 'boost-chip-mult', gate ? '100%' : tl('×{0}', mult(b.id).toLocaleString(locale))));
         el.onclick = () => this.openShop('boosts');
         this.boostHud.append(el);
       }
@@ -3513,7 +3528,7 @@ export class App {
       const t = dialTime(left);
       const span = el.querySelector('.boost-chip-time')!;
       if (span.textContent !== t) span.textContent = t;
-      el.setAttribute('aria-label', tl('{0} : encore {1}', b.id === 'openGate' ? tl('Grossiste sans limite') : tl('{0} ×{1}', EFFECT_NAME[b.ch], mult(b.id).toLocaleString(locale)), duration(left)));
+      el.setAttribute('aria-label', tl('{0} : encore {1}', b.id === 'openGate' ? tl('Grossiste au prix fort') : tl('{0} ×{1}', EFFECT_NAME[b.ch], mult(b.id).toLocaleString(locale)), duration(left)));
     });
   }
 

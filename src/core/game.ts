@@ -3,7 +3,7 @@ import { EventBus } from './events';
 import type { Label } from './label';
 import { PARTY } from './market';
 import { AD_EXTEND, AD_REF, adById, adCost, ADS, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type AdDef, type AdId, type BarEventId, type ShopItemId } from './market';
-import { orderGems, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, PRESTIGE_QUALITY, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
+import { orderGems, wholesaleFactor, wholesaleValue, WHOLESALE, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, PRESTIGE_QUALITY, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelCost, precisionLevel, STATION_ORDER, stationDuration, STEPS_PER_TIER, upgradeCost, type StationId, type StationState } from './stations';
@@ -11,7 +11,7 @@ import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { pointsAsStars, QUALIFY_METAL, type ContestTier, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
-import { PARTNER_DAYS, PARTNER_POP_WEIGHT, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
+import { PARTNER_DAYS, PARTNER_ROUND_S, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
 import { tl } from '../i18n';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -37,7 +37,6 @@ export const TICK_DT = 1 / TICK_RATE;
 export const BOTTLE_L = 0.33;
 
 /** Quota du grossiste, par bière et par jour, en brassins : base + pop × popularité (0 à 1). */
-export const WHOLESALE_QUOTA = { base: 4, pop: 20 } as const;
 /** Pubs vidéo récompensées : chaque usage est limité à 3 par jour (jour local). */
 export type AdReward = 'double' | 'prospect';
 export const AD_DAILY = 3;
@@ -101,8 +100,6 @@ export interface Beer {
   pop: number;
   /** Litres vendus (bar, commandes et grossiste). */
   liters: number;
-  /** Litres repris par le grossiste aujourd'hui (le quota se recharge à minuit). */
-  wsToday: number;
   /** Médailles gagnées en concours (la plus prestigieuse se porte en cocarde). */
   medals?: Medal[];
   /** Litres vendus par tranche de 6 h, sur 7 jours glissants (la plus récente à la fin) : la part « ventes » de la popularité. */
@@ -292,6 +289,8 @@ export class Game {
   wall = 0;
   /** Jour (local) du dernier rechargement du quota. */
   quotaDay = 0;
+  /** Litres repris par le grossiste aujourd'hui, toutes bières confondues (son prix baisse au fil de la journée). */
+  wsToday = 0;
   /** Pubs récompensées regardées aujourd'hui, par usage ; `day` est le jour local du décompte. */
   adViews: { day: number; double: number; prospect: number } = { day: 0, double: 0, prospect: 0 };
   /** Heure réelle (ms) de la dernière proposition de doublement. */
@@ -321,6 +320,8 @@ export class Game {
   salesSlot = 0;
   /** Partenariat en cours (un seul à la fois). */
   partner: Partnership | null = null;
+  /** Minuteur de la livraison automatique au partenaire. */
+  private partnerClock = 0;
   /** Partenariats menés à leur terme, par partenaire. */
   partnersDone: Partial<Record<PartnerId, number>> = {};
   private announced = new Set<string>();
@@ -626,10 +627,10 @@ export class Game {
     const queued = this.plan.reduce((s, p, i) => s + (i !== index ? p.count * this.batchSpace(p.format) : 0), 0);
     const used = this.stored + pending + queued;
     const unit = this.batchSpace(format);
-    const extra = this.autoWholesale ? this.beers.reduce((s, b) => s + (b.tasting.quality >= DRINKABLE_MIN ? Math.floor(this.wholesaleLeft(b) / BOTTLE_L) : 0), 0) : 0;
-    const cap = this.storageCap + extra;
+    // le grossiste reprend tout quand la vente automatique est active : le stockage ne limite plus la file
+    if (this.autoWholesale) return Math.max(0, room);
     // un brassin plus gros que tout le stockage peut partir quand tout est vide (il se rangera au fil des ventes)
-    const fits = used === 0 && unit > this.storageCap ? 1 : Math.floor(Math.max(0, cap - used) / Math.max(1, unit));
+    const fits = used === 0 && unit > this.storageCap ? 1 : Math.floor(Math.max(0, this.storageCap - used) / Math.max(1, unit));
     return Math.max(0, Math.min(room, fits));
   }
 
@@ -794,7 +795,7 @@ export class Game {
     if (this.beers.length >= this.rangeSlots) return { ok: false, reason: tl('Ta gamme est pleine : achète une nouvelle place ou retire une bière') };
     const beer: Beer = {
       id: this.nextId++, name: name.trim() || tl('Bière n°{0}', this.beers.length + 1), recipe: b.recipe, tasting: b.tasting,
-      stock: 0, kegs: [], sold: 0, revenue: 0, label: { ...label }, pop: 0, liters: 0, wsToday: 0, week: new Array(SALES_SLOTS).fill(0),
+      stock: 0, kegs: [], sold: 0, revenue: 0, label: { ...label }, pop: 0, liters: 0, week: new Array(SALES_SLOTS).fill(0),
     };
     this.beers.push(beer);
     b.beerId = beer.id;
@@ -880,7 +881,7 @@ export class Game {
 
   /** Popularité de la marque sans la campagne de pub en cours (paliers des partenariats). */
   get brandBase(): number {
-    return brandPopularity(this.beers.map((b) => popParts(b.tasting, this.trends, this.weekLiters(b)).total / 5));
+    return brandPopularity(this.beers.map((b) => popParts(b.tasting, this.trends, this.weekLiters(b), 0, this.partnerVisibility(b) / 20).total / 5));
   }
 
   /** Clients par minute : 1 toutes les 10 minutes au début, plus avec la popularité, le niveau du bar et la variété. */
@@ -1036,8 +1037,6 @@ export class Game {
         const r = this.fulfill(o.id, this.autoPick(o));
         if (r.ok) this.events.emit({ type: 'autoSent', client: o.client, amount: r.amount! });
       }
-      // le livreur remplit aussi la jauge du partenaire
-      if (this.partner && this.partnerLeft > 0 && this.partnerStock > 0) this.deliverPartner();
     }
     if (this.staffOn('apprentice') && (this.apprenticeClock += dt) >= APPRENTICE_CHECK_S) {
       this.apprenticeClock = 0;
@@ -1293,7 +1292,7 @@ export class Game {
   /** D'où vient la popularité d'une bière : qualité, tendances, ventes sur 7 jours, et la pub en cours. */
   popBreakdown(b: Beer): PopBreakdown {
     const liters = this.weekLiters(b);
-    return { ...popParts(b.tasting, this.trends, liters, this.ad?.stars ?? 0), next: nextSalesStep(liters) };
+    return { ...popParts(b.tasting, this.trends, liters, this.ad?.stars ?? 0, this.partnerVisibility(b) / 20), next: nextSalesStep(liters) };
   }
 
   /** Compte une vente pour la popularité ; `weight` > 1 quand elle fait davantage parler (événement du bar, prestige). */
@@ -1316,7 +1315,7 @@ export class Game {
   /** La popularité suit la qualité, les tendances, les ventes de la semaine et la pub en cours. */
   private updatePop(): void {
     const ad = this.ad?.stars ?? 0;
-    for (const b of this.beers) b.pop = popParts(b.tasting, this.trends, this.weekLiters(b), ad).total / 5;
+    for (const b of this.beers) b.pop = popParts(b.tasting, this.trends, this.weekLiters(b), ad, this.partnerVisibility(b) / 20).total / 5;
   }
 
   /** Bonus de notoriété d'une bière médaillée (prix et ventes), de 0 à 0,5. */
@@ -1454,10 +1453,14 @@ export class Game {
     return Math.max(0, p.daily - (this.partner!.delivered[this.partnerDay] ?? 0));
   }
 
-  /** Les bières qu'accepte le partenaire en cours (assez bonnes). */
+  /** Les bières qu'accepte le partenaire en cours (assez bonnes) : la bière officielle d'abord. */
   partnerBeers(): Beer[] {
-    const p = this.partner && partnerById(this.partner.id);
-    return p ? this.beers.filter((b) => b.tasting.quality >= p.minQuality) : [];
+    const ship = this.partner;
+    const p = ship && partnerById(ship.id);
+    if (!ship || !p) return [];
+    const ok = this.beers.filter((b) => b.tasting.quality >= p.minQuality);
+    const stockL = (b: Beer) => b.stock * BOTTLE_L + b.kegs.reduce((k, g) => k + g * GLASS_L, 0);
+    return ok.sort((a, b) => Number(b.id === ship.beerId) - Number(a.id === ship.beerId) || stockL(b) - stockL(a));
   }
 
   /** Litres en stock que le partenaire accepte. */
@@ -1465,34 +1468,59 @@ export class Game {
     return this.partnerBeers().reduce((s, b) => s + b.stock * BOTTLE_L + b.kegs.reduce((k, g) => k + g * GLASS_L, 0), 0);
   }
 
-  /** Signe un partenariat d'une semaine. */
-  signPartner(id: PartnerId): CommandResult {
+  /** Prix payé par le partenaire au litre pour une bière (le grossiste à plein prix × celui du partenaire). */
+  partnerPricePerL(p: PartnerDef, b: Beer): number {
+    return (wholesalePrice(b.tasting) / BOTTLE_L) * p.pay * (1 + this.medalBonus(b));
+  }
+
+  /** Points de popularité qu'apporte le partenariat en cours à une bière (la bière officielle seulement). */
+  partnerVisibility(b: Beer): number {
+    const ship = this.partner;
+    return ship && ship.beerId === b.id ? partnerById(ship.id)?.visibility ?? 0 : 0;
+  }
+
+  /** Signe un partenariat d'une semaine, avec sa bière officielle. */
+  signPartner(id: PartnerId, beerId: number): CommandResult {
     const p = partnerById(id);
     if (!p) return { ok: false, reason: tl('Partenaire inconnu') };
     if (this.partner) return { ok: false, reason: tl('Un partenariat est déjà en cours') };
     const lock = this.partnerLock(p);
     if (lock) return { ok: false, reason: lock };
+    const beer = this.beer(beerId);
+    if (!beer) return { ok: false, reason: tl('Choisis la bière officielle') };
+    if (beer.tasting.quality < p.minQuality) return { ok: false, reason: tl('Bière pas assez bonne pour ce partenaire') };
     if (this.money < p.fee) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= p.fee;
-    this.partner = { id, start: this.time, delivered: new Array(PARTNER_DAYS).fill(0), earned: 0 };
+    this.partner = { id, beerId, start: this.time, delivered: new Array(PARTNER_DAYS).fill(0), earned: 0 };
+    this.partnerClock = PARTNER_ROUND_S; // première livraison tout de suite
+    return { ok: true };
+  }
+
+  /** Change la bière officielle du partenariat en cours. */
+  setPartnerBeer(beerId: number): CommandResult {
+    const ship = this.partner;
+    const p = ship && partnerById(ship.id);
+    const beer = this.beer(beerId);
+    if (!ship || !p || !beer) return { ok: false, reason: tl('Aucun partenariat en cours') };
+    if (beer.tasting.quality < p.minQuality) return { ok: false, reason: tl('Bière pas assez bonne pour ce partenaire') };
+    ship.beerId = beerId;
     return { ok: true };
   }
 
   /**
-   * Livre au partenaire ce qu'il reste à livrer aujourd'hui, avec les bières assez bonnes (celles qui ont le plus de
-   * stock d'abord) : bouteilles puis fûts entiers. Payé tout de suite, plus que le grossiste.
+   * Livraison automatique au partenaire : ce qu'il reste à livrer aujourd'hui part du stock (la bière officielle
+   * d'abord, puis les autres assez bonnes), bouteilles puis fûts entiers, payé au prix annoncé.
    */
-  deliverPartner(): CommandResult & { liters?: number; amount?: number } {
+  private deliverPartner(): number {
     const ship = this.partner;
     const p = ship && partnerById(ship.id);
-    if (!ship || !p) return { ok: false, reason: tl('Aucun partenariat en cours') };
+    if (!ship || !p) return 0;
     let left = this.partnerLeft;
-    if (left <= 0) return { ok: false, reason: tl('Tout est livré pour aujourd\'hui') };
-    const stockL = (b: Beer) => b.stock * BOTTLE_L + b.kegs.reduce((k, g) => k + g * GLASS_L, 0);
+    if (left < BOTTLE_L) return 0;
     let liters = 0;
     let amount = 0;
     let units = 0;
-    for (const beer of this.partnerBeers().sort((a, b) => stockL(b) - stockL(a))) {
+    for (const beer of this.partnerBeers()) {
       if (left < BOTTLE_L) break;
       let l = 0;
       const n = Math.min(beer.stock, Math.floor(left / BOTTLE_L + 1e-9));
@@ -1509,16 +1537,16 @@ export class Game {
         } else i++;
       }
       if (l <= 0) continue;
-      const price = (l / BOTTLE_L) * wholesalePrice(beer.tasting) * p.pay * (1 + this.medalBonus(beer));
+      const price = l * this.partnerPricePerL(p, beer);
       beer.liters += l;
       beer.sold += n;
       beer.revenue += price;
-      this.countSales(beer, l, PARTNER_POP_WEIGHT);
+      this.countSales(beer, l);
       left -= l;
       liters += l;
       amount += price;
     }
-    if (liters <= 0) return { ok: false, reason: tl('Aucune bière assez bonne en stock') };
+    if (liters <= 0) return 0;
     ship.delivered[this.partnerDay] = (ship.delivered[this.partnerDay] ?? 0) + liters;
     ship.earned += amount;
     this.totalSold += units;
@@ -1528,11 +1556,15 @@ export class Game {
     this.recordSale('orders', amount);
     this.money += amount;
     this.events.emit({ type: 'sale', amount });
-    return { ok: true, liters, amount };
+    return liters;
   }
 
   /** Fin de la semaine : prime si toutes les journées ont été remplies. */
-  private tickPartner(): void {
+  private tickPartner(dt: number): void {
+    if (this.partner && (this.partnerClock += dt) >= PARTNER_ROUND_S) {
+      this.partnerClock = 0;
+      this.deliverPartner();
+    }
     const ship = this.partner;
     if (!ship || this.time < ship.start + PARTNER_DAYS * 86400) return;
     const p = partnerById(ship.id);
@@ -1675,36 +1707,33 @@ export class Game {
     return this.orders.filter((o) => this.quote(o, this.autoPick(o)).ok);
   }
 
-  /** Quota du grossiste pour une bière, en litres par jour : il grandit avec sa popularité (et avec le matériel). */
-  wholesaleQuota(beer: Beer): number {
-    // pendant un boost de production, le grossiste suit la cadence : sans ça, produire plus ne rapporterait rien
-    if (this.boostOf('wholesale')?.id === 'openGate') return Infinity; // grossiste sans limite
-    const boost = Math.max(this.boostMult('brew'), this.boostMult('yeast') > 1 ? 1.5 : 1);
-    return Math.round(this.batchLiters * (WHOLESALE_QUOTA.base + WHOLESALE_QUOTA.pop * beer.pop) * boost * (1 + this.medalBonus(beer)));
+  /** Litres que le grossiste reprend à plein prix chaque jour (selon le niveau de la brasserie). */
+  get wholesaleFull(): number {
+    return WHOLESALE.full[this.breweryLevel - 1] ?? WHOLESALE.full[WHOLESALE.full.length - 1]!;
   }
 
-  /** Litres que le grossiste reprend encore aujourd'hui pour cette bière. */
-  wholesaleLeft(beer: Beer): number {
-    return Math.max(0, this.wholesaleQuota(beer) - beer.wsToday);
+  /** Prix actuel du grossiste, en part du plein prix (1 tant qu'il n'en a pas trop ; le boost « prix fort » le garde à 1). */
+  get wholesaleRate(): number {
+    if (this.boostOf('wholesale')?.id === 'openGate') return 1;
+    return wholesaleFactor(this.wsToday, this.wholesaleFull);
   }
 
-  /** Bouteilles ou fûts que le grossiste peut reprendre maintenant (stock et quota du jour). */
+  /** Ce que rapporteraient `liters` litres de cette bière chez le grossiste, maintenant (le prix baisse en cours de vente). */
+  wholesaleQuote(beer: Beer, liters: number): number {
+    const perL = (wholesalePrice(beer.tasting) / BOTTLE_L) * this.boostMult('wholesale') * (1 + this.medalBonus(beer));
+    const share = this.boostOf('wholesale')?.id === 'openGate' ? liters : wholesaleValue(this.wsToday, this.wsToday + liters, this.wholesaleFull);
+    return perL * share;
+  }
+
+  /** Bouteilles ou fûts que le grossiste peut reprendre : tout ce qui se boit. */
   wholesaleSellable(beer: Beer, format: Format): number {
     if (beer.tasting.quality < DRINKABLE_MIN) return 0;
-    let left = this.wholesaleLeft(beer) + 1e-9;
-    if (format === 'bottle') return Math.min(beer.stock, Math.floor(left / BOTTLE_L));
-    let n = 0;
-    for (const g of [...beer.kegs].sort((a, b) => a - b)) {
-      if (g * GLASS_L > left) break;
-      left -= g * GLASS_L;
-      n++;
-    }
-    return n;
+    return format === 'bottle' ? beer.stock : beer.kegs.length;
   }
 
   /**
-   * Le grossiste reprend bouteilles et fûts à tout moment, à petit prix (le même au litre), dans la limite
-   * d'un quota quotidien par bière, en litres, rechargé à minuit.
+   * Le grossiste reprend bouteilles et fûts à tout moment, sans limite, mais de moins en moins cher au fil de la
+   * journée. Il ne fait pas connaître les bières : ses ventes ne comptent pas pour la popularité.
    */
   sellWholesale(beerId: number, n: number, format: Format = 'bottle'): CommandResult & { amount?: number; sold?: number } {
     const beer = this.beer(beerId);
@@ -1712,16 +1741,15 @@ export class Game {
     if (beer.tasting.quality < DRINKABLE_MIN) return { ok: false, reason: tl('Imbuvable') };
     const have = format === 'bottle' ? beer.stock : beer.kegs.length;
     if (Math.floor(n) <= 0 || have <= 0) return { ok: false, reason: tl('Rien à vendre') };
-    n = Math.min(Math.floor(n), this.wholesaleSellable(beer, format));
-    if (n <= 0) return { ok: false, reason: tl('Quota du grossiste atteint pour aujourd\'hui') };
+    n = Math.min(Math.floor(n), have);
     let liters = n * BOTTLE_L;
     if (format === 'bottle') beer.stock -= n;
     else {
       beer.kegs.sort((a, b) => a - b);
       liters = beer.kegs.splice(0, n).reduce((s, g) => s + g * GLASS_L, 0);
     }
-    const amount = (liters / BOTTLE_L) * wholesalePrice(beer.tasting) * this.boostMult('wholesale') * (1 + this.medalBonus(beer));
-    beer.wsToday += liters;
+    const amount = this.wholesaleQuote(beer, liters);
+    this.wsToday += liters;
     beer.sold += n;
     beer.liters += liters;
     beer.revenue += amount;
@@ -1736,12 +1764,12 @@ export class Game {
     return { ok: true, amount, sold: n };
   }
 
-  /** Recharge les quotas du grossiste au premier passage après minuit. */
+  /** Le grossiste se remet à plein prix au premier passage après minuit. */
   private refillQuota(): void {
     const day = localDay(this.wall);
     if (day === this.quotaDay) return;
     this.quotaDay = day;
-    for (const b of this.beers) b.wsToday = 0;
+    this.wsToday = 0;
   }
 
   /**
@@ -1851,7 +1879,7 @@ export class Game {
     }
     this.tickTrends();
     this.tickContests();
-    this.tickPartner();
+    this.tickPartner(dt);
     this.rollSales();
     this.updatePop();
     this.announce();
@@ -2155,7 +2183,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
       contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, partner: this.partner, partnersDone: this.partnersDone,
     };
@@ -2215,8 +2243,9 @@ export class Game {
     g.totalLiters ??= g.totalSold * BOTTLE_L;
     for (const b of g.beers) {
       b.liters ??= b.sold * BOTTLE_L;
-      b.wsToday ??= 0;
+      delete (b as { wsToday?: unknown }).wsToday; // le quota par bière a laissé place au prix dégressif
     }
+    g.wsToday ??= 0;
     g.wall ??= 0;
     g.quotaDay ??= localDay(g.wall);
     g.adViews ??= { day: 0, double: 0, prospect: 0 };
@@ -2296,6 +2325,8 @@ export class Game {
       g.stations[id].extra ??= 0;
     }
     g.partner ??= null;
+    // avant la bière officielle : celle qui a le plus de stock
+    if (g.partner && g.partner.beerId == null) g.partner.beerId = [...g.beers].sort((a, b) => b.stock - a.stock)[0]?.id ?? 0;
     g.partnersDone ??= {};
     return g;
   }

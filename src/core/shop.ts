@@ -75,7 +75,7 @@ export const BOOST_POSTS: readonly { id: BoostChannel | null; name: string; text
   { id: 'brew', name: tl('Machines'), text: tl('Toutes les machines tournent plus vite. Le temps du jeu, lui, ne change pas.') },
   { id: 'yeast', name: tl('Fermentation'), text: tl('Fermentation et garde : là où les brassins attendent le plus.') },
   { id: 'bar', name: tl('Clients du bar'), text: tl('Plus de monde au comptoir.') },
-  { id: 'wholesale', name: tl('Grossiste'), text: tl('Le grossiste paie plus cher, ou reprend tout sans limite.') },
+  { id: 'wholesale', name: tl('Grossiste'), text: tl('Le grossiste paie plus cher, ou garde son plein prix toute la journée.') },
   { id: null, name: tl('Coups ponctuels'), text: tl('Un effet immédiat.') },
 ];
 
@@ -88,7 +88,7 @@ export const BOOSTS: readonly BoostDef[] = [
   { id: 'happyHour', channel: 'bar', name: tl('Happy hour'), text: tl('Clients ×2, verres −20 % · 2 h'), mult: 2, minutes: 120, priceMult: 0.8, gems: 6 },
   { id: 'buzz', channel: 'bar', name: tl('Bouche-à-oreille'), text: tl('50 % de clients en plus · 8 h'), mult: 1.5, minutes: 480, gems: 15 },
   { id: 'broker', channel: 'wholesale', name: tl('Grossiste généreux'), text: tl('Le grossiste paie +50 % · 4 h'), mult: 1.5, minutes: 240, gems: 8 },
-  { id: 'openGate', channel: 'wholesale', name: tl('Grossiste sans limite'), text: tl('Le grossiste reprend tout · 4 h'), mult: 1, minutes: 240, gems: 50 },
+  { id: 'openGate', channel: 'wholesale', name: tl('Grossiste au prix fort'), text: tl('Le grossiste paie plein prix toute la journée · 4 h'), mult: 1, minutes: 240, gems: 50 },
   { id: 'prospect', name: tl('Prospection'), text: tl('Une commande arrive tout de suite'), mult: 1, minutes: 0, gems: 3 },
 ];
 export const boostById = (id: string) => BOOSTS.find((b) => b.id === id);

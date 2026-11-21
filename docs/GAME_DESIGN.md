@@ -220,7 +220,7 @@ L'objet d'un événement n'apparaît que pendant cet événement, toujours au m�
 |---|---|---|
 | **Qualité** | jusqu'à 50 points | rien en dessous de Médiocre, 10 pour Correcte (0,6), 25 pour Bonne (0,75), 40 pour Excellente (0,9), 50 pour une bière parfaite |
 | **Tendances** | +10 points par tendance suivie | jusqu'à 3 tendances à la fois |
-| **Ventes des 7 derniers jours** | jusqu'à 50 points | litres vendus (bar, commandes et grossiste), par paliers |
+| **Ventes des 7 derniers jours** | jusqu'à 50 points | litres vendus au bar, sur commande et aux partenaires (le grossiste ne compte pas : il ne fait pas connaître la bière), par paliers |
 
 | Ventes sur 7 jours | 100 L | 1 000 L | 10 000 L | 50 000 L | 150 000 L |
 |---|---|---|---|---|---|
@@ -290,26 +290,24 @@ Les concours donnent un but au-delà des étoiles : une **médaille**, portée e
 L'application Concours montre aussi le barème des cocardes et le **palmarès** de la brasserie. Les commandes ne changent pas : leur paiement est annoncé d'avance.
 
 ## Partenariats (`src/core/partners.ts`)
-Pour la fin de partie, quand l'argent s'accumule : la brasserie **sponsorise un club ou un événement pendant 7 jours de jeu** (application **Partenariats** de l'ordinateur). Chaque jour, une **jauge de litres à livrer** se remplit à nouveau ; ce qui n'est pas livré dans la journée est perdu. Un seul partenariat à la fois.
+**Le grand débouché pour les gros volumes**, au milieu et à la fin de la partie (application **Partenariats** de l'ordinateur). On sponsorise un club ou un événement pendant **7 jours de jeu** et on choisit sa **bière officielle**. Chaque jour, le partenaire a besoin d'une quantité de litres : elle **part toute seule du stock**, toutes les 30 s (la bière officielle d'abord, puis les autres assez bonnes, bouteilles puis fûts entiers), payée au prix annoncé. Ce qui manque un jour est perdu. Un seul partenariat à la fois.
 
-| Partenaire | Brasserie | Marque | Par jour | Qualité minimale | Payé | Contrat | Prime |
-|---|---|---|---|---|---|---|---|
-| Club de rugby du village | garage | 30 / 100 | 150 L | Correcte | ×1,5 grossiste | 1 500 € | 10 💎 |
-| Festival Rock en Fût | microbrasserie | 50 / 100 | 1 500 L | Correcte | ×1,5 | 15 000 € | 15 💎 |
-| FC des Remparts | microbrasserie | 60 / 100 | 2 500 L | Bonne | ×1,6 | 30 000 € | 20 💎 |
-| Finale de la Coupe au Grand Stade | usine | 70 / 100 | 8 000 L | Bonne | ×1,7 | 120 000 € | 30 💎 |
-| Festival des Mille Fûts | labo du futur | 80 / 100 | 30 000 L | Bonne | ×1,8 | 500 000 € | 50 💎 |
-| **Jeux mondiaux** (l'événement ultime) | labo du futur + une médaille au concours international | 90 / 100 | 70 000 L | Excellente | ×2 | 2 M€ | 100 💎 |
+| Partenaire | Brasserie | Marque | Par jour | Qualité minimale | Payé (× plein prix du grossiste) | Bière officielle | Contrat | Prime |
+|---|---|---|---|---|---|---|---|---|
+| Club de rugby du village | garage | 30 / 100 | 1 800 L | Correcte | ×1,2 | +5 points | 5 000 € | 10 💎 |
+| Festival Rock en Fût | microbrasserie | 50 / 100 | 9 000 L | Correcte | ×1,25 | +10 | 20 000 € | 15 💎 |
+| FC des Remparts | microbrasserie | 60 / 100 | 15 000 L | Bonne | ×1,3 | +10 | 40 000 € | 20 💎 |
+| Finale de la Coupe au Grand Stade | usine | 70 / 100 | 60 000 L | Bonne | ×1,4 | +15 | 150 000 € | 30 💎 |
+| Festival des Mille Fûts | labo du futur | 80 / 100 | 240 000 L | Bonne | ×1,5 | +20 | 600 000 € | 50 💎 |
+| **Jeux mondiaux** | labo du futur + une médaille au concours international | 90 / 100 | 450 000 L | Excellente | ×1,6 | +25 | 2 M€ | 100 💎 |
 
-- **Deux conditions pour signer** : le niveau de la brasserie (pour pouvoir fournir le volume) et un **palier de popularité de la marque** (30, 50, 60, 70, 80 puis 90 sur 100). Le score de la marque compte **sans la campagne de pub en cours** : on ne signe pas un grand partenaire sur un coup de pub. L'app affiche le score de la marque en haut, et pour chaque partenaire fermé ses conditions cochées ou non (« ✓ Brasserie : Usine », « 🔒 Marque à 70 / 100 au moins (sans la pub) »).
-- Mesure du joueur simulé : le club de rugby s'ouvre au 3e jour (marque 38), le festival rock et le FC des Remparts au 8e (63), la finale de la Coupe au 15e (72), le festival des Mille Fûts au 29e (82). Sa marque plafonne à 84 : les Jeux mondiaux demandent de très bonnes bières, des tendances suivies et beaucoup de ventes.
-- Les volumes sont calés sur la production du joueur simulé : un partenaire demande à peu près le tiers de ce que produit une brasserie de son niveau (400 L par jour au garage, 2 000 à 5 000 L à la microbrasserie, 10 000 à 25 000 L à l'usine, 50 000 à 130 000 L au labo du futur).
-- **Livrer** prend ce qu'il reste à livrer aujourd'hui dans le stock, bouteilles puis fûts entiers, en commençant par les bières assez bonnes qui ont le plus de stock. C'est payé tout de suite, au prix du grossiste multiplié par celui du partenaire (et le bonus de la cocarde), et compté avec les commandes dans le tableau de bord.
-- Les litres livrés **comptent double** dans les ventes de la semaine : le public découvre les bières.
-- **Le livreur** (Personnel) remplit aussi la jauge, même pendant l'absence.
-- **Toutes les journées remplies** : la prime en diamants, et le partenaire est coché « ✓ ×n » dans la liste.
-- Dans l'app : le contrat en cours (les 7 journées, ✓ remplie, ✗ manquée, la jauge du jour, « Nouvelle jauge dans … », Livrer), puis chaque partenaire avec ses conditions et « Signer · prix ».
-- En haut à droite, avec les effets actifs, une **case bleue au fanion** : son cadran se remplit avec la jauge du jour (pourcentage au centre, ✓ une fois remplie), le jour du contrat dans un coin (« 3/7 ») ; la toucher ouvre l'application.
+- **Deux conditions pour signer** : le niveau de la brasserie et un palier de popularité de la marque (sans la pub en cours). L'app affiche le score de la marque, et pour chaque partenaire fermé ses conditions cochées ou non.
+- **La bière officielle** se choisit à la signature (la plus populaire par défaut) et se change pendant le contrat. Elle gagne des **points de popularité tant que le contrat dure** (ligne « Bière officielle : … » dans sa fiche), et ses litres livrés comptent dans ses ventes de la semaine.
+- **Le prix** : le plein prix du grossiste pour la qualité de la bière, multiplié par celui du partenaire (et le bonus de la cocarde), affiché « 7 € le litre ». Bien au-dessus du grossiste, qui baisse au fil de la journée.
+- **Toutes les journées remplies** : la prime en diamants, et le partenaire est coché « ✓ ×n ».
+- Dans l'app : le contrat en cours (les 7 journées, ✓ remplie, ✗ manquée, la jauge du jour, « Nouvelle jauge dans … », la bière officielle, et « Plus de bière assez bonne en stock : il manque … aujourd'hui. Brasse ! » quand le stock ne suit pas), puis chaque partenaire avec ses conditions, le choix de la bière officielle et « Signer · prix ».
+- En haut à droite, avec les effets actifs, une **case bleue au fanion** : la jauge du jour dans son cadran, le jour du contrat dans un coin ; la toucher ouvre l'application.
+- **Calage** (joueur simulé) : un partenaire prend plusieurs fois ce que le grossiste reprend à plein prix au même niveau. Le joueur simulé signe le club de rugby vers le 5e jour, le festival rock vers le 13e, le FC des Remparts vers le 20e et la finale de la Coupe vers le 28e ; la partie se termine vers le 33e jour, comme avant.
 - Les Jeux mondiaux s'appellent ainsi plutôt que « Jeux olympiques », nom et symboles protégés.
 
 ## Commandes
@@ -363,9 +361,15 @@ L'ordinateur du bureau rassemble les applications **Commandes**, **Tendances** e
 | Intelligence logistique | 6 | 2 M€ |
 
 ## Le grossiste
-Le grossiste reprend n'importe quelle bouteille buvable, à environ la moitié du prix d'une commande : 1,40 € × (0,6 + 0,8 × qualité), soit 1,18 € à 1,96 € la bouteille. Les ingrédients et la bouteille coûtent environ 0,46 € (blonde de Gaston) à 0,65 € (recette très maltée) : il reste rentable, avec une marge d'au moins ×1,8. Par défaut, il reprend **automatiquement le surplus**, même appli fermée : tout ce qui dépasse la moitié du stockage, la bière la plus en stock d'abord. L'autre moitié reste pour les commandes. L'application Grossiste permet de couper cette vente automatique, ou de vendre à la main une caisse ou tout le stock d'une bière.
-
-Le grossiste reprend chaque jour une quantité limitée de chaque bière (4 à 24 brassins selon sa popularité). **Pendant un boost de production, il suit la cadence** : son quota est multiplié par celui des machines (×2 ou ×3), ou par 1,5 pendant une Levure express. Le Grossiste sans limite (boost) lève le quota. Sans ça, produire plus ne rapporterait rien et les boosts des machines seraient inutiles.
+**Le déstockage** : il reprend n'importe quelle bouteille ou n'importe quel fût buvable, à tout moment, **sans quota**, mais **son prix baisse au fil de la journée** (toutes bières confondues), parce qu'il en a déjà trop.
+- **Plein prix** : 1,40 € × (0,6 + 0,8 × qualité) la bouteille, soit 1,18 € à 1,96 € (environ la moitié d'une commande), **jusqu'à un volume par jour qui dépend du niveau de la brasserie** : 100 L au labo d'alchimiste, 300 L au garage, 1 500 L à la microbrasserie, 7 000 L à l'usine, 35 000 L au labo du futur (à peu près ce que reprenait l'ancien quota).
+- **Au-delà, le prix baisse** comme (plein prix / litres)², jusqu'à un **plancher de 35 %** : à ce prix, on rentre à peine dans le coût des ingrédients (0,46 à 0,65 € la bouteille). Il revient au plein prix à minuit (heure locale).
+- **Il ne fait pas connaître les bières** : ses ventes ne comptent pas pour la popularité.
+- **Pour les gros volumes, les partenariats paient bien mieux** : c'est leur rôle.
+- **Vente automatique** (cochée par défaut) : quand le stockage plein bloque la production, il reprend de quoi la débloquer ; la file de brassins n'est alors plus limitée par le stockage.
+- **Boosts** : Grossiste généreux (+50 % pendant 4 h, 8 💎) ; **Grossiste au prix fort** (plein prix toute la journée pendant 4 h, 50 💎).
+- L'app Grossiste : la vente automatique, une phrase qui explique la baisse de prix, le **prix du jour** (jauge en %, litres repris aujourd'hui), puis chaque bière en stock avec son prix au litre du moment et « 1 caisse » / « Tout · montant ».
+- Équilibrage : sans partenariat, le surplus part au grossiste de moins en moins cher ; le joueur simulé, qui signe les partenaires dès qu'il le peut, finit la partie vers le 33e jour.
 
 ## Gamme : l'étagère
 La gamme est une étagère de grandes bouteilles portant leur étiquette. À côté de la dernière, une silhouette « + » permet d'acheter une nouvelle place (8 au maximum) ; un essai gardé vient la remplir. Prix des places : 150 €, 8 000 €, 50 000 €, 200 000 €, 600 000 €, 1,5 M€ puis 3 M€.
