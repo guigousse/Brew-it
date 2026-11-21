@@ -14,7 +14,8 @@ import { decorLayout } from '../render/decorLayout';
 import { BarRoom, boundsFor, drawKeg, ROOM_W, StorageRoom } from '../render/rooms';
 import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
-import { cocardeCanvas, medalName, playCeremony } from './ceremony';
+import { cocardeCanvas, confetti, medalName, playCeremony } from './ceremony';
+import { missionCounted, missionText } from '../core/missions';
 import { PARTNER_DAYS, partnerById, PARTNERS, type Partnership } from '../core/partners';
 import { drawPartnerScene } from '../render/partnerArt';
 import { featureById, type FeatureId } from '../core/features';
@@ -384,6 +385,9 @@ export class App {
   private sheet = h('section', 'sheet hidden');
   private modal = h('div', 'modal hidden');
   private toasts = h('div', 'toasts');
+  /** Le bandeau de la mission en cours, en bas à gauche au-dessus de la navigation. */
+  private missionEl = h('button', 'mission hidden');
+  private missionKey = '';
   private openSheet: SheetState | null = null;
   /** Assistant « Brasser » : étape en cours et choix faits (null : la file des brassins). */
   private wiz: { step: 'beer' | 'format' | 'count' | 'trial'; beerId: number | null; format: Format; count: number } | null = null;
@@ -560,7 +564,8 @@ export class App {
       },
       tap: () => sfx.play('pop'),
     }, root);
-    root.append(this.header, this.stage, this.fabs, this.harvests, this.boostHud, this.sheet, this.dock, this.modal, this.toasts);
+    root.append(this.header, this.stage, this.fabs, this.harvests, this.boostHud, this.missionEl, this.sheet, this.dock, this.modal, this.toasts);
+    this.missionEl.onclick = () => this.claimMission();
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }
@@ -797,7 +802,9 @@ export class App {
     this.fabs.classList.toggle('hidden', !isRoom(this.view) || !!this.openSheet);
     // les notifications se posent au-dessus du panneau ouvert
     const sheetTop = this.openSheet ? this.sheet.getBoundingClientRect().top : 0;
-    this.root.style.setProperty('--toast-bottom', sheetTop ? `${Math.round(window.innerHeight - sheetTop)}px` : 'var(--bottom-h, 70px)');
+    const missionUp = this.renderMission(g);
+    this.root.style.setProperty('--toast-bottom', sheetTop ? `${Math.round(window.innerHeight - sheetTop)}px`
+      : missionUp ? `calc(var(--bottom-h, 70px) + ${this.missionEl.offsetHeight + 8}px)` : 'var(--bottom-h, 70px)');
     // le tutoriel montre le bouton dont il parle
     setPlaque(this.plaque, `★ ${g.breweryLevel} · ${g.breweryName}`, stationUp, tl('amélioration'));
     setPlaque(this.storagePlaque, `▣ ${STORAGE[g.storageLevel - 1]!.name}`, !!nextStore && g.money >= nextStore.cost, 'agrandissement');
@@ -2412,6 +2419,59 @@ export class App {
       }
       card.append(el);
     }
+  }
+
+  /** Le bandeau de mission : l'objectif et son avancement ; doré avec « Récupérer » quand il est rempli. */
+  private renderMission(g: Game): boolean {
+    const m = g.mission;
+    const show = !!m && g.tips >= TUTO_DONE && isRoom(this.view) && !this.openSheet && !this.modalOpen;
+    this.missionEl.classList.toggle('hidden', !show);
+    if (!show || !m) return false;
+    const key = `${m.def.id}|${m.value}|${m.done}|${chosenLang()}`;
+    if (key === this.missionKey) return true;
+    const fresh = m.done && !this.missionKey.includes('|true|');
+    this.missionKey = key;
+    this.missionEl.classList.toggle('done', m.done);
+    const reward = [m.def.money ? `+${compact(m.def.money)} €` : '', m.def.gems ? `+${m.def.gems} 💎` : ''].filter(Boolean).join(' ');
+    const head = h('span', 'mission-head');
+    head.append(h('span', 'mission-icon', m.done ? '🎁' : '🎯'), h('span', 'mission-text', missionText(m.def)));
+    const foot = h('span', 'mission-foot');
+    if (m.done) foot.append(h('span', 'mission-claim', tl('Récupérer')), h('span', 'mission-reward', reward));
+    else {
+      const bar = h('span', 'mission-bar');
+      const fill = h('i');
+      fill.style.width = `${Math.round((m.value / m.def.target) * 100)}%`;
+      bar.append(fill);
+      foot.append(bar, h('span', 'mission-count', missionCounted(m.def) ? `${fmtRate(m.value)}/${m.def.target}` : ''), h('span', 'mission-reward', reward));
+    }
+    this.missionEl.replaceChildren(head, foot);
+    this.missionEl.setAttribute('aria-label', m.done ? tl('Mission remplie : {0}. Récupérer {1}', missionText(m.def), reward) : tl('Mission : {0}', missionText(m.def)));
+    if (fresh) {
+      sfx.play('carillon');
+      this.missionEl.classList.remove('bump');
+      void this.missionEl.offsetWidth;
+      this.missionEl.classList.add('bump');
+    }
+    return true;
+  }
+
+  /** Récolte la mission : pièces et diamants volent vers le compteur, confettis. */
+  private claimMission(): void {
+    const g = this.game();
+    const r = g.claimMission();
+    if (!r) {
+      const m = g.mission;
+      if (m) this.toast(tl('Mission : {0}', missionText(m.def)), 'good');
+      return;
+    }
+    sfx.play('cash');
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce) {
+      if (r.money) this.fly(this.missionEl, this.moneyPill, 6, () => h('span', 'fly coin'));
+      if (r.gems) this.fly(this.missionEl, this.gemsPill, Math.min(6, r.gems), () => iconCanvas('gem', 1, 'fly fly-gem'));
+      confetti(document.body, 'gold', 40);
+    }
+    this.missionKey = '';
   }
 
   /** Une fonction s'ouvre : Gaston la présente, et un bouton y mène tout de suite. */

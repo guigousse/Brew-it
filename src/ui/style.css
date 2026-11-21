@@ -1070,3 +1070,22 @@ button:disabled { cursor: default; opacity: .5; }
 /* ouverture progressive : une application toute neuve */
 .pc-app.fresh .pc-app-icon { box-shadow: inset 2px 2px 0 #3a5068, inset -2px -2px 0 #0c1420, 0 0 0 2px var(--accent), 0 0 12px #f2c14ea0; animation: pulse 1.4s steps(4) infinite; }
 .pc-new { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); padding: 0 4px; font-size: 13px; line-height: 15px; color: var(--ink); background: var(--accent); border: 1px solid var(--ink); white-space: nowrap; }
+
+/* --- Bandeau de mission --------------------------------------------------------------- */
+.mission {
+  position: absolute; z-index: 5; left: 10px; bottom: calc(var(--bottom-h, 70px) + 10px); max-width: min(300px, calc(100% - 84px));
+  display: grid; gap: 3px; padding: 5px 9px 6px; text-align: left; color: var(--text, #f6ecd6); font: inherit; font-size: 16px; line-height: 1.1;
+  background: #2a2035ee; border: 2px solid var(--ink); box-shadow: inset 0 0 0 2px #5c4a6e, 0 3px 0 #0008; cursor: pointer;
+}
+.mission.hidden { display: none; }
+.mission-head { display: flex; gap: 6px; align-items: flex-start; }
+.mission-icon { flex: none; }
+.mission-foot { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.mission-bar { flex: 1; min-width: 60px; height: 6px; background: #1b1424; border: 1px solid #5c4a6e; }
+.mission-bar i { display: block; height: 100%; background: var(--good, #7ee081); }
+.mission-count { opacity: .85; }
+.mission-reward { color: var(--accent, #f2c14e); margin-left: auto; white-space: nowrap; }
+.mission.done { background: #4a3410f0; box-shadow: inset 0 0 0 2px var(--accent, #f2c14e), 0 3px 0 #0008; animation: pulse 1.2s steps(3) infinite; }
+.mission-claim { font-family: var(--font-title); font-size: 12px; padding: 2px 6px; background: var(--accent, #f2c14e); color: var(--ink); border: 2px solid var(--ink); }
+.mission.bump { animation: pop .25s steps(3), pulse 1.2s steps(3) infinite .25s; }
+@media (prefers-reduced-motion: reduce) { .mission.done, .mission.bump { animation: none; } }

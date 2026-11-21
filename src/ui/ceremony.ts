@@ -303,7 +303,7 @@ export function playCeremony(o: CeremonyOptions): void {
 }
 
 /** Pluie de confettis en pixel art, aux couleurs du métal. */
-function confetti(layer: HTMLElement, metal: 'gold' | 'silver' | 'bronze', n: number): void {
+export function confetti(layer: HTMLElement, metal: 'gold' | 'silver' | 'bronze', n: number): void {
   const colors = {
     gold: ['#f2c14e', '#fff4b0', '#a8742a', '#e8553a', '#7ee081', '#4ea8f0'],
     silver: ['#ffffff', '#bcc6d0', '#8cd0ff', '#5c6670'],

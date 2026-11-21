@@ -12,10 +12,11 @@ export type GameEvent =
   | { type: 'batchRuined'; beerId: number }
   | { type: 'autoSent'; client: string; amount: number }
   | { type: 'apprenticePlanned'; beerId: number }
-  | { type: 'gems'; amount: number; why: 'order' | 'level' | 'purchase' | 'contest' | 'partner' }
+  | { type: 'gems'; amount: number; why: 'order' | 'level' | 'purchase' | 'contest' | 'partner' | 'mission' }
   | { type: 'contestOpen'; tier: number; cat: string }
   | { type: 'contestResult'; tier: number; metal: number | null; beerId: number | null }
   | { type: 'feature'; id: string }
+  | { type: 'missionClaimed'; id: string; money: number; gems: number }
   | { type: 'partnerDelivered'; id: string; deliveries: number }
   | { type: 'partnerEnd'; id: string; days: number; earned: number; gems: number };
 

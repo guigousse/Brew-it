@@ -6,6 +6,7 @@ import { AD_EXTEND, AD_REF, adById, adCost, ADS, BAR, BAR_BASE_SHARE, BAR_MIN_QU
 import { orderGems, wholesaleFactor, wholesaleValue, WHOLESALE, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, PRESTIGE_QUALITY, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
+import { MISSIONS, type MissionDef, type MissionProgress } from './missions';
 import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelCost, precisionLevel, STATION_ORDER, stationDuration, STEPS_PER_TIER, upgradeCost, type StationId, type StationState } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
@@ -330,6 +331,8 @@ export class Game {
   /** Partenariats menés à leur terme, par partenaire. */
   partnersDone: Partial<Record<PartnerId, number>> = {};
   private announced = new Set<string>();
+  /** La mission en cours (indice dans MISSIONS) ; au-delà de la liste, toutes sont faites. */
+  missionIndex = 0;
 
   // ------------------------------------------------------------------ lectures
 
@@ -1112,7 +1115,7 @@ export class Game {
     return { ok: true, gems: pack.gems };
   }
 
-  earnGems(n: number, why: 'order' | 'level' | 'purchase' | 'contest' | 'partner'): void {
+  earnGems(n: number, why: 'order' | 'level' | 'purchase' | 'contest' | 'partner' | 'mission'): void {
     if (n <= 0) return;
     this.gems += n;
     this.events.emit({ type: 'gems', amount: n, why });
@@ -1608,6 +1611,46 @@ export class Game {
       this.partnerClock = 0;
       this.fillPartners();
     }
+  }
+
+  // ------------------------------------------------------------------ missions
+
+  /** Ce que les missions mesurent. */
+  missionProgress(): MissionProgress {
+    const medals = this.beers.flatMap((b) => b.medals ?? []);
+    const done = Object.values(this.partnersDone).reduce((a, n) => a + (n ?? 0), 0);
+    const levels = STATION_ORDER.map((id) => levelNumber(this.stations[id]));
+    return {
+      batches: this.batchesDone, orders: this.ordersDone, glasses: this.barSold,
+      machineLevels: levels.reduce((a, n) => a + n - 1, 0), topMachineLevel: Math.max(...levels),
+      breweryLevel: this.breweryLevel, beers: this.beers.length,
+      bestStars: Math.max(0, ...this.beers.map((b) => stars(b.pop))),
+      partnersSigned: this.partners.length + done, partnersDone: done,
+      storageLevel: this.storageLevel, barLevel: this.barLevel,
+      medals: medals.length, nationalMedals: medals.filter((m) => m.tier >= 1).length,
+      internationalMedals: medals.filter((m) => m.tier === 2).length,
+    };
+  }
+
+  /** La mission en cours et son avancement, ou null quand toutes sont faites. */
+  get mission(): { def: MissionDef; value: number; done: boolean } | null {
+    const def = MISSIONS[this.missionIndex];
+    if (!def) return null;
+    const value = Math.min(def.target, def.progress(this.missionProgress()));
+    return { def, value, done: value >= def.target };
+  }
+
+  /** Récolte la récompense d'une mission remplie et passe à la suivante. */
+  claimMission(): { money: number; gems: number } | null {
+    const m = this.mission;
+    if (!m?.done) return null;
+    const money = m.def.money ?? 0;
+    const gems = m.def.gems ?? 0;
+    this.money += money;
+    this.missionIndex++;
+    this.earnGems(gems, 'mission');
+    this.events.emit({ type: 'missionClaimed', id: m.def.id, money, gems });
+    return { money, gems };
   }
 
   // ------------------------------------------------------------------ ouverture progressive
@@ -2246,7 +2289,7 @@ export class Game {
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
-      contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, features: this.features, featuresSeen: this.featuresSeen, partners: this.partners, partnersDone: this.partnersDone,
+      contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, features: this.features, featuresSeen: this.featuresSeen, missionIndex: this.missionIndex, partners: this.partners, partnersDone: this.partnersDone,
     };
   }
 
@@ -2409,6 +2452,11 @@ export class Game {
       }
     }
     g.partnersDone ??= {};
+    // avant les missions : celles déjà remplies sont passées, sans récompense
+    if ((s as { missionIndex?: number }).missionIndex == null) {
+      g.missionIndex = 0;
+      while (g.mission?.done) g.missionIndex++;
+    }
     return g;
   }
 }

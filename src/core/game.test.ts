@@ -9,6 +9,7 @@ import { MemoryStorage, SaveManager } from './save';
 import { GEM_PACKS, GEMS } from './shop';
 import { STATION_ORDER } from './stations';
 import { STORAGE } from './warehouse';
+import { MISSIONS } from './missions';
 
 const run = (g: Game, seconds: number) => {
   for (let i = 0; i < seconds * 20; i++) g.step();
@@ -1247,5 +1248,44 @@ describe('visite guidée', () => {
     // une partie en cours de nouvelle visite garde son étape
     const mid = JSON.parse(JSON.stringify(Object.assign(new Game(), { tips: 6 })));
     expect(Game.fromJSON(mid).tips).toBe(6);
+  });
+});
+
+describe('missions', () => {
+  it('une mission remplie se récolte une fois, puis la suivante prend sa place', () => {
+    const g = new Game();
+    expect(g.mission?.def.id).toBe(MISSIONS[0]!.id);
+    expect(g.mission?.done).toBe(false);
+    expect(g.claimMission()).toBeNull();
+    g.ordersDone = 3;
+    expect(g.mission?.done).toBe(true);
+    const money = g.money;
+    const gems = g.gems;
+    const r = g.claimMission();
+    expect(r).toEqual({ money: MISSIONS[0]!.money ?? 0, gems: MISSIONS[0]!.gems ?? 0 });
+    expect(g.money).toBe(money + (MISSIONS[0]!.money ?? 0));
+    expect(g.gems).toBe(gems + (MISSIONS[0]!.gems ?? 0));
+    expect(g.mission?.def.id).toBe(MISSIONS[1]!.id);
+    expect(g.claimMission()).toBeNull();
+  });
+
+  it('une ancienne partie saute les missions déjà remplies, sans récompense', () => {
+    const g = new Game();
+    g.ordersDone = 12;
+    g.barSold = 50;
+    g.batchesDone = 20;
+    g.upgrade('mill');
+    const json = JSON.parse(JSON.stringify(g.toJSON()));
+    delete json.missionIndex;
+    const back = Game.fromJSON(json);
+    expect(back.missionIndex).toBeGreaterThanOrEqual(4);
+    expect(back.mission?.done).toBe(false);
+    expect(back.gems).toBe(g.gems);
+    expect(Game.fromJSON(JSON.parse(JSON.stringify(back.toJSON()))).missionIndex).toBe(back.missionIndex);
+  });
+
+  it('chaque mission a un identifiant unique et un objectif positif', () => {
+    expect(new Set(MISSIONS.map((m) => m.id)).size).toBe(MISSIONS.length);
+    for (const m of MISSIONS) expect(m.target).toBeGreaterThan(0);
   });
 });
