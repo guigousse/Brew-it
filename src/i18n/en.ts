@@ -1040,7 +1040,6 @@ const dict: Record<string, string> = {
   "Régional": "Regional",
   "National": "National",
   "International": "International",
-  "En compétition": "Competing",
-  "Les notes du jury restent secrètes jusqu'à la proclamation. À ce niveau, les rivaux notent entre {0} et {1} / 20.": "The judges' scores stay secret until the results. At this level, rivals score between {0} and {1} / 20.",
+  "Participants : {0} brasseries": "Entrants: {0} breweries",
 };
 export default dict;

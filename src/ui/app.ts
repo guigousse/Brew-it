@@ -2536,17 +2536,8 @@ export class App {
     el.append(head);
     this.paintTimer(time, g.time);
     el.append(h('div', 'letter-ask', tl('Catégorie : {0}', cat?.text ?? c.cat)));
-    // les rivaux, sans leurs notes (elles ne se dévoilent qu'à la proclamation), dans l'ordre alphabétique pour ne rien
-    // trahir du classement ; seul le niveau du concours est annoncé
-    const podium = h('div', 'podium');
-    for (const r of [...c.rivals].sort((a, b) => a.name.localeCompare(b.name))) {
-      const line = h('div', 'podium-line');
-      line.append(iconCanvas('range', 1, 'rival-icon'), h('span', 'podium-name', r.beer ? `${r.beer} · ${r.name}` : r.name), h('span', 'podium-score hidden-score', '?'));
-      podium.append(line);
-    }
-    const [lo, hi] = tier.rivals;
-    el.append(h('div', 'letter-sub', tl('En compétition')), podium,
-      h('p', 'letter-status', tl('Les notes du jury restent secrètes jusqu\'à la proclamation. À ce niveau, les rivaux notent entre {0} et {1} / 20.', lo.toLocaleString(locale), hi.toLocaleString(locale))));
+    // les rivaux ne se dévoilent qu'à la proclamation : seulement le nombre de participants
+    el.append(h('div', 'letter-ask', tl('Participants : {0} brasseries', c.rivals.length + 1)));
     if (c.entry) {
       const b = g.beer(c.entry.beerId);
       el.append(h('p', 'letter-status ok', tl('✓ « {0} » est inscrite. Le jury goûte son lot à la clôture.', b?.name ?? '?')));

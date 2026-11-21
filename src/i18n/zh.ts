@@ -1040,7 +1040,6 @@ const dict: Record<string, string> = {
   "Régional": "地区",
   "National": "全国",
   "International": "国际",
-  "En compétition": "参赛者",
-  "Les notes du jury restent secrètes jusqu'à la proclamation. À ce niveau, les rivaux notent entre {0} et {1} / 20.": "评委打分在公布前保密。在这一级别，对手得分在 {0} 到 {1} / 20 之间。",
+  "Participants : {0} brasseries": "参赛酒厂：{0} 家",
 };
 export default dict;
