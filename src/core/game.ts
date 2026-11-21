@@ -241,9 +241,10 @@ export class Game {
   trends: Trend[] = [];
   /** Cuves de fermentation et de garde (plusieurs brassins en parallèle). */
   tanks: Partial<Record<StationId, number>> = {};
-  /** Fin de la fête en cours, et instant où l'on pourra en organiser une autre (s de jeu). */
+  /** Fin de l'événement en cours (s de jeu). */
   partyUntil = 0;
-  partyReadyAt = 0;
+  /** Chaque type d'événement a son propre repos : l'instant où l'on pourra le relancer (s de jeu). */
+  eventReadyAt: Partial<Record<BarEventId, number>> = {};
   /** Événement en cours au bar (ou le dernier). */
   eventId: BarEventId = 'party';
   /** Objets achetés au magasin (télé, cible…). */
@@ -1255,19 +1256,29 @@ export class Game {
     return this.startEvent('party');
   }
 
+  /** Instant (s de jeu) où cet événement aura fini son repos. */
+  eventReadyTime(id: BarEventId): number {
+    return this.eventReadyAt[id] ?? 0;
+  }
+
+  /** Cet événement a fini son repos (les autres types ont chacun le leur). */
+  eventRested(id: BarEventId): boolean {
+    return this.time >= this.eventReadyTime(id);
+  }
+
   /** Lance un événement au bar (il faut l'objet nécessaire, de l'argent, et que le quartier soit remis du précédent). */
   startEvent(id: BarEventId): CommandResult {
     const ev = barEventById(id);
     if (!ev) return { ok: false, reason: tl('Événement introuvable') };
     if (ev.needs && !this.owns(ev.needs)) return { ok: false, reason: tl('Il faut d\'abord acheter : {0}', SHOP_ITEMS.find((x) => x.id === ev.needs)?.name) };
     if (this.partying) return { ok: false, reason: tl('Un événement bat déjà son plein') };
-    if (this.time < this.partyReadyAt) return { ok: false, reason: tl('Le quartier se remet du dernier événement') };
+    if (!this.eventRested(id)) return { ok: false, reason: tl('Le quartier se remet du dernier événement de ce type') };
     const cost = this.eventCost(id);
     if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= cost;
     this.eventId = id;
     this.partyUntil = this.time + ev.duration;
-    this.partyReadyAt = this.time + PARTY_COOLDOWN;
+    this.eventReadyAt[id] = this.time + PARTY_COOLDOWN;
     this.refillTaps();
     return { ok: true };
   }
@@ -2365,7 +2376,7 @@ export class Game {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, storageStep: this.storageStep, planExtra: this.planExtra, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
-      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
+      barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, eventReadyAt: this.eventReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, giftTaken: this.giftTaken, tour: true, offline: this.offline, announced: [...this.announced],
       contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, features: this.features, featuresSeen: this.featuresSeen, missionIndex: this.missionIndex, partners: this.partners, partnersDone: this.partnersDone,
     };
@@ -2447,13 +2458,17 @@ export class Game {
     delete (g as unknown as { decor?: unknown }).decor; // la décoration reviendra plus tard
     g.tanks ??= {};
     g.partyUntil ??= 0;
-    g.partyReadyAt ??= 0;
     g.eventId ??= 'party';
+    // l'ancien repos commun devient celui du dernier événement lancé
+    const oldReady = (g as unknown as { partyReadyAt?: number }).partyReadyAt ?? 0;
+    delete (g as unknown as { partyReadyAt?: unknown }).partyReadyAt;
+    g.eventReadyAt ??= {};
+    if (oldReady > 0) g.eventReadyAt[g.eventId] ??= oldReady;
     g.owned ??= [];
     g.barmanUntil ??= 0;
     g.barMessage ??= BAR_MESSAGE;
     // la fête demande désormais une boule à facettes : qui en a déjà organisé une la garde
-    if (g.partyReadyAt > 0 && !g.owned.includes('disco')) g.owned.push('disco');
+    if (oldReady > 0 && !g.owned.includes('disco')) g.owned.push('disco');
     g.adUntil ??= 0;
     g.adId ??= 'paper'; // les campagnes d'avant les types de pub ressemblaient à l'annonce dans le journal
     g.adPrestige ??= false;

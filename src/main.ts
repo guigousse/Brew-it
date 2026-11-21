@@ -7,6 +7,8 @@ import { TRENDS } from './core/trends';
 import { onAppLifecycle, tapFeedback } from './platform/lifecycle';
 import { createGemStore, type Purchase } from './platform/purchases';
 import { createStorage } from './platform/storage';
+import { Notifier } from './platform/notifications';
+import { planNotifications } from './core/notifications';
 import { sfx } from './platform/audio';
 import { App } from './ui/app';
 import { CONTEST_TIERS, contestName, MEDALS, type ContestTier, type Metal } from './core/contests';
@@ -64,6 +66,12 @@ async function boot() {
       }
     },
   });
+
+  // notifications locales : programmées au départ, annulées au retour
+  const notifier = new Notifier();
+  app.notifier = notifier;
+  notifier.onTap((kind) => app.openFromNotification(kind));
+  void notifier.cancelAll();
 
   app.onTasteReady = () => {
     tapFeedback(true);
@@ -180,9 +188,15 @@ async function boot() {
     () => {
       pausedAt = Date.now();
       void saves.save(game);
+      try {
+        void notifier.schedule(planNotifications(game, pausedAt, notifier.prefs.enabled));
+      } catch (e) {
+        console.error('notifications', e);
+      }
     },
     () => {
       if (!pausedAt) return;
+      void notifier.cancelAll();
       app.scene.invalidate();
       app.storageRoom.invalidate();
       app.barRoom.invalidate();

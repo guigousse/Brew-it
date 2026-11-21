@@ -24,7 +24,7 @@ function play(snap: unknown, act: Act, seed: number, kegsPerTap: number) {
   const best = [...g.beers].sort((a, b) => b.pop - a.pop);
   for (let i = 0; i < g.taps.length * kegsPerTap; i++) best[i % best.length]!.kegs.push(kl);
   for (const e of BAR_EVENTS) if (e.needs && !g.owns(e.needs)) (g.owned as string[]).push(e.needs);
-  g.partyReadyAt = 0; g.partyUntil = 0; g.adUntil = 0;
+  g.eventReadyAt = {}; g.partyUntil = 0; g.adUntil = 0;
   const m0 = g.money, bar0 = g.barRevenue;
   let orders = 0, cost = 0;
   if (act.kind === 'ad') { cost = g.adCost(act.id); if (!g.advertise(act.id).ok) throw new Error('ad'); }

@@ -26,6 +26,8 @@ import { GEMSTONES, BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTER
 import { drawGaston } from './gaston';
 import { createKnob } from './knob';
 import { sfx } from '../platform/audio';
+import type { Notifier } from '../platform/notifications';
+import type { NotifCategory, NotifKind } from '../core/notifications';
 import { showRewardedAd } from '../platform/ads';
 import { Tour, type TourTarget, type TourView } from './tutorial';
 import { compact, countdown, dialTime } from './format';
@@ -410,6 +412,10 @@ export class App {
   onTasteReady?: () => void;
   /** Appelé quand une commande part (haptique). */
   onSent?: () => void;
+  /** Les notifications locales (réglages, autorisation). */
+  notifier?: Notifier;
+  /** Gaston a déjà proposé les notifications pendant cette session. */
+  private notifAsked = false;
 
   constructor(private root: HTMLElement, private game: () => Game, private cb: AppCallbacks) {
     // header
@@ -789,7 +795,7 @@ export class App {
     else if (res && res !== this.ceremonyShown && !this.modalOpen && !this.openSheet && !this.tour.active) {
       this.ceremonyShown = res;
       this.openContestResult(res);
-    }
+    } else this.maybeAskNotifications();
     const can = g.canBrew();
     const trial = g.tastable;
     // pastilles des boutons d'action : l'essentiel en un coup d'œil ; « ready » = il y a quelque chose à faire
@@ -813,7 +819,7 @@ export class App {
     const kegsReady = g.beers.some((b) => b.kegs.length > 0);
     this.syncKegHits();
     const nextBar = BAR[g.barLevel];
-    const eventReady = !g.partying && g.time >= g.partyReadyAt;
+    const eventReady = !g.partying && BAR_EVENTS.some((ev) => (!ev.needs || g.owns(ev.needs)) && g.eventRested(ev.id));
     setFab(this.eventsBtn, g.partying ? clock(g.partyUntil - g.time) : '', g.partying ? 'alert' : '', g.partying ? tl('{0} en cours', g.barEvent.name) : tl('Événements'));
     this.eventsBtn.classList.toggle('dim', !g.partying && !eventReady);
     // améliorations possibles : la flèche brille
@@ -1791,12 +1797,10 @@ export class App {
     const card = this.modalCard(tl('Événements'));
     const kegs = g.beers.reduce((s, b) => s + b.kegs.length, 0);
     if (g.partying) card.append(h('div', 'note', tl('{0} en cours · encore {1}', g.barEvent.name, clock(g.partyUntil - g.time))));
-    else if (g.time < g.partyReadyAt) card.append(h('div', 'hint', tl('Le quartier se repose : prochain événement dans {0}', duration(g.partyReadyAt - g.time))));
     card.append(
       h('p', 'hint', tl('Pendant un événement, les fûts vides sont rebranchés tout seuls avec ceux du stockage.')),
       h('div', kegs ? 'stats-line strong' : 'note bad', tl('Fûts pleins au stockage : {0}', kegs)),
     );
-    const can = !g.partying && g.time >= g.partyReadyAt;
     for (const ev of BAR_EVENTS) {
       const el = h('div', 'card event-card');
       const head = h('div', 'event-head');
@@ -1822,9 +1826,12 @@ export class App {
           this.onSent?.();
           this.closeModal();
         });
+        const rested = g.eventRested(ev.id);
+        const can = !g.partying && rested;
         go.disabled = !can;
         if (can) this.costGate(go, cost);
         el.append(go);
+        if (!rested) el.append(h('div', 'hint', tl('Le quartier s\'en remet : de nouveau possible dans {0}', duration(g.eventReadyTime(ev.id) - g.time))));
       }
       card.append(el);
     }
@@ -3394,6 +3401,7 @@ export class App {
     for (const l of LANGS) opt(l.id, l.name);
     langCard.append(h('div', 'section-title', tl('Langue')), langs);
     card.append(langCard);
+    if (this.notifier) card.append(this.notifOptions(this.notifier));
     // Accélération du temps : réservée aux tests (elle fausserait l'équilibrage du jeu).
     const speed = h('div', 'card');
     const chips = h('div', 'chips');
@@ -3407,6 +3415,73 @@ export class App {
     speed.append(h('div', 'section-title', tl('Mode test : vitesse')), chips);
     if (import.meta.env.DEV) card.append(speed);
     card.append(fresh, this.btn('btn', tl('Fermer'), () => this.closeModal()));
+  }
+
+  /** Réglages des notifications : une puce par catégorie, et l'état de l'autorisation iOS. */
+  private notifOptions(n: Notifier): HTMLElement {
+    const card = h('div', 'card');
+    const chips = h('div', 'chips');
+    const names: Record<NotifCategory, string> = {
+      brewery: tl('Brasserie'), orders: tl('Commandes'), contests: tl('Concours'), reminders: tl('Rappels'),
+    };
+    for (const c of Object.keys(names) as NotifCategory[]) {
+      const chip = this.btn(`chip${n.prefs.enabled[c] ? ' active' : ''}`, names[c], () => {
+        n.setCategory(c, !n.prefs.enabled[c]);
+        chip.classList.toggle('active', n.prefs.enabled[c]);
+        sfx.play('pop');
+      });
+      chips.append(chip);
+    }
+    const state = h('p', 'hint', '');
+    card.append(h('div', 'section-title', tl('Notifications')), chips, state);
+    void n.permission().then((p) => {
+      if (p === 'denied') state.textContent = tl('Les notifications sont coupées dans les Réglages de l\'iPhone (Brew It → Notifications).');
+      else if (p === 'prompt') {
+        state.textContent = tl('Gaston peut te prévenir quand ta bière a besoin de toi.');
+        card.append(this.btn('btn small', tl('Autoriser les notifications'), () => void n.request().then(() => this.openOptions())));
+      } else if (p === 'unsupported') state.textContent = tl('Sur iPhone, Gaston te prévient quand ta bière a besoin de toi.');
+      else state.textContent = tl('Rien entre 22 h et 8 h, et jamais plus d\'une toutes les 2 h.');
+    });
+    return card;
+  }
+
+  /**
+   * Gaston propose les notifications au bon moment : après la visite guidée et la première commande livrée,
+   * une seule fois, avant que la question d'iOS n'apparaisse.
+   */
+  private maybeAskNotifications(): void {
+    const n = this.notifier;
+    const g = this.game();
+    if (!n?.native || n.prefs.asked || this.notifAsked) return;
+    if (g.tips < TUTO_DONE || g.ordersDone < 1 || this.modalOpen || this.openSheet || this.tour.active) return;
+    this.notifAsked = true;
+    void n.permission().then((p) => {
+      if (p !== 'prompt') return n.markAsked();
+      const card = this.modalCard(tl('Gaston'));
+      const av = h('canvas', 'mentor-avatar');
+      drawGaston(av);
+      card.append(av, h('p', '', tl('Je peux te prévenir quand ton essai est prêt à goûter, qu\'un concours ouvre ou que la brasserie s\'arrête. Jamais la nuit, promis. D\'accord ?')));
+      card.append(
+        this.btn('btn primary', tl('Oui, préviens-moi'), () => {
+          this.closeModal();
+          void n.request();
+        }),
+        this.btn('btn', tl('Plus tard'), () => {
+          n.markAsked();
+          this.closeModal();
+        }),
+      );
+    });
+  }
+
+  /** Le joueur a touché une notification : on l'emmène où ça se passe. */
+  openFromNotification(kind: NotifKind): void {
+    if (this.tour.active) return;
+    if (kind === 'taste') this.goRoom('workshop');
+    else if (kind === 'eventReady') this.openEvents();
+    else if (kind === 'contestOpen' || kind === 'contestClosing') this.openComputer('contests');
+    else if (kind === 'partnerDone') this.openComputer('orders', true);
+    else if (kind === 'courier' || kind === 'boardFull' || kind === 'urgentOrder' || kind === 'prestigeOrder') this.openComputer('orders');
   }
 
   /** Le message qui défile sur le panneau lumineux du comptoir. */

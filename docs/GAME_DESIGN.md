@@ -198,7 +198,7 @@ Un jeu complet de fûts tient environ 2 à 5 heures quand la marque est au somme
 
 **Les fûts se branchent à la main** : on touche le comptoir, puis la tireuse, puis la bière. L'onglet Bar porte un « ! » quand une tireuse est vide et qu'un fût plein attend au stockage. Le **barman** (Personnel, 3 💎 les 8 h) le fait à notre place, même pendant l'absence ; pendant un événement, le personnel du bar s'en charge aussi.
 
-**Événements** (bouton à l'étoile, ou l'objet de l'événement dans le bar). Un seul à la fois, puis 6 h de repos avant le suivant. Pendant un événement, les fûts vides sont rebranchés tout seuls avec ceux du stockage : il faut donc **prévoir des fûts d'avance**. Ils se débloquent **l'un après l'autre**, en achetant leur objet au magasin. Chaque objet débloque l'achat du suivant, et les prix suivent les agrandissements du bar. Le prix d'un événement est un multiple d'un prix de référence, qui vaut 80 € au comptoir poussiéreux, puis 450 €, 2 000 €, 4 000 € et 12 000 € selon le niveau du bar. **Pendant un événement, les verres se vendent plus cher** : c'est là que se fait le bénéfice, sur les fûts préparés d'avance. Mesure (`npm run roi`, 24 h, 6 fûts par tireuse) : un événement rapporte de 1,3 à 3,3 fois son prix quand la cave est prête, rien quand elle est vide. Le bar reste une petite part du chiffre d'affaires : les événements y sont un coup de pouce et un moment de jeu, pas le moteur de la brasserie.
+**Événements** (bouton à l'étoile, ou l'objet de l'événement dans le bar). Un seul à la fois ; **chaque type d'événement a son propre repos de 6 h** : après une soirée foot, on peut lancer tout de suite un tournoi de fléchettes, mais pas une autre soirée foot. La carte d'un événement au repos affiche le temps qui reste (« de nouveau possible dans 4 h 12 »), et le bouton à l'étoile s'assombrit quand aucun événement débloqué n'est disponible. Les anciennes parties gardent le repos en cours pour le dernier événement lancé. Pendant un événement, les fûts vides sont rebranchés tout seuls avec ceux du stockage : il faut donc **prévoir des fûts d'avance**. Ils se débloquent **l'un après l'autre**, en achetant leur objet au magasin. Chaque objet débloque l'achat du suivant, et les prix suivent les agrandissements du bar. Le prix d'un événement est un multiple d'un prix de référence, qui vaut 80 € au comptoir poussiéreux, puis 450 €, 2 000 €, 4 000 € et 12 000 € selon le niveau du bar. **Pendant un événement, les verres se vendent plus cher** : c'est là que se fait le bénéfice, sur les fûts préparés d'avance. Mesure (`npm run roi`, 24 h, 6 fûts par tireuse) : un événement rapporte de 1,3 à 3,3 fois son prix quand la cave est prête, rien quand elle est vide. Le bar reste une petite part du chiffre d'affaires : les événements y sont un coup de pouce et un moment de jeu, pas le moteur de la brasserie.
 
 | Événement | Durée | Effet | Prix | Objet (magasin) |
 |---|---|---|---|---|
@@ -412,6 +412,28 @@ Le jeu s'est enrichi (concours, partenariats, marketing, grossiste…) ; pour qu
 - **Automatismes** : après la visite guidée, **la file de brassins se reprogramme toute seule** (le dernier brassin, quand la file est vide : la brasserie ne s'arrête plus) Le **grossiste** reprend le surplus tout seul. Brancher les fûts et livrer restent des gestes du jeu : le **barman** et le **livreur** s'en chargent contre quelques diamants (app Personnel).
 - **Moins d'écrans** : plus d'app Grossiste, les partenariats vivent dans Commandes ; la popularité d'une bière se résume à ses étoiles, sa jauge et le conseil de Gaston, le détail des parts s'ouvre avec « Détail ▾ ».
 - **Récompenses visibles** : confettis à chaque mission récoltée, à chaque niveau de brasserie et à chaque contrat de partenariat rempli.
+
+## Notifications (`src/core/notifications.ts`, `src/platform/notifications.ts`)
+Des **notifications locales iOS** ramènent le joueur au bon moment, sans serveur. Au passage en arrière-plan, le jeu **rejoue l'absence sur une copie de la partie** (la même simulation qu'au retour, jusqu'au plafond des 8 h, par pas de 2 s) et relève les moments clés ; au retour, tout ce qui est en attente est annulé.
+
+| Catégorie | Notification | Quand |
+|---|---|---|
+| Brasserie | Plafond des 8 h : « La brasserie s'est arrêtée : viens récolter tes 12k € » | 8 h après le départ |
+| Brasserie | Essai prêt à goûter | quand la première bouteille d'un essai sort |
+| Brasserie | Événement du bar disponible | à la fin du repos d'un événement, s'il reste des fûts au stockage |
+| Commandes | Le livreur termine sa tournée | 30 min avant la fin du contrat |
+| Commandes | Commande urgente ou de prestige | à son arrivée (abandonnée si elle expire avant l'envoi) |
+| Commandes | Tableau des commandes plein | quand la dernière place se remplit |
+| Commandes | Contrat de partenaire rempli | à la 7e livraison, avec la prime |
+| Concours | Nouveau concours | à l'ouverture des inscriptions |
+| Concours | Concours sans bière inscrite | 1 h avant la clôture |
+| Rappels | Gaston : « tes clients réclament ta « Blonde » ! », puis « les cuves s'ennuient sans toi » | 1 jour, puis 3 jours sans ouvrir le jeu |
+
+- **Anti-spam** : rien de 22 h à 8 h (la notification attend 8 h du matin, ou est abandonnée si elle n'a plus de sens) ; au moins 2 h entre deux notifications, la plus importante l'emporte ; 4 au plus par absence, plus les rappels.
+- **Autorisation** : jamais au lancement. Après la visite guidée et la première commande livrée, Gaston propose : « Je peux te prévenir quand ton essai est prêt à goûter… D'accord ? » (« Oui, préviens-moi » déclenche la question d'iOS, « Plus tard » ne la repose plus ; la croix la repose au prochain lancement).
+- **Options** : une puce par catégorie (Brasserie, Commandes, Concours, Rappels), et l'état de l'autorisation (bouton « Autoriser les notifications », ou le chemin des Réglages de l'iPhone si elles sont coupées).
+- **Toucher une notification** mène où ça se passe : l'atelier pour un essai, les événements du bar, l'app Commandes (onglet Partenaires pour un contrat rempli) ou l'app Concours.
+- Rien avant la fin de la visite guidée.
 
 ## Équilibrage
 Voir [BALANCE.md](BALANCE.md) : l'audit, les objectifs de rythme et le joueur simulé (`npm run balance`).

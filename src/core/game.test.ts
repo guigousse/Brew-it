@@ -501,10 +501,37 @@ describe('jeu', () => {
     expect(money - g.money).toBe(g.eventCost('foot'));
     expect(g.partying).toBe(true);
     expect(g.barEvent.id).toBe('foot');
-    expect(g.startEvent('party').ok).toBe(false); // un seul à la fois, puis le repos
+    expect(g.startEvent('party').ok).toBe(false); // un seul à la fois
     const back = Game.fromJSON(JSON.parse(JSON.stringify(g)));
     expect(back.owns('tv')).toBe(true);
     expect(back.eventId).toBe('foot');
+  });
+
+  it('événements du bar : chaque type a son propre repos', () => {
+    const g = withBeer(1e6);
+    for (const id of ['plants', 'darts', 'posters', 'tv'] as const) expect(g.buyDecor(id).ok).toBe(true);
+    expect(g.startEvent('foot').ok).toBe(true);
+    run(g, 90 * 60 + 1);
+    expect(g.partying).toBe(false);
+    expect(g.eventRested('foot')).toBe(false);
+    expect(g.startEvent('foot').ok).toBe(false); // la soirée foot se repose
+    expect(g.eventRested('darts')).toBe(true);
+    expect(g.startEvent('darts').ok).toBe(true); // le tournoi de fléchettes, lui, est libre
+    const back = Game.fromJSON(JSON.parse(JSON.stringify(g)));
+    expect(back.eventReadyTime('foot')).toBe(g.eventReadyTime('foot'));
+    simulateOffline(g, PARTY.cooldown);
+    expect(g.startEvent('foot').ok).toBe(true);
+  });
+
+  it('événements du bar : l\'ancien repos commun passe au dernier événement lancé', () => {
+    const g = withBeer(1e6);
+    const raw = JSON.parse(JSON.stringify(g));
+    delete raw.eventReadyAt;
+    raw.partyReadyAt = g.time + 3600;
+    raw.eventId = 'foot';
+    const back = Game.fromJSON(raw);
+    expect(back.eventReadyTime('foot')).toBe(g.time + 3600);
+    expect(back.eventRested('darts')).toBe(true);
   });
 
   it('barman en renfort : 8 h à rebrancher les fûts tout seul, à renouveler', () => {

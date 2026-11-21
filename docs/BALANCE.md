@@ -142,7 +142,7 @@ Après chaque réglage, relancer `npm run balance` et vérifier :
 ## Pistes pour la suite (pas encore faites)
 
 1. ~~Des commandes spéciales~~ : c'est fait en partie. Les clients envoient des commandes à remplir, parfois avec un style exigé. On pourrait ajouter des commandes rares, avec une prime, qui demandent une recette précise.
-2. **Des notifications locales** : essai prêt à goûter, stockage plein, plafond des 8 h atteint. Elles ramènent le joueur au bon moment.
+2. ~~Des notifications locales~~ : c'est fait (voir GAME_DESIGN.md, « Notifications »). Le stockage plein n'est pas notifié : le grossiste le vide tout seul.
 3. ~~Faire peser davantage la qualité~~ : c'est fait. La précision du matériel fait varier la qualité de 0,58 en moyenne au niveau 1 à 1,00 au niveau 5 (voir GAME_DESIGN.md et `npm run quality`). Le rythme reste de 28 jours.
 4. **Le palier du niveau 5.** Le volume de 600 L n'arrive qu'avec les 7 machines au niveau 5. C'est le passage le plus lent (J13 à J19). On pourrait donner à chaque machine de niveau 5 un bonus immédiat (vitesse, qualité).
 5. **Une rejouabilité après la fin** (nouvelle brasserie, prestige) pour les joueurs qui finissent en un mois.
