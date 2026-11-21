@@ -14,7 +14,7 @@
 import { writeFileSync } from 'node:fs';
 import { DRINKABLE_MIN } from '../src/core/brewing/model';
 import { DEFAULT_LABEL } from '../src/core/label';
-import { Game, simulateOffline } from '../src/core/game';
+import { Game, simulateOffline, TUTO_DONE } from '../src/core/game';
 import { BAR, BAR_EVENTS } from '../src/core/market';
 import { COMPUTERS } from '../src/core/orders';
 import { MAX_LEVEL, STATION_ORDER, upgradeCost } from '../src/core/stations';
@@ -227,6 +227,7 @@ function signPartner() {
   }
 }
 const partnersSigned: string[] = [];
+const MISSIONS_DONE: string[] = [];
 let PARTNER_EARNED = 0;
 g.events.on((e) => { if (e.type === 'partnerEnd') PARTNER_EARNED += e.earned; });
 
@@ -258,8 +259,10 @@ function session(minutes: number) {
   deliver();
   wholesale();
   shop();
-  // avant de partir, un barman pour changer les fûts pendant l'absence (s'il y en a de quoi)
-  if (g.beers.some((b) => b.kegs.length) && !g.barmanOn && g.money >= g.barmanCost * 10 && g.hireBarman().ok) buy('Barman', g.barmanCost);
+  // les missions remplies se récoltent
+  for (let r = g.claimMission(); r; r = g.claimMission()) MISSIONS_DONE.push(`${fmt(clock)} ${g.missionIndex}`);
+  // la visite guidée est finie au bout de la première session : les fûts se changent et la file se reprogramme toute seule
+  g.tips = Math.max(g.tips, TUTO_DONE);
   // avant de partir, on remplit la file de brassins (en bouteilles, la gamme à tour de rôle)
   for (let i = 0; g.beers.length && g.planRoom > 0 && i < 500; i++) g.planBrew(g.beers[i % g.beers.length]!.id, 'bottle');
 }
@@ -314,6 +317,7 @@ console.log(revenueByDay.map((r, i) => `J${i + 1} ${Math.round(((revenueByDay[i 
 console.log('\n=== Partenariats');
 console.log(partnersSigned.join(' · '));
 console.log('\n=== Résumé');
+console.log(`Missions : ${MISSIONS_DONE.length} — ${MISSIONS_DONE.join(' · ')}`);
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
 console.log('Diamants gagnés (cumul) :', gemsByDay.map((c, i) => `J${i + 1} ${c}`).join(' · '), '· fin', g.gems + gemsSpent - BUY - gift);

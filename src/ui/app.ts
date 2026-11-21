@@ -18,7 +18,7 @@ import { cocardeCanvas, confetti, medalName, playCeremony } from './ceremony';
 import { missionCounted, missionText } from '../core/missions';
 import { PARTNER_DAYS, partnerById, PARTNERS, type Partnership } from '../core/partners';
 import { drawPartnerScene } from '../render/partnerArt';
-import { featureById, type FeatureId } from '../core/features';
+import { FEATURES, featureById, type FeatureId } from '../core/features';
 import { type ContestTier, pointsAsStars, bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
@@ -219,19 +219,18 @@ const SOURCE: Record<SaleSource, { name: string; color: string }> = {
 };
 
 /** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
-export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'marketing' | 'wholesale' | 'contests' | 'partners';
+export type PcApp = 'dashboard' | 'messages' | 'orders' | 'trends' | 'marketing' | 'contests';
 
 const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'dashboard', name: tl('Tableau de bord'), icon: 'chart' },
   { id: 'messages', name: tl('Messages'), icon: 'bubble' },
   { id: 'orders', name: tl('Commandes'), icon: 'clipboard' },
-  { id: 'staff', name: tl('Personnel'), icon: 'staff' },
   { id: 'trends', name: tl('Tendances'), icon: 'trend' },
   { id: 'marketing', name: tl('Marketing'), icon: 'megaphone' },
-  { id: 'wholesale', name: tl('Grossiste'), icon: 'truck' },
   { id: 'contests', name: tl('Concours'), icon: 'trophy' },
-  { id: 'partners', name: tl('Partenariats'), icon: 'pennant' },
 ];
+/** L'application où se trouve une fonction : les partenariats vivent dans Commandes. */
+const featureApp = (id: FeatureId): PcApp => (id === 'partners' ? 'orders' : id);
 /** Un message reçu au bureau (commandes, tendances, brassins…), daté en temps de jeu. */
 interface Message { at: number; text: string; kind: 'good' | 'bad' | 'info'; icon: IconId; read: boolean }
 const MAX_MESSAGES = 60;
@@ -312,7 +311,6 @@ export class App {
   private wasStopped = false;
   private rangeBtn = fab('range', tl('Ma gamme'));
   private eventsBtn = fab('events', tl('Événements'));
-  private barmanBtn = fab('barman', tl('Barman en renfort'));
   /** Le magasin : trois onglets, et le rayon affiché dessous. */
   private shopPane = h('div', 'shop');
   private shopBody = h('div', 'shop-body');
@@ -374,6 +372,8 @@ export class App {
   /** Commandes dont on modifie le choix des bières. */
   private editing = new Set<number>();
   private picks = new Map<number, number[]>();
+  /** Bières dont le détail de popularité est déplié. */
+  private popOpen = new Set<number>();
   /** Bière choisie pour le concours en cours. */
   private contestPick: number | null = null;
   /** Bière officielle choisie avant de signer un partenariat. */
@@ -522,7 +522,6 @@ export class App {
     this.rangeBtn.onclick = () => this.open({ kind: 'range' });
     this.brewBtn.onclick = () => this.open({ kind: 'brew' });
     this.eventsBtn.onclick = () => this.openEvents();
-    this.barmanBtn.onclick = () => this.openBarman();
     this.setBottom();
 
     // Gaston
@@ -546,7 +545,7 @@ export class App {
       brewBtn: () => this.brewBtn,
       racks: () => this.roomHits.find((x) => x.el.dataset.hit === 'racks')?.el,
       counter: () => this.roomHits.find((x) => x.el.dataset.hit === 'counter')?.el,
-      barBtns: () => [this.eventsBtn, this.barmanBtn],
+      barBtns: () => [this.eventsBtn],
       money: () => [this.gemsPill, this.moneyPill],
       taste: () => (this.tasteBtn.classList.contains('hidden') ? null : this.tasteBtn),
     };
@@ -788,10 +787,6 @@ export class App {
     const eventReady = !g.partying && g.time >= g.partyReadyAt;
     setFab(this.eventsBtn, g.partying ? clock(g.partyUntil - g.time) : '', g.partying ? 'alert' : '', g.partying ? tl('{0} en cours', g.barEvent.name) : tl('Événements'));
     this.eventsBtn.classList.toggle('dim', !g.partying && !eventReady);
-    // barman : temps restant de son contrat ; le bouton s'allume quand un fût attend d'être branché
-    const left = g.barmanUntil - g.time;
-    setFab(this.barmanBtn, g.barmanOn ? (left >= 3600 ? `${Math.ceil(left / 3600)} h` : tl('{0} min', Math.ceil(left / 60))) : '',
-      g.barmanOn ? 'alert' : emptyTap && kegsReady ? 'ready' : '', g.barmanOn ? tl('Barman en renfort : encore {0}', duration(left)) : tl('Embaucher un barman'));
     // améliorations possibles : la flèche brille
     const stationUp = STATION_ORDER.some((id) => g.money >= g.upgradeCost(id));
     const nextStore = STORAGE[g.storageLevel];
@@ -1597,6 +1592,16 @@ export class App {
       gauge.append(seg);
     }
     box.append(gauge);
+    // le détail des parts, replié par défaut : les étoiles et le conseil de Gaston suffisent
+    const open = this.popOpen.has(b.id);
+    const more = this.btn('pop-more', open ? tl('Masquer le détail ▴') : tl('Détail ▾'), () => {
+      if (open) this.popOpen.delete(b.id);
+      else this.popOpen.add(b.id);
+      this.sheetKey = '';
+      if (this.computer) this.computer.key = '';
+      this.renderSheet();
+      this.refreshComputer();
+    });
     // les parts, une ligne chacune
     const why = h('div', 'pop-why');
     const row = (cls: string, label: string, value: string) => why.append(h('span', `pop-dot ${cls}`), h('span', 'pop-why-label', label), h('span', 'pop-why-value', value));
@@ -1608,8 +1613,8 @@ export class App {
     row('s', tl('Ventes sur 7 jours : {0}', liters(p.liters)), `${pts(p.sales)} / 50`);
     if (p.ad) row('a', tl('Campagne de pub en cours'), `+${pts(p.ad)}`);
     if (p.partner) row('a', tl('Bière officielle : {0}', g.partners.filter((x) => x.beerId === b.id).map((x) => partnerById(x.id)?.name).join(', ')), `+${pts(p.partner)}`);
-    box.append(why);
-    if (p.next) {
+    if (open) box.append(why);
+    if (open && p.next) {
       // la marche suivante des ventes
       const step = h('div', 'pop-next');
       const prev = [...[{ liters: 10, stars: 0 }], ...SALES_STEPS].filter((x) => x.liters <= p.next!.liters).slice(-2)[0]!;
@@ -1627,6 +1632,7 @@ export class App {
         : p.next ? tl('Gaston : « Fais-la connaître : le bar, les commandes et les partenariats comptent, pas le grossiste. »')
           : tl('Gaston : « Suis une tendance : +10 points par tendance. »');
     if (tip) box.append(h('p', 'hint pop-tip', tip));
+    box.append(more);
     return box;
   }
 
@@ -1713,34 +1719,6 @@ export class App {
     } else body.append(h('p', 'note', tl('Niveau maximal')));
   }
 
-  /** Barman en renfort : 8 h à rebrancher les fûts vides, à renouveler. */
-  openBarman(): void {
-    const g = this.game();
-    const card = this.modalCard(tl('Barman en renfort'));
-    const head = h('div', 'event-head');
-    head.append(iconCanvas('barman', 2), h('p', 'hint', tl('Pendant {0} h, il rebranche tout seul les fûts vides avec ceux du stockage, même quand tu n\'es pas là. Pense à renouveler son contrat.', BARMAN.duration / 3600)));
-    card.append(head);
-    const kegs = g.beers.reduce((s, b) => s + b.kegs.length, 0);
-    card.append(h('div', g.barmanOn ? 'note' : 'stats-line', g.barmanOn ? tl('En poste encore {0}', duration(g.barmanUntil - g.time)) : tl('Pas de barman en renfort')));
-    card.append(h('div', kegs ? 'stats-line strong' : 'note bad', tl('Fûts pleins au stockage : {0}', kegs)));
-    const cost = g.barmanCost;
-    const tooLong = Math.max(g.time, g.barmanUntil) + BARMAN.duration - g.time > BARMAN.maxAhead;
-    const go = this.btn('btn primary big', tooLong ? tl('Contrat déjà prolongé au maximum (24 h)') : `${g.barmanOn ? tl('Prolonger de 8 h') : tl('Embaucher pour 8 h')} · ${moneyInt(cost)}`, () => {
-      const r = g.hireBarman();
-      if (!r.ok) return this.toast(r.reason!, 'bad');
-      sfx.play('doorOpen');
-      this.toast(g.barmanUntil - g.time > BARMAN.duration + 1 ? tl('Contrat prolongé') : tl('Barman embauché !'), 'good');
-      this.onSent?.();
-      this.closeModal();
-    });
-    const full = !g.barmanOn && g.staffBusy >= g.staffSlots;
-    if (full) go.textContent = tl('Aucun poste libre ({0}/{1})', g.staffBusy, g.staffSlots);
-    go.disabled = tooLong || full;
-    if (!go.disabled) this.costGate(go, cost);
-    card.append(h('p', 'hint', tl('Personnel : {0}/{1} postes occupés.', g.staffBusy, g.staffSlots)));
-    card.append(go, this.btn('btn', tl('Tout le personnel (bureau)'), () => this.openComputer('staff')), this.btn('btn', tl('Fermer'), () => this.closeModal()));
-  }
-
   /** Les événements du bar : la fête, puis ceux qu'on débloque en achetant des objets au magasin. */
   openEvents(): void {
     const g = this.game();
@@ -1794,9 +1772,8 @@ export class App {
    * L'ordinateur du bureau : un écran de taille fixe, le fond d'écran flouté, et par-dessus le menu des applications
    * (tableau de bord, messages, commandes, tendances, grossiste) ; chaque application s'ouvre dans une fenêtre.
    */
-  openComputer(app: PcApp | null = null): void {
-    const feature = app && featureById(app);
-    if (feature) this.game().seeFeature(feature.id);
+  openComputer(app: PcApp | null = null, toPartners = false): void {
+    for (const f of FEATURES) if (app && featureApp(f.id) === app && this.game().hasFeature(f.id)) this.game().seeFeature(f.id);
     if (this.view !== 'office') this.goView('office');
     this.close();
     this.modal.replaceChildren();
@@ -1821,6 +1798,7 @@ export class App {
     this.modal.append(pc);
     this.computer = { app, key: '', ui };
     this.renderComputer();
+    if (toPartners) ui.querySelector('.partners-section')?.scrollIntoView({ block: 'start' });
   }
 
   private get unread(): number {
@@ -1848,10 +1826,11 @@ export class App {
   private computerKey(g: Game): string {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
-      app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
-      app === 'partners' ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
+      app === 'orders' ? [g.staffOn('courier'), Math.ceil((g.staffEnd('courier') - g.time) / 600), g.money >= g.staffCost('courier'), Math.round(g.wholesaleRate * 20), g.hasFeature('partners'),
+        g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
+      0 ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
       app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
-      app === 'trends' || app === 'marketing' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(g.wsToday / 100)]), [...this.picks]] : 0]);
+      app === 'trends' || app === 'marketing' || app === 'orders' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(g.wsToday / 100)]), [...this.picks]] : 0]);
   }
 
   /** Reconstruit l'écran quand une commande arrive, expire, ou que le stock change ; le tableau de bord vit en direct. */
@@ -1918,12 +1897,9 @@ export class App {
       this.dashboardPage(g, body);
     } else if (st.app === 'messages') this.messagesTab(g, body);
     else if (st.app === 'orders') this.ordersTab(g, body);
-    else if (st.app === 'staff') this.staffTab(g, body);
     else if (st.app === 'trends') this.trendsTab(g, body);
     else if (st.app === 'marketing') this.marketingTab(g, body);
-    else if (st.app === 'contests') this.contestsTab(g, body);
-    else if (st.app === 'partners') this.partnersTab(g, body);
-    else this.wholesaleTab(g, body);
+    else this.contestsTab(g, body);
     body.scrollTop = scroll;
   }
 
@@ -1935,11 +1911,8 @@ export class App {
       dashboard: { text: '', hot: false },
       messages: { text: this.unread ? String(this.unread) : '', hot: false },
       orders: { text: g.orders.length ? String(g.orders.length) : '', hot: ready > 0 },
-      staff: { text: `${g.staffBusy}/${g.staffSlots}`, hot: false },
       trends: { text: '', hot: false },
       marketing: { text: g.advertising ? '●' : '', hot: false },
-      wholesale: { text: '', hot: false },
-      partners: { text: g.partners.length ? String(g.partners.length) : '', hot: false },
       contests: (() => {
         const open = ([0, 1, 2] as ContestTier[]).filter((t) => g.contestOf(t) && !g.contestOf(t)!.entry);
         return { text: open.length ? '!' : '', hot: open.some((t) => g.beers.some((b) => g.contestChecks(t, b).every((x) => x.ok))) };
@@ -1950,7 +1923,9 @@ export class App {
     for (const a of PC_APPS) {
       const feature = featureById(a.id);
       if (feature && !g.hasFeature(feature.id)) continue;
-      const fresh = !!feature && !g.featuresSeen.includes(feature.id);
+      // une fonction qui s'ouvre dans cette application (les partenariats dans Commandes) l'allume aussi
+      const inside = FEATURES.filter((f) => featureApp(f.id) === a.id && g.hasFeature(f.id));
+      const fresh = inside.some((f) => !g.featuresSeen.includes(f.id));
       const b = h('button', `pc-app${fresh ? ' fresh' : ''}`);
       const icon = h('span', 'pc-app-icon');
       icon.append(iconCanvas(a.icon, 3));
@@ -1960,7 +1935,7 @@ export class App {
       else if (bd.text) b.append(h('span', `room-badge pc-badge${bd.hot ? ' hot' : ''}`, bd.text));
       b.setAttribute('aria-label', `${a.name}${bd.text ? ` (${bd.text})` : ''}`);
       b.onclick = () => {
-        if (feature) g.seeFeature(feature.id);
+        for (const f of inside) g.seeFeature(f.id);
         this.computer!.app = a.id;
         this.renderComputer();
       };
@@ -1979,40 +1954,6 @@ export class App {
       home.append(n);
     }
     return home;
-  }
-
-  /** Le personnel : des postes selon le niveau de la brasserie, des contrats de 8 h qu'on prolonge jusqu'à 24 h. */
-  private staffTab(g: Game, card: HTMLElement): void {
-    const next = STAFF_SLOTS.findIndex((n, i) => i >= g.breweryLevel && n > g.staffSlots);
-    card.append(h('div', 'stats-line strong', tl('Postes occupés : {0} / {1}', g.staffBusy, g.staffSlots)));
-    card.append(h('p', 'hint', next >= 0 ? tl('Un poste de plus quand la brasserie passe ★{0}.', next + 1) : tl('Tous les postes sont ouverts.')));
-    for (const def of STAFF) {
-      const on = g.staffOn(def.id);
-      const left = g.staffEnd(def.id) - g.time;
-      const el = h('div', `card staff${on ? ' banner' : ''}`);
-      const head = h('div', 'event-head');
-      const title = h('div', 'event-title');
-      title.append(h('span', 'beer-name', def.name), h('span', 'hint', def.role));
-      head.append(iconCanvas(def.id, 3), title);
-      el.append(head, h('p', 'hint', def.text));
-      const state = h('div', 'stats-line', on ? tl('En poste · encore {0}', duration(left)) : tl('Libre'));
-      el.append(state);
-      const cost = g.staffCost(def.id);
-      const full = !on && g.staffBusy >= g.staffSlots;
-      const tooLong = on && left + STAFF_CONTRACT.duration > STAFF_CONTRACT.maxAhead;
-      const b = this.btn('btn primary', full ? tl('Aucun poste libre') : tooLong ? tl('Contrat au maximum (24 h)') : `${on ? tl('Prolonger de 8 h') : tl('Embaucher pour 8 h')} · ${moneyShort(cost)}`, () => {
-        const r = g.hire(def.id);
-        if (!r.ok) return this.toast(r.reason!, 'bad');
-        sfx.play('doorOpen');
-        this.toast(on ? tl('Contrat prolongé') : tl('{0} embauché !', def.name), 'good');
-        this.computer!.key = '';
-        this.refreshComputer();
-      });
-      b.disabled = full || tooLong;
-      if (!b.disabled) this.costGate(b, cost);
-      el.append(b);
-      card.append(el);
-    }
   }
 
   /** La boîte de réception : tout ce qui s'est passé à la brasserie ; l'ouvrir marque tout comme lu. */
@@ -2063,6 +2004,7 @@ export class App {
     for (const id of this.picks.keys()) if (!g.orders.some((o) => o.id === id)) this.picks.delete(id);
     const ready = new Set(g.readyOrders.map((o) => o.id));
     const sorted = [...g.orders].sort((a, b) => Number(ready.has(b.id)) - Number(ready.has(a.id)) || a.expires - b.expires);
+    card.append(this.courierLine(g));
     for (const o of sorted) card.append(this.orderCard(g, o));
     g.slotWaits.forEach((w, i) => card.append(this.emptySlot(g, w, i)));
     // l'ordinateur : une place de plus au tableau à chaque niveau
@@ -2082,6 +2024,42 @@ export class App {
       foot.append(b);
     }
     card.append(foot);
+    // les grands partenaires, une fois le premier ouvert
+    if (g.hasFeature('partners')) {
+      const sec = h('div', 'pc-section partners-section');
+      sec.append(h('h3', 'pc-section-title', tl('Grands partenaires')));
+      card.append(sec);
+      this.partnersTab(g, card);
+    }
+    // le grossiste : plus rien à faire, il reprend le surplus tout seul
+    const ws = h('div', 'ws-line');
+    const rate = g.wholesaleRate;
+    ws.append(iconCanvas('truck', 1, 'ws-line-icon'), h('span', 'hint', tl('Grossiste : quand le stockage est plein, il reprend le surplus tout seul. Prix du jour : {0} % (plein prix jusqu\'à {1}, puis il baisse jusqu\'à minuit).', Math.round(rate * 100), liters(g.wholesaleFull))));
+    card.append(ws);
+  }
+
+  /** Le livreur : un contrat de 8 h, et les commandes prêtes partent toutes seules, même en ton absence. */
+  private courierLine(g: Game): HTMLElement {
+    const on = g.staffOn('courier');
+    const left = g.staffEnd('courier') - g.time;
+    const el = h('div', `courier-line${on ? ' on' : ''}`);
+    const info = h('div', 'courier-info');
+    info.append(h('span', 'courier-name', tl('Livreur')), h('span', 'hint', on ? tl('En tournée encore {0} : les commandes prêtes partent toutes seules.', duration(left)) : tl('Envoie seul les commandes prêtes.')));
+    el.append(iconCanvas('courier', 2, 'courier-icon'), info);
+    const cost = g.staffCost('courier');
+    const tooLong = on && left + STAFF_CONTRACT.duration > STAFF_CONTRACT.maxAhead;
+    const b = this.btn('btn small', tooLong ? tl('24 h max') : `${on ? '+8 h' : tl('8 h')} · ${moneyShort(cost)}`, () => {
+      const r = g.hire('courier');
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('doorOpen');
+      this.toast(on ? tl('Contrat prolongé') : tl('{0} embauché !', tl('Livreur')), 'good');
+      this.computer!.key = '';
+      this.refreshComputer();
+    });
+    b.disabled = tooLong;
+    if (!b.disabled) this.costGate(b, cost);
+    el.append(b);
+    return el;
   }
 
   /** Minuteur lisible : une horloge et le temps, en clair sur fond d'encre ; sa couleur dit l'urgence. */
@@ -2477,13 +2455,13 @@ export class App {
   /** Une fonction s'ouvre : Gaston la présente, et un bouton y mène tout de suite. */
   onFeature(id: FeatureId): void {
     const f = featureById(id);
-    const a = PC_APPS.find((x) => x.id === id);
+    const a = PC_APPS.find((x) => x.id === featureApp(id));
     if (!f || !a) return;
     sfx.play('carillon');
     this.log(f.intro, 'good', a.icon);
-    this.toast(tl('Nouveau : {0}', a.name), 'good', { label: tl('Voir'), run: () => {
+    this.toast(tl('Nouveau : {0}', id === 'partners' ? tl('Grands partenaires') : a.name), 'good', { label: tl('Voir'), run: () => {
       this.game().seeFeature(id);
-      this.openComputer(a.id);
+      this.openComputer(a.id, id === 'partners');
     } }, 6000);
   }
 
@@ -2493,7 +2471,7 @@ export class App {
     if (!p) return;
     sfx.play('crate');
     this.toast(tl('{0} : livraison {1}/{2}', p.name, deliveries, PARTNER_DAYS), 'good');
-    const card = this.computer?.app === 'partners' ? this.computer.ui.querySelector<HTMLElement>(`[data-partner="${id}"]`) : null;
+    const card = this.computer?.app === 'orders' ? this.computer.ui.querySelector<HTMLElement>(`[data-partner="${id}"]`) : null;
     const zone = card?.querySelector<HTMLElement>('.partner-zone');
     const pic = card?.querySelector<HTMLElement>('.partner-pic');
     if (zone && pic) this.fly(zone, pic, 8, () => iconCanvas('range', 1, 'fly fly-bottle'));
@@ -2726,57 +2704,6 @@ export class App {
     });
   }
 
-  /** Le grossiste : il reprend bouteilles et fûts à tout moment, à petit prix, dans la limite d'un quota par bière (en litres, rechargé à minuit). */
-  private wholesaleTab(g: Game, card: HTMLElement): void {
-    const auto = h('label', 'toggle');
-    const box = h('input');
-    box.type = 'checkbox';
-    box.checked = g.autoWholesale;
-    box.onchange = () => (g.autoWholesale = box.checked);
-    auto.append(box, h('span', '', tl('Vendre automatiquement quand le stockage est plein')));
-    card.append(auto, h('p', 'hint', tl('Le grossiste reprend tout, à tout moment, mais son prix baisse au fil de la journée : il en a déjà trop. Plein prix jusqu\'à {0} par jour, puis jusqu\'à {1} % du prix. Il ne fait pas connaître tes bières. Pour les gros volumes, signe un partenariat.', liters(g.wholesaleFull), Math.round(WHOLESALE.floor * 100))));
-    // le prix du jour : une jauge qui se vide au fil des litres repris
-    const rate = g.wholesaleRate;
-    const priceBox = h('div', 'ws-price');
-    const head = h('div', 'stock-line');
-    head.append(h('span', 'stock-name', tl('Prix du jour')), h('span', `ws-quota${rate < 0.999 ? ' full' : ''}`, `${Math.round(rate * 100)} %`));
-    const bar = h('div', 'ws-bar');
-    const fill = h('div', 'ws-fill');
-    fill.style.width = `${Math.round(rate * 100)}%`;
-    bar.append(fill);
-    priceBox.append(head, bar, h('p', 'hint', tl('{0} repris aujourd\'hui · plein prix à minuit', liters(g.wsToday))));
-    card.append(priceBox);
-    const beers = g.beers.filter((b) => (b.stock > 0 || b.kegs.length > 0) && b.tasting.quality >= DRINKABLE_MIN);
-    if (!beers.length) card.append(h('p', 'hint', tl('Rien en stock.')));
-    for (const b of beers) {
-      const box = h('div', 'ws-beer');
-      const head = h('div', 'stock-line');
-      const thumb = h('canvas', 'label-thumb');
-      drawLabel(thumb, b.label, b.name);
-      head.append(thumb, h('span', 'stock-name', b.name), h('span', 'ws-quota', tl('{0} le litre', moneyInt((wholesalePrice(b.tasting) / BOTTLE_L) * rate))));
-      box.append(head);
-      const row = (format: Format, have: number, what: string, one: { n: number; label: string }) => {
-        if (have <= 0) return;
-        const el = h('div', 'ws-row');
-        el.append(h('span', 'ws-have', what));
-        const sell = (n: number, label: string) => this.btn('btn small', label, () => {
-          const r = g.sellWholesale(b.id, n, format);
-          if (!r.ok) return this.toast(r.reason!, 'bad');
-          sfx.play('cash');
-          this.gainToast(r.amount!);
-          this.refreshComputer();
-        });
-        if (have > one.n) el.append(sell(one.n, one.label));
-        const allL = format === 'bottle' ? have * BOTTLE_L : b.kegs.reduce((s2, k) => s2 + k * GLASS_L, 0);
-        el.append(sell(have, `${tl('Tout')} · ${moneyInt(g.wholesaleQuote(b, allL))}`));
-        box.append(el);
-      };
-      row('bottle', b.stock, tl('{0} btl', b.stock), { n: CRATE, label: '1 caisse' });
-      row('keg', b.kegs.length, tl('{0} fût{1}', b.kegs.length, b.kegs.length > 1 ? 's' : ''), { n: 1, label: tl('1 fût') });
-      card.append(box);
-    }
-  }
-
   // ------------------------------------------------------------------ pièces
 
   /** Va dans une pièce (onglet ou glissement). */
@@ -2845,7 +2772,7 @@ export class App {
 
   /** Les boutons flottants proposent les actions de la pièce affichée (l'action principale en bas). */
   private setBottom(): void {
-    const btns = this.view === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.view === 'bar' ? [this.barmanBtn, this.eventsBtn] : [];
+    const btns = this.view === 'workshop' ? [this.rangeBtn, this.brewBtn] : this.view === 'bar' ? [this.eventsBtn] : [];
     this.fabs.replaceChildren(...btns);
     this.fabs.classList.toggle('hidden', !btns.length || !!this.openSheet);
   }
@@ -3586,7 +3513,7 @@ export class App {
         const face = h('span', 'boost-chip-face');
         face.append(h('span', 'boost-chip-dial'), iconCanvas('pennant', 2), h('span', 'boost-chip-time'));
         el.append(face, h('span', 'boost-chip-mult partner-flag', `${ship.deliveries}/${PARTNER_DAYS}`));
-        el.onclick = () => this.openComputer('partners');
+        el.onclick = () => this.openComputer('orders', true);
         this.boostHud.append(el);
       }
     }

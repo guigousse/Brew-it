@@ -1071,15 +1071,12 @@ describe('emplacements du tableau des commandes', () => {
 });
 
 describe('personnel', () => {
-  it('les postes dépendent du niveau de la brasserie', () => {
+  it('le livreur se loue pour 8 h, prolongeable jusqu\'à 24 h', () => {
     const g = withBeer(1e6);
-    expect(g.staffSlots).toBe(1);
     expect(g.hire('courier').ok).toBe(true);
-    expect(g.hire('apprentice').ok).toBe(false); // un seul poste au niveau 1
-    expect(g.hire('courier').ok).toBe(true); // prolonger reste possible
-    for (const id of STATION_ORDER) g.stations[id] = { level: 3 };
-    expect(g.staffSlots).toBe(2);
-    expect(g.hire('apprentice').ok).toBe(true);
+    expect(g.hire('courier').ok).toBe(true);
+    expect(g.hire('courier').ok).toBe(true);
+    expect(g.hire('courier').ok).toBe(false); // déjà 24 h d'avance
   });
 
   it('le livreur envoie les commandes remplissables', () => {
@@ -1092,13 +1089,17 @@ describe('personnel', () => {
     expect(g.orders.find((o) => o.id === 999)).toBeUndefined();
   });
 
-  it("l'apprenti reprogramme le dernier brassin quand la file est vide", () => {
+  it('après la visite guidée, la file se reprogramme toute seule et les fûts vides se changent seuls', () => {
     const g = withBeer(1e6);
     g.planBrew(g.beers[0]!.id, 'bottle', 1);
     g.plan = [];
-    g.hire('apprentice');
+    run(g, 10);
+    expect(g.planned + g.batches.length).toBe(0); // pendant la visite guidée, rien d'automatique
+    expect(g.barmanOn).toBe(false);
+    g.tips = TUTO_DONE;
     run(g, 10);
     expect(g.planned + g.batches.length).toBeGreaterThan(0);
+    expect(g.barmanOn).toBe(true);
   });
 });
 

@@ -166,7 +166,7 @@ export const WHOLESALE = {
   /** Litres repris à plein prix chaque jour, par niveau de la brasserie. */
   full: [100, 300, 1_500, 7_000, 35_000],
   /** Prix plancher, en part du plein prix. */
-  floor: 0.35,
+  floor: 0.33,
 };
 
 /** Prix du litre suivant chez le grossiste, en part du plein prix, après `sold` litres repris aujourd'hui. */

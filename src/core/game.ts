@@ -984,9 +984,9 @@ export class Game {
     return PARTY_COST[this.barLevel - 1] ?? PARTY_COST[0];
   }
 
-  /** Le barman en renfort est là : il rebranche les fûts vides tout seul. */
+  /** Les fûts vides se rebranchent tout seuls avec ceux du stockage (après la visite guidée, qui apprend à le faire). */
   get barmanOn(): boolean {
-    return this.time < this.barmanUntil;
+    return this.tips >= TUTO_DONE || this.time < this.barmanUntil;
   }
 
   get barmanCost(): number {
@@ -1028,7 +1028,6 @@ export class Game {
   /** Embauche (ou prolonge) un employé pour 8 h, jusqu'à 24 h d'avance ; il faut un poste libre pour un nouveau. */
   hire(id: StaffId): CommandResult {
     const on = this.staffOn(id);
-    if (!on && this.staffBusy >= this.staffSlots) return { ok: false, reason: tl('Plus de poste libre ({0}) : la brasserie en ouvre d\'autres en grandissant', this.staffSlots) };
     const from = Math.max(this.time, this.staffEnd(id));
     if (from + STAFF_CONTRACT.duration - this.time > STAFF_CONTRACT.maxAhead) return { ok: false, reason: tl('Contrat déjà assez long') };
     const cost = this.staffCost(id);
@@ -1050,7 +1049,8 @@ export class Game {
         if (r.ok) this.events.emit({ type: 'autoSent', client: o.client, amount: r.amount! });
       }
     }
-    if (this.staffOn('apprentice') && (this.apprenticeClock += dt) >= APPRENTICE_CHECK_S) {
+    // la file de brassins se reprogramme toute seule (le dernier brassin) : la brasserie ne s'arrête jamais
+    if ((this.tips >= TUTO_DONE || this.staffOn('apprentice')) && (this.apprenticeClock += dt) >= APPRENTICE_CHECK_S) {
       this.apprenticeClock = 0;
       const last = this.lastPlan;
       if (!this.plan.length && !this.queued && last && this.beer(last.beerId) && this.planBrew(last.beerId, last.format, 1).ok) {

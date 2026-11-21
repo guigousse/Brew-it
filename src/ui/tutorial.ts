@@ -63,7 +63,7 @@ export const TOUR: readonly Step[] = [
   { view: 'storage', target: 'nav:bar', text: tl('Maintenant, le bar !'), done: (_, h) => h.view() === 'bar' },
   // ---- le bar
   { view: 'bar', target: 'counter', text: tl('Au bar, tes clients boivent ta bière en fût. Touche le comptoir pour brancher tes fûts.'), next: tl('Suivant') },
-  { view: 'bar', target: 'barBtns', text: tl('Ici, lance des soirées et embauche un barman : plus de clients, plus de ventes.'), next: tl('Suivant') },
+  { view: 'bar', target: 'barBtns', text: tl('Ici, lance des soirées : plus de clients, plus de ventes. Les fûts vides se changent tout seuls.'), next: tl('Suivant') },
   { view: 'bar', target: 'nav:shop', text: tl('Au magasin : de la déco pour le bar, des boosts et de nouvelles étiquettes.'), next: tl('Suivant') },
   { target: 'money', text: tl('En haut, ton argent et tes diamants. Les commandes livrées rapportent des diamants.'), next: tl('Suivant') },
   // ---- la première bière
