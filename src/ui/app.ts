@@ -216,13 +216,14 @@ const SOURCE: Record<SaleSource, { name: string; color: string }> = {
 };
 
 /** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
-export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'wholesale' | 'contests' | 'partners';
+export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'marketing' | 'wholesale' | 'contests' | 'partners';
 const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'dashboard', name: tl('Tableau de bord'), icon: 'chart' },
   { id: 'messages', name: tl('Messages'), icon: 'bubble' },
   { id: 'orders', name: tl('Commandes'), icon: 'clipboard' },
   { id: 'staff', name: tl('Personnel'), icon: 'staff' },
   { id: 'trends', name: tl('Tendances'), icon: 'trend' },
+  { id: 'marketing', name: tl('Marketing'), icon: 'megaphone' },
   { id: 'wholesale', name: tl('Grossiste'), icon: 'truck' },
   { id: 'contests', name: tl('Concours'), icon: 'trophy' },
   { id: 'partners', name: tl('Partenariats'), icon: 'pennant' },
@@ -1835,7 +1836,7 @@ export class App {
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
       app === 'partners' ? [g.partner ? [g.partner.id, g.partnerDay, Math.floor(g.partnerLeft), Math.floor(g.partnerStock)] : null, PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase), g.staffOn('courier')] : 0,
       app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
-      app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
+      app === 'trends' || app === 'marketing' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
   }
 
   /** Reconstruit l'écran quand une commande arrive, expire, ou que le stock change ; le tableau de bord vit en direct. */
@@ -1904,6 +1905,7 @@ export class App {
     else if (st.app === 'orders') this.ordersTab(g, body);
     else if (st.app === 'staff') this.staffTab(g, body);
     else if (st.app === 'trends') this.trendsTab(g, body);
+    else if (st.app === 'marketing') this.marketingTab(g, body);
     else if (st.app === 'contests') this.contestsTab(g, body);
     else if (st.app === 'partners') this.partnersTab(g, body);
     else this.wholesaleTab(g, body);
@@ -1920,6 +1922,7 @@ export class App {
       orders: { text: g.orders.length ? String(g.orders.length) : '', hot: ready > 0 },
       staff: { text: `${g.staffBusy}/${g.staffSlots}`, hot: false },
       trends: { text: '', hot: false },
+      marketing: { text: g.advertising ? '●' : '', hot: false },
       wholesale: { text: '', hot: false },
       partners: { text: g.partner && g.partnerLeft > 0 ? '!' : '', hot: !!g.partner && g.partnerLeft > 0 && g.partnerStock >= 1 },
       contests: (() => {
@@ -2323,10 +2326,15 @@ export class App {
     return box;
   }
 
+  /** Le marketing : la popularité de la marque et les campagnes de pub. */
+  private marketingTab(g: Game, card: HTMLElement): void {
+    card.append(h('div', 'stats-line strong', tl('Ta marque : {0} · {1} / 100', starText(g.brand), popScore(g.brand))));
+    card.append(this.adsBox(g));
+  }
+
   /** La popularité de la marque et les tendances du moment. */
   private trendsTab(g: Game, card: HTMLElement): void {
     card.append(h('div', 'stats-line strong', tl('Ta marque : {0} · {1} / 100', starText(g.brand), popScore(g.brand))));
-    card.append(this.adsBox(g));
     for (const tr of g.trends) {
       const def = trendById(tr.id);
       if (!def) continue;

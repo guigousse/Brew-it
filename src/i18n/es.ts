@@ -1041,5 +1041,6 @@ const dict: Record<string, string> = {
   "National": "Nacional",
   "International": "Internacional",
   "Participants : {0} brasseries": "Participantes: {0} cervecerías",
+  "Marketing": "Marketing",
 };
 export default dict;

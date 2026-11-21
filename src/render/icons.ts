@@ -215,6 +215,25 @@ const GRIDS = {
     'kkkkk...........',
     'kSSSk...........',
   ],
+  // porte-voix du marketing
+  megaphone: [
+    '................',
+    '...........kk...',
+    '..........kyyk..',
+    '.........kyyYk..',
+    '.kkk....kyyyYk..',
+    'kwwwkkkkyyyyYk.k',
+    'kwwwwwwwyyyyYk.k',
+    'kwwwwwwwyyyyYk..',
+    'kWWWkkkkyyyyYkkk',
+    '.kkk.kk.kyyyYk..',
+    '.....kk..kyyYk..',
+    '.....kk...kyyk..',
+    '.....kkk...kk...',
+    '......kk........',
+    '................',
+    '................',
+  ],
   // coupe des concours
   trophy: [
     '................',
