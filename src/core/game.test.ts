@@ -1290,3 +1290,35 @@ describe('missions', () => {
     for (const m of MISSIONS) expect(m.target).toBeGreaterThan(0);
   });
 });
+
+describe('agrandissements sans fin', () => {
+  it('le stockage grandit de 15 % par agrandissement : 4 par palier, sans fin au dernier', () => {
+    const g = new Game();
+    g.money = 1e12;
+    const base = g.storageCap;
+    for (let i = 0; i < 4; i++) expect(g.growStorage().ok).toBe(true);
+    expect(g.growStorage().ok).toBe(false); // il faut passer au palier suivant
+    expect(g.storageCap).toBe(Math.round((base / 12) * 1.15 ** 4) * 12);
+    expect(g.upgradeStorage().ok).toBe(true);
+    expect(g.storageStep).toBe(0);
+    while (g.upgradeStorage().ok);
+    const top = g.storageCap;
+    const c1 = g.storageStepCost!;
+    for (let i = 0; i < 10; i++) expect(g.growStorage().ok).toBe(true);
+    expect(g.storageCap).toBeGreaterThan(top * 3.9);
+    expect(g.storageStepCost!).toBeGreaterThan(c1 * 50);
+    const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
+    expect(back.storageCap).toBe(g.storageCap);
+  });
+
+  it('la file de brassins s\'allonge de 25 % de sa base, de plus en plus cher', () => {
+    const g = new Game();
+    g.money = 1e9;
+    const cap = g.planCap;
+    const c0 = g.planExtraCost;
+    expect(g.growPlan().ok).toBe(true);
+    expect(g.planCap).toBe(Math.round(cap * 1.25));
+    expect(g.planExtraCost).toBeGreaterThan(c0 * 1.5);
+    expect(Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON()))).planCap).toBe(g.planCap);
+  });
+});

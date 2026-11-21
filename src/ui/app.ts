@@ -1,6 +1,6 @@
 import { DRINKABLE_MIN, verdictOf, type Tasting } from '../core/brewing/model';
 import { STRAINS, type StrainId } from '../core/brewing/strains';
-import { AD_DAILY, TUTO_DONE, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
+import { AD_DAILY, PLAN_CAP, PLAN_EXTRA, TUTO_DONE, BAR_MESSAGE, BAR_MESSAGE_MAX, BOTTLE_L, MAX_TANKS, SALE_SOURCES, TANK_STAGES, type Beer, type Format, type Game, type Order, type SaleSource } from '../core/game';
 import { AD_EXTEND, ADS, BAR, BAR_EVENTS, BARMAN, GLASS_L, kegGlasses, kegLiters, PARTY, SHOP_ITEMS, type AdDef, type AdId, type BarEventId, type ShopItemId } from '../core/market';
 import { WHOLESALE, CLIENT_TYPES, COMPUTERS, KIND_LABEL, orderAsk, orderGems, wholesalePrice } from '../core/orders';
 import { popScore, SALES_STEPS, stars, trendById, trendsOf } from '../core/trends';
@@ -20,7 +20,7 @@ import { PARTNER_DAYS, partnerById, PARTNERS, type Partnership } from '../core/p
 import { drawPartnerScene } from '../render/partnerArt';
 import { FEATURES, featureById, type FeatureId } from '../core/features';
 import { type ContestTier, pointsAsStars, bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
-import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
+import { CRATE, MAX_RANGE, STORAGE, STORAGE_STEPS, storageCrates } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { GEMSTONES, BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
 import { drawGaston } from './gaston';
@@ -806,7 +806,7 @@ export class App {
     this.root.style.setProperty('--toast-bottom', sheetTop ? `${Math.round(window.innerHeight - sheetTop)}px` : 'var(--bottom-h, 70px)');
     // le tutoriel montre le bouton dont il parle
     setPlaque(this.plaque, `★ ${g.breweryLevel} · ${g.breweryName}`, stationUp, tl('amélioration'));
-    setPlaque(this.storagePlaque, `▣ ${STORAGE[g.storageLevel - 1]!.name}`, !!nextStore && g.money >= nextStore.cost, 'agrandissement');
+    setPlaque(this.storagePlaque, `▣ ${STORAGE[g.storageLevel - 1]!.name}`, (!!nextStore && g.money >= nextStore.cost) || g.money >= (g.storageStepCost ?? Infinity), 'agrandissement');
     setPlaque(this.officePlaque, `▣ ${COMPUTERS[g.computerLevel - 1]!.name}`, !!nextPc && g.money >= nextPc.cost, tl('amélioration'));
     setPlaque(this.barPlaque, `★ ${g.barLevel} · ${g.bar.name}`, !!nextBar && g.money >= nextBar.cost, 'agrandissement');
     // pastilles des onglets de pièces
@@ -865,7 +865,7 @@ export class App {
     const key = JSON.stringify([
       s, g.levelNumber(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer,
       g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.planCap, this.wiz, g.selectedBeer, g.beers.map((b) => b.kegs.length), this.planStatus(g)] : 0,
-      s.kind === 'storage' || s.kind === 'storageUp' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.bottlingBlocked, this.shelfSel,
+      s.kind === 'storage' || s.kind === 'storageUp' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.storageStep, g.planExtra, g.money >= (g.storageStepCost ?? Infinity), g.money >= g.planExtraCost, g.bottlingBlocked, this.shelfSel,
     ]);
     if (key === this.sheetKey) return this.refreshLive();
     this.sheetKey = key;
@@ -1158,6 +1158,17 @@ export class App {
     fill.style.width = `${Math.min(100, (g.planned / g.planCap) * 100)}%`;
     bar.append(fill);
     body.append(head, bar);
+    // allonger la file : +25 % de la file de base, de plus en plus cher
+    const planCost = g.planExtraCost;
+    const longer = this.btn('btn small plan-grow', tl('Allonger la file : +{0} · {1}', Math.round((PLAN_CAP[g.breweryLevel - 1] ?? 50) * PLAN_EXTRA.gain), moneyShort(planCost)), () => {
+      const r = g.growPlan();
+      if (!r.ok) return this.toast(r.reason!, 'bad');
+      sfx.play('upgrade');
+      this.toast(tl('File de brassins : {0} places', g.planCap), 'good');
+      this.sheetKey = '';
+    });
+    this.costGate(longer, planCost);
+    body.append(longer);
     // temps de production restant : les brassins sur la ligne, puis toute la file
     const fc = this.forecast(g);
     const inLine = g.batches.filter((b) => b.beerId != null).length;
@@ -1313,7 +1324,7 @@ export class App {
     body.append(go);
     if (!room) body.append(h('p', 'note bad', g.planRoom
       ? tl('Plus de place au stockage (en comptant les brassins déjà programmés). {0}, ou agrandis le stockage.', f === 'keg' ? tl('Sers des fûts au bar, livre des commandes de fûts, vends-en au grossiste') : tl('Livre des commandes, vends au grossiste'))
-      : tl('La file est pleine ({0} brassins). Elle s\'allonge avec le niveau de la brasserie.', g.planCap)));
+      : tl('La file est pleine ({0} brassins). Allonge-la dans Brasser, ou fais grandir la brasserie.', g.planCap)));
   }
 
   /** Un essai : les réglages actuels des machines ; on goûtera la première bouteille. */
@@ -1516,22 +1527,43 @@ export class App {
   }
 
   // --- Stockage : l'agrandir
+  /**
+   * Agrandir le stockage, sur le principe des machines : jusqu'à 4 agrandissements de +15 % par palier (sans fin au
+   * dernier palier), et le passage au palier suivant, bien plus grand.
+   */
   private storageUpSheet(g: Game): void {
     const lvl = STORAGE[g.storageLevel - 1]!;
     const body = this.frameSheet(tl('Agrandir le stockage'));
     const up = h('div', 'card upgrade');
-    // Seulement le palier actuel et le suivant.
     const levels = h('div', 'storage-levels');
-    const next = STORAGE[g.storageLevel];
-    for (const [l, tag, cls] of [[lvl, tl('Actuel'), 'done'], [next, tl('Suivant'), 'current']] as const) {
-      if (!l) continue;
-      const cell = h('div', `storage-level ${cls}`);
-      cell.append(h('span', 'level-name', `${tag} : ${l.name}`), h('span', 'level-perk', tl('{0} caisses', l.crates.toLocaleString(locale))));
-      levels.append(cell);
-    }
+    const cur = h('div', 'storage-level done');
+    const steps = g.storageStep ? tl(' · +{0}', g.storageStep) : '';
+    cur.append(h('span', 'level-name', `${tl('Actuel')} : ${lvl.name}${steps}`), h('span', 'level-perk', tl('{0} caisses', count(g.storageCap / CRATE))));
+    levels.append(cur);
     up.append(levels);
+    // +15 % : les agrandissements du palier
+    const stepCost = g.storageStepCost;
+    if (stepCost != null) {
+      const more = storageCrates(g.storageLevel, g.storageStep + 1) - storageCrates(g.storageLevel, g.storageStep);
+      const last = STORAGE.length === g.storageLevel;
+      up.append(h('p', 'hint', last ? tl('Agrandissement {0} : +{1} caisses', g.storageStep + 1, count(more)) : tl('Agrandissement {0}/{1} : +{2} caisses', g.storageStep + 1, STORAGE_STEPS, count(more))));
+      const b = this.btn('btn', tl('+15 % · {0}', moneyShort(stepCost)), () => {
+        const r = g.growStorage();
+        if (!r.ok) return this.toast(r.reason!, 'bad');
+        sfx.play('upgrade');
+        this.toast(tl('Stockage agrandi : {0} caisses', count(g.storageCap / CRATE)), 'good');
+        this.sheetKey = '';
+      });
+      this.costGate(b, stepCost);
+      up.append(b);
+    }
+    // le palier suivant
+    const next = STORAGE[g.storageLevel];
     if (next) {
-      const b = this.btn('btn primary', tl('Agrandir · {0}', moneyInt(next.cost)), () => {
+      const cell = h('div', 'storage-level current');
+      cell.append(h('span', 'level-name', `${tl('Suivant')} : ${next.name}`), h('span', 'level-perk', tl('{0} caisses', count(next.crates))));
+      up.append(cell);
+      const b = this.btn('btn primary', tl('Agrandir · {0}', moneyShort(next.cost)), () => {
         const r = g.upgradeStorage();
         if (!r.ok) return this.toast(r.reason!, 'bad');
         sfx.play('upgrade');
@@ -1540,7 +1572,7 @@ export class App {
       });
       this.costGate(b, next.cost);
       up.append(b);
-    } else up.append(h('p', 'note', tl('Niveau maximal')));
+    }
     body.append(up);
   }
 

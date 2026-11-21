@@ -8,7 +8,7 @@ import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { MISSIONS, type MissionDef, type MissionProgress } from './missions';
 import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelCost, precisionLevel, STATION_ORDER, stationDuration, STEPS_PER_TIER, upgradeCost, type StationId, type StationState } from './stations';
-import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
+import { CRATE, MAX_RANGE, slotCost, STORAGE, storageCrates, storageStepCost } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_GEMS, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { pointsAsStars, QUALIFY_METAL, type ContestTier, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
@@ -223,6 +223,10 @@ export class Game {
   rangeSlots = 1;
   /** Niveau du stockage (1 à STORAGE.length). */
   storageLevel = 1;
+  /** Agrandissements du palier de stockage en cours (0 à 4, sans fin au dernier palier). */
+  storageStep = 0;
+  /** Places en plus achetées dans la file de brassins. */
+  planExtra = 0;
   /** Niveau du bar (1 à BAR.length). */
   barLevel = 1;
   /** Tireuses du bar, un fût branché sur chacune. */
@@ -420,7 +424,7 @@ export class Game {
 
   /** Capacité du stockage, en bouteilles. */
   get storageCap(): number {
-    return STORAGE[this.storageLevel - 1]!.crates * CRATE;
+    return storageCrates(this.storageLevel, this.storageStep) * CRATE;
   }
 
   /** Place occupée au stockage, en bouteilles : les bouteilles, plus une caisse par fût plein. */
@@ -658,7 +662,25 @@ export class Game {
 
   /** Brassins qu'on peut programmer d'avance : la file s'allonge avec le niveau de la brasserie. */
   get planCap(): number {
-    return PLAN_CAP[this.breweryLevel - 1] ?? PLAN_CAP[PLAN_CAP.length - 1]!;
+    const base = PLAN_CAP[this.breweryLevel - 1] ?? PLAN_CAP[PLAN_CAP.length - 1]!;
+    return Math.round(base * (1 + PLAN_EXTRA.gain * this.planExtra));
+  }
+
+  /** Prix de la prochaine extension de la file : selon le niveau de la brasserie, ×1,6 à chaque extension. */
+  get planExtraCost(): number {
+    const base = PLAN_EXTRA.cost[this.breweryLevel - 1] ?? PLAN_EXTRA.cost[PLAN_EXTRA.cost.length - 1]!;
+    const v = base * Math.pow(PLAN_EXTRA.growth, this.planExtra);
+    const p = Math.pow(10, Math.max(0, Math.floor(Math.log10(v)) - 1));
+    return Math.round(v / p) * p;
+  }
+
+  /** Allonge la file de brassins (+25 % de la file de base). */
+  growPlan(): CommandResult {
+    const cost = this.planExtraCost;
+    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
+    this.money -= cost;
+    this.planExtra++;
+    return { ok: true };
   }
 
   get planRoom(): number {
@@ -782,6 +804,22 @@ export class Game {
     if (this.money < next.cost) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= next.cost;
     this.storageLevel++;
+    this.storageStep = 0;
+    return { ok: true };
+  }
+
+  /** Prix du prochain agrandissement intermédiaire du stockage (null : il faut passer au palier suivant). */
+  get storageStepCost(): number | null {
+    return storageStepCost(this.storageLevel, this.storageStep);
+  }
+
+  /** Agrandit le stockage de 15 % (4 fois par palier, sans fin au dernier). */
+  growStorage(): CommandResult {
+    const cost = this.storageStepCost;
+    if (cost == null) return { ok: false, reason: tl('Passe au stockage suivant') };
+    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
+    this.money -= cost;
+    this.storageStep++;
     return { ok: true };
   }
 
@@ -2293,7 +2331,7 @@ export class Game {
     return {
       version: 7, time: this.time, money: this.money, gems: this.gems, rng: this.rng.state, stations: this.stations, recipe: this.recipe,
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
-      queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
+      queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, storageStep: this.storageStep, planExtra: this.planExtra, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
       contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, features: this.features, featuresSeen: this.featuresSeen, missionIndex: this.missionIndex, partners: this.partners, partnersDone: this.partnersDone,
@@ -2462,6 +2500,8 @@ export class Game {
       }
     }
     g.partnersDone ??= {};
+    g.storageStep ??= 0;
+    g.planExtra ??= 0;
     // avant les missions : celles déjà remplies sont passées, sans récompense
     if ((s as { missionIndex?: number }).missionIndex == null) {
       g.missionIndex = 0;
@@ -2478,6 +2518,8 @@ export class Game {
  * d'équilibrage finit le jeu vers le 31e jour, comme avec l'ancien brassage continu).
  */
 export const PLAN_CAP: readonly number[] = [50, 80, 150, 250, 400];
+/** Extensions de la file : +25 % de la file de base chacune ; prix selon le niveau de la brasserie, ×1,6 à chaque fois. */
+export const PLAN_EXTRA = { gain: 0.25, growth: 1.6, cost: [300, 3_000, 30_000, 300_000, 1_500_000] } as const;
 /** Étapes lentes où l'on peut ajouter des cuves en parallèle, et leur nombre maximal. */
 export const TANK_STAGES: readonly StationId[] = ['fermenter', 'conditioning'];
 export const MAX_TANKS = 4;

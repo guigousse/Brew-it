@@ -595,7 +595,6 @@ const dict: Record<string, string> = {
   'Plus de place au stockage (en comptant les brassins déjà programmés). {0}, ou agrandis le stockage.': 'No queda sitio en el almacén (contando los lotes ya programados). {0}, o amplía el almacén.',
   'Sers des fûts au bar, livre des commandes de fûts, vends-en au grossiste': 'Sirve barriles en el bar, entrega pedidos de barriles, véndelos al mayorista',
   'Livre des commandes, vends au grossiste': 'Entrega pedidos, vende al mayorista',
-  'La file est pleine ({0} brassins). Elle s\'allonge avec le niveau de la brasserie.': 'La cola está llena ({0} lotes). Se alarga con el nivel de la cervecería.',
   'Un brassin avec les réglages actuels des machines. On goûte la première bouteille, puis on décide de la garder dans la gamme.': 'Un lote con los ajustes actuales de las máquinas. Probamos la primera botella y decidimos si se queda en la gama.',
   'offert par Gaston': 'invita Gaston',
   'En attente du moulin…': 'Esperando al molino…',
@@ -1067,5 +1066,14 @@ const dict: Record<string, string> = {
   "Mission {0} sur {1}": "Misión {0} de {1}",
   "Récompense : {0}": "Recompensa: {0}",
   "Ensuite": "Después",
+  "Passe au stockage suivant": "Pasa al siguiente almacén",
+  "Allonger la file : +{0} · {1}": "Alargar la cola: +{0} · {1}",
+  "File de brassins : {0} places": "Cola de elaboraciones: {0} plazas",
+  "La file est pleine ({0} brassins). Allonge-la dans Brasser, ou fais grandir la brasserie.": "La cola está llena ({0} elaboraciones). Alárgala en Elaborar, o haz crecer la cervecería.",
+  " · +{0}": " · +{0}",
+  "Agrandissement {0} : +{1} caisses": "Ampliación {0}: +{1} cajas",
+  "Agrandissement {0}/{1} : +{2} caisses": "Ampliación {0}/{1}: +{2} cajas",
+  "+15 % · {0}": "+15 % · {0}",
+  "Stockage agrandi : {0} caisses": "Almacén ampliado: {0} cajas",
 };
 export default dict;

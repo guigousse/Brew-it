@@ -595,7 +595,6 @@ const dict: Record<string, string> = {
   'Plus de place au stockage (en comptant les brassins déjà programmés). {0}, ou agrandis le stockage.': '仓库没有空间了（已计入排好的批次）。{0}，或扩建仓库。',
   'Sers des fûts au bar, livre des commandes de fûts, vends-en au grossiste': '去酒吧卖桶装酒、完成桶装订单、卖给批发商',
   'Livre des commandes, vends au grossiste': '完成订单、卖给批发商',
-  'La file est pleine ({0} brassins). Elle s\'allonge avec le niveau de la brasserie.': '队列已满（{0} 批）。酒厂等级越高，队列越长。',
   'Un brassin avec les réglages actuels des machines. On goûte la première bouteille, puis on décide de la garder dans la gamme.': '用机器当前设置酿一批。先尝第一瓶，再决定是否加入产品线。',
   'offert par Gaston': '加斯东请客',
   'En attente du moulin…': '等待粉碎机…',
@@ -1067,5 +1066,14 @@ const dict: Record<string, string> = {
   "Mission {0} sur {1}": "第 {0} 个任务，共 {1} 个",
   "Récompense : {0}": "奖励：{0}",
   "Ensuite": "接下来",
+  "Passe au stockage suivant": "升级到下一级仓库",
+  "Allonger la file : +{0} · {1}": "加长队列：+{0} · {1}",
+  "File de brassins : {0} places": "酿造队列：{0} 个位置",
+  "La file est pleine ({0} brassins). Allonge-la dans Brasser, ou fais grandir la brasserie.": "队列已满（{0} 批）。在酿造中加长它，或扩大酒厂。",
+  " · +{0}": " · +{0}",
+  "Agrandissement {0} : +{1} caisses": "扩建 {0}：+{1} 箱",
+  "Agrandissement {0}/{1} : +{2} caisses": "扩建 {0}/{1}：+{2} 箱",
+  "+15 % · {0}": "+15 % · {0}",
+  "Stockage agrandi : {0} caisses": "仓库已扩建：{0} 箱",
 };
 export default dict;

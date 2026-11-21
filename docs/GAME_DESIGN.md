@@ -171,7 +171,7 @@ Chaque appareil exécute ta recette avec sa propre précision (`src/core/brewing
 ## Brassins : bouteilles ou fûts, et programmation
 Dans « Brasser », une bière de la gamme se brasse **en bouteilles** (pour le stock et les commandes) ou **en fûts** (pour le bar). Un essai est toujours en bouteilles, puisqu'on goûte la première.
 
-- **Programmer** ajoute des brassins à une file d'attente (50 à 400 selon le niveau de la brasserie, voir plus haut). Les brassins programmés partent dans l'ordre dès que le moulin est libre. Chacun attend d'avoir l'argent et la place au stockage. Quand la file est vide, la brasserie s'arrête.
+- **Programmer** ajoute des brassins à une file d'attente (50 à 400 selon le niveau de la brasserie, voir plus haut). **« Allonger la file »** (dans Brasser, sous la jauge de la file) ajoute 25 % de la file de base, sans limite ; le prix suit le niveau de la brasserie (300 €, 3 000 €, 30 000 €, 300 000 €, 1,5 M€) et monte de ×1,6 à chaque extension. Les brassins programmés partent dans l'ordre dès que le moulin est libre. Chacun attend d'avoir l'argent et la place au stockage. Quand la file est vide, la brasserie s'arrête.
 - Sur la ligne, les fûts se remplissent sous le bec, puis sont rangés au **stockage**.
 - **Taille des fûts**, selon le volume des brassins (donc le matériel) : 5 L (20 verres) au début, puis 10, 20, 30 et 50 L (200 verres). Un fût plein prend au stockage environ la place de son volume en bouteilles : celui de 5 L occupe à peu près une caisse.
 
@@ -384,6 +384,8 @@ La gamme est une étagère de grandes bouteilles portant leur étiquette. À cô
 Le stockage est une pièce à part entière. Ses rayonnages se remplissent de caisses aux couleurs des étiquettes ; dans les grands stockages, chaque case affichée est une palette de plusieurs caisses. L'ordinateur des commandes est au bureau.
 
 Les bouteilles embouteillées rejoignent le stockage en caisses de 12. Quand il est plein, l'embouteillage s'arrête jusqu'à ce que des ventes libèrent de la place. Un brassin programmé attend d'avoir la place pour lui, mais repart toujours quand tout est vide, même s'il est plus gros que le stockage. Le stock accumulé pendant l'absence sert à honorer les commandes au retour : un grand stockage permet d'en remplir davantage.
+
+**Agrandissements**, sur le principe des machines : en plus des paliers ci-dessous, chaque palier s'agrandit 4 fois de **+15 %** (5, 8, 12 puis 18 % du prix du palier suivant) ; au dernier palier, les agrandissements sont **sans fin** (200 000 €, puis ×1,6 à chaque fois). Passer au palier suivant repart de sa capacité de base, bien plus grande. La fiche « Agrandir le stockage » montre le palier actuel (« Cave voûtée · +2 », sa capacité), le bouton « +15 % · prix » et le palier suivant.
 
 | Niveau | Décor | Capacité | Prix |
 |---|---|---|---|

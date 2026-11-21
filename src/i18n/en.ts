@@ -595,7 +595,6 @@ const dict: Record<string, string> = {
   'Plus de place au stockage (en comptant les brassins déjà programmés). {0}, ou agrandis le stockage.': 'No more room in storage (counting brews already scheduled). {0}, or enlarge storage.',
   'Sers des fûts au bar, livre des commandes de fûts, vends-en au grossiste': 'Serve kegs at the bar, deliver keg orders, sell some to the wholesaler',
   'Livre des commandes, vends au grossiste': 'Deliver orders, sell to the wholesaler',
-  'La file est pleine ({0} brassins). Elle s\'allonge avec le niveau de la brasserie.': 'The queue is full ({0} brews). It grows with the brewery\'s level.',
   'Un brassin avec les réglages actuels des machines. On goûte la première bouteille, puis on décide de la garder dans la gamme.': 'A brew with the current machine settings. We taste the first bottle, then decide whether to keep it in the range.',
   'offert par Gaston': 'paid for by Gaston',
   'En attente du moulin…': 'Waiting for the mill…',
@@ -1067,5 +1066,14 @@ const dict: Record<string, string> = {
   "Mission {0} sur {1}": "Mission {0} of {1}",
   "Récompense : {0}": "Reward: {0}",
   "Ensuite": "Next",
+  "Passe au stockage suivant": "Move up to the next storage",
+  "Allonger la file : +{0} · {1}": "Lengthen the queue: +{0} · {1}",
+  "File de brassins : {0} places": "Brew queue: {0} slots",
+  "La file est pleine ({0} brassins). Allonge-la dans Brasser, ou fais grandir la brasserie.": "The queue is full ({0} brews). Lengthen it in Brew, or grow the brewery.",
+  " · +{0}": " · +{0}",
+  "Agrandissement {0} : +{1} caisses": "Expansion {0}: +{1} crates",
+  "Agrandissement {0}/{1} : +{2} caisses": "Expansion {0}/{1}: +{2} crates",
+  "+15 % · {0}": "+15 % · {0}",
+  "Stockage agrandi : {0} caisses": "Storage expanded: {0} crates",
 };
 export default dict;
