@@ -1048,7 +1048,6 @@ const dict: Record<string, string> = {
   "Partenaires": "Partners",
   "Vendre": "Sell",
   "stock {0} %": "stock {0} %",
-  "Il reprend tout, à tout moment, et vide tout seul le surplus quand le stockage est plein. Son prix baisse au fil de la journée (plein prix jusqu'à {0}) et revient à minuit. Ses ventes ne font pas connaître tes bières.": "He takes everything, at any time, and clears the surplus by himself when storage is full. His price drops over the day (full price up to {0}) and comes back at midnight. His sales don't make your beers known.",
   "{0} / {1} btl": "{0} / {1} btl",
   "Prix du jour": "Today's price",
   "Rien en stock.": "Nothing in stock.",
@@ -1059,5 +1058,8 @@ const dict: Record<string, string> = {
   "1 fût": "1 keg",
   "Vendre au grossiste": "Sell to the wholesaler",
   "Prix du jour : {0} %. Il baisse au fil de la journée et revient à minuit.": "Today's price: {0} %. It drops over the day and comes back at midnight.",
+  "Il vide seul le surplus quand le stockage est plein. Son prix baisse dans la journée et revient à minuit.": "He clears the surplus by himself when storage is full. His price drops during the day and comes back at midnight.",
+  "Contrat au maximum (24 h)": "Contract at maximum (24 h)",
+  "Livreur pour 8 h : {0}": "Courier for 8 h: {0}",
 };
 export default dict;

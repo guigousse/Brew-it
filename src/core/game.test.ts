@@ -1140,7 +1140,7 @@ describe('mobilier et étiquettes', () => {
     g.hire('courier');
     const back = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
     expect(back.isUnlocked('emblem', 'bee')).toBe(true);
-    expect(back.gems).toBe(40);
+    expect(back.gems).toBe(36); // 10 pour le boost, 4 pour le livreur
     expect(back.boostMult('brew')).toBe(2);
     expect(back.staffOn('courier')).toBe(true);
   });

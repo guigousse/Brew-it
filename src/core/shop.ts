@@ -122,7 +122,8 @@ export const STAFF_CONTRACT = { duration: 8 * 3600, maxAhead: 24 * 3600 } as con
 /** Postes de personnel, selon le niveau de la brasserie. */
 export const STAFF_SLOTS = [1, 1, 2, 2, 3] as const;
 /** Prix d'un contrat selon le niveau de la brasserie (le barman, lui, suit le niveau du bar). */
-export const COURIER_COST = [40, 250, 1500, 8000, 30000] as const;
+/** Le livreur se paie en diamants : 4 💎 les 8 h, quel que soit le niveau. */
+export const COURIER_GEMS = 4;
 export const APPRENTICE_COST = [30, 200, 1200, 6000, 25000] as const;
 /** Le livreur passe toutes les 30 s de jeu ; l'apprenti vérifie la file toutes les 5 s. */
 export const COURIER_ROUND_S = 30;

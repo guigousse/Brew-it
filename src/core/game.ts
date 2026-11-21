@@ -9,7 +9,7 @@ import { executeStep } from './brewing/execution';
 import { MISSIONS, type MissionDef, type MissionProgress } from './missions';
 import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelCost, precisionLevel, STATION_ORDER, stationDuration, STEPS_PER_TIER, upgradeCost, type StationId, type StationState } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
-import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
+import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_GEMS, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { pointsAsStars, QUALIFY_METAL, type ContestTier, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
 import { PARTNER_COOLDOWN_S, PARTNER_DAYS, PARTNER_ROUND_S, PARTNER_SLOTS, PARTNERS, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
@@ -1019,9 +1019,11 @@ export class Game {
     return (['barman', 'courier', 'apprentice'] as const).filter((id) => this.staffOn(id)).length;
   }
 
+  /** Prix d'un contrat : en diamants pour le livreur, en euros pour les autres. */
   staffCost(id: StaffId): number {
     if (id === 'barman') return this.barmanCost;
-    const table = id === 'courier' ? COURIER_COST : APPRENTICE_COST;
+    if (id === 'courier') return COURIER_GEMS;
+    const table = APPRENTICE_COST;
     return table[this.breweryLevel - 1] ?? table[0];
   }
 
@@ -1031,8 +1033,13 @@ export class Game {
     const from = Math.max(this.time, this.staffEnd(id));
     if (from + STAFF_CONTRACT.duration - this.time > STAFF_CONTRACT.maxAhead) return { ok: false, reason: tl('Contrat déjà assez long') };
     const cost = this.staffCost(id);
-    if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
-    this.money -= cost;
+    if (id === 'courier') {
+      if (this.gems < cost) return { ok: false, reason: tl('Pas assez de diamants') };
+      this.gems -= cost;
+    } else {
+      if (this.money < cost) return { ok: false, reason: tl('Pas assez d\'argent') };
+      this.money -= cost;
+    }
     if (id === 'barman') {
       this.barmanUntil = from + BARMAN.duration;
       this.refillTaps();

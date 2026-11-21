@@ -1121,3 +1121,4 @@ button:disabled { cursor: default; opacity: .5; }
 .ws-sell-gain { font-size: 15px; color: var(--accent); white-space: nowrap; }
 .ws-beer .stock-line { min-width: 0; }
 .ws-beer .ws-quota { font-size: 14px; }
+.btn.courier-hire { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }

@@ -1832,7 +1832,7 @@ export class App {
   private computerKey(g: Game): string {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
-      app === 'orders' ? [this.ordersView, g.staffOn('courier'), Math.ceil((g.staffEnd('courier') - g.time) / 600), g.money >= g.staffCost('courier'), Math.round(g.wholesaleRate * 20), g.hasFeature('partners'),
+      app === 'orders' ? [this.ordersView, g.staffOn('courier'), Math.ceil((g.staffEnd('courier') - g.time) / 600), g.gems >= g.staffCost('courier'), Math.round(g.wholesaleRate * 20), g.hasFeature('partners'),
         g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
       0 ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
       app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
@@ -2058,7 +2058,7 @@ export class App {
    * faire de la place. Le remplissage du stockage, le prix du jour, puis chaque bière avec « 1 caisse », « Moitié », « Tout ».
    */
   private wholesaleTab(g: Game, card: HTMLElement): void {
-    card.append(h('p', 'hint', tl('Il reprend tout, à tout moment, et vide tout seul le surplus quand le stockage est plein. Son prix baisse au fil de la journée (plein prix jusqu\'à {0}) et revient à minuit. Ses ventes ne font pas connaître tes bières.', liters(g.wholesaleFull))));
+    card.append(h('p', 'hint', tl('Il vide seul le surplus quand le stockage est plein. Son prix baisse dans la journée et revient à minuit.')));
     const gauge = (label: string, value: string, pct: number, cls: string) => {
       const box = h('div', 'ws-price');
       const head = h('div', 'stock-line');
@@ -2147,7 +2147,7 @@ export class App {
     el.append(iconCanvas('courier', 2, 'courier-icon'), info);
     const cost = g.staffCost('courier');
     const tooLong = on && left + STAFF_CONTRACT.duration > STAFF_CONTRACT.maxAhead;
-    const b = this.btn('btn small', tooLong ? tl('24 h max') : `${on ? '+8 h' : tl('8 h')} · ${moneyShort(cost)}`, () => {
+    const b = this.btn('btn small courier-hire', '', () => {
       const r = g.hire('courier');
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('doorOpen');
@@ -2155,8 +2155,12 @@ export class App {
       this.computer!.key = '';
       this.refreshComputer();
     });
+    // le prix en diamants, avec l'icône du diamant
+    if (tooLong) b.textContent = tl('24 h max');
+    else b.append(h('span', '', `${on ? '+8 h' : tl('8 h')} ·`), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(cost)));
+    b.setAttribute('aria-label', tooLong ? tl('Contrat au maximum (24 h)') : tl('Livreur pour 8 h : {0}', gemsText(cost)));
     b.disabled = tooLong;
-    if (!b.disabled) this.costGate(b, cost);
+    b.classList.toggle('short', !tooLong && g.gems < cost);
     el.append(b);
     return el;
   }

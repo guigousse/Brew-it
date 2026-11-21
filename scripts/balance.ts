@@ -235,7 +235,7 @@ function session(minutes: number) {
   if (g.offline) g.collectOffline();
   if (process.env.COURIER) for (let i = 0; i < 3; i++) {
     const c = g.staffCost('courier');
-    if (g.money < c * 3 || !g.hire('courier').ok) break;
+    if (g.gems < c || !g.hire('courier').ok) break;
     courierPaid += c;
   }
   // SNAP=dossier : garde le dernier état à chaque niveau de brasserie (bN) et de bar (rN), pour scripts/roi.ts
@@ -321,7 +321,7 @@ console.log(`Missions : ${MISSIONS_DONE.length} — ${MISSIONS_DONE.join(' · ')
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
 console.log('Diamants gagnés (cumul) :', gemsByDay.map((c, i) => `J${i + 1} ${c}`).join(' · '), '· fin', g.gems + gemsSpent - BUY - gift);
-console.log('Diamants dépensés en boosts :', gemsSpent, '· achetés :', BUY, process.env.COURIER ? `· livreur payé ${Math.round(courierPaid)} €` : '');
+console.log('Diamants dépensés en boosts :', gemsSpent, '· achetés :', BUY, process.env.COURIER ? `· livreur payé ${Math.round(courierPaid)} 💎` : '');
 console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.round(b * 100)}`).join(' · '));
 console.log('Partenariats :', Math.round(PARTNER_EARNED), '€');
 console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', Math.round(g.wholesaleLiters), 'L,', Math.round(g.wholesaleRevenue), '€');
