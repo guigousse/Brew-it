@@ -840,17 +840,17 @@ button:disabled { cursor: default; opacity: .5; }
 .harvests.over-modal { z-index: 11; }
 
 /* --- Visite guidée de Gaston : surbrillance, doigt pixelisé, bulle ------------------------------ */
-.tour-spot { position: fixed; z-index: 8; pointer-events: none; border: 3px solid var(--accent);
+.tour-spot { position: fixed; z-index: 12; pointer-events: none; border: 3px solid var(--accent);
   box-shadow: 0 0 0 200vmax #0d0a12a6, 0 0 14px 3px #f2c14ec0, inset 0 0 10px #f2c14e80;
   transition: left .45s ease, top .45s ease, width .45s ease, height .45s ease; animation: spot-pulse 1.2s steps(3) infinite; }
 @keyframes spot-pulse { 50% { border-color: #ffe7a0; box-shadow: 0 0 0 200vmax #0d0a12a6, 0 0 20px 6px #f2c14ee0, inset 0 0 14px #f2c14ea0; } }
-.tour-finger { position: fixed; z-index: 9; pointer-events: none; transition: left .55s cubic-bezier(.4, 0, .2, 1), top .55s cubic-bezier(.4, 0, .2, 1); filter: drop-shadow(2px 3px 0 #0009); }
+.tour-finger { position: fixed; z-index: 13; pointer-events: none; transition: left .55s cubic-bezier(.4, 0, .2, 1), top .55s cubic-bezier(.4, 0, .2, 1); filter: drop-shadow(2px 3px 0 #0009); }
 .tour-finger canvas { display: block; image-rendering: pixelated; }
 .tour-finger-tap { animation: finger-tap .9s steps(3) infinite; }
 .tour-finger.down .tour-finger-tap { transform: scaleY(-1); animation-name: finger-tap-down; }
 @keyframes finger-tap { 50% { translate: 0 7px; } }
 @keyframes finger-tap-down { 50% { translate: 0 -7px; } }
-.tour-bubble { position: fixed; z-index: 9; left: 8px; right: 8px; top: calc(var(--top-h, 60px) + 8px); display: grid; grid-template-columns: 52px 1fr; gap: 10px;
+.tour-bubble { position: fixed; z-index: 13; left: 8px; right: 8px; top: calc(var(--top-h, 60px) + 8px); display: grid; grid-template-columns: 52px 1fr; gap: 10px;
   max-width: 560px; margin: 0 auto; padding: 10px; background: var(--panel); border: 3px solid var(--ink); box-shadow: inset 0 0 0 2px var(--accent), 0 4px 0 #0008; }
 .tour-bubble.low { top: auto; bottom: calc(var(--bottom-h, 70px) + 10px); }
 .tour-body { display: grid; gap: 6px; align-content: start; }

@@ -121,8 +121,8 @@ export const staffById = (id: string) => STAFF.find((s) => s.id === id);
 export const STAFF_CONTRACT = { duration: 8 * 3600, maxAhead: 24 * 3600 } as const;
 /** Postes de personnel, selon le niveau de la brasserie. */
 export const STAFF_SLOTS = [1, 1, 2, 2, 3] as const;
-/** Prix d'un contrat selon le niveau de la brasserie (le barman, lui, suit le niveau du bar). */
-/** Le livreur se paie en diamants : 4 💎 les 8 h, quel que soit le niveau. */
+/** Le barman et le livreur se paient en diamants, quel que soit le niveau : 3 💎 et 4 💎 les 8 h. */
+export const BARMAN_GEMS = 3;
 export const COURIER_GEMS = 4;
 export const APPRENTICE_COST = [30, 200, 1200, 6000, 25000] as const;
 /** Le livreur passe toutes les 30 s de jeu ; l'apprenti vérifie la file toutes les 5 s. */

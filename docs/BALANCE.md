@@ -299,3 +299,14 @@ Après la visite guidée, les fûts vides se changent seuls (le barman payant di
 - Les missions rapportent peu d'argent (≈ 75 k€ en tout, surtout au début) : leur effet sur le rythme est négligeable ; leurs diamants (≈ 400 en tout) vont aux boosts et aux cosmétiques.
 - Recalage : plancher du grossiste de 35 % à **33 %**. Le plancher reste le réglage le plus sensible (30 % : J37, 34 % : J30) ; à 33 %, fin à **J32½**, 21 % de visites sans achat, pire série sans achat : 2.
 - Le joueur simulé ne s'inscrit pas aux concours : ses missions s'arrêtent à « Gagne une médaille en concours » (la 12e), comme un joueur qui ignorerait les concours.
+
+## Fûts à la main, barman en diamants (novembre 2026)
+
+Les fûts ne se changent plus seuls après la visite : on les branche à la main, ou on embauche le **barman** (app Personnel, **3 💎** les 8 h, comme le livreur à 4 💎). Le joueur simulé garde un barman sous contrat dès qu'il a des fûts et qu'il lui reste moins de 6 h, tant que les diamants suivent (`NO_BARMAN=1` pour jouer sans).
+
+- Avant (fûts automatiques) : fin à **J32½**, 21 % de visites sans achat.
+- Fûts à la main, sans barman : fin à **J36½** (le bar reste à sec pendant les absences), 18 % de visites sans achat.
+- Avec le barman payé en diamants : fin à **J34**, 19 % de visites sans achat, pire série sans achat : 3 ; il coûte environ 70 💎 sur toute la partie (le joueur simulé n'a pas toujours les diamants).
+- Pas de recalage pour l'instant : la cible reste « 4 semaines environ ».
+
+La visite guidée offre aussi 30 min de « Plein régime » (machines 3×) au premier brassin, et les brassins de la visite (l'essai, les deux premiers fûts) vont 4 fois plus vite.

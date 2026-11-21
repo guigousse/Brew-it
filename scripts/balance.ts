@@ -44,6 +44,7 @@ g.gems += BUY;
 let gemsSpent = 0;
 let gift = 0;
 let courierPaid = 0;
+let barmanPaid = 0;
 let clock = SESSIONS[0]! * 3600; // secondes depuis le jour 1 à minuit
 g.wall = clock * 1000 + new Date(0).getTimezoneOffset() * 60000; // minuit local = minuit du jour simulé (quota du grossiste)
 const log: { t: number; what: string; cost: number }[] = [];
@@ -238,6 +239,12 @@ function session(minutes: number) {
     if (g.gems < c || !g.hire('courier').ok) break;
     courierPaid += c;
   }
+  // le barman rebranche les fûts pendant l'absence : on le garde sous contrat tant que les diamants suivent
+  // (NO_BARMAN=1 : on branche les fûts à la main, à chaque visite seulement)
+  if (!process.env.NO_BARMAN && g.beers.some((b) => b.kegs.length) && g.staffEnd('barman') - g.time < 6 * 3600) {
+    const c = g.staffCost('barman');
+    if (g.gems >= c && g.hire('barman').ok) barmanPaid += c;
+  }
   // SNAP=dossier : garde le dernier état à chaque niveau de brasserie (bN) et de bar (rN), pour scripts/roi.ts
   if (process.env.SNAP && g.beers.length) for (const k of ['b' + g.breweryLevel, 'r' + g.barLevel]) writeFileSync(`${process.env.SNAP}/${k}.json`, JSON.stringify(g.toJSON()));
   deliver();
@@ -321,7 +328,7 @@ console.log(`Missions : ${MISSIONS_DONE.length} — ${MISSIONS_DONE.join(' · ')
 console.log('Fini :', completed ? fmt(completed) : `non (après ${DAYS} jours)`);
 console.log('Visites :', sessionStarts.length, '· sans achat :', noBuy, `(${Math.round((noBuy / sessionStarts.length) * 100)} %) · pire série sans achat :`, worst);
 console.log('Diamants gagnés (cumul) :', gemsByDay.map((c, i) => `J${i + 1} ${c}`).join(' · '), '· fin', g.gems + gemsSpent - BUY - gift);
-console.log('Diamants dépensés en boosts :', gemsSpent, '· achetés :', BUY, process.env.COURIER ? `· livreur payé ${Math.round(courierPaid)} 💎` : '');
+console.log('Diamants dépensés en boosts :', gemsSpent, '· achetés :', BUY, process.env.COURIER ? `· livreur payé ${Math.round(courierPaid)} 💎` : '', `· barman payé ${barmanPaid} 💎`);
 console.log('Marque par jour :', brandByDay.map((b, i) => `J${i + 1} ${Math.round(b * 100)}`).join(' · '));
 console.log('Partenariats :', Math.round(PARTNER_EARNED), '€');
 console.log('Bar :', Math.round(g.barRevenue), '€ · commandes :', g.ordersDone, 'livrées,', Math.round(delivered), '€ · grossiste :', Math.round(g.wholesaleLiters), 'L,', Math.round(g.wholesaleRevenue), '€');

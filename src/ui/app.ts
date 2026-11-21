@@ -222,18 +222,24 @@ const SOURCE: Record<SaleSource, { name: string; color: string }> = {
 };
 
 /** Les applications de l'ordinateur du bureau, dans l'ordre du menu. */
-export type PcApp = 'dashboard' | 'messages' | 'orders' | 'trends' | 'marketing' | 'contests';
+export type PcApp = 'dashboard' | 'messages' | 'orders' | 'staff' | 'trends' | 'marketing' | 'contests';
 
 const PC_APPS: readonly { id: PcApp; name: string; icon: IconId }[] = [
   { id: 'dashboard', name: tl('Tableau de bord'), icon: 'chart' },
   { id: 'messages', name: tl('Messages'), icon: 'bubble' },
   { id: 'orders', name: tl('Commandes'), icon: 'clipboard' },
+  { id: 'staff', name: tl('Personnel'), icon: 'staff' },
   { id: 'trends', name: tl('Tendances'), icon: 'trend' },
   { id: 'marketing', name: tl('Marketing'), icon: 'megaphone' },
   { id: 'contests', name: tl('Concours'), icon: 'trophy' },
 ];
 /** L'application où se trouve une fonction : les partenariats vivent dans Commandes. */
 const featureApp = (id: FeatureId): PcApp => (id === 'partners' ? 'orders' : id);
+/** Le personnel qu'on embauche depuis l'ordinateur (l'apprenti, lui, travaille d'office après la visite). */
+const HIRED: readonly { id: 'barman' | 'courier'; icon: IconId; name: string; idle: string; busy: string }[] = [
+  { id: 'barman', icon: 'barman', name: tl('Barman'), idle: tl('Rebranche les fûts vides avec ceux du stockage, même pendant ton absence.'), busy: tl('Au comptoir encore {0}.') },
+  { id: 'courier', icon: 'courier', name: tl('Livreur'), idle: tl('Envoie seul les commandes prêtes.'), busy: tl('En tournée encore {0}.') },
+];
 /** Un message reçu au bureau (commandes, tendances, brassins…), daté en temps de jeu. */
 interface Message { at: number; text: string; kind: 'good' | 'bad' | 'info'; icon: IconId; read: boolean }
 const MAX_MESSAGES = 60;
@@ -553,14 +559,32 @@ export class App {
       barBtns: () => [this.eventsBtn],
       money: () => [this.gemsPill, this.moneyPill],
       taste: () => (this.tasteBtn.classList.contains('hidden') ? null : this.tasteBtn),
+      boost: () => this.boostHud.querySelector<HTMLElement>('.boost-chip:not(.contest-chip):not(.partner-chip)'),
+      // dans la fiche « Brasser » : la file, puis l'assistant écran par écran
+      planAdd: () => this.sheet.querySelector<HTMLElement>('.plan-add'),
+      planList: () => this.sheet.querySelector<HTMLElement>('.plan-list .plan-card'),
+      wizBeer: () => this.sheet.querySelector<HTMLElement>('.pick-card:not(.trial)'),
+      wizKeg: () => this.sheet.querySelector<HTMLElement>('.pick-card[data-format="keg"]'),
+      wizBack: () => this.sheet.querySelector<HTMLElement>('.wiz-back'),
+      wizPlus: () => this.sheet.querySelector<HTMLElement>('.count-row .knob-btn:last-child'),
+      wizGo: () => this.sheet.querySelector<HTMLElement>('.plan-go'),
+      // au bar : la tireuse, puis la bière dont on branche un fût
+      tapLine: () => this.sheet.querySelector<HTMLElement>('.tap-line'),
+      kegBeer: () => this.modal.querySelector<HTMLElement>('.keg-swap .tap-line:not(:disabled)'),
     };
     this.tour = new Tour({
       game: () => this.game(),
       view: () => this.view as TourView,
       goView: (v) => this.goView(v),
       target: (t: TourTarget) => (t.startsWith('nav:') ? this.navTabs.get(t.slice(4) as View)?.btn ?? null : tourTargets[t]?.() ?? null),
-      busy: () => this.modalOpen || !!this.openSheet,
       sheet: () => this.openSheet?.kind ?? null,
+      modal: () => (!this.modalOpen ? null : this.modal.querySelector('.keg-swap') ? 'kegSwap' : 'other'),
+      wiz: () => (this.openSheet?.kind === 'brew' && this.wiz ? { step: this.wiz.step, format: this.wiz.format, count: this.wiz.count } : null),
+      gift: () => {
+        const gems = this.game().openGift();
+        sfx.play('upgrade');
+        this.toast(gems ? tl('Cadeau de Gaston : +{0} 💎', gems) : tl('Cadeau de Gaston : Plein régime, 30 min !'), 'good');
+      },
       avatar: () => {
         const av = h('canvas', 'mentor-avatar');
         drawGaston(av);
@@ -864,7 +888,7 @@ export class App {
     if (!s) return;
     const key = JSON.stringify([
       s, g.levelNumber(s.kind === 'station' ? s.id : 'mill'), s.kind === 'station' ? g.tankCount(s.id) : 0, g.beers.map((b) => [b.id, b.stock, b.name]), g.tastable?.id ?? 0, g.selectedBeer,
-      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel] : 0, s.kind === 'brew' ? [g.plan, g.planCap, this.wiz, g.selectedBeer, g.beers.map((b) => b.kegs.length), this.planStatus(g)] : 0,
+      g.batchLiters, s.kind === 'brew' ? [g.canBrew().ok, g.roomForBatch, g.queued, g.broke] : 0, s.kind === 'bar' || s.kind === 'barUp' ? [g.taps, g.beers.map((b) => [b.kegs.length, Math.round(b.pop * 100)]), g.barLevel, g.staffOn('barman'), Math.ceil((g.staffEnd('barman') - g.time) / 600), g.gems >= g.barmanCost] : 0, s.kind === 'brew' ? [g.plan, g.planCap, this.wiz, g.selectedBeer, g.beers.map((b) => b.kegs.length), this.planStatus(g)] : 0,
       s.kind === 'storage' || s.kind === 'storageUp' ? [Math.round(g.productionRate()), g.beers.map((b) => b.kegs.length)] : 0, s.kind === 'range' ? g.beers.map((b) => Math.round(b.pop * 20)) : 0, g.rangeSlots, g.storageLevel, g.storageStep, g.planExtra, g.money >= (g.storageStepCost ?? Infinity), g.money >= g.planExtraCost, g.bottlingBlocked, this.shelfSel,
     ]);
     if (key === this.sheetKey) return this.refreshLive();
@@ -1149,7 +1173,7 @@ export class App {
   private queueView(g: Game): void {
     const body = this.frameSheet(tl('Brasser'));
     if (g.tastable) body.append(this.btn('btn primary', tl('🍺 Un essai attend : goûter'), () => this.openTasting()));
-    body.append(this.btn('btn primary big', tl('+ Programmer des brassins'), () => this.wizGo('beer', { beerId: null, format: 'bottle', count: 1 })));
+    body.append(this.btn('btn primary big plan-add', tl('+ Programmer des brassins'), () => this.wizGo('beer', { beerId: null, format: 'bottle', count: 1 })));
     // la file et sa capacité
     const head = h('div', 'beer-head');
     head.append(h('span', 'section-title', tl('File des brassins')), h('span', 'stats-line', `${g.planned}/${g.planCap}`));
@@ -1265,6 +1289,7 @@ export class App {
     const grid = h('div', 'pick-grid');
     for (const [f, name, use] of [['bottle', tl('Bouteilles'), tl('Pour le stock et les commandes')], ['keg', tl('Fûts'), tl('Pour les tireuses du bar')]] as const) {
       const card = h('button', `card pick-card format${this.wiz?.format === f ? ' selected' : ''}`);
+      card.dataset.format = f;
       card.setAttribute('aria-label', `${name} : ${use}`);
       card.append(this.beerVisual(beer, f), h('span', 'beer-name', name));
       card.onclick = () => this.wizGo('count', { format: f, count: Math.min(this.wiz?.count ?? 1, Math.max(1, g.planLimit(f))) });
@@ -1313,7 +1338,7 @@ export class App {
     }
     sum.append(h('p', 'hint', tl('Payés au lancement de chaque brassin. Un brassin attend l\'argent et la place dont il a besoin.')));
     body.append(sum);
-    const go = this.btn('btn primary big', room ? tl('Programmer {0} brassin{1}', n, n > 1 ? 's' : '') : g.planRoom ? tl('Stockage plein') : tl('File pleine'), () => {
+    const go = this.btn('btn primary big plan-go', room ? tl('Programmer {0} brassin{1}', n, n > 1 ? 's' : '') : g.planRoom ? tl('Stockage plein') : tl('File pleine'), () => {
       const r = g.planBrew(beer.id, f, n);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('pop');
@@ -1692,6 +1717,8 @@ export class App {
     });
     body.append(list);
     if (!g.beers.some((b) => b.kegs.length)) body.append(h('p', 'hint', tl('Aucun fût plein : brasse en « Fûts » à l\'atelier.')));
+    // sans barman, les fûts vides attendent qu'on les rebranche : on peut l'embaucher d'ici (aussi dans Personnel)
+    body.append(this.staffLine(g, HIRED[0]!));
   }
 
   /** Changer le fût d'une tireuse : on prend un fût plein au stockage. */
@@ -1701,6 +1728,7 @@ export class App {
     if (!tap) return;
     this.barRoom.selected = `keg${i}`;
     const card = this.modalCard(tl('Changer le fût'));
+    card.classList.add('keg-swap');
     if (tap.glasses > 0) card.append(h('p', 'hint', tl('Il reste {0} verres, ils seront perdus.', tap.glasses)));
     const list = h('div', 'stock-list');
     for (const b of g.beers) {
@@ -1866,6 +1894,7 @@ export class App {
       app === 'orders' ? [this.ordersView, g.staffOn('courier'), Math.ceil((g.staffEnd('courier') - g.time) / 600), g.gems >= g.staffCost('courier'), Math.round(g.wholesaleRate * 20), g.hasFeature('partners'),
         g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
       0 ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
+      app === 'staff' ? HIRED.map((x) => [g.staffOn(x.id), Math.ceil((g.staffEnd(x.id) - g.time) / 600), g.gems >= g.staffCost(x.id)]) : 0,
       app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
       app === 'trends' || app === 'marketing' || app === 'orders' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(g.wsToday / 100)]), [...this.picks]] : 0]);
   }
@@ -1934,6 +1963,7 @@ export class App {
       this.dashboardPage(g, body);
     } else if (st.app === 'messages') this.messagesTab(g, body);
     else if (st.app === 'orders') this.ordersTab(g, body);
+    else if (st.app === 'staff') this.staffTab(g, body);
     else if (st.app === 'trends') this.trendsTab(g, body);
     else if (st.app === 'marketing') this.marketingTab(g, body);
     else this.contestsTab(g, body);
@@ -1948,6 +1978,12 @@ export class App {
       dashboard: { text: '', hot: false },
       messages: { text: this.unread ? String(this.unread) : '', hot: false },
       orders: { text: g.orders.length ? String(g.orders.length) : '', hot: ready > 0 },
+      // le nombre d'employés en service ; « ! » quand une tireuse attend un fût et que personne n'est au comptoir
+      staff: (() => {
+        const on = HIRED.filter((x) => g.staffOn(x.id)).length;
+        const tapWaits = !g.barmanOn && g.taps.some((t) => t.glasses <= 0) && g.beers.some((b) => b.kegs.length > 0);
+        return { text: on ? String(on) : tapWaits ? '!' : '', hot: tapWaits };
+      })(),
       trends: { text: '', hot: false },
       marketing: { text: g.advertising ? '●' : '', hot: false },
       contests: (() => {
@@ -2062,7 +2098,6 @@ export class App {
       if (this.ordersView === 'partners') return this.partnersTab(g, card);
       if (this.ordersView === 'wholesale') return this.wholesaleTab(g, card);
     }
-    card.append(this.courierLine(g));
     for (const o of sorted) card.append(this.orderCard(g, o));
     g.slotWaits.forEach((w, i) => card.append(this.emptySlot(g, w, i)));
     // l'ordinateur : une place de plus au tableau à chaque niveau
@@ -2168,28 +2203,36 @@ export class App {
     fill();
   }
 
-  /** Le livreur : un contrat de 8 h, et les commandes prêtes partent toutes seules, même en ton absence. */
-  private courierLine(g: Game): HTMLElement {
-    const on = g.staffOn('courier');
-    const left = g.staffEnd('courier') - g.time;
+  /** Personnel (application de l'ordinateur) : le barman et le livreur, des contrats de 8 h payés en diamants. */
+  private staffTab(g: Game, card: HTMLElement): void {
+    card.append(h('p', 'hint', tl('Chaque contrat dure 8 h et se prolonge jusqu\'à 24 h d\'avance. Ils travaillent même pendant ton absence.')));
+    for (const x of HIRED) card.append(this.staffLine(g, x));
+  }
+
+  /** Un employé : ce qu'il fait (ou le temps qui lui reste), et son contrat de 8 h en diamants. */
+  private staffLine(g: Game, x: (typeof HIRED)[number]): HTMLElement {
+    const on = g.staffOn(x.id);
+    const left = g.staffEnd(x.id) - g.time;
     const el = h('div', `courier-line${on ? ' on' : ''}`);
     const info = h('div', 'courier-info');
-    info.append(h('span', 'courier-name', tl('Livreur')), h('span', 'hint', on ? tl('En tournée encore {0}.', duration(left)) : tl('Envoie seul les commandes prêtes.')));
-    el.append(iconCanvas('courier', 2, 'courier-icon'), info);
-    const cost = g.staffCost('courier');
+    info.append(h('span', 'courier-name', x.name), h('span', 'hint', on ? x.busy.replace('{0}', duration(left)) : x.idle));
+    el.append(iconCanvas(x.icon, 2, 'courier-icon'), info);
+    const cost = g.staffCost(x.id);
     const tooLong = on && left + STAFF_CONTRACT.duration > STAFF_CONTRACT.maxAhead;
     const b = this.btn('btn small courier-hire', '', () => {
-      const r = g.hire('courier');
+      const r = g.hire(x.id);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('doorOpen');
-      this.toast(on ? tl('Contrat prolongé') : tl('{0} embauché !', tl('Livreur')), 'good');
-      this.computer!.key = '';
-      this.refreshComputer();
+      this.toast(on ? tl('Contrat prolongé') : tl('{0} embauché !', x.name), 'good');
+      if (this.computer) {
+        this.computer.key = '';
+        this.refreshComputer();
+      } else this.refreshSheet();
     });
     // le prix en diamants, avec l'icône du diamant
     if (tooLong) b.textContent = tl('24 h max');
     else b.append(h('span', '', `${on ? '+8 h' : tl('8 h')} ·`), iconCanvas('gem', 1, 'gems-icon'), h('span', '', String(cost)));
-    b.setAttribute('aria-label', tooLong ? tl('Contrat au maximum (24 h)') : tl('Livreur pour 8 h : {0}', gemsText(cost)));
+    b.setAttribute('aria-label', tooLong ? tl('Contrat au maximum (24 h)') : tl('{0} pour 8 h : {1}', x.name, gemsText(cost)));
     b.disabled = tooLong;
     b.classList.toggle('short', !tooLong && g.gems < cost);
     el.append(b);

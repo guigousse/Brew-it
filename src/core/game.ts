@@ -2,14 +2,14 @@ import { brew, GASTON_RECIPE, DRINKABLE_MIN, REF_LITERS, type Actual, type Level
 import { EventBus } from './events';
 import type { Label } from './label';
 import { PARTY } from './market';
-import { AD_EXTEND, AD_REF, adById, adCost, ADS, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, BARMAN_COST, barEventById, SHOP_ITEMS, variety, type AdDef, type AdId, type BarEventId, type ShopItemId } from './market';
+import { AD_EXTEND, AD_REF, adById, adCost, ADS, BAR, BAR_BASE_SHARE, BAR_MIN_QUALITY, GLASS_L, glassPrice, kegGlasses, kegLiters, kegSpace, PARTY_COST, BARMAN, barEventById, SHOP_ITEMS, variety, type AdDef, type AdId, type BarEventId, type ShopItemId } from './market';
 import { orderGems, wholesaleFactor, wholesaleValue, WHOLESALE, CLIENT_TYPES, COMPUTERS, drawOrder, FIRST_ORDER_S, fits, openTypes, ORDER_GAP_MAX_S, ORDER_GAP_MIN_S, PRESTIGE_QUALITY, STARTER_ORDERS, wholesalePrice, type Order } from './orders';
 import { Rng } from './rng';
 import { executeStep } from './brewing/execution';
 import { MISSIONS, type MissionDef, type MissionProgress } from './missions';
 import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelCost, precisionLevel, STATION_ORDER, stationDuration, STEPS_PER_TIER, upgradeCost, type StationId, type StationState } from './stations';
 import { CRATE, MAX_RANGE, slotCost, STORAGE, storageCrates, storageStepCost } from './warehouse';
-import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_GEMS, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
+import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, BARMAN_GEMS, COURIER_GEMS, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { pointsAsStars, QUALIFY_METAL, type ContestTier, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
 import { PARTNER_COOLDOWN_S, PARTNER_DAYS, PARTNER_ROUND_S, PARTNER_SLOTS, PARTNERS, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
@@ -44,6 +44,10 @@ export type AdReward = 'double' | 'prospect';
 export const AD_DAILY = 3;
 /** `tips` vaut TUTO_DONE quand la visite guidée de Gaston est finie (ou passée). En dessous : l'étape en cours. */
 export const TUTO_DONE = 100;
+/** Pendant la visite guidée, les brassins (l'essai puis les deux premiers fûts) vont 4 fois plus vite. */
+export const TUTO_RUSH_BATCHES = 3;
+/** Le cadeau de bienvenue de Gaston : un boost des machines offert pendant la visite. */
+export const TUTO_GIFT = { boost: 'fullSpeed', minutes: 30 } as const;
 /**
  * Contre le spam de la proposition « Doubler tes gains ? » : il faut une absence d'au moins 15 min, et 30 min
  * depuis la dernière proposition (regardée, refusée ou fermée). Le plafond de 3 pubs par jour s'y ajoute.
@@ -314,6 +318,8 @@ export class Game {
   nextId = 1;
   /** Avancement de l'accompagnement de Gaston. */
   tips = 0;
+  /** Le cadeau de bienvenue de Gaston (un boost des machines, pendant la visite) a été ouvert. */
+  giftTaken = false;
   /** Gains de la dernière absence, en attente de récolte. */
   offline: OfflineReport | null = null;
   /** Les trois concours en cours (régional, national, international), ou null entre deux sessions. */
@@ -1022,13 +1028,14 @@ export class Game {
     return PARTY_COST[this.barLevel - 1] ?? PARTY_COST[0];
   }
 
-  /** Les fûts vides se rebranchent tout seuls avec ceux du stockage (après la visite guidée, qui apprend à le faire). */
+  /** Le barman est sous contrat : il rebranche les fûts vides avec ceux du stockage. Sans lui, on les branche soi-même. */
   get barmanOn(): boolean {
-    return this.tips >= TUTO_DONE || this.time < this.barmanUntil;
+    return this.time < this.barmanUntil;
   }
 
+  /** Prix du barman pour 8 h, en diamants. */
   get barmanCost(): number {
-    return BARMAN_COST[this.barLevel - 1] ?? BARMAN_COST[0];
+    return BARMAN_GEMS;
   }
 
   /** Embauche (ou prolonge) le barman pour 8 h, jusqu'à 24 h d'avance. */
@@ -1057,7 +1064,7 @@ export class Game {
     return (['barman', 'courier', 'apprentice'] as const).filter((id) => this.staffOn(id)).length;
   }
 
-  /** Prix d'un contrat : en diamants pour le livreur, en euros pour les autres. */
+  /** Prix d'un contrat : en diamants pour le barman et le livreur, en euros pour l'apprenti. */
   staffCost(id: StaffId): number {
     if (id === 'barman') return this.barmanCost;
     if (id === 'courier') return COURIER_GEMS;
@@ -1071,7 +1078,7 @@ export class Game {
     const from = Math.max(this.time, this.staffEnd(id));
     if (from + STAFF_CONTRACT.duration - this.time > STAFF_CONTRACT.maxAhead) return { ok: false, reason: tl('Contrat déjà assez long') };
     const cost = this.staffCost(id);
-    if (id === 'courier') {
+    if (id === 'courier' || id === 'barman') {
       if (this.gems < cost) return { ok: false, reason: tl('Pas assez de diamants') };
       this.gems -= cost;
     } else {
@@ -2085,9 +2092,35 @@ export class Game {
     b.duration = b.format === 'keg' && id === 'bottling'
       ? this.stationTime(id, r, (b.kegs ?? 0) * ((b.kegGlasses ?? 20) * 0.25)) * 0.5
       : this.stationTime(id, r, b.bottles != null ? b.bottles * BOTTLE_L : b.liters);
-    // Premier brassin du tutoriel : Gaston donne un coup de main, tout va 4 fois plus vite.
-    if (this.batchesDone === 0 && this.beers.length === 0 && this.batches.length <= 1) b.duration *= 0.25;
+    // Gaston donne un coup de main, tout va 4 fois plus vite : le tout premier brassin, et pendant la visite
+    // guidée, l'essai et les deux premiers brassins programmés (les fûts du bar)
+    if (this.tutoRush) b.duration *= 0.25;
     this.events.emit({ type: 'stage', batchId: b.id, stage });
+  }
+
+  /** Coup de main de Gaston (machines 4 fois plus vite) : le tout premier brassin, et les premiers de la visite guidée. */
+  private get tutoRush(): boolean {
+    return (this.batchesDone === 0 && this.beers.length === 0 && this.batches.length <= 1)
+      || (this.tips < TUTO_DONE && this.batchesDone < TUTO_RUSH_BATCHES);
+  }
+
+  /**
+   * Le cadeau de bienvenue de Gaston, ouvert pendant la visite : un boost des machines offert (Plein régime, 30 min).
+   * Une seule fois par partie. Il prolonge un boost des machines au même effet ; si un autre effet tourne déjà sur
+   * ce poste, Gaston donne à la place les diamants qu'il vaut. Renvoie les diamants donnés (0 : le boost est parti).
+   */
+  openGift(): number {
+    if (this.giftTaken) return 0;
+    this.giftTaken = true;
+    const def = boostById(TUTO_GIFT.boost)!;
+    if (this.boostBlocked(def.id)) {
+      const gems = Math.ceil((def.gems * TUTO_GIFT.minutes) / def.minutes);
+      this.gems += gems;
+      return gems;
+    }
+    const cur = this.boostOf('brew');
+    this.boosts.brew = { id: cur?.id ?? def.id, until: (cur ? cur.until : this.time) + TUTO_GIFT.minutes * 60, from: cur ? cur.from ?? this.time : this.time };
+    return 0;
   }
 
   /**
@@ -2333,7 +2366,7 @@ export class Game {
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, storageStep: this.storageStep, planExtra: this.planExtra, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
-      nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
+      nextId: this.nextId, tips: this.tips, giftTaken: this.giftTaken, tour: true, offline: this.offline, announced: [...this.announced],
       contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, features: this.features, featuresSeen: this.featuresSeen, missionIndex: this.missionIndex, partners: this.partners, partnersDone: this.partnersDone,
     };
   }
@@ -2401,6 +2434,7 @@ export class Game {
     // l'ancien tuto s'arrêtait à 4 : une partie qui l'avait fini n'a pas à refaire la nouvelle visite
     if ((g.tips ?? 0) >= 4 && g.tips < TUTO_DONE && !(s as { tour?: boolean }).tour) g.tips = TUTO_DONE;
     g.doubleOfferAt ??= 0;
+    g.giftTaken ??= false;
     // plus d'app Grossiste ni de case à cocher : une partie d'avant (sans missions) qui l'avait coupée la retrouve
     // active, sinon le stockage plein bloquerait la production
     if ((s as { missionIndex?: number }).missionIndex == null) g.autoWholesale = true;

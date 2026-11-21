@@ -1,5 +1,5 @@
 import { GASTON_RECIPE } from './brewing/model';
-import { BAR_MESSAGE, BAR_MESSAGE_MAX, doubleMinimum, Game, simulateOffline, TUTO_DONE } from './game';
+import { BAR_MESSAGE, BAR_MESSAGE_MAX, doubleMinimum, Game, simulateOffline, TUTO_DONE, TUTO_RUSH_BATCHES } from './game';
 import { DEFAULT_LABEL } from './label';
 import { AD_EXTEND, adCost, ADS, BAR, kegSpace, PARTY } from './market';
 import { COMPUTERS, WHOLESALE, WHOLESALE_PRICE, wholesalePrice, drawOrder, orderGems, FIRST_ORDER_S, openTypes, ORDER_LIFE_MAX_S, STARTER_MAX_BOTTLES, fits, type Order } from './orders';
@@ -127,6 +127,7 @@ describe('jeu', () => {
 
   it('lancement anticipé : un brassin ne part que s\'il ne devra attendre devant aucun appareil, sans perdre de cadence', () => {
     const g = withBeer(1e5);
+    g.batchesDone = TUTO_RUSH_BATCHES; // passé les brassins de la visite : la cadence normale, sans le coup de main de Gaston
     runUntil(g, () => g.batches.length === 0);
     g.planBrew(g.beers[0]!.id, 'bottle', 6);
     let blocked = 0;
@@ -510,6 +511,7 @@ describe('jeu', () => {
     const g = withBeer(1e5);
     const beer = g.beers[0]!;
     beer.kegs = [20, 20, 20];
+    g.gems = 100;
     expect(g.hireBarman().ok).toBe(true);
     expect(g.barmanOn).toBe(true);
     expect(g.taps[0]!.glasses).toBe(20); // il branche un fût d'office
@@ -869,10 +871,49 @@ describe('à court d\'argent', () => {
   });
 });
 
+describe('visite guidée', () => {
+  it('le cadeau de Gaston : Plein régime offert 30 min, une seule fois', () => {
+    const g = new Game();
+    const gems = g.gems;
+    expect(g.openGift()).toBe(0);
+    expect(g.boostMult('brew')).toBe(3);
+    expect(g.boostOf('brew')!.until - g.time).toBe(30 * 60);
+    expect(g.openGift()).toBe(0);
+    expect(g.boostOf('brew')!.until - g.time).toBe(30 * 60);
+    expect(g.gems).toBe(gems);
+  });
+
+  it('le cadeau devient des diamants si un autre boost des machines tourne déjà', () => {
+    const g = new Game();
+    g.gems = 100;
+    expect(g.buyBoost('rush').ok).toBe(true);
+    expect(g.openGift()).toBeGreaterThan(0);
+    expect(g.boostOf('brew')!.id).toBe('rush');
+  });
+
+  it('pendant la visite, avec le cadeau : on goûte en moins d\'une minute, et le premier fût suit vite', () => {
+    const g = new Game();
+    g.brew();
+    g.openGift();
+    const t0 = g.time;
+    runUntil(g, () => !!g.tastable);
+    expect(g.time - t0).toBeLessThan(60);
+    g.keepTrial('Blonde', DEFAULT_LABEL);
+    expect(g.planBrew(g.beers[0]!.id, 'keg', 2).ok).toBe(true);
+    const t1 = g.time;
+    runUntil(g, () => g.beers[0]!.kegs.length > 0);
+    expect(g.time - t1).toBeLessThan(90);
+    // la visite finie, plus de coup de main
+    g.tips = TUTO_DONE;
+    expect((g as unknown as { tutoRush: boolean }).tutoRush).toBe(false);
+  });
+});
+
 describe('boosts', () => {
   it('cadence ×2 : les machines finissent leur étape deux fois plus vite', () => {
     const slow = withBeer(1e6);
     const fast = withBeer(1e6);
+    slow.tips = fast.tips = TUTO_DONE;
     fast.gems = 100;
     expect(fast.buyBoost('cadence').ok).toBe(true);
     slow.planBrew(slow.beers[0]!.id, 'bottle', 1);
@@ -1089,7 +1130,7 @@ describe('personnel', () => {
     expect(g.orders.find((o) => o.id === 999)).toBeUndefined();
   });
 
-  it('après la visite guidée, la file se reprogramme toute seule et les fûts vides se changent seuls', () => {
+  it('après la visite guidée, la file se reprogramme toute seule ; les fûts, eux, se branchent à la main (ou par le barman)', () => {
     const g = withBeer(1e6);
     g.planBrew(g.beers[0]!.id, 'bottle', 1);
     g.plan = [];
@@ -1099,7 +1140,18 @@ describe('personnel', () => {
     g.tips = TUTO_DONE;
     run(g, 10);
     expect(g.planned + g.batches.length).toBeGreaterThan(0);
-    expect(g.barmanOn).toBe(true);
+    expect(g.barmanOn).toBe(false);
+  });
+
+  it('le barman se paie en diamants', () => {
+    const g = withBeer(1e6);
+    g.gems = 2;
+    expect(g.hire('barman').ok).toBe(false);
+    g.gems = 10;
+    const money = g.money;
+    expect(g.hire('barman').ok).toBe(true);
+    expect(g.gems).toBe(10 - g.staffCost('barman'));
+    expect(g.money).toBe(money);
   });
 });
 
