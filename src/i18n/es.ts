@@ -1025,16 +1025,14 @@ const dict: Record<string, string> = {
   "plein prix toute la journée · {0}": "precio completo todo el día · {0}",
   "{0} le litre": "{0} el litro",
   "{0} repris aujourd'hui · plein prix à minuit": "{0} recogidos hoy · precio completo a medianoche",
-  "La jauge n'est pas encore pleine": "El indicador aún no está lleno",
-  "Livrer · {0}": "Entregar · {0}",
   "Prochaine livraison": "Próxima entrega",
   "Stock vide : brasse !": "Stock vacío: ¡elabora!",
-  "{0} : prêt à livrer": "{0}: listo para entregar",
   "{0} : {1} livraisons sur {2}": "{0}: {1} entregas de {2}",
   "{0} par livraison · ×{1}": "{0} por entrega · ×{1}",
   "Ce partenariat est déjà en cours": "Este patrocinio ya está en curso",
   "Contrats : {0} / {1}": "Contratos: {0} / {1}",
   "Pas de place pour un partenariat de plus : agrandis la brasserie": "No hay sitio para otro patrocinio: amplía la cervecería",
   "🔒 Plus de place : agrandis la brasserie": "🔒 Sin sitio: amplía la cervecería",
+  "{0} : livraison {1}/{2}": "{0}: entrega {1}/{2}",
 };
 export default dict;

@@ -1025,16 +1025,14 @@ const dict: Record<string, string> = {
   "plein prix toute la journée · {0}": "全天全价 · {0}",
   "{0} le litre": "每升 {0}",
   "{0} repris aujourd'hui · plein prix à minuit": "今日已收 {0} · 午夜恢复全价",
-  "La jauge n'est pas encore pleine": "进度还没满",
-  "Livrer · {0}": "送货 · {0}",
   "Prochaine livraison": "下次送货",
   "Stock vide : brasse !": "库存空了：快酿造！",
-  "{0} : prêt à livrer": "{0}：可以送货了",
   "{0} : {1} livraisons sur {2}": "{0}：已送 {1}/{2} 次",
   "{0} par livraison · ×{1}": "每次 {0} · ×{1}",
   "Ce partenariat est déjà en cours": "该合作已在进行中",
   "Contrats : {0} / {1}": "合同：{0} / {1}",
   "Pas de place pour un partenariat de plus : agrandis la brasserie": "没有空位签更多合作：扩建酒厂吧",
   "🔒 Plus de place : agrandis la brasserie": "🔒 没有空位：扩建酒厂",
+  "{0} : livraison {1}/{2}": "{0}：第 {1}/{2} 次送货",
 };
 export default dict;

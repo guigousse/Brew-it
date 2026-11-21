@@ -3,11 +3,11 @@ import { tl } from '../i18n';
 /**
  * Partenariats : le grand débouché pour les gros volumes. La brasserie sponsorise un club ou un événement et choisit
  * sa bière officielle. Une jauge se remplit toute seule depuis le stock (la bière officielle d'abord, puis les autres
- * assez bonnes) ; pleine, on touche « Livrer » : les bières partent chez le partenaire, payées bien plus que chez le
- * grossiste. Puis il faut attendre le lendemain (24 h de jeu) pour que la jauge se remplisse à nouveau.
- * Au bout de 7 livraisons, le contrat est rempli : une prime en diamants. La bière officielle gagne de la popularité
- * tant que le contrat dure. On tient 1 contrat à la fois au début, 2 à l'usine, 3 au labo du futur (un partenaire
- * une seule fois à la fois) ; les jauges se remplissent dans l'ordre de signature.
+ * assez bonnes), et chaque litre qui part est payé tout de suite, bien plus que chez le grossiste. Quand la jauge est
+ * pleine, la livraison part toute seule ; puis il faut attendre le lendemain (24 h de jeu). Au bout de 7 livraisons,
+ * le contrat est rempli : une prime en diamants. La bière officielle gagne de la popularité tant que le contrat dure.
+ * On tient 1 contrat à la fois au début, 2 à l'usine, 3 au labo du futur ; les jauges se remplissent dans l'ordre
+ * de signature.
  *
  * Chaque partenaire s'ouvre avec un niveau de la brasserie et un palier de popularité de la marque (30, 50, 60, 70,
  * 80 puis 90 sur 100, sans la pub en cours). Volumes et prix calés avec le joueur simulé (voir BALANCE.md).

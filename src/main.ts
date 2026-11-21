@@ -123,6 +123,7 @@ async function boot() {
         const name = CONTEST_TIERS[e.tier]!.name;
         app.log(e.metal != null ? tl('{0} : {1} pour « {2} » !', name, MEDALS[e.metal as Metal], beerName(e.beerId)) : tl('{0} : « {1} » repart sans médaille', name, beerName(e.beerId)), e.metal != null ? 'good' : 'info', 'trophy');
       }
+      if (e.type === 'partnerDelivered') app.onPartnerDelivered(e.id, e.deliveries);
       if (e.type === 'partnerEnd') {
         const p = partnerById(e.id);
         const msg = e.gems ? tl('{0} : partenariat réussi, {1} journées sur 7 remplies, +{2} 💎', p?.name, e.days, e.gems) : tl('{0} : partenariat terminé, {1} journées sur 7 remplies', p?.name, e.days);

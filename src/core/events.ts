@@ -15,6 +15,7 @@ export type GameEvent =
   | { type: 'gems'; amount: number; why: 'order' | 'level' | 'purchase' | 'contest' | 'partner' }
   | { type: 'contestOpen'; tier: number; cat: string }
   | { type: 'contestResult'; tier: number; metal: number | null; beerId: number | null }
+  | { type: 'partnerDelivered'; id: string; deliveries: number }
   | { type: 'partnerEnd'; id: string; days: number; earned: number; gems: number };
 
 type Listener = (e: GameEvent) => void;

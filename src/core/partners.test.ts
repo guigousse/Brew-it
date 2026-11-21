@@ -69,8 +69,8 @@ describe('partenariats', () => {
     expect(g.signPartner('rugby', b.id).ok).toBe(false); // plus de place
     b.stock = Math.ceil(10_000 / 0.33); // de quoi remplir le premier (9 000 L), pas le second
     g.step(1);
-    expect(g.partnerReady(g.partners[0]!)).toBe(true);
-    expect(g.partnerReady(g.partners[1]!)).toBe(false);
+    expect(g.partners[0]!.deliveries).toBe(1); // le premier signé est servi d'abord
+    expect(g.partners[1]!.deliveries).toBe(0);
     // la bière officielle des deux contrats cumule leur visibilité
     expect(g.partnerVisibility(b)).toBe(partnerById('rock')!.visibility + partnerById('foot')!.visibility);
     for (const id of STATION_ORDER) g.stations[id] = { level: 5 };
@@ -78,30 +78,34 @@ describe('partenariats', () => {
     expect(g.signPartner('rugby', b.id).ok).toBe(true);
   });
 
-  it('la jauge se remplit toute seule depuis le stock ; pleine, on livre au prix annoncé ; puis on attend le lendemain', () => {
+  it('la jauge se remplit toute seule depuis le stock, chaque litre payé tout de suite ; pleine, la livraison part seule ; puis le lendemain', () => {
     const { g, b } = setup(3);
     const p = partnerById('rock')!;
-    b.stock = 100_000; // 33 000 L
+    b.stock = Math.ceil(5_000 / 0.33); // 5 000 L : un peu plus de la moitié d'une livraison
     g.signPartner('rock', b.id);
-    expect(g.deliverPartner(g.partners[0]!.id).ok).toBe(false); // jauge vide
-    g.step(1); // la jauge se remplit tout de suite
-    expect(g.partnerReady(g.partners[0]!)).toBe(true);
-    expect(g.partnerGauge(g.partners[0]!)).toBeGreaterThan(p.daily - 0.34);
-    expect(b.stock).toBeLessThan(100_000); // les bières mises de côté quittent le stock
     const money = g.money;
-    const value = g.partnerValue(g.partners[0]!);
-    expect(value).toBeCloseTo(g.partnerGauge(g.partners[0]!) * (wholesalePrice(b.tasting) / 0.33) * p.pay, 3);
-    const r = g.deliverPartner(g.partners[0]!.id);
-    expect(r.ok).toBe(true);
-    expect(g.money - money).toBeCloseTo(value, 3);
-    expect(g.partners[0]!.deliveries).toBe(1);
-    // le lendemain seulement, la jauge se remplit de nouveau
+    g.step(1);
+    const ship = g.partners[0]!;
+    const gauge = g.partnerGauge(ship);
+    expect(gauge).toBeGreaterThan(4_999);
+    expect(b.stock).toBe(0);
+    expect(g.money - money).toBeCloseTo(gauge * (wholesalePrice(b.tasting) / 0.33) * p.pay, 3); // payé tout de suite
+    expect(ship.deliveries).toBe(0);
+    // le stock arrive : la jauge se remplit, la livraison part toute seule
+    const delivered: number[] = [];
+    g.events.on((e) => e.type === 'partnerDelivered' && delivered.push(e.deliveries));
+    b.stock = 100_000;
+    g.step(60);
+    expect(delivered).toEqual([1]);
+    expect(ship.deliveries).toBe(1);
+    expect(g.partnerGauge(ship)).toBe(0);
+    expect(g.partnerWait(ship)).toBeGreaterThan(0);
+    // pas avant le lendemain
     g.step(3600);
-    expect(g.partnerGauge(g.partners[0]!)).toBe(0);
-    expect(g.partnerWait(g.partners[0]!)).toBeGreaterThan(0);
+    expect(g.partnerGauge(ship)).toBe(0);
     g.step(86400);
     g.step(60);
-    expect(g.partnerReady(g.partners[0]!)).toBe(true);
+    expect(ship.deliveries).toBe(2);
   });
 
   it('la bière officielle part d\'abord, puis les autres assez bonnes ; les fûts comptent', () => {
@@ -117,9 +121,7 @@ describe('partenariats', () => {
     g.step(1);
     expect(b.kegs).toHaveLength(0);
     expect(other.stock).toBeLessThan(100_000);
-    expect(g.partners[0]!.gauge[0]!.beerId).toBe(b.id);
     // une bière trop faible ne part pas
-    g.deliverPartner(g.partners[0]!.id);
     const weak = g.beers.find((x) => x.id === 99)!;
     weak.tasting = { ...weak.tasting, quality: 0.65 };
     weak.stock = 5000;
@@ -138,8 +140,7 @@ describe('partenariats', () => {
     const parts = g.popBreakdown(b);
     expect(parts.partner * 20).toBe(partnerById('rugby')!.visibility);
     expect(parts.total).toBeGreaterThan(before);
-    g.deliverPartner(g.partners[0]!.id);
-    expect(g.weekLiters(b)).toBeGreaterThan(0);
+    expect(g.weekLiters(b)).toBeGreaterThan(0); // les litres partis comptent dans les ventes de la semaine
   });
 
   it('7 livraisons remplissent le contrat : prime en diamants', () => {
@@ -151,7 +152,6 @@ describe('partenariats', () => {
     for (let d = 0; d < PARTNER_DAYS; d++) {
       b.stock = 100_000;
       g.step(60);
-      expect(g.deliverPartner(g.partners[0]!.id).ok).toBe(true);
       g.step(86400);
     }
     expect(g.partners).toHaveLength(0);

@@ -52,7 +52,6 @@ const buy = (what: string, cost: number) => log.push({ t: clock, what, cost });
 
 /** Remplit toutes les commandes possibles avec les bières qui conviennent (les plus en stock d'abord). */
 function deliver() {
-  for (const x of [...g.partners]) if (g.partnerReady(x)) g.deliverPartner(x.id);
   for (const o of [...g.orders]) {
     const r = g.fulfill(o.id, g.autoPick(o));
     if (r.ok) delivered += r.amount!;

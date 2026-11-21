@@ -1025,16 +1025,14 @@ const dict: Record<string, string> = {
   "plein prix toute la journée · {0}": "full price all day · {0}",
   "{0} le litre": "{0} per litre",
   "{0} repris aujourd'hui · plein prix à minuit": "{0} taken today · full price again at midnight",
-  "La jauge n'est pas encore pleine": "The gauge isn't full yet",
-  "Livrer · {0}": "Deliver · {0}",
   "Prochaine livraison": "Next delivery",
   "Stock vide : brasse !": "Stock empty: brew!",
-  "{0} : prêt à livrer": "{0}: ready to deliver",
   "{0} : {1} livraisons sur {2}": "{0}: {1} deliveries out of {2}",
   "{0} par livraison · ×{1}": "{0} per delivery · ×{1}",
   "Ce partenariat est déjà en cours": "This partnership is already running",
   "Contrats : {0} / {1}": "Contracts: {0} / {1}",
   "Pas de place pour un partenariat de plus : agrandis la brasserie": "No room for another partnership: grow the brewery",
   "🔒 Plus de place : agrandis la brasserie": "🔒 No room left: grow the brewery",
+  "{0} : livraison {1}/{2}": "{0}: delivery {1}/{2}",
 };
 export default dict;

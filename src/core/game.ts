@@ -1468,16 +1468,6 @@ export class Game {
     return p ? Math.max(0, p.daily - this.partnerGauge(ship)) : 0;
   }
 
-  /** La jauge est pleine : on peut livrer. */
-  partnerReady(ship: Partnership): boolean {
-    return this.partnerLeft(ship) < BOTTLE_L;
-  }
-
-  /** Un contrat au moins peut livrer. */
-  get anyPartnerReady(): boolean {
-    return this.partners.some((x) => this.partnerReady(x));
-  }
-
   /** Temps avant que la jauge se remplisse de nouveau (0 : elle se remplit). */
   partnerWait(ship: Partnership): number {
     return Math.max(0, ship.readyAt - this.time);
@@ -1538,83 +1528,73 @@ export class Game {
 
   /**
    * Remplit les jauges depuis le stock, dans l'ordre de signature : pour chaque contrat, sa bière officielle d'abord,
-   * puis les autres assez bonnes, bouteilles puis fûts entiers. Les bières mises de côté quittent le stock.
+   * puis les autres assez bonnes, bouteilles puis fûts entiers. Chaque litre qui part est payé tout de suite au prix
+   * du partenaire (pas de bière immobilisée sans revenu). Quand la jauge est pleine, la livraison part toute seule :
+   * puis il faut attendre le lendemain ; au bout de 7 livraisons, le contrat est rempli (prime en diamants).
    */
   private fillPartners(): void {
-    for (const ship of this.partners) {
-      if (this.partnerWait(ship) > 0) continue;
+    for (const ship of [...this.partners]) {
+      const p = partnerById(ship.id);
+      if (!p || this.partnerWait(ship) > 0) continue;
       let left = this.partnerLeft(ship);
+      let liters = 0;
+      let amount = 0;
+      let units = 0;
       for (const beer of this.partnerBeers(ship)) {
         if (left < BOTTLE_L) break;
         let l = 0;
         const n = Math.min(beer.stock, Math.floor(left / BOTTLE_L + 1e-9));
         beer.stock -= n;
         l += n * BOTTLE_L;
+        units += n;
         beer.kegs.sort((a, b) => b - a);
         for (let i = 0; i < beer.kegs.length; ) {
           const kl = beer.kegs[i]! * GLASS_L;
           if (kl <= left - l + 1e-9) {
             beer.kegs.splice(i, 1);
             l += kl;
+            units++;
           } else i++;
         }
         if (l <= 0) continue;
+        const price = l * this.partnerPricePerL(p, beer);
+        beer.liters += l;
+        beer.sold += n;
+        beer.revenue += price;
+        this.countSales(beer, l);
         const slot = ship.gauge.find((x) => x.beerId === beer.id);
         if (slot) slot.liters += l;
         else ship.gauge.push({ beerId: beer.id, liters: l });
         left -= l;
+        liters += l;
+        amount += price;
       }
+      if (liters > 0) {
+        ship.earned += amount;
+        this.totalSold += units;
+        this.totalLiters += liters;
+        this.totalRevenue += amount;
+        this.ordersRevenue += amount;
+        this.recordSale('orders', amount);
+        this.money += amount;
+        this.events.emit({ type: 'sale', amount });
+      }
+      if (left < BOTTLE_L) this.completeDelivery(ship, p);
     }
   }
 
-  /** Ce que rapporterait la jauge d'un contrat si on la livrait maintenant. */
-  partnerValue(ship: Partnership): number {
-    const p = partnerById(ship.id);
-    if (!p) return 0;
-    return ship.gauge.reduce((s, x) => {
-      const b = this.beer(x.beerId);
-      return s + (b ? x.liters * this.partnerPricePerL(p, b) : 0);
-    }, 0);
-  }
-
-  /**
-   * Livre la jauge pleine d'un contrat : payée au prix du partenaire, elle compte dans les ventes de la semaine. La
-   * jauge se remplira de nouveau le lendemain ; au bout de 7 livraisons, le contrat est rempli (prime en diamants).
-   */
-  deliverPartner(id: PartnerId): CommandResult & { liters?: number; amount?: number } {
-    const ship = this.partnerOf(id);
-    const p = partnerById(id);
-    if (!ship || !p) return { ok: false, reason: tl('Aucun partenariat en cours') };
-    if (!this.partnerReady(ship)) return { ok: false, reason: tl('La jauge n\'est pas encore pleine') };
-    const amount = this.partnerValue(ship);
-    const liters = this.partnerGauge(ship);
-    for (const x of ship.gauge) {
-      const b = this.beer(x.beerId);
-      if (!b) continue;
-      const price = x.liters * this.partnerPricePerL(p, b);
-      b.liters += x.liters;
-      b.sold += Math.round(x.liters / BOTTLE_L);
-      b.revenue += price;
-      this.countSales(b, x.liters);
-    }
+  /** La jauge est pleine : la livraison part, la jauge attendra le lendemain ; la 7e remplit le contrat. */
+  private completeDelivery(ship: Partnership, p: PartnerDef): void {
     ship.gauge = [];
     ship.deliveries++;
-    ship.earned += amount;
     ship.readyAt = this.time + PARTNER_COOLDOWN_S;
-    this.totalSold += Math.round(liters / BOTTLE_L);
-    this.totalLiters += liters;
-    this.totalRevenue += amount;
-    this.ordersRevenue += amount;
-    this.recordSale('orders', amount);
-    this.money += amount;
-    this.events.emit({ type: 'sale', amount });
+    this.events.emit({ type: 'partnerDelivered', id: p.id, deliveries: ship.deliveries });
     if (ship.deliveries >= PARTNER_DAYS) {
       this.partners = this.partners.filter((x) => x !== ship);
       this.partnersDone[p.id] = (this.partnersDone[p.id] ?? 0) + 1;
       this.earnGems(p.gems, 'partner');
       this.events.emit({ type: 'partnerEnd', id: p.id, days: ship.deliveries, earned: ship.earned, gems: p.gems });
     }
-    return { ok: true, liters, amount };
   }
 
   /** Les jauges se remplissent toutes seules depuis le stock, toutes les 30 s. */

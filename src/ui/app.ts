@@ -1839,7 +1839,7 @@ export class App {
     const app = this.computer?.app;
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
-      app === 'partners' ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerReady(x), g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
+      app === 'partners' ? [g.beers.map((b) => [b.id, Math.round(b.pop * 100), b.stock > 0]), g.partnerSlots, g.partners.map((x) => [x.id, x.beerId, x.deliveries, g.partnerWait(x) > 0, Math.floor(g.partnerGauge(x) / 100)]), PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase)] : 0,
       app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
       app === 'trends' || app === 'marketing' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(g.wsToday / 100)]), [...this.picks]] : 0]);
   }
@@ -1929,7 +1929,7 @@ export class App {
       trends: { text: '', hot: false },
       marketing: { text: g.advertising ? '●' : '', hot: false },
       wholesale: { text: '', hot: false },
-      partners: { text: g.anyPartnerReady ? '!' : '', hot: g.anyPartnerReady },
+      partners: { text: g.partners.length ? String(g.partners.length) : '', hot: false },
       contests: (() => {
         const open = ([0, 1, 2] as ContestTier[]).filter((t) => g.contestOf(t) && !g.contestOf(t)!.entry);
         return { text: open.length ? '!' : '', hot: open.some((t) => g.beers.some((b) => g.contestChecks(t, b).every((x) => x.ok))) };
@@ -2405,14 +2405,27 @@ export class App {
     }
   }
 
+  /** Une livraison vient de partir : un mot, et si l'app est ouverte, les bières volent vers le partenaire. */
+  onPartnerDelivered(id: string, deliveries: number): void {
+    const p = partnerById(id);
+    if (!p) return;
+    sfx.play('crate');
+    this.toast(tl('{0} : livraison {1}/{2}', p.name, deliveries, PARTNER_DAYS), 'good');
+    const card = this.computer?.app === 'partners' ? this.computer.ui.querySelector<HTMLElement>(`[data-partner="${id}"]`) : null;
+    const zone = card?.querySelector<HTMLElement>('.partner-zone');
+    const pic = card?.querySelector<HTMLElement>('.partner-pic');
+    if (zone && pic) this.fly(zone, pic, 8, () => iconCanvas('range', 1, 'fly fly-bottle'));
+  }
+
   /**
    * Un contrat en cours, en un coup d'œil : la scène du partenaire dans son cadre, et à sa droite la jauge de bière
-   * qui se remplit toute seule depuis le stock. Pleine, elle laisse la place au bouton « Livrer » (les bières volent
-   * vers le partenaire) ; puis on attend le lendemain. Sept livraisons remplissent le contrat.
+   * qui se remplit toute seule depuis le stock (chaque litre est payé tout de suite). Pleine, la livraison part
+   * d'elle-même (les bières volent vers le partenaire) ; puis on attend le lendemain. Sept livraisons remplissent le contrat.
    */
   private partnerCard(g: Game, ship: Partnership): HTMLElement {
     const cur = partnerById(ship.id)!;
     const el = h('div', 'card partner-live');
+    el.dataset.partner = cur.id;
     const row = h('div', 'partner-main');
     const pic = h('div', 'partner-pic');
     const art = h('canvas', 'partner-art');
@@ -2427,21 +2440,6 @@ export class App {
       wait.dataset.expires = String(ship.readyAt);
       wait.textContent = `⏳ ${duration(g.partnerWait(ship))}`;
       zone.append(h('span', 'partner-wait-label', tl('Prochaine livraison')), wait);
-    } else if (g.partnerReady(ship)) {
-      const go = this.btn('btn primary partner-go', tl('Livrer · {0}', moneyShort(g.partnerValue(ship))), () => {
-        const r = g.deliverPartner(ship.id);
-        if (!r.ok) return this.toast(r.reason!, 'bad');
-        sfx.play('crate');
-        this.onSent?.();
-        // les bières filent vers le partenaire, puis l'argent arrive
-        this.fly(zone, pic, 8, () => iconCanvas('range', 1, 'fly fly-bottle'));
-        window.setTimeout(() => {
-          sfx.play('cash');
-          this.gainToast(r.amount!);
-          if (this.computer?.app === 'partners') this.renderComputer();
-        }, 800);
-      });
-      zone.append(go);
     } else {
       const gauge = h('div', 'partner-gauge');
       const fill = h('div', 'partner-gauge-fill');
@@ -3458,7 +3456,7 @@ export class App {
     // les partenariats : une seule case, qui montre le contrat le plus avancé (prêt à livrer, sinon la jauge la plus pleine)
     const ships = g.partners;
     const ship = [...ships].sort((a, b) => {
-      const score = (x: Partnership) => (g.partnerReady(x) ? 2 : g.partnerWait(x) > 0 ? -g.partnerWait(x) / 1e6 : g.partnerGauge(x) / (partnerById(x.id)?.daily ?? 1));
+      const score = (x: Partnership) => (g.partnerWait(x) > 0 ? -g.partnerWait(x) / 1e6 : g.partnerGauge(x) / (partnerById(x.id)?.daily ?? 1));
       return score(b) - score(a);
     })[0];
     const shipDef = ship && partnerById(ship.id);
@@ -3515,16 +3513,14 @@ export class App {
       // le cadran : la jauge qui se remplit ; pleine, « Livrer ! » ; en attente, le temps avant la suivante
       const done = g.partnerGauge(ship);
       const wait = g.partnerWait(ship);
-      const ready = g.partnerReady(ship);
       el.style.setProperty('--left', (wait > 0 ? 0 : Math.min(1, done / shipDef.daily)).toFixed(4));
-      el.classList.toggle('full', ready);
-      const t = wait > 0 ? dialTime(wait) : ready ? '!' : `${Math.floor((done / shipDef.daily) * 100)}%`;
+      const t = wait > 0 ? dialTime(wait) : `${Math.floor((done / shipDef.daily) * 100)}%`;
       const span = el.querySelector('.boost-chip-time')!;
       if (span.textContent !== t) span.textContent = t;
       const corner = el.querySelector('.partner-flag');
       const c = ships.length > 1 ? `×${ships.length}` : `${ship.deliveries}/${PARTNER_DAYS}`;
       if (corner && corner.textContent !== c) corner.textContent = c;
-      el.setAttribute('aria-label', ready ? tl('{0} : prêt à livrer', shipDef.name) : tl('{0} : {1} livraisons sur {2}', shipDef.name, ship.deliveries, PARTNER_DAYS));
+      el.setAttribute('aria-label', tl('{0} : {1} livraisons sur {2}', shipDef.name, ship.deliveries, PARTNER_DAYS));
     }
     if (contest) {
       const el = this.boostHud.querySelector<HTMLElement>('.contest-chip')!;
