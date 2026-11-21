@@ -25,6 +25,8 @@ describe('visite et leçons de Gaston', () => {
     g.ordersDone = 2;
     expect(due(g)).toEqual(['queue']);
     g.money = 1e6;
+    expect(due(g)).not.toContain('upgrade'); // pas avant sa mission
+    g.missionIndex = 1;
     expect(due(g)).toContain('upgrade');
     g.owned.push('darts');
     expect(due(g)).toContain('events');

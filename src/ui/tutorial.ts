@@ -234,8 +234,8 @@ export const LESSONS: readonly Lesson[] = [
     ],
   },
   {
-    // la première amélioration, dès que la caisse le permet
-    id: 'upgrade', when: (g) => g.beers.length > 0 && STATION_ORDER.some((id) => g.money >= g.upgradeCost(id)) && machineLevels(g) === STATION_ORDER.length,
+    // la première amélioration : quand la mission la demande et que la caisse le permet
+    id: 'upgrade', when: (g) => g.mission?.def.id === 'upgrade1' && STATION_ORDER.some((id) => g.money >= g.upgradeCost(id)) && machineLevels(g) === STATION_ORDER.length,
     steps: [
       { target: 'nav:workshop', text: tl('Ta caisse permet d\'améliorer une machine ! Allons à l\'atelier.'), done: (_, h) => h.view() === 'workshop' },
       { view: 'workshop', target: 'cheapMachine', text: tl('Touche cette machine : c\'est l\'amélioration la moins chère.'), done: (_, h) => h.sheet() === 'station' },

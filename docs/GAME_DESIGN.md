@@ -458,7 +458,7 @@ Pour que la visite ne fasse pas attendre, Gaston donne un coup de main à l'essa
 | Leçon | Déclencheur | Contenu |
 |---|---|---|
 | La file de brassins | 2e commande livrée | la brasserie tourne sans toi : programmer 3 brassins en bouteilles, la file |
-| Améliorer | assez d'argent pour la première amélioration | la machine la moins chère, son bouton, la flèche verte |
+| Améliorer | mission « Améliore une machine », avec assez d'argent | la machine la moins chère, son bouton, la flèche verte |
 | Le bar | mission « Sers 20 verres au bar » | le comptoir, programmer 2 brassins en fûts |
 | Brancher un fût | un fût plein au stockage, aucune tireuse branchée (après la leçon du bar) | comptoir, tireuse, bière ; le barman (Personnel) |
 | Le stockage | stockage rempli à 80 %, ou première reprise du surplus par le grossiste | le grossiste rachète le surplus à petit prix ; agrandir |
