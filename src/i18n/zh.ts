@@ -914,7 +914,6 @@ const dict: Record<string, string> = {
   "Concours": "比赛",
   "Qualité {0}": "品质：{0}",
   "🔒 Les concours s'ouvrent avec la microbrasserie": "🔒 升级到精酿厂后开放比赛",
-  "Régional (3 ★), national avec l'usine (4 ★), international avec le labo du futur (4½ ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "地区赛（3 ★），工厂级开放全国赛（4 ★），未来实验室开放国际赛（5 ★）。奖牌会以徽章形式挂在瓶身：啤酒卖得更多、更贵。",
   "Prochain concours": "下一场比赛",
   "Une lettre arrivera au bureau. Prépare des bières excellentes et populaires : le jury goûte le dernier lot.": "办公室会收到来信。准备好优秀又受欢迎的啤酒：评委品尝的是最新一批。",
   "Cocardes": "徽章",
@@ -1033,5 +1032,14 @@ const dict: Record<string, string> = {
   "Sans limite : le prix grimpe à chaque niveau.": "没有上限：每级价格都会上涨。",
   "Brasserie : {0}": "酒厂：{0}",
   "Marque à {0} / 100 au moins (sans la pub)": "品牌至少 {0} / 100（不计广告）",
+  "Inscris-la d'abord au {0} et décroche une médaille.": "先报名参加{0}并拿到奖牌。",
+  "Médaillée au {0}": "在{0}获得过奖牌",
+  "Prochaine session": "下一届",
+  "Trois concours : régional, national puis international. Pour le national, il faut une médaille au régional ; pour l'international, une médaille au national. Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "三项比赛：地区、全国、国际。参加全国赛需要地区赛奖牌；参加国际赛需要全国赛奖牌。奖牌会以徽章形式挂在瓶身：啤酒卖得更多、更贵。",
+  "fermé": "未开放",
+  "✓ inscrite": "✓ 已报名",
+  "Régional": "地区",
+  "National": "全国",
+  "International": "国际",
 };
 export default dict;

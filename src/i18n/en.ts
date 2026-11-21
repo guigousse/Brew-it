@@ -914,7 +914,6 @@ const dict: Record<string, string> = {
   "Concours": "Competitions",
   "Qualité {0}": "Quality: {0}",
   "🔒 Les concours s'ouvrent avec la microbrasserie": "🔒 Competitions open with the microbrewery",
-  "Régional (3 ★), national avec l'usine (4 ★), international avec le labo du futur (4½ ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "Regional (3 ★), national with the factory (4 ★), international with the lab of the future (4½ ★). A medal is worn as a rosette on the bottle: the beer sells more, and for more.",
   "Prochain concours": "Next competition",
   "Une lettre arrivera au bureau. Prépare des bières excellentes et populaires : le jury goûte le dernier lot.": "A letter will arrive at the office. Get excellent, popular beers ready: the judges taste the latest batch.",
   "Cocardes": "Rosettes",
@@ -1033,5 +1032,14 @@ const dict: Record<string, string> = {
   "Sans limite : le prix grimpe à chaque niveau.": "No limit: the price climbs with every level.",
   "Brasserie : {0}": "Brewery: {0}",
   "Marque à {0} / 100 au moins (sans la pub)": "Brand at {0} / 100 or more (without ads)",
+  "Inscris-la d'abord au {0} et décroche une médaille.": "Enter it in the {0} first and win a medal.",
+  "Médaillée au {0}": "Medal at the {0}",
+  "Prochaine session": "Next session",
+  "Trois concours : régional, national puis international. Pour le national, il faut une médaille au régional ; pour l'international, une médaille au national. Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "Three competitions: regional, national, then international. The national requires a medal at the regional; the international, a medal at the national. A medal is worn as a rosette on the bottle: the beer sells more, and for more.",
+  "fermé": "closed",
+  "✓ inscrite": "✓ entered",
+  "Régional": "Regional",
+  "National": "National",
+  "International": "International",
 };
 export default dict;

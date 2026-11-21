@@ -10,7 +10,7 @@ import { BREWERY_NAMES, CAPACITY, levelNumber, levelSpeed, MAX_LEVEL, nextLevelC
 import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
-import { pointsAsStars, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
+import { pointsAsStars, QUALIFY_METAL, type ContestTier, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
 import { PARTNER_DAYS, PARTNER_POP_WEIGHT, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
 import { tl } from '../i18n';
 
@@ -311,12 +311,10 @@ export class Game {
   tips = 0;
   /** Gains de la dernière absence, en attente de récolte. */
   offline: OfflineReport | null = null;
-  /** Concours en cours (inscriptions ouvertes), ou null entre deux concours. */
-  contest: Contest | null = null;
-  /** Ouverture du prochain concours (s de jeu) ; 0 tant que les concours ne sont pas ouverts. */
-  contestNext = 0;
-  /** Concours déjà tenus (ils se succèdent à tour de rôle). */
-  contestCount = 0;
+  /** Les trois concours en cours (régional, national, international), ou null entre deux sessions. */
+  contests: (Contest | null)[] = [null, null, null];
+  /** Ouverture de la prochaine session de chaque concours (s de jeu) ; 0 tant que les concours ne sont pas ouverts. */
+  contestNexts: number[] = [0, 0, 0];
   /** Résultats pas encore vus par le joueur (la cérémonie s'affiche au retour). */
   contestResults: ContestResult[] = [];
   /** Tranche de 6 h en cours, pour le compte des ventes sur 7 jours. */
@@ -1328,39 +1326,55 @@ export class Game {
 
   // ------------------------------------------------------------------ concours
 
-  /** Droit d'inscription au concours en cours. */
-  get contestFee(): number {
-    return this.contest ? contestFee(this.contest.tier, this.breweryLevel) : 0;
+  /** Le concours en cours de ce niveau (0 régional, 1 national, 2 international), ou null entre deux sessions. */
+  contestOf(tier: ContestTier): Contest | null {
+    return this.contests[tier] ?? null;
   }
 
-  /** Les conditions d'inscription d'une bière au concours en cours. */
-  contestChecks(b: Beer): ContestCheck[] {
-    const c = this.contest;
-    if (!c) return [];
-    const need = CONTEST_TIERS[c.tier]!.points;
-    return [
-      { ok: inCategory(c, b.tasting), text: tl('Dans la catégorie') },
-      { ok: popScore(b.pop) >= need, text: tl('{0} ★ de popularité ({1} points)', pointsAsStars(need), need) },
-      { ok: b.stock >= CONTEST_BOTTLES, text: tl('{0} bouteilles pour le jury', CONTEST_BOTTLES) },
-    ];
+  /** Le concours ouvert qui ferme le plus tôt (la coupe en haut à droite). */
+  get contest(): Contest | null {
+    return this.contests.filter((c): c is Contest => !!c).sort((a, b) => a.closes - b.closes)[0] ?? null;
   }
 
-  /** La meilleure candidate de la gamme : celle qui remplit le plus de conditions, puis la meilleure qualité. */
-  contestCandidate(): Beer | undefined {
-    const score = (b: Beer) => this.contestChecks(b).filter((x) => x.ok).length * 10 + b.tasting.quality;
+  /** Droit d'inscription à un concours. */
+  contestFee(tier: ContestTier): number {
+    return contestFee(tier, this.breweryLevel);
+  }
+
+  /**
+   * Les conditions d'inscription d'une bière à un concours : la catégorie, la popularité, les bouteilles pour le jury,
+   * et la hiérarchie : une médaille au concours régional pour le national, au national pour l'international.
+   */
+  contestChecks(tier: ContestTier, b: Beer): ContestCheck[] {
+    const c = this.contestOf(tier);
+    const need = CONTEST_TIERS[tier]!.points;
+    const out: ContestCheck[] = [];
+    if (tier > 0) {
+      const below = CONTEST_TIERS[tier - 1]!.name;
+      out.push({ ok: !!b.medals?.some((m) => m.tier === tier - 1 && m.metal >= QUALIFY_METAL), text: tl('Médaillée au {0}', below.toLowerCase()) });
+    }
+    if (c) out.push({ ok: inCategory(c, b.tasting), text: tl('Dans la catégorie') });
+    out.push({ ok: popScore(b.pop) >= need, text: tl('{0} ★ de popularité ({1} points)', pointsAsStars(need), need) });
+    out.push({ ok: b.stock >= CONTEST_BOTTLES, text: tl('{0} bouteilles pour le jury', CONTEST_BOTTLES) });
+    return out;
+  }
+
+  /** La meilleure candidate de la gamme pour un concours : celle qui remplit le plus de conditions, puis la meilleure qualité. */
+  contestCandidate(tier: ContestTier): Beer | undefined {
+    const score = (b: Beer) => this.contestChecks(tier, b).filter((x) => x.ok).length * 10 + b.tasting.quality;
     return [...this.beers].sort((a, b) => score(b) - score(a))[0];
   }
 
   /** Inscrit une bière : le jury goûtera son dernier lot (6 bouteilles prises au stock). */
-  enterContest(beerId: number): CommandResult {
-    const c = this.contest;
+  enterContest(tier: ContestTier, beerId: number): CommandResult {
+    const c = this.contestOf(tier);
     if (!c) return { ok: false, reason: tl('Aucun concours en cours') };
     if (c.entry) return { ok: false, reason: tl('Une bière est déjà inscrite') };
     const b = this.beer(beerId);
     if (!b) return { ok: false, reason: tl('Bière introuvable') };
-    const miss = this.contestChecks(b).find((x) => !x.ok);
+    const miss = this.contestChecks(tier, b).find((x) => !x.ok);
     if (miss) return { ok: false, reason: tl('Condition manquante : {0}', miss.text) };
-    const fee = this.contestFee;
+    const fee = this.contestFee(tier);
     if (this.money < fee) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= fee;
     b.stock -= CONTEST_BOTTLES;
@@ -1368,26 +1382,28 @@ export class Game {
     return { ok: true };
   }
 
-  /** Les concours s'ouvrent avec la microbrasserie, puis se succèdent à tour de rôle. */
+  /**
+   * Les trois concours tournent en parallèle dès la microbrasserie, chacun à son rythme : 12 h d'inscriptions,
+   * puis 4 à 8 h avant la session suivante. Au début, ils s'ouvrent l'un après l'autre (10 min, 2 h, 4 h).
+   */
   private tickContests(): void {
-    const tiers = openTiers(this.breweryLevel);
-    if (!tiers.length) return;
-    const c = this.contest;
-    if (c && this.time >= c.closes) this.judge(c);
-    if (this.contest) return;
-    if (!this.contestNext) this.contestNext = this.time + CONTEST_FIRST_S;
-    if (this.time < this.contestNext) return;
-    // du plus prestigieux au plus modeste, à tour de rôle
-    const tier = tiers[tiers.length - 1 - (this.contestCount % tiers.length)]!;
-    this.contest = drawContest(this.rng, tier, this.time);
-    this.contestCount++;
-    this.events.emit({ type: 'contestOpen', tier, cat: this.contest.cat });
+    if (!openTiers(this.breweryLevel).length) return;
+    for (const tier of [0, 1, 2] as ContestTier[]) {
+      const c = this.contests[tier];
+      if (c && this.time >= c.closes) this.judge(c);
+      if (this.contests[tier]) continue;
+      if (!this.contestNexts[tier]) this.contestNexts[tier] = this.time + CONTEST_FIRST_S + tier * 2 * 3600;
+      if (this.time < this.contestNexts[tier]!) continue;
+      const next = drawContest(this.rng, tier, this.time);
+      this.contests[tier] = next;
+      this.events.emit({ type: 'contestOpen', tier, cat: next.cat });
+    }
   }
 
   /** Clôture : le jury goûte le lot inscrit, la bière gagne peut-être une médaille. */
   private judge(c: Contest): void {
-    this.contest = null;
-    this.contestNext = this.time + CONTEST_GAP_MIN_S + (CONTEST_GAP_MAX_S - CONTEST_GAP_MIN_S) * this.rng.next();
+    this.contests[c.tier] = null;
+    this.contestNexts[c.tier] = this.time + CONTEST_GAP_MIN_S + (CONTEST_GAP_MAX_S - CONTEST_GAP_MIN_S) * this.rng.next();
     const beer = c.entry ? this.beer(c.entry.beerId) : undefined;
     if (!c.entry) return; // personne d'inscrit : le concours passe sans bruit
     const score = juryScore(c.entry.quality, this.rng);
@@ -2141,7 +2157,7 @@ export class Game {
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
-      contest: this.contest, contestNext: this.contestNext, contestCount: this.contestCount, contestResults: this.contestResults, salesSlot: this.salesSlot, partner: this.partner, partnersDone: this.partnersDone,
+      contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, partner: this.partner, partnersDone: this.partnersDone,
     };
   }
 
@@ -2149,7 +2165,7 @@ export class Game {
     const s = raw as Omit<ReturnType<Game['toJSON']>, 'version'> & { version: number };
     if (!s || s.version < 2 || s.version > 7) throw new Error(tl('Sauvegarde incompatible'));
     const g = new Game();
-    const { demand: _d, signed: _s, deals: _dl, orderTimers: _t, ...rest } = s as typeof s & { demand?: unknown; signed?: unknown; deals?: unknown; orderTimers?: unknown };
+    const { demand: _d, signed: _s, deals: _dl, orderTimers: _t, contest: _c, contestNext: _cn, contestCount: _cc, ...rest } = s as typeof s & { demand?: unknown; signed?: unknown; deals?: unknown; orderTimers?: unknown; contest?: unknown; contestNext?: unknown; contestCount?: unknown };
     Object.assign(g, { ...rest, rng: new Rng(s.rng), announced: new Set(s.announced) });
     // Sauvegardes v2 : places de gamme liées aux distributeurs, pas encore de stockage.
     if (s.version === 2) {
@@ -2252,9 +2268,17 @@ export class Game {
     g.lastPlan ??= null;
     g.queued ??= false;
     g.trial ??= null;
-    g.contest ??= null;
-    g.contestNext ??= 0;
-    g.contestCount ??= 0;
+    // avant les trois concours en parallèle, un seul concours tournait : il garde sa place
+    if (!(s as { contests?: unknown }).contests) {
+      const old = s as unknown as { contest?: Contest | null; contestNext?: number };
+      g.contests = [null, null, null];
+      g.contestNexts = [0, 0, 0];
+      if (old.contest) g.contests[old.contest.tier] = old.contest;
+      for (const t of [0, 1, 2]) if (!g.contests[t] && old.contestNext) g.contestNexts[t] = old.contestNext + t * 2 * 3600;
+    }
+    delete (g as unknown as { contest?: unknown }).contest;
+    delete (g as unknown as { contestNext?: unknown }).contestNext;
+    delete (g as unknown as { contestCount?: unknown }).contestCount;
     g.contestResults ??= [];
     // avant les ventes sur 7 jours, la popularité montait vers une cible : on reprend les ventes qui la justifient
     if ((s as { salesSlot?: number }).salesSlot == null) {

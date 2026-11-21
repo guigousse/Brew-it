@@ -914,7 +914,6 @@ const dict: Record<string, string> = {
   "Concours": "Concursos",
   "Qualité {0}": "Calidad: {0}",
   "🔒 Les concours s'ouvrent avec la microbrasserie": "🔒 Los concursos se abren con la microcervecería",
-  "Régional (3 ★), national avec l'usine (4 ★), international avec le labo du futur (4½ ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "Regional (3 ★), nacional con la fábrica (4 ★), internacional con el laboratorio del futuro (4½ ★). La medalla se lleva como escarapela en la botella: la cerveza se vende más, y más cara.",
   "Prochain concours": "Próximo concurso",
   "Une lettre arrivera au bureau. Prépare des bières excellentes et populaires : le jury goûte le dernier lot.": "Llegará una carta a la oficina. Prepara cervezas excelentes y populares: el jurado prueba el último lote.",
   "Cocardes": "Escarapelas",
@@ -1033,5 +1032,14 @@ const dict: Record<string, string> = {
   "Sans limite : le prix grimpe à chaque niveau.": "Sin límite: el precio sube en cada nivel.",
   "Brasserie : {0}": "Cervecería: {0}",
   "Marque à {0} / 100 au moins (sans la pub)": "Marca a {0} / 100 como mínimo (sin publicidad)",
+  "Inscris-la d'abord au {0} et décroche une médaille.": "Inscríbela primero en el {0} y gana una medalla.",
+  "Médaillée au {0}": "Medalla en el {0}",
+  "Prochaine session": "Próxima sesión",
+  "Trois concours : régional, national puis international. Pour le national, il faut une médaille au régional ; pour l'international, une médaille au national. Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.": "Tres concursos: regional, nacional e internacional. Para el nacional hace falta una medalla en el regional; para el internacional, una medalla en el nacional. La medalla se lleva como escarapela en la botella: la cerveza se vende más, y más cara.",
+  "fermé": "cerrado",
+  "✓ inscrite": "✓ inscrita",
+  "Régional": "Regional",
+  "National": "Nacional",
+  "International": "Internacional",
 };
 export default dict;

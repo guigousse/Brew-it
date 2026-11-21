@@ -16,7 +16,7 @@ import { OfficeRoom } from '../render/officeRoom';
 import { iconCanvas, type IconId } from '../render/icons';
 import { cocardeCanvas, medalName, playCeremony } from './ceremony';
 import { PARTNER_DAYS, partnerById, PARTNERS } from '../core/partners';
-import { pointsAsStars, bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
+import { type ContestTier, pointsAsStars, bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
 import { GEMSTONES, BOTTLES, DEFAULT_LABEL, EMBLEMS, FONTS, LABEL_COLORS, PATTERNS, SHAPES, type Label } from '../core/label';
@@ -371,6 +371,8 @@ export class App {
   private picks = new Map<number, number[]>();
   /** Bière choisie pour le concours en cours. */
   private contestPick: number | null = null;
+  /** Onglet ouvert dans l'app Concours (0 régional, 1 national, 2 international). */
+  private contestTier: ContestTier = 0;
   /** Bière choisie sur l'étagère (fiche affichée sous l'étagère). */
   private shelfSel: number | null = null;
   private sheet = h('section', 'sheet hidden');
@@ -1832,7 +1834,7 @@ export class App {
     return JSON.stringify([app, g.computerLevel, g.orders.map((o) => o.id), g.readyOrders.length, this.messages.length, this.unread,
       app === 'staff' ? [g.staffBusy, g.staffSlots, Math.floor(g.money >= g.staffCost('courier') ? 1 : 0), STAFF.map((x) => Math.ceil((g.staffEnd(x.id) - g.time) / 60))] : 0,
       app === 'partners' ? [g.partner ? [g.partner.id, g.partnerDay, Math.floor(g.partnerLeft), Math.floor(g.partnerStock)] : null, PARTNERS.map((p) => [g.partnerChecks(p).map((c) => c.ok), g.money >= p.fee]), popScore(g.brandBase), g.staffOn('courier')] : 0,
-      app === 'contests' ? [g.contest, g.contestNext > g.time ? Math.ceil((g.contestNext - g.time) / 60) : 0, g.breweryLevel, g.money >= g.contestFee, g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
+      app === 'contests' ? [g.contests, g.contestNexts.map((t) => (t > g.time ? Math.ceil((t - g.time) / 60) : 0)), this.contestTier, g.breweryLevel, [0, 1, 2].map((t) => g.money >= g.contestFee(t as ContestTier)), g.beers.map((b) => [b.id, b.stock >= CONTEST_BOTTLES, Math.round(b.pop * 10), Math.round(b.tasting.quality * 200), b.medals?.length ?? 0]), this.contestPick] : 0,
       app === 'trends' || app === 'orders' || app === 'wholesale' ? [g.adId, g.advertising, ADS.map((a) => g.money >= g.adCost(a.id)), g.gems >= AD_EXTEND.gems, g.computerLevel, g.money >= (COMPUTERS[g.computerLevel]?.cost ?? Infinity), g.trends, g.beers.map((b) => [b.id, b.stock, b.kegs.length, Math.round(b.pop * 10), Math.round(b.wsToday)]), [...this.picks]] : 0]);
   }
 
@@ -1920,7 +1922,10 @@ export class App {
       trends: { text: '', hot: false },
       wholesale: { text: '', hot: false },
       partners: { text: g.partner && g.partnerLeft > 0 ? '!' : '', hot: !!g.partner && g.partnerLeft > 0 && g.partnerStock >= 1 },
-      contests: { text: g.contest && !g.contest.entry ? '!' : '', hot: !!g.contest && !g.contest.entry && g.beers.some((b) => g.contestChecks(b).every((x) => x.ok)) },
+      contests: (() => {
+        const open = ([0, 1, 2] as ContestTier[]).filter((t) => g.contestOf(t) && !g.contestOf(t)!.entry);
+        return { text: open.length ? '!' : '', hot: open.some((t) => g.beers.some((b) => g.contestChecks(t, b).every((x) => x.ok))) };
+      })(),
     };
     const grid = h('div', 'pc-apps');
     for (const a of PC_APPS) {
@@ -2447,18 +2452,43 @@ export class App {
     if (!tiers.length) {
       const el = h('div', 'card locked');
       el.append(h('div', 'beer-name', tl('🔒 Les concours s\'ouvrent avec la microbrasserie')),
-        h('p', 'hint', tl('Régional (3 ★), national avec l\'usine (4 ★), international avec le labo du futur (4½ ★). Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.')));
+        h('p', 'hint', tl('Trois concours : régional, national puis international. Pour le national, il faut une médaille au régional ; pour l\'international, une médaille au national. Une médaille se porte en cocarde sur la bouteille : la bière se vend plus, et plus cher.')));
       card.append(el);
-    } else if (!g.contest) {
-      const el = h('div', 'card');
-      const wait = h('span', 'order-time');
-      wait.dataset.expires = String(g.contestNext);
-      wait.textContent = `⏳ ${duration(g.contestNext - g.time)}`;
-      const head = h('div', 'beer-head');
-      head.append(h('span', 'beer-name', tl('Prochain concours')), wait);
-      el.append(head, h('p', 'hint', tl('Une lettre arrivera au bureau. Prépare des bières excellentes et populaires : le jury goûte le dernier lot.')));
-      card.append(el);
-    } else card.append(this.contestLetter(g));
+    } else {
+      // les trois concours, un onglet chacun : la hiérarchie se lit de gauche à droite
+      const tabs = h('div', 'contest-tabs');
+      for (const tier of [0, 1, 2] as const) {
+        const c = g.contestOf(tier);
+        const t = CONTEST_TIERS[tier]!;
+        const tab = this.btn(`contest-tab${tier === this.contestTier ? ' active' : ''}`, '', () => {
+          this.contestTier = tier;
+          this.contestPick = null;
+          this.renderComputer();
+        });
+        const state = h('span', 'contest-tab-state');
+        if (c?.entry) state.textContent = tl('✓ inscrite');
+        else if (c) {
+          state.dataset.expires = String(c.closes);
+          state.textContent = `⏳ ${duration(c.closes - g.time)}`;
+        } else state.textContent = tl('fermé');
+        tab.append(cocardeCanvas({ tier, metal: 2 }, 1, 'cocarde small'), h('span', 'contest-tab-name', t.short), state);
+        if (c && !c.entry && g.beers.some((b) => g.contestChecks(tier, b).every((x) => x.ok))) tab.classList.add('hot');
+        tabs.append(tab);
+      }
+      card.append(tabs);
+      const tier = this.contestTier;
+      if (g.contestOf(tier)) card.append(this.contestLetter(g, tier));
+      else {
+        const el = h('div', 'card');
+        const wait = h('span', 'order-time');
+        wait.dataset.expires = String(g.contestNexts[tier]);
+        wait.textContent = `⏳ ${duration((g.contestNexts[tier] ?? 0) - g.time)}`;
+        const head = h('div', 'beer-head');
+        head.append(h('span', 'beer-name', tl('Prochaine session')), wait);
+        el.append(head, h('p', 'hint', tl('Une lettre arrivera au bureau. Prépare des bières excellentes et populaires : le jury goûte le dernier lot.')));
+        card.append(el);
+      }
+    }
     // le barème des cocardes : plus le concours est prestigieux, plus elle rapporte
     const scale = h('div', 'card');
     scale.append(h('div', 'beer-name', tl('Cocardes')), h('p', 'hint', tl('La meilleure médaille d\'une bière fait vendre plus, et plus cher (bar et grossiste).')));
@@ -2493,8 +2523,8 @@ export class App {
   }
 
   /** La lettre du concours en cours : la catégorie, les rivaux à battre, et la bière à inscrire. */
-  private contestLetter(g: Game): HTMLElement {
-    const c = g.contest!;
+  private contestLetter(g: Game, tierId: ContestTier): HTMLElement {
+    const c = g.contestOf(tierId)!;
     const tier = CONTEST_TIERS[c.tier]!;
     const cat = contestCategory(c.cat);
     const el = h('div', 'letter contest-letter');
@@ -2523,12 +2553,12 @@ export class App {
       el.append(h('p', 'letter-status none', tl('Garde une bière dans ta gamme pour l\'inscrire.')));
       return el;
     }
-    if (this.contestPick == null || !g.beer(this.contestPick)) this.contestPick = g.contestCandidate()?.id ?? null;
+    if (this.contestPick == null || !g.beer(this.contestPick)) this.contestPick = g.contestCandidate(c.tier)?.id ?? null;
     const pick = g.beer(this.contestPick)!;
     // les bières de la gamme, en puces : on choisit la candidate
     const chips = h('div', 'chips');
     for (const b of g.beers) {
-      const ok = g.contestChecks(b).every((x) => x.ok);
+      const ok = g.contestChecks(c.tier, b).every((x) => x.ok);
       const chip = this.btn(`chip${b.id === pick.id ? ' active' : ''}${ok ? ' ok' : ''}`, b.name, () => {
         this.contestPick = b.id;
         this.renderComputer();
@@ -2538,13 +2568,13 @@ export class App {
     el.append(h('div', 'letter-sub', tl('Ta candidate')), chips);
     const note = Math.round(pick.tasting.quality * 200) / 10;
     const checks = h('div', 'contest-checks');
-    for (const x of g.contestChecks(pick)) checks.append(h('div', `contest-check${x.ok ? ' ok' : ''}`, `${x.ok ? '✓' : '✗'} ${x.text}`));
+    for (const x of g.contestChecks(c.tier, pick)) checks.append(h('div', `contest-check${x.ok ? ' ok' : ''}`, `${x.ok ? '✓' : '✗'} ${x.text}`));
     checks.append(h('div', 'contest-check info', tl('Dernier lot : {0}/20 (le jury varie de ± 0,3)', note.toFixed(1))));
     el.append(checks);
-    const fee = g.contestFee;
-    const ready = g.contestChecks(pick).every((x) => x.ok);
+    const fee = g.contestFee(c.tier);
+    const ready = g.contestChecks(c.tier, pick).every((x) => x.ok);
     const go = this.btn('btn primary', tl('Inscrire · {0}', moneyInt(fee)), () => {
-      const r = g.enterContest(pick.id);
+      const r = g.enterContest(c.tier, pick.id);
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('paper');
       this.toast(tl('« {0} » est inscrite !', pick.name), 'good');
@@ -2554,20 +2584,22 @@ export class App {
     else this.costGate(go, fee);
     el.append(go);
     if (!ready) {
-      const miss = g.contestChecks(pick).find((x) => !x.ok)!;
-      el.append(h('p', 'letter-status short', this.contestAdvice(g, pick, miss.text)));
+      const miss = g.contestChecks(c.tier, pick).find((x) => !x.ok)!;
+      el.append(h('p', 'letter-status short', this.contestAdvice(g, c.tier, pick, miss.text)));
     }
     return el;
   }
 
   /** Ce qu'il faut faire pour remplir la condition qui manque. */
-  private contestAdvice(g: Game, b: Beer, miss: string): string {
-    const [cat, starsOk] = g.contestChecks(b);
-    if (miss === cat?.text) return tl('Elle n\'entre pas dans la catégorie : brasse une recette exprès.');
-    if (miss === starsOk?.text) {
+  private contestAdvice(g: Game, tier: ContestTier, b: Beer, miss: string): string {
+    const checks = g.contestChecks(tier, b);
+    const kind = (text: string) => checks.findIndex((x) => x.text === text) - (tier > 0 ? 1 : 0);
+    if (tier > 0 && checks[0]?.text === miss) return tl('Inscris-la d\'abord au {0} et décroche une médaille.', CONTEST_TIERS[tier - 1]!.name.toLowerCase());
+    const k = kind(miss);
+    if (k === 0) return tl('Elle n\'entre pas dans la catégorie : brasse une recette exprès.');
+    if (k === 1) {
       const p = g.popBreakdown(b);
-      const need = CONTEST_TIERS[g.contest!.tier]!.points;
-      const missing = Math.max(1, need - popScore(b.pop));
+      const missing = Math.max(1, CONTEST_TIERS[tier]!.points - popScore(b.pop));
       if (p.next) return tl('Il lui manque {0} points : vends-en davantage ({1} sur 7 jours donnent {2} / 50) ou suis une tendance (+10).', missing, liters(p.next.liters), Math.round(p.next.stars * 20));
       return tl('Il lui manque {0} points : suis une tendance (+10) ou améliore la qualité.', missing);
     }
@@ -3410,7 +3442,7 @@ export class App {
     this.boostHud.classList.toggle('below-harvest', !this.harvest.classList.contains('hidden') || !this.harvestGems.classList.contains('hidden'));
     if (hide) return;
     const mult = (id: string) => BOOSTS.find((x) => x.id === id)?.mult ?? 1;
-    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|') + (contest ? `|contest:${contest.tier}:${!!contest.entry}` : '') + (ship ? `|partner:${ship.id}:${g.partnerDay}` : '');
+    const key = live.map((b) => `${b.ch}:${mult(b.id)}`).join('|') + (contest ? `|contest:${contest.tier}:${g.contests.map((c) => (c ? (c.entry ? 'e' : 'o') : '-')).join('')}` : '') + (ship ? `|partner:${ship.id}:${g.partnerDay}` : '');
     if (key !== this.boostHudKey) {
       this.boostHudKey = key;
       this.boostHud.replaceChildren();
@@ -3431,8 +3463,16 @@ export class App {
         const face = h('span', 'boost-chip-face');
         face.append(h('span', 'boost-chip-dial'), iconCanvas('trophy', 2), h('span', 'boost-chip-time'));
         // inscrite : une coche ; pas encore : un point d'exclamation
-        el.append(face, h('span', `boost-chip-mult contest-flag${contest.entry ? ' in' : ''}`, contest.entry ? '✓' : '!'));
-        el.onclick = () => this.openComputer('contests');
+        const waiting = g.contests.some((c) => c && !c.entry);
+        el.append(face, h('span', `boost-chip-mult contest-flag${waiting ? '' : ' in'}`, waiting ? '!' : '✓'));
+        el.onclick = () => {
+          // ouvre l'onglet du concours qui ferme le plus tôt sans bière inscrite (sinon le plus proche)
+          const open = ([0, 1, 2] as ContestTier[]).filter((t) => g.contestOf(t));
+          const todo = open.filter((t) => !g.contestOf(t)!.entry).sort((a, b) => g.contestOf(a)!.closes - g.contestOf(b)!.closes)[0];
+          this.contestTier = todo ?? g.contest?.tier ?? 0;
+          this.contestPick = null;
+          this.openComputer('contests');
+        };
         this.boostHud.append(el);
       }
       if (ship) {

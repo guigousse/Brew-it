@@ -44,48 +44,63 @@ describe('concours', () => {
     }
   });
 
-  it('les concours ouverts se succèdent, du plus prestigieux au plus modeste', () => {
-    const { g } = setup(5);
-    const tiers: number[] = [];
-    for (let i = 0; i < 4; i++) {
-      until(g, () => !!g.contest, 48 * 3600);
-      tiers.push(g.contest!.tier);
-      until(g, () => !g.contest, CONTEST_OPEN_S + 10);
-    }
-    expect(tiers).toEqual([2, 1, 0, 2]);
+  it('les trois concours tournent en parallèle dès la microbrasserie, chacun avec sa catégorie et ses rivaux', () => {
+    const { g } = setup(3);
+    until(g, () => g.contests.every((c) => !!c), 6 * 3600);
+    expect(g.contests.map((c) => c!.tier)).toEqual([0, 1, 2]);
+    // chacun à son rythme : il se ferme au bout de 12 h, puis une nouvelle session s'ouvre
+    const first = g.contestOf(0)!;
+    until(g, () => g.contestOf(0) !== first, CONTEST_OPEN_S + 9 * 3600);
+    expect(g.contestOf(0)).not.toBe(first);
+  });
+
+  it('hiérarchie : le national demande une médaille au régional, l\'international une médaille au national', () => {
+    const { g, b } = setup(5);
+    until(g, () => g.contests.every((c) => !!c), 6 * 3600);
+    for (const t of [1, 2] as const) g.contestOf(t)!.cat = TRENDS.find((x) => x.test(b.tasting))!.id;
+    const ok = (t: 0 | 1 | 2) => g.contestChecks(t, b).every((x) => x.ok);
+    expect(g.contestChecks(1, b)[0]!.ok).toBe(false);
+    expect(ok(1)).toBe(false);
+    expect(g.enterContest(1, b.id).ok).toBe(false);
+    b.medals = [{ tier: 0, metal: 0, cat: 'ipa', score: 15 }]; // un bronze régional suffit
+    expect(g.contestChecks(1, b)[0]!.ok).toBe(true);
+    expect(g.contestChecks(2, b)[0]!.ok).toBe(false); // pas encore de médaille nationale
+    b.medals.push({ tier: 1, metal: 1, cat: 'ipa', score: 17.5 });
+    expect(g.contestChecks(2, b)[0]!.ok).toBe(true);
   });
 
   it('inscription : catégorie, étoiles, bouteilles et droit d\'entrée', () => {
     const { g, b } = setup(3);
-    until(g, () => !!g.contest);
-    const c = g.contest!;
+    until(g, () => !!g.contestOf(0));
+    const c = g.contestOf(0)!;
     const cat = TRENDS.find((t) => t.id === c.cat)!;
     if (!cat.test(b.tasting)) {
-      expect(g.enterContest(b.id).ok).toBe(false);
+      expect(g.enterContest(0, b.id).ok).toBe(false);
       c.cat = TRENDS.find((t) => t.test(b.tasting))!.id;
     }
     b.week.fill(0);
     g.step(); // qualité seule : 2,25 ★ (+ ½ par tendance), il en faut 3
-    if (g.popBreakdown(b).total < 2.75) expect(g.enterContest(b.id).ok).toBe(false);
+    if (g.popBreakdown(b).total < 2.75) expect(g.enterContest(0, b.id).ok).toBe(false);
     b.week.fill(150_000 / 28);
     g.step();
     const money = g.money;
     const stock = b.stock;
-    expect(g.enterContest(b.id).ok).toBe(true);
+    expect(g.enterContest(0, b.id).ok).toBe(true);
     expect(g.money).toBe(money - contestFee(0, 3));
     expect(b.stock).toBe(stock - CONTEST_BOTTLES);
-    expect(g.enterContest(b.id).ok).toBe(false); // une seule bière par concours
+    expect(g.enterContest(0, b.id).ok).toBe(false); // une seule bière par concours
   });
 
   it('battre les rivaux donne une médaille, une cocarde et son bonus de vente', () => {
     const { g, b } = setup(3);
-    until(g, () => !!g.contest);
-    g.contest!.cat = TRENDS.find((t) => t.test(b.tasting))!.id;
-    g.contest!.rivals = [{ name: 'A', score: 18 }, { name: 'B', score: 17 }, { name: 'C', score: 16 }];
+    until(g, () => !!g.contestOf(0));
+    const c = g.contestOf(0)!;
+    c.cat = TRENDS.find((t) => t.test(b.tasting))!.id;
+    c.rivals = [{ name: 'A', score: 18 }, { name: 'B', score: 17 }, { name: 'C', score: 16 }];
     b.tasting = { ...b.tasting, quality: 0.875 }; // 17,5/20 : devant B et C
-    expect(g.enterContest(b.id).ok).toBe(true);
+    expect(g.enterContest(0, b.id).ok).toBe(true);
     const gems = g.gems;
-    until(g, () => !g.contest, CONTEST_OPEN_S + 10);
+    until(g, () => g.contestResults.length > 0, CONTEST_OPEN_S + 10);
     const r = g.contestResults[0]!;
     expect(r.score).toBeGreaterThanOrEqual(17.2);
     expect(r.metal).toBe(1); // argent
@@ -111,15 +126,30 @@ describe('concours', () => {
 
   it('popularité exigée : 60, 80 puis 90 points (l\'international n\'exige pas 100)', () => {
     const { g, b } = setup(5);
-    until(g, () => g.contest?.tier === 2, 10 * 86400);
-    const c = g.contest!;
+    until(g, () => !!g.contestOf(2), 10 * 86400);
+    const c = g.contestOf(2)!;
     c.cat = TRENDS.find((t) => t.test(b.tasting))!.id;
+    b.medals = [{ tier: 1, metal: 0, cat: 'ipa', score: 17 }]; // qualifiée par le national
     b.tasting = { ...b.tasting, quality: 0.9 }; // 40 points de qualité
     b.week.fill(150_000 / 28); // 50 points de ventes
     g.step();
     expect(g.popBreakdown(b).total * 20).toBeGreaterThanOrEqual(90);
-    expect(g.contestChecks(b).every((x) => x.ok)).toBe(true);
-    expect(g.contestChecks(b)[1]!.text).toContain('90');
+    expect(g.contestChecks(2, b).every((x) => x.ok)).toBe(true);
+    expect(g.contestChecks(2, b)[2]!.text).toContain('90');
+  });
+
+  it('les parties d\'avant les trois concours gardent leur concours en cours', () => {
+    const { g } = setup(3);
+    until(g, () => !!g.contestOf(0));
+    const json = JSON.parse(JSON.stringify(g.toJSON()));
+    const old = json.contests[0];
+    delete json.contests;
+    delete json.contestNexts;
+    json.contest = old;
+    json.contestNext = 0;
+    const back = Game.fromJSON(json);
+    expect(back.contestOf(0)).toEqual(old);
+    expect(back.contestOf(1)).toBeNull();
   });
 
   it('places et cocardes', () => {
@@ -167,8 +197,8 @@ describe('concours', () => {
     const saves = new SaveManager(new MemoryStorage());
     await saves.save(g);
     const back = (await saves.load())!.game;
-    expect(back.contest).toEqual(g.contest);
-    expect(back.contestNext).toBe(g.contestNext);
+    expect(back.contests).toEqual(g.contests);
+    expect(back.contestNexts).toEqual(g.contestNexts);
     expect(back.beers[0]!.medals).toEqual(b.medals);
   });
 });

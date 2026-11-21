@@ -18,6 +18,8 @@ export type Metal = 0 | 1 | 2;
 
 export interface ContestTierDef {
   name: string;
+  /** Nom court (onglet de l'app Concours). */
+  short: string;
   /** Popularité exigée de la bière inscrite (score sur 100 ; 20 points = 1 ★). */
   points: number;
   /** Niveau de la brasserie qui ouvre ce concours. */
@@ -29,9 +31,9 @@ export interface ContestTierDef {
 }
 
 export const CONTEST_TIERS: readonly ContestTierDef[] = [
-  { name: tl('Concours régional'), points: 60, level: 3, rivals: [14, 17], feeShare: 0.04 },
-  { name: tl('Concours national'), points: 80, level: 4, rivals: [16, 18.5], feeShare: 0.04 },
-  { name: tl('Concours international'), points: 90, level: 5, rivals: [18, 19.8], feeShare: 0.04 },
+  { name: tl('Concours régional'), short: tl('Régional'), points: 60, level: 3, rivals: [14, 17], feeShare: 0.02 },
+  { name: tl('Concours national'), short: tl('National'), points: 80, level: 3, rivals: [16, 18.5], feeShare: 0.04 },
+  { name: tl('Concours international'), short: tl('International'), points: 90, level: 3, rivals: [18, 19.8], feeShare: 0.08 },
 ];
 
 /** Une exigence en étoiles : 90 points → « 4½ ». */
@@ -39,6 +41,12 @@ export const pointsAsStars = (points: number) => {
   const h = Math.floor(points / 10) / 2;
   return h % 1 ? `${Math.floor(h)}½` : String(h);
 };
+
+/**
+ * Hiérarchie des concours : pour s'inscrire au national, une bière doit avoir une médaille au régional ; pour
+ * l'international, une médaille au national. Le métal minimum (0 = bronze : une place sur le podium suffit).
+ */
+export const QUALIFY_METAL: Metal = 0;
 
 export const METALS = [tl('Bronze'), tl('Argent'), tl('Or')] as const;
 export const MEDALS = [tl('Médaille de bronze'), tl('Médaille d\'argent'), tl('Médaille d\'or')] as const;
