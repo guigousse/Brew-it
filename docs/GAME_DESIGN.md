@@ -274,7 +274,7 @@ Les concours donnent un but au-delà des étoiles : une **médaille**, portée e
 - **Une catégorie** par concours : un style ou un caractère, les mêmes que les tendances (IPA, ≥ 7 %, limpide…). Il faut souvent brasser une recette exprès.
 - **Les rivaux restent secrets jusqu'à la proclamation** : la lettre donne seulement le nombre de participants (« Participants : 4 brasseries », la tienne comprise). Les bières rivales et leurs notes se dévoilent au défilé de la proclamation. Battre la 3e donne le bronze, la 2e l'argent, la 1re l'or (à égalité, le joueur passe devant). Le joueur voit toujours la note de son dernier lot.
 - **Inscription** (application **Concours** de l'ordinateur, inscriptions ouvertes 12 h) : une bière de la catégorie, avec les étoiles exigées et 6 bouteilles pour le jury, plus un droit d'entrée, une part d'une journée de revenus typique au niveau de la brasserie : 2 % au régional, 4 % au national, 8 % à l'international (à l'usine : 10 000 €, 20 000 € et 40 000 €). Une seule bière par concours. Chaque condition s'affiche cochée ou non, avec le conseil pour la remplir.
-- **Le jury goûte le dernier lot** au moment de l'inscription : sa note sur 20, à ± 0,3 près. La précision du matériel et le « bon ou mauvais jour » comptent.
+- **Le jury goûte le dernier lot dès l'inscription** : pas besoin d'attendre la clôture, l'ordinateur s'éteint et la proclamation commence aussitôt ; le concours de ce niveau se clôt, et la session suivante arrive 4 à 8 h plus tard. Le jury goûte le dernier lot au moment de l'inscription : sa note sur 20, à ± 0,3 près. La précision du matériel et le « bon ou mauvais jour » comptent.
 - **La proclamation des résultats** (`src/ui/ceremony.ts`) s'ouvre à la clôture, ou au retour dans le jeu. Elle se joue en trois temps, et « Passer » mène directement au résultat :
   1. **Le défilé des bouteilles** : les bières rivales passent une à une sous le projecteur, de la 3e à la 1re. Chacune a un nom, une forme de bouteille et une étiquette tirés au hasard à l'ouverture du concours ; les rivaux internationaux s'offrent parfois le luxe (bouteille d'or, cartouche baroque, Art déco). Les brasseries sont voisines au concours régional, de tout le pays au national, du monde entier à l'international. La bouteille entre, sa note défile, puis elle sort et rejoint le classement.
   2. **La bouteille du joueur** entre en dernier : « Le jury goûte… », puis sa note monte en ralentissant. Chaque rival dépassé vacille et s'assombrit, et plus la bière en dépasse, plus la montée dure. Quand l'écart avec un rival fait moins de 0,5 point, la note clignote un instant avant le verdict.
@@ -290,7 +290,11 @@ Les concours donnent un but au-delà des étoiles : une **médaille**, portée e
 L'application Concours montre aussi le barème des cocardes et le **palmarès** de la brasserie. Les commandes ne changent pas : leur paiement est annoncé d'avance.
 
 ## Partenariats (`src/core/partners.ts`)
-**Le grand débouché pour les gros volumes**, au milieu et à la fin de la partie (application **Partenariats** de l'ordinateur). On sponsorise un club ou un événement pendant **7 jours de jeu** et on choisit sa **bière officielle**. Chaque jour, le partenaire a besoin d'une quantité de litres : elle **part toute seule du stock**, toutes les 30 s (la bière officielle d'abord, puis les autres assez bonnes, bouteilles puis fûts entiers), payée au prix annoncé. Ce qui manque un jour est perdu. Un seul partenariat à la fois.
+**Le grand débouché pour les gros volumes**, au milieu et à la fin de la partie (application **Partenariats** de l'ordinateur). On sponsorise un club ou un événement et on choisit sa **bière officielle** (la plus populaire au départ).
+1. **La jauge se remplit toute seule** depuis le stock, toutes les 30 s : la bière officielle d'abord, puis les autres assez bonnes, bouteilles puis fûts entiers. Les bières mises de côté quittent le stock.
+2. **Pleine, elle laisse la place au bouton « Livrer · montant »** : les bouteilles volent vers l'image du partenaire, puis l'argent arrive.
+3. **Ensuite, il faut attendre le lendemain** (24 h de jeu) : un minuteur « Prochaine livraison » remplace la jauge.
+4. **7 livraisons remplissent le contrat** : la prime en diamants. Pas de date limite, pas de journée manquée. Un seul partenariat à la fois.
 
 | Partenaire | Brasserie | Marque | Par jour | Qualité minimale | Payé (× plein prix du grossiste) | Bière officielle | Contrat | Prime |
 |---|---|---|---|---|---|---|---|---|
@@ -301,13 +305,12 @@ L'application Concours montre aussi le barème des cocardes et le **palmarès** 
 | Festival des Mille Fûts | labo du futur | 80 / 100 | 240 000 L | Bonne | ×1,5 | +20 | 600 000 € | 50 💎 |
 | **Jeux mondiaux** | labo du futur + une médaille au concours international | 90 / 100 | 450 000 L | Excellente | ×1,6 | +25 | 2 M€ | 100 💎 |
 
-- **Deux conditions pour signer** : le niveau de la brasserie et un palier de popularité de la marque (sans la pub en cours). L'app affiche le score de la marque, et pour chaque partenaire fermé ses conditions cochées ou non.
-- **La bière officielle** se choisit à la signature (la plus populaire par défaut) et se change pendant le contrat. Elle gagne des **points de popularité tant que le contrat dure** (ligne « Bière officielle : … » dans sa fiche), et ses litres livrés comptent dans ses ventes de la semaine.
-- **Le prix** : le plein prix du grossiste pour la qualité de la bière, multiplié par celui du partenaire (et le bonus de la cocarde), affiché « 7 € le litre ». Bien au-dessus du grossiste, qui baisse au fil de la journée.
-- **Toutes les journées remplies** : la prime en diamants, et le partenaire est coché « ✓ ×n ».
-- Dans l'app : le contrat en cours (les 7 journées, ✓ remplie, ✗ manquée, la jauge du jour, « Nouvelle jauge dans … », la bière officielle, et « Plus de bière assez bonne en stock : il manque … aujourd'hui. Brasse ! » quand le stock ne suit pas), puis chaque partenaire avec ses conditions, le choix de la bière officielle et « Signer · prix ».
-- En haut à droite, avec les effets actifs, une **case bleue au fanion** : la jauge du jour dans son cadran, le jour du contrat dans un coin ; la toucher ouvre l'application.
-- **Calage** (joueur simulé) : un partenaire prend plusieurs fois ce que le grossiste reprend à plein prix au même niveau. Le joueur simulé signe le club de rugby vers le 5e jour, le festival rock vers le 13e, le FC des Remparts vers le 20e et la finale de la Coupe vers le 28e ; la partie se termine vers le 33e jour, comme avant.
+- **Deux conditions pour signer** : le niveau de la brasserie et un palier de popularité de la marque (sans la pub en cours). Un partenaire fermé affiche la première condition qui manque (« 🔒 Marque à 70 / 100 au moins »).
+- **L'app, en un coup d'œil** : la marque (« Ta marque : ★★★★½ · 94 / 100 ») ; le contrat en cours : l'**image en pixel art du partenaire** (poteaux de rugby, guitare, ballon, stade, chapiteau, flamme sur le podium) et à sa droite la jauge (« 19 800 L / 60 000 L »), le bouton Livrer ou le minuteur, 7 cases pour les livraisons ; dessous, la bière officielle avec son bonus (« +15 ★ ») : la toucher passe à la suivante parmi celles assez bonnes. Puis chaque partenaire sur une ligne : image, nom, « 60 000 L par livraison · ×1,4 » et le bouton du prix pour signer.
+- **La bière officielle** gagne des points de popularité tant que le contrat dure, et les litres livrés comptent dans ses ventes de la semaine.
+- **Le prix** : le plein prix du grossiste pour la qualité de la bière, multiplié par celui du partenaire (et le bonus de la cocarde).
+- En haut à droite, avec les effets actifs, une **case bleue au fanion** : la jauge dans son cadran (en %), « ! » quand on peut livrer, le temps qui reste pendant l'attente, et les livraisons faites dans un coin (« 3/7 ») ; la toucher ouvre l'application.
+- **Calage** (joueur simulé, qui livre à chaque visite) : club de rugby vers le 5e jour, festival rock vers le 13e, FC des Remparts vers le 21e, finale de la Coupe vers le 29e ; fin de partie vers le 33e jour.
 - Les Jeux mondiaux s'appellent ainsi plutôt que « Jeux olympiques », nom et symboles protégés.
 
 ## Commandes

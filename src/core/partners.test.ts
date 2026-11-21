@@ -59,23 +59,30 @@ describe('partenariats', () => {
     expect(g.signPartner('foot', b.id).ok).toBe(false);
   });
 
-  it('livraison automatique : la jauge du jour part du stock, au prix annoncé, et se recharge le lendemain', () => {
+  it('la jauge se remplit toute seule depuis le stock ; pleine, on livre au prix annoncé ; puis on attend le lendemain', () => {
     const { g, b } = setup(3);
     const p = partnerById('rock')!;
     b.stock = 100_000; // 33 000 L
     g.signPartner('rock', b.id);
+    expect(g.deliverPartner().ok).toBe(false); // jauge vide
+    g.step(1); // la jauge se remplit tout de suite
+    expect(g.partnerReady).toBe(true);
+    expect(g.partnerGauge).toBeGreaterThan(p.daily - 0.34);
+    expect(b.stock).toBeLessThan(100_000); // les bières mises de côté quittent le stock
     const money = g.money;
-    g.step(1); // première livraison tout de suite
-    const done = g.partner!.delivered[0]!;
-    expect(done).toBeLessThanOrEqual(p.daily);
-    expect(done).toBeGreaterThan(p.daily - 0.34);
-    expect(g.money - money).toBeCloseTo(done * g.partnerPricePerL(p, b), 3);
-    expect(g.partnerPricePerL(p, b)).toBeCloseTo((wholesalePrice(b.tasting) / 0.33) * p.pay, 6);
-    expect(g.partnerLeft).toBeLessThan(0.34);
+    const value = g.partnerValue;
+    expect(value).toBeCloseTo(g.partnerGauge * (wholesalePrice(b.tasting) / 0.33) * p.pay, 3);
+    const r = g.deliverPartner();
+    expect(r.ok).toBe(true);
+    expect(g.money - money).toBeCloseTo(value, 3);
+    expect(g.partner!.deliveries).toBe(1);
+    // le lendemain seulement, la jauge se remplit de nouveau
+    g.step(3600);
+    expect(g.partnerGauge).toBe(0);
+    expect(g.partnerWait).toBeGreaterThan(0);
     g.step(86400);
-    expect(g.partnerDay).toBe(1);
     g.step(60);
-    expect(g.partner!.delivered[1]!).toBeGreaterThan(p.daily - 0.34);
+    expect(g.partnerReady).toBe(true);
   });
 
   it('la bière officielle part d\'abord, puis les autres assez bonnes ; les fûts comptent', () => {
@@ -86,12 +93,14 @@ describe('partenariats', () => {
     g.beers.push(other);
     b.stock = 0;
     b.kegs = [200, 200]; // 2 × 50 L
-    other.stock = 10_000;
+    other.stock = 100_000;
     g.signPartner('foot', b.id);
     g.step(1);
     expect(b.kegs).toHaveLength(0);
-    expect(other.stock).toBeLessThan(10_000);
-    // une bière trop faible n'est pas livrée
+    expect(other.stock).toBeLessThan(100_000);
+    expect(g.partner!.gauge[0]!.beerId).toBe(b.id);
+    // une bière trop faible ne part pas
+    g.deliverPartner();
     const weak = g.beers.find((x) => x.id === 99)!;
     weak.tasting = { ...weak.tasting, quality: 0.65 };
     weak.stock = 5000;
@@ -104,16 +113,17 @@ describe('partenariats', () => {
     b.week.fill(0);
     g.step();
     const before = g.popBreakdown(b).total;
-    b.stock = 3000;
+    b.stock = 30_000;
     expect(g.signPartner('rugby', b.id).ok).toBe(true); // marque à 30 / 100 suffit
     g.step(1);
     const parts = g.popBreakdown(b);
     expect(parts.partner * 20).toBe(partnerById('rugby')!.visibility);
-    expect(g.weekLiters(b)).toBeGreaterThan(0);
     expect(parts.total).toBeGreaterThan(before);
+    g.deliverPartner();
+    expect(g.weekLiters(b)).toBeGreaterThan(0);
   });
 
-  it('toutes les journées remplies : prime en diamants', () => {
+  it('7 livraisons remplissent le contrat : prime en diamants', () => {
     const { g, b } = setup(3);
     const p = partnerById('rock')!;
     g.signPartner('rock', b.id);
@@ -121,21 +131,13 @@ describe('partenariats', () => {
     g.events.on((e) => e.type === 'partnerEnd' && ends.push(e));
     for (let d = 0; d < PARTNER_DAYS; d++) {
       b.stock = 100_000;
-      for (let t = 0; t < 86400; t += 60) g.step(60);
+      g.step(60);
+      expect(g.deliverPartner().ok).toBe(true);
+      g.step(86400);
     }
-    g.step(60);
     expect(g.partner).toBeNull();
     expect(g.partnersDone.rock).toBe(1);
     expect(ends).toEqual([expect.objectContaining({ days: PARTNER_DAYS, gems: p.gems })]);
-  });
-
-  it('une journée manquée : pas de prime', () => {
-    const { g, b } = setup(3);
-    b.stock = 0;
-    g.signPartner('rugby', b.id);
-    g.step(PARTNER_DAYS * 86400 + 1);
-    expect(g.partner).toBeNull();
-    expect(g.partnersDone.rugby).toBeUndefined();
   });
 
   it('le partenariat en cours se sauvegarde', async () => {
@@ -143,6 +145,7 @@ describe('partenariats', () => {
     b.stock = 1000;
     g.signPartner('rock', b.id);
     g.step(1);
+    expect(g.partner!.gauge.length).toBeGreaterThan(0);
     const saves = new SaveManager(new MemoryStorage());
     await saves.save(g);
     const back = (await saves.load())!.game;

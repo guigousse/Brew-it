@@ -11,7 +11,7 @@ import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { pointsAsStars, QUALIFY_METAL, type ContestTier, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
-import { PARTNER_DAYS, PARTNER_ROUND_S, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
+import { PARTNER_COOLDOWN_S, PARTNER_DAYS, PARTNER_ROUND_S, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
 import { tl } from '../i18n';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -1364,7 +1364,7 @@ export class Game {
     return [...this.beers].sort((a, b) => score(b) - score(a))[0];
   }
 
-  /** Inscrit une bière : le jury goûtera son dernier lot (6 bouteilles prises au stock). */
+  /** Inscrit une bière : le jury goûte aussitôt son dernier lot (6 bouteilles prises au stock), et le concours se clôt. */
   enterContest(tier: ContestTier, beerId: number): CommandResult {
     const c = this.contestOf(tier);
     if (!c) return { ok: false, reason: tl('Aucun concours en cours') };
@@ -1378,6 +1378,8 @@ export class Game {
     this.money -= fee;
     b.stock -= CONTEST_BOTTLES;
     c.entry = { beerId, quality: b.tasting.quality };
+    // pas besoin d'attendre la clôture : le jury goûte tout de suite, et la proclamation suit
+    this.judge(c);
     return { ok: true };
   }
 
@@ -1441,16 +1443,25 @@ export class Game {
     return this.partnerChecks(p).find((c) => !c.ok)?.text ?? null;
   }
 
-  /** La journée en cours du partenariat (0 à 6). */
-  get partnerDay(): number {
-    return this.partner ? Math.min(PARTNER_DAYS - 1, Math.floor((this.time - this.partner.start) / 86400)) : 0;
+  /** Litres déjà dans la jauge du partenariat en cours. */
+  get partnerGauge(): number {
+    return this.partner ? this.partner.gauge.reduce((s, x) => s + x.liters, 0) : 0;
   }
 
-  /** Litres qu'il reste à livrer aujourd'hui au partenaire. */
+  /** Litres qu'il manque dans la jauge pour pouvoir livrer. */
   get partnerLeft(): number {
     const p = this.partner && partnerById(this.partner.id);
-    if (!p) return 0;
-    return Math.max(0, p.daily - (this.partner!.delivered[this.partnerDay] ?? 0));
+    return p ? Math.max(0, p.daily - this.partnerGauge) : 0;
+  }
+
+  /** La jauge est pleine : on peut livrer. */
+  get partnerReady(): boolean {
+    return !!this.partner && this.partnerLeft < BOTTLE_L;
+  }
+
+  /** Temps avant que la jauge se remplisse de nouveau (0 : elle se remplit). */
+  get partnerWait(): number {
+    return this.partner ? Math.max(0, this.partner.readyAt - this.time) : 0;
   }
 
   /** Les bières qu'accepte le partenaire en cours (assez bonnes) : la bière officielle d'abord. */
@@ -1491,8 +1502,8 @@ export class Game {
     if (beer.tasting.quality < p.minQuality) return { ok: false, reason: tl('Bière pas assez bonne pour ce partenaire') };
     if (this.money < p.fee) return { ok: false, reason: tl('Pas assez d\'argent') };
     this.money -= p.fee;
-    this.partner = { id, beerId, start: this.time, delivered: new Array(PARTNER_DAYS).fill(0), earned: 0 };
-    this.partnerClock = PARTNER_ROUND_S; // première livraison tout de suite
+    this.partner = { id, beerId, start: this.time, deliveries: 0, gauge: [], readyAt: this.time, earned: 0 };
+    this.partnerClock = PARTNER_ROUND_S; // la jauge commence à se remplir tout de suite
     return { ok: true };
   }
 
@@ -1508,75 +1519,91 @@ export class Game {
   }
 
   /**
-   * Livraison automatique au partenaire : ce qu'il reste à livrer aujourd'hui part du stock (la bière officielle
-   * d'abord, puis les autres assez bonnes), bouteilles puis fûts entiers, payé au prix annoncé.
+   * Remplit la jauge depuis le stock (la bière officielle d'abord, puis les autres assez bonnes), bouteilles puis fûts
+   * entiers, jusqu'au volume d'une livraison. Les bières mises de côté quittent le stock.
    */
-  private deliverPartner(): number {
+  private fillPartner(): void {
     const ship = this.partner;
-    const p = ship && partnerById(ship.id);
-    if (!ship || !p) return 0;
+    if (!ship || this.partnerWait > 0) return;
     let left = this.partnerLeft;
-    if (left < BOTTLE_L) return 0;
-    let liters = 0;
-    let amount = 0;
-    let units = 0;
     for (const beer of this.partnerBeers()) {
       if (left < BOTTLE_L) break;
       let l = 0;
       const n = Math.min(beer.stock, Math.floor(left / BOTTLE_L + 1e-9));
       beer.stock -= n;
       l += n * BOTTLE_L;
-      units += n;
       beer.kegs.sort((a, b) => b - a);
       for (let i = 0; i < beer.kegs.length; ) {
         const kl = beer.kegs[i]! * GLASS_L;
         if (kl <= left - l + 1e-9) {
           beer.kegs.splice(i, 1);
           l += kl;
-          units++;
         } else i++;
       }
       if (l <= 0) continue;
-      const price = l * this.partnerPricePerL(p, beer);
-      beer.liters += l;
-      beer.sold += n;
-      beer.revenue += price;
-      this.countSales(beer, l);
+      const slot = ship.gauge.find((x) => x.beerId === beer.id);
+      if (slot) slot.liters += l;
+      else ship.gauge.push({ beerId: beer.id, liters: l });
       left -= l;
-      liters += l;
-      amount += price;
     }
-    if (liters <= 0) return 0;
-    ship.delivered[this.partnerDay] = (ship.delivered[this.partnerDay] ?? 0) + liters;
+  }
+
+  /** Ce que rapporterait la jauge si on la livrait maintenant. */
+  get partnerValue(): number {
+    const p = this.partner && partnerById(this.partner.id);
+    if (!p) return 0;
+    return this.partner!.gauge.reduce((s, x) => {
+      const b = this.beer(x.beerId);
+      return s + (b ? x.liters * this.partnerPricePerL(p, b) : 0);
+    }, 0);
+  }
+
+  /**
+   * Livre la jauge pleine : payée au prix du partenaire, elle compte dans les ventes de la semaine. La jauge se
+   * remplira de nouveau le lendemain ; au bout de 7 livraisons, le contrat est rempli (prime en diamants).
+   */
+  deliverPartner(): CommandResult & { liters?: number; amount?: number } {
+    const ship = this.partner;
+    const p = ship && partnerById(ship.id);
+    if (!ship || !p) return { ok: false, reason: tl('Aucun partenariat en cours') };
+    if (!this.partnerReady) return { ok: false, reason: tl('La jauge n\'est pas encore pleine') };
+    const amount = this.partnerValue;
+    const liters = this.partnerGauge;
+    for (const x of ship.gauge) {
+      const b = this.beer(x.beerId);
+      if (!b) continue;
+      const price = x.liters * this.partnerPricePerL(p, b);
+      b.liters += x.liters;
+      b.sold += Math.round(x.liters / BOTTLE_L);
+      b.revenue += price;
+      this.countSales(b, x.liters);
+    }
+    ship.gauge = [];
+    ship.deliveries++;
     ship.earned += amount;
-    this.totalSold += units;
+    ship.readyAt = this.time + PARTNER_COOLDOWN_S;
+    this.totalSold += Math.round(liters / BOTTLE_L);
     this.totalLiters += liters;
     this.totalRevenue += amount;
     this.ordersRevenue += amount;
     this.recordSale('orders', amount);
     this.money += amount;
     this.events.emit({ type: 'sale', amount });
-    return liters;
+    if (ship.deliveries >= PARTNER_DAYS) {
+      this.partner = null;
+      this.partnersDone[p.id] = (this.partnersDone[p.id] ?? 0) + 1;
+      this.earnGems(p.gems, 'partner');
+      this.events.emit({ type: 'partnerEnd', id: p.id, days: ship.deliveries, earned: ship.earned, gems: p.gems });
+    }
+    return { ok: true, liters, amount };
   }
 
-  /** Fin de la semaine : prime si toutes les journées ont été remplies. */
+  /** La jauge se remplit toute seule depuis le stock, toutes les 30 s. */
   private tickPartner(dt: number): void {
     if (this.partner && (this.partnerClock += dt) >= PARTNER_ROUND_S) {
       this.partnerClock = 0;
-      this.deliverPartner();
+      this.fillPartner();
     }
-    const ship = this.partner;
-    if (!ship || this.time < ship.start + PARTNER_DAYS * 86400) return;
-    const p = partnerById(ship.id);
-    this.partner = null;
-    if (!p) return;
-    const full = ship.delivered.every((l) => l >= p.daily - 0.5);
-    const days = ship.delivered.filter((l) => l >= p.daily - 0.5).length;
-    if (full) {
-      this.partnersDone[p.id] = (this.partnersDone[p.id] ?? 0) + 1;
-      this.earnGems(p.gems, 'partner');
-    }
-    this.events.emit({ type: 'partnerEnd', id: p.id, days, earned: ship.earned, gems: full ? p.gems : 0 });
   }
 
   /** Les tendances que suit une bière. */
@@ -2327,6 +2354,15 @@ export class Game {
     g.partner ??= null;
     // avant la bière officielle : celle qui a le plus de stock
     if (g.partner && g.partner.beerId == null) g.partner.beerId = [...g.beers].sort((a, b) => b.stock - a.stock)[0]?.id ?? 0;
+    // avant la jauge à livrer : les journées remplies comptent comme des livraisons
+    if (g.partner && g.partner.gauge == null) {
+      const old = g.partner as unknown as { delivered?: number[] };
+      const p = partnerById(g.partner.id);
+      g.partner.deliveries = (old.delivered ?? []).filter((l) => p && l >= p.daily - 0.5).length;
+      g.partner.gauge = [];
+      g.partner.readyAt = g.time;
+      delete old.delivered;
+    }
     g.partnersDone ??= {};
     return g;
   }

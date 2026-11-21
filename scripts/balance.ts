@@ -50,6 +50,7 @@ const buy = (what: string, cost: number) => log.push({ t: clock, what, cost });
 
 /** Remplit toutes les commandes possibles avec les bières qui conviennent (les plus en stock d'abord). */
 function deliver() {
+  if (g.partnerReady) g.deliverPartner();
   for (const o of [...g.orders]) {
     const r = g.fulfill(o.id, g.autoPick(o));
     if (r.ok) delivered += r.amount!;
@@ -238,7 +239,7 @@ function session(minutes: number) {
   // SNAP=dossier : garde le dernier état à chaque niveau de brasserie (bN) et de bar (rN), pour scripts/roi.ts
   if (process.env.SNAP && g.beers.length) for (const k of ['b' + g.breweryLevel, 'r' + g.barLevel]) writeFileSync(`${process.env.SNAP}/${k}.json`, JSON.stringify(g.toJSON()));
   deliver();
-  if (!g.partner) wholesale(); // avec un partenaire, on garde le stock pour lui (le surplus part tout seul au grossiste)
+  wholesale();
   tendBar();
   signPartner();
   shop();

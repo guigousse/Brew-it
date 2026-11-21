@@ -1,19 +1,15 @@
 import { tl } from '../i18n';
 
 /**
- * Partenariats : le grand débouché en volume, au milieu et à la fin de la partie. La brasserie sponsorise un club
- * ou un événement pendant une semaine et choisit sa **bière officielle**. Chaque jour, le partenaire a besoin d'une
- * quantité de litres : elle part toute seule du stock (la bière officielle d'abord, puis les autres assez bonnes),
- * au prix annoncé, bien au-dessus du grossiste. La bière officielle gagne de la visibilité (des points de popularité)
- * tant que le contrat dure. Ce qui manque un jour est perdu ; toutes les journées remplies : une prime en diamants.
- * Un seul partenariat à la fois.
+ * Partenariats : le grand débouché pour les gros volumes. La brasserie sponsorise un club ou un événement et choisit
+ * sa bière officielle. Une jauge se remplit toute seule depuis le stock (la bière officielle d'abord, puis les autres
+ * assez bonnes) ; pleine, on touche « Livrer » : les bières partent chez le partenaire, payées bien plus que chez le
+ * grossiste. Puis il faut attendre le lendemain (24 h de jeu) pour que la jauge se remplisse à nouveau.
+ * Au bout de 7 livraisons, le contrat est rempli : une prime en diamants. La bière officielle gagne de la popularité
+ * tant que le contrat dure. Un seul partenariat à la fois.
  *
- * Chaque partenaire s'ouvre avec un niveau de la brasserie (pour pouvoir fournir son volume) et un palier de
- * popularité de la marque (30, 50, 60, 70, 80 puis 90 sur 100). La pub en cours ne compte pas.
- *
- * Volumes et prix calés avec le joueur simulé (fin de partie vers le 33e jour, comme avant) : un partenaire
- * prend plusieurs fois ce que le grossiste reprend à plein prix au même niveau, et le paie 1,2 à 1,6 fois plus.
- * Le contrat coûte environ une demi-journée de revenus de son niveau.
+ * Chaque partenaire s'ouvre avec un niveau de la brasserie et un palier de popularité de la marque (30, 50, 60, 70,
+ * 80 puis 90 sur 100, sans la pub en cours). Volumes et prix calés avec le joueur simulé (voir BALANCE.md).
  */
 
 export type PartnerId = 'rugby' | 'rock' | 'foot' | 'stadium' | 'festival' | 'games';
@@ -43,8 +39,11 @@ export interface PartnerDef {
   visibility: number;
 }
 
+/** Livraisons d'un contrat. */
 export const PARTNER_DAYS = 7;
-/** Livraison automatique : toutes les 30 s de jeu. */
+/** Après une livraison, la jauge se remplit de nouveau au bout de 24 h de jeu. */
+export const PARTNER_COOLDOWN_S = 86400;
+/** La jauge se remplit depuis le stock toutes les 30 s de jeu. */
 export const PARTNER_ROUND_S = 30;
 
 export const PARTNERS: readonly PartnerDef[] = [
@@ -61,12 +60,16 @@ export const partnerById = (id: string) => PARTNERS.find((p) => p.id === id);
 /** Un partenariat en cours. */
 export interface Partnership {
   id: PartnerId;
-  /** La bière officielle (livrée en premier, et qui gagne la visibilité). */
+  /** La bière officielle (prise en premier pour la jauge, et qui gagne la visibilité). */
   beerId: number;
-  /** Signature (s de jeu) : chaque journée dure 24 h de jeu à partir de là. */
+  /** Signature (s de jeu). */
   start: number;
-  /** Litres livrés chaque journée. */
-  delivered: number[];
+  /** Livraisons faites. */
+  deliveries: number;
+  /** La jauge : les litres déjà mis de côté pour la prochaine livraison, par bière. */
+  gauge: { beerId: number; liters: number }[];
+  /** La jauge se remplit de nouveau à partir de ce moment (s de jeu) : le lendemain d'une livraison. */
+  readyAt: number;
   /** Argent gagné depuis la signature. */
   earned: number;
 }

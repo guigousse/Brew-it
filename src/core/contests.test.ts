@@ -91,16 +91,18 @@ describe('concours', () => {
     expect(g.enterContest(0, b.id).ok).toBe(false); // une seule bière par concours
   });
 
-  it('battre les rivaux donne une médaille, une cocarde et son bonus de vente', () => {
+  it('le jury goûte dès l\'inscription ; battre les rivaux donne une médaille, une cocarde et son bonus de vente', () => {
     const { g, b } = setup(3);
     until(g, () => !!g.contestOf(0));
     const c = g.contestOf(0)!;
     c.cat = TRENDS.find((t) => t.test(b.tasting))!.id;
     c.rivals = [{ name: 'A', score: 18 }, { name: 'B', score: 17 }, { name: 'C', score: 16 }];
     b.tasting = { ...b.tasting, quality: 0.875 }; // 17,5/20 : devant B et C
-    expect(g.enterContest(0, b.id).ok).toBe(true);
     const gems = g.gems;
-    until(g, () => g.contestResults.length > 0, CONTEST_OPEN_S + 10);
+    expect(g.enterContest(0, b.id).ok).toBe(true);
+    // pas d'attente : le jury goûte tout de suite et le concours se clôt
+    expect(g.contestResults).toHaveLength(1);
+    expect(g.contestOf(0)).toBeNull();
     const r = g.contestResults[0]!;
     expect(r.score).toBeGreaterThanOrEqual(17.2);
     expect(r.metal).toBe(1); // argent
