@@ -1034,5 +1034,12 @@ const dict: Record<string, string> = {
   "Pas de place pour un partenariat de plus : agrandis la brasserie": "没有空位签更多合作：扩建酒厂吧",
   "🔒 Plus de place : agrandis la brasserie": "🔒 没有空位：扩建酒厂",
   "{0} : livraison {1}/{2}": "{0}：第 {1}/{2} 次送货",
+  "Gaston : « Le Marketing : une campagne de pub fait connaître toute ta gamme et fait venir les commandes. »": "加斯东：“营销：广告活动让你的全线产品出名，还会带来订单。”",
+  "Gaston : « Les Concours sont ouverts : une médaille fait vendre ta bière plus cher. »": "加斯东：“比赛开放了：奖牌能让你的啤酒卖得更贵。”",
+  "Gaston : « Les Tendances : ce que les gens veulent boire en ce moment. Suis-les, ta bière gagne en popularité. »": "加斯东：“潮流：大家现在想喝什么。跟上潮流，你的啤酒人气就会上升。”",
+  "Gaston : « Nouveau sur l'ordinateur : le tableau de bord, pour suivre tes ventes. »": "加斯东：“电脑上新增了仪表盘，可以查看销售情况。”",
+  "Gaston : « Un club veut ta bière ! Les Partenariats écoulent de gros volumes, bien payés. »": "加斯东：“有俱乐部想要你的啤酒！合作能卖出大批量，报酬丰厚。”",
+  "Nouveau": "新",
+  "Nouveau : {0}": "新功能：{0}",
 };
 export default dict;

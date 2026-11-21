@@ -17,6 +17,7 @@ import { iconCanvas, type IconId } from '../render/icons';
 import { cocardeCanvas, medalName, playCeremony } from './ceremony';
 import { PARTNER_DAYS, partnerById, PARTNERS, type Partnership } from '../core/partners';
 import { drawPartnerScene } from '../render/partnerArt';
+import { featureById, type FeatureId } from '../core/features';
 import { type ContestTier, pointsAsStars, bestMedal, COCARDE_BONUS, CONTEST_BOTTLES, CONTEST_OPEN_S, CONTEST_TIERS, cocardeRank, contestCategory, MEDALS, METALS, openTiers, type ContestResult, type Medal } from '../core/contests';
 import { CRATE, MAX_RANGE, STORAGE } from '../core/warehouse';
 import { BOOST_POSTS, BOOSTS, GEM_PACKS, type GemPack, GEMS, DECOR_ORDER, type DecorId, FURNITURE, LABEL_UNLOCKS, LUXURY_GEMS, STAFF, STAFF_CONTRACT, STAFF_SLOTS, UNLOCK_KINDS, type BoostChannel, type BoostDef, type BoostId, type LabelUnlock, type UnlockKind } from '../core/shop';
@@ -1787,6 +1788,8 @@ export class App {
    * (tableau de bord, messages, commandes, tendances, grossiste) ; chaque application s'ouvre dans une fenêtre.
    */
   openComputer(app: PcApp | null = null): void {
+    const feature = app && featureById(app);
+    if (feature) this.game().seeFeature(feature.id);
     if (this.view !== 'office') this.goView('office');
     this.close();
     this.modal.replaceChildren();
@@ -1936,15 +1939,21 @@ export class App {
       })(),
     };
     const grid = h('div', 'pc-apps');
+    // ouverture progressive : une application n'apparaît qu'une fois ouverte, avec « Nouveau » tant qu'on ne l'a pas vue
     for (const a of PC_APPS) {
-      const b = h('button', 'pc-app');
+      const feature = featureById(a.id);
+      if (feature && !g.hasFeature(feature.id)) continue;
+      const fresh = !!feature && !g.featuresSeen.includes(feature.id);
+      const b = h('button', `pc-app${fresh ? ' fresh' : ''}`);
       const icon = h('span', 'pc-app-icon');
       icon.append(iconCanvas(a.icon, 3));
       b.append(icon, h('span', 'pc-app-name', a.name));
       const bd = badge[a.id];
-      if (bd.text) b.append(h('span', `room-badge pc-badge${bd.hot ? ' hot' : ''}`, bd.text));
+      if (fresh) b.append(h('span', 'pc-new', tl('Nouveau')));
+      else if (bd.text) b.append(h('span', `room-badge pc-badge${bd.hot ? ' hot' : ''}`, bd.text));
       b.setAttribute('aria-label', `${a.name}${bd.text ? ` (${bd.text})` : ''}`);
       b.onclick = () => {
+        if (feature) g.seeFeature(feature.id);
         this.computer!.app = a.id;
         this.renderComputer();
       };
@@ -2403,6 +2412,19 @@ export class App {
       }
       card.append(el);
     }
+  }
+
+  /** Une fonction s'ouvre : Gaston la présente, et un bouton y mène tout de suite. */
+  onFeature(id: FeatureId): void {
+    const f = featureById(id);
+    const a = PC_APPS.find((x) => x.id === id);
+    if (!f || !a) return;
+    sfx.play('carillon');
+    this.log(f.intro, 'good', a.icon);
+    this.toast(tl('Nouveau : {0}', a.name), 'good', { label: tl('Voir'), run: () => {
+      this.game().seeFeature(id);
+      this.openComputer(a.id);
+    } }, 6000);
   }
 
   /** Une livraison vient de partir : un mot, et si l'app est ouverte, les bières volent vers le partenaire. */

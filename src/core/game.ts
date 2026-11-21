@@ -11,7 +11,8 @@ import { CRATE, MAX_RANGE, slotCost, STORAGE } from './warehouse';
 import { APPRENTICE_CHECK_S, APPRENTICE_COST, BOOST_MAX_AHEAD, boostById, GEMS, sameEffect, COURIER_COST, COURIER_ROUND_S, FURNITURE, STAFF_CONTRACT, STAFF_SLOTS, unlockById, isLockable, YEAST_STAGES, DECOR_ORDER, gemPackById, gemPackByProduct, type GemPackId, type DecorId, type BoostChannel, type BoostId, type FurnitureId, type StaffId, type UnlockKind } from './shop';
 import { type PopParts, brandPopularity, litersForSales, nextSalesStep, popParts, popScore, SALES_SLOT_S, SALES_SLOTS, stars, TREND_COUNT, TREND_MAX_S, TREND_MIN_S, TRENDS, trendFactor, trendsOf, type Trend } from './trends';
 import { pointsAsStars, QUALIFY_METAL, type ContestTier, CONTEST_BOTTLES, CONTEST_FIRST_S, CONTEST_GAP_MAX_S, CONTEST_GAP_MIN_S, CONTEST_TIERS, contestFee, drawContest, inCategory, juryScore, medalBonus, openTiers, placeOf, type Contest, type ContestResult, type Medal } from './contests';
-import { PARTNER_COOLDOWN_S, PARTNER_DAYS, PARTNER_ROUND_S, PARTNER_SLOTS, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
+import { PARTNER_COOLDOWN_S, PARTNER_DAYS, PARTNER_ROUND_S, PARTNER_SLOTS, PARTNERS, partnerById, type PartnerDef, type PartnerId, type Partnership } from './partners';
+import { FEATURES, type FeatureId } from './features';
 import { tl } from '../i18n';
 
 /** Prévision de production : fin de chaque brassin (s), et ce qui bloque la file si elle ne se vide pas. */
@@ -320,6 +321,10 @@ export class Game {
   salesSlot = 0;
   /** Contrats en cours, dans l'ordre de signature (leurs jauges se remplissent dans cet ordre). */
   partners: Partnership[] = [];
+  /** Applications de l'ordinateur ouvertes au fil de la progression (et celles déjà consultées). */
+  features: FeatureId[] = [];
+  featuresSeen: FeatureId[] = [];
+  private featureClock = 0;
   /** Minuteur de la livraison automatique au partenaire. */
   private partnerClock = 0;
   /** Partenariats menés à leur terme, par partenaire. */
@@ -1605,6 +1610,35 @@ export class Game {
     }
   }
 
+  // ------------------------------------------------------------------ ouverture progressive
+
+  /** La fonction est-elle ouverte ? */
+  hasFeature(id: FeatureId): boolean {
+    return this.features.includes(id);
+  }
+
+  /** Le joueur a consulté la fonction : la pastille « Nouveau » s'éteint. */
+  seeFeature(id: FeatureId): void {
+    if (!this.featuresSeen.includes(id)) this.featuresSeen.push(id);
+  }
+
+  /** Les fonctions qui viennent de s'ouvrir sont annoncées (pas pendant la visite guidée). */
+  private tickFeatures(dt: number, announce = true): void {
+    if ((this.featureClock += dt) < 2 && announce) return;
+    this.featureClock = 0;
+    if (this.tips < TUTO_DONE) return;
+    const state = {
+      tutoDone: true, ordersDone: this.ordersDone, breweryLevel: this.breweryLevel, beers: this.beers.length,
+      partnerOpen: !this.partnerLock(PARTNERS[0]!),
+    };
+    for (const f of FEATURES) {
+      if (this.features.includes(f.id) || !f.when(state)) continue;
+      this.features.push(f.id);
+      if (announce) this.events.emit({ type: 'feature', id: f.id });
+      else this.featuresSeen.push(f.id);
+    }
+  }
+
   /** Les tendances que suit une bière. */
   trendsOf(b: Beer) {
     return trendsOf(b.tasting, this.trends);
@@ -1906,6 +1940,7 @@ export class Game {
     this.tickTrends();
     this.tickContests();
     this.tickPartner(dt);
+    this.tickFeatures(dt);
     this.rollSales();
     this.updatePop();
     this.announce();
@@ -2211,7 +2246,7 @@ export class Game {
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, partyReadyAt: this.partyReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
       nextId: this.nextId, tips: this.tips, tour: true, offline: this.offline, announced: [...this.announced],
-      contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, partners: this.partners, partnersDone: this.partnersDone,
+      contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, features: this.features, featuresSeen: this.featuresSeen, partners: this.partners, partnersDone: this.partnersDone,
     };
   }
 
@@ -2335,6 +2370,12 @@ export class Game {
     delete (g as unknown as { contestNext?: unknown }).contestNext;
     delete (g as unknown as { contestCount?: unknown }).contestCount;
     g.contestResults ??= [];
+    // avant l'ouverture progressive : tout ce qui est déjà accessible est ouvert, sans annonce
+    if (!(s as { features?: unknown }).features) {
+      g.features = [];
+      g.featuresSeen = [];
+      g.tickFeatures(0, false);
+    }
     // avant les ventes sur 7 jours, la popularité montait vers une cible : on reprend les ventes qui la justifient
     if ((s as { salesSlot?: number }).salesSlot == null) {
       g.salesSlot = Math.floor(g.time / SALES_SLOT_S);

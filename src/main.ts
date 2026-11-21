@@ -11,6 +11,7 @@ import { sfx } from './platform/audio';
 import { App } from './ui/app';
 import { CONTEST_TIERS, contestName, MEDALS, type ContestTier, type Metal } from './core/contests';
 import { partnerById } from './core/partners';
+import type { FeatureId } from './core/features';
 import { locale, tl } from './i18n';
 
 const AUTOSAVE_SECONDS = 20;
@@ -123,6 +124,7 @@ async function boot() {
         const name = CONTEST_TIERS[e.tier]!.name;
         app.log(e.metal != null ? tl('{0} : {1} pour « {2} » !', name, MEDALS[e.metal as Metal], beerName(e.beerId)) : tl('{0} : « {1} » repart sans médaille', name, beerName(e.beerId)), e.metal != null ? 'good' : 'info', 'trophy');
       }
+      if (e.type === 'feature') app.onFeature(e.id as FeatureId);
       if (e.type === 'partnerDelivered') app.onPartnerDelivered(e.id, e.deliveries);
       if (e.type === 'partnerEnd') {
         const p = partnerById(e.id);

@@ -822,6 +822,38 @@ describe('jeu', () => {
   });
 });
 
+describe('ouverture progressive', () => {
+  it('les applications s\'ouvrent au fil de la progression, chacune annoncée une seule fois', () => {
+    const g = withBeer(1e9);
+    g.tips = TUTO_DONE;
+    const opened: string[] = [];
+    g.events.on((e) => e.type === 'feature' && opened.push(e.id));
+    g.step(3);
+    expect(g.hasFeature('trends')).toBe(false);
+    for (const id of STATION_ORDER) g.stations[id] = { level: 2 };
+    g.step(3);
+    expect(g.hasFeature('trends')).toBe(true);
+    expect(opened).toContain('trends');
+    g.step(3);
+    expect(opened.filter((x) => x === 'trends')).toHaveLength(1);
+    expect(g.featuresSeen).not.toContain('trends');
+    g.seeFeature('trends');
+    expect(g.featuresSeen).toContain('trends');
+  });
+
+  it('une ancienne partie ouvre d\'un coup ce qui lui est déjà accessible, sans annonce', () => {
+    const g = withBeer(1e9);
+    g.tips = TUTO_DONE;
+    for (const id of STATION_ORDER) g.stations[id] = { level: 3 };
+    const json = JSON.parse(JSON.stringify(g.toJSON()));
+    delete json.features;
+    delete json.featuresSeen;
+    const back = Game.fromJSON(json);
+    expect(back.hasFeature('contests')).toBe(true);
+    expect(back.featuresSeen).toContain('contests');
+  });
+});
+
 describe('à court d\'argent', () => {
   it('Gaston avance les ingrédients quand le prochain brassin de la file coûte plus que la caisse (même si la recette chargée est moins chère)', () => {
     const g = withBeer(1e5);

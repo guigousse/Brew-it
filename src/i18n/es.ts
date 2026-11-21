@@ -1034,5 +1034,12 @@ const dict: Record<string, string> = {
   "Pas de place pour un partenariat de plus : agrandis la brasserie": "No hay sitio para otro patrocinio: amplía la cervecería",
   "🔒 Plus de place : agrandis la brasserie": "🔒 Sin sitio: amplía la cervecería",
   "{0} : livraison {1}/{2}": "{0}: entrega {1}/{2}",
+  "Gaston : « Le Marketing : une campagne de pub fait connaître toute ta gamme et fait venir les commandes. »": "Gaston: «Marketing: una campaña de publicidad da a conocer toda tu gama y atrae pedidos.»",
+  "Gaston : « Les Concours sont ouverts : une médaille fait vendre ta bière plus cher. »": "Gaston: «Los concursos están abiertos: una medalla hace que tu cerveza se venda más cara.»",
+  "Gaston : « Les Tendances : ce que les gens veulent boire en ce moment. Suis-les, ta bière gagne en popularité. »": "Gaston: «Tendencias: lo que la gente quiere beber ahora mismo. Síguelas y tu cerveza ganará popularidad.»",
+  "Gaston : « Nouveau sur l'ordinateur : le tableau de bord, pour suivre tes ventes. »": "Gaston: «Nuevo en el ordenador: el panel, para seguir tus ventas.»",
+  "Gaston : « Un club veut ta bière ! Les Partenariats écoulent de gros volumes, bien payés. »": "Gaston: «¡Un club quiere tu cerveza! Los patrocinios dan salida a grandes volúmenes, bien pagados.»",
+  "Nouveau": "Nuevo",
+  "Nouveau : {0}": "Nuevo: {0}",
 };
 export default dict;
