@@ -574,9 +574,15 @@ export class App {
       wizBack: () => this.sheet.querySelector<HTMLElement>('.wiz-back'),
       wizPlus: () => this.sheet.querySelector<HTMLElement>('.count-row .knob-btn:last-child'),
       wizGo: () => this.sheet.querySelector<HTMLElement>('.plan-go'),
+      trialGo: () => this.sheet.querySelector<HTMLElement>('.trial-go'),
+      tasteKeep: () => this.modal.querySelector<HTMLElement>('.taste-keep:not(:disabled)'),
+      labelCard: () => this.modal.querySelector<HTMLElement>('.label-card'),
       // au bar : la tireuse, puis la bière dont on branche un fût
       tapLine: () => this.sheet.querySelector<HTMLElement>('.tap-line'),
       kegBeer: () => this.modal.querySelector<HTMLElement>('.keg-swap .tap-line:not(:disabled)'),
+      // à l'ordinateur : l'application Commandes, puis la lettre qu'on peut envoyer
+      pcOrders: () => this.modal.querySelector<HTMLElement>('.pc-app[data-app="orders"]'),
+      orderSend: () => this.modal.querySelector<HTMLElement>('.order-send:not(:disabled)'),
     };
     this.tour = new Tour({
       game: () => this.game(),
@@ -584,7 +590,21 @@ export class App {
       goView: (v) => this.goView(v),
       target: (t: TourTarget) => (t.startsWith('nav:') ? this.navTabs.get(t.slice(4) as View)?.btn ?? null : tourTargets[t]?.() ?? null),
       sheet: () => this.openSheet?.kind ?? null,
-      modal: () => (!this.modalOpen ? null : this.modal.querySelector('.keg-swap') ? 'kegSwap' : 'other'),
+      modal: () => (!this.modalOpen ? null : this.modal.querySelector('.keg-swap') ? 'kegSwap' : this.computer ? 'computer'
+        : this.modal.querySelector('.label-card') ? 'label' : this.modal.querySelector('.taste-keep') ? 'taste' : 'other'),
+      pcApp: () => this.computer?.app ?? null,
+      close: () => {
+        if (this.modalOpen) this.closeModal();
+        if (this.openSheet) this.close();
+      },
+      finish: () => {
+        const gems = this.game().finishTour();
+        if (!gems) return;
+        sfx.play('levelUp');
+        this.celebrate();
+        this.toast(tl('Cadeau de Gaston : +{0} 💎', gems), 'good');
+        this.fly(this.stage, this.gemsPill, 8, () => iconCanvas('gem', 1, 'fly fly-gem'));
+      },
       wiz: () => (this.openSheet?.kind === 'brew' && this.wiz ? { step: this.wiz.step, format: this.wiz.format, count: this.wiz.count } : null),
       gift: () => {
         const gems = this.game().openGift();
@@ -1370,7 +1390,7 @@ export class App {
     const can = g.canBrew();
     const busy = !!g.batchAt('mill');
     const label = g.queued ? tl('En attente du moulin…') : can.ok ? (g.broke ? tl('Brasser (offert par Gaston)') : tl('Brasser l\'essai')) : busy ? tl('Brasser au prochain tour') : can.reason!;
-    const go = this.btn('btn primary big', label, () => {
+    const go = this.btn('btn primary big trial-go', label, () => {
       const r = busy ? g.queueBrew() : g.brew();
       if (!r.ok) return this.toast(r.reason!, 'bad');
       sfx.play('pop');
@@ -2007,6 +2027,7 @@ export class App {
       const inside = FEATURES.filter((f) => featureApp(f.id) === a.id && g.hasFeature(f.id));
       const fresh = inside.some((f) => !g.featuresSeen.includes(f.id));
       const b = h('button', `pc-app${fresh ? ' fresh' : ''}`);
+      b.dataset.app = a.id;
       const icon = h('span', 'pc-app-icon');
       icon.append(iconCanvas(a.icon, 3));
       b.append(icon, h('span', 'pc-app-name', a.name));
@@ -3067,7 +3088,7 @@ export class App {
     const ok = t.quality >= DRINKABLE_MIN;
     const full = g.beers.length >= g.rangeSlots;
     const slotCost = g.nextSlotCost;
-    const keep = this.btn('btn primary big', ok ? (full ? tl('Gamme pleine') : tl('Garder cette bière')) : tl('Imbuvable'), () => {
+    const keep = this.btn('btn primary big taste-keep', ok ? (full ? tl('Gamme pleine') : tl('Garder cette bière')) : tl('Imbuvable'), () => {
       this.openLabelEditor(g.beers.length ? '' : tl('Blonde de Gaston'), { ...DEFAULT_LABEL }, (name, label) => {
         const r = g.keepTrial(name, label);
         if (!r.ok) return this.toast(r.reason!, 'bad');
@@ -3186,7 +3207,8 @@ export class App {
     card.append(stones);
     chooser(tl('Police du nom'), 'font', FONTS);
     colors(tl('Couleur du texte et du contour'), 'textColor');
-    card.append(this.btn('btn primary big', tl('Valider l\'étiquette'), () => onDone(input.value, label)));
+    card.classList.add('label-card');
+    card.append(this.btn('btn primary big label-done', tl('Valider l\'étiquette'), () => onDone(input.value, label)));
     redraw();
     void document.fonts?.ready.then(redraw);
   }

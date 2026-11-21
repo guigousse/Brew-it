@@ -269,7 +269,7 @@ function session(minutes: number) {
   // les missions remplies se récoltent
   for (let r = g.claimMission(); r; r = g.claimMission()) MISSIONS_DONE.push(`${fmt(clock)} ${g.missionIndex}`);
   // la visite guidée est finie au bout de la première session : les fûts se changent et la file se reprogramme toute seule
-  g.tips = Math.max(g.tips, TUTO_DONE);
+  if (g.tips < TUTO_DONE) g.finishTour();
   // avant de partir, on remplit la file de brassins (en bouteilles, la gamme à tour de rôle)
   for (let i = 0; g.beers.length && g.planRoom > 0 && i < 500; i++) g.planBrew(g.beers[i % g.beers.length]!.id, 'bottle');
 }

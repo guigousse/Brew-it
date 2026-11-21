@@ -858,7 +858,11 @@ button:disabled { cursor: default; opacity: .5; }
 .tour-text { margin: 0; font-size: 19px; line-height: 1.2; }
 .tour-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tour-skip { margin-left: auto; padding: 4px 0; font: inherit; font-size: 15px; color: var(--dim); background: none; border: 0; text-decoration: underline; }
-.tour-spot.hidden, .tour-finger.hidden, .tour-bubble.hidden { display: none; }
+.tour-block { position: fixed; z-index: 12; background: transparent; touch-action: none; }
+.tour-bubble.nudge { animation: tour-nudge .4s steps(4); }
+.tour-finger.nudge .tour-finger-tap { animation: finger-tap .3s steps(3) 3; }
+@keyframes tour-nudge { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.tour-spot.hidden, .tour-finger.hidden, .tour-bubble.hidden, .tour-block.hidden { display: none; }
 @media (prefers-reduced-motion: reduce) { .tour-spot, .tour-finger-tap { animation: none; } .tour-finger, .tour-spot { transition: none; } }
 
 /* ---------------------------------------------------------------- popularité expliquée */

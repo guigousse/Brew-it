@@ -48,6 +48,12 @@ export const TUTO_DONE = 100;
 export const TUTO_RUSH_BATCHES = 3;
 /** Le cadeau de bienvenue de Gaston : un boost des machines offert pendant la visite. */
 export const TUTO_GIFT = { boost: 'fullSpeed', minutes: 30 } as const;
+/** Les diamants que Gaston offre à la fin de la visite guidée (le joueur part de zéro). */
+export const TUTO_GEMS = 25;
+/** Pendant la visite, les fûts vont encore plus vite que le reste : le joueur ne les attend pas. */
+export const TUTO_KEG_RUSH = 0.025;
+/** Pendant la visite, l'essai sort pendant qu'on visite le stockage et le bar. */
+export const TUTO_TRIAL_RUSH = 0.1;
 /**
  * Contre le spam de la proposition « Doubler tes gains ? » : il faut une absence d'au moins 15 min, et 30 min
  * depuis la dernière proposition (regardée, refusée ou fermée). Le plafond de 3 pubs par jour s'y ajoute.
@@ -321,6 +327,8 @@ export class Game {
   tips = 0;
   /** Le cadeau de bienvenue de Gaston (un boost des machines, pendant la visite) a été ouvert. */
   giftTaken = false;
+  /** Les diamants de fin de visite ont été offerts. */
+  welcomeGems = false;
   /** Gains de la dernière absence, en attente de récolte. */
   offline: OfflineReport | null = null;
   /** Les trois concours en cours (régional, national, international), ou null entre deux sessions. */
@@ -2105,7 +2113,7 @@ export class Game {
       : this.stationTime(id, r, b.bottles != null ? b.bottles * BOTTLE_L : b.liters);
     // Gaston donne un coup de main, tout va 4 fois plus vite : le tout premier brassin, et pendant la visite
     // guidée, l'essai et les deux premiers brassins programmés (les fûts du bar)
-    if (this.tutoRush) b.duration *= 0.25;
+    if (this.tutoRush) b.duration *= this.tips >= TUTO_DONE ? 0.25 : b.format === 'keg' ? TUTO_KEG_RUSH : TUTO_TRIAL_RUSH;
     this.events.emit({ type: 'stage', batchId: b.id, stage });
   }
 
@@ -2120,6 +2128,22 @@ export class Game {
    * Une seule fois par partie. Il prolonge un boost des machines au même effet ; si un autre effet tourne déjà sur
    * ce poste, Gaston donne à la place les diamants qu'il vaut. Renvoie les diamants donnés (0 : le boost est parti).
    */
+  /** Fin de la visite guidée (finie ou passée) : Gaston offre ses diamants, une seule fois. Renvoie les diamants donnés. */
+  finishTour(): number {
+    this.tips = TUTO_DONE;
+    if (this.welcomeGems) return 0;
+    this.welcomeGems = true;
+    this.gems += TUTO_GEMS;
+    return TUTO_GEMS;
+  }
+
+  /** Pendant la visite : la première lettre arrive tout de suite, pour apprendre à livrer une commande. */
+  tourLetter(): void {
+    if (this.tips >= TUTO_DONE || this.orders.length || this.ordersDone > 0 || !this.orderWaits.length) return;
+    const i = this.orderWaits.indexOf(Math.min(...this.orderWaits));
+    this.orderWaits[i] = 0;
+  }
+
   openGift(): number {
     if (this.giftTaken) return 0;
     this.giftTaken = true;
@@ -2377,7 +2401,7 @@ export class Game {
       selectedBeer: this.selectedBeer, batches: this.batches, trial: this.trial, beers: this.beers,
       queued: this.queued, rangeSlots: this.rangeSlots, storageLevel: this.storageLevel, storageStep: this.storageStep, planExtra: this.planExtra, barLevel: this.barLevel, taps: this.taps, barDemand: this.barDemand, trends: this.trends, plan: this.plan, format: this.format,
       barSold: this.barSold, barRevenue: this.barRevenue, orders: this.orders, expiredAt: this.expiredAt, orderWaits: this.orderWaits, tanks: this.tanks, partyUntil: this.partyUntil, eventReadyAt: this.eventReadyAt, eventId: this.eventId, owned: this.owned, barmanUntil: this.barmanUntil, barMessage: this.barMessage, adUntil: this.adUntil, adId: this.adId, adPrestige: this.adPrestige, boosts: this.boosts, purchases: this.purchases, packsBought: this.packsBought, staffUntil: this.staffUntil, furniture: this.furniture, unlocked: this.unlocked, lastPlan: this.lastPlan, ordersDone: this.ordersDone, computerLevel: this.computerLevel, wholesaleLiters: this.wholesaleLiters, autoWholesale: this.autoWholesale, wall: this.wall, quotaDay: this.quotaDay, wsToday: this.wsToday, adViews: this.adViews, doubleOfferAt: this.doubleOfferAt, totalSold: this.totalSold, totalLiters: this.totalLiters, totalRevenue: this.totalRevenue, ordersRevenue: this.ordersRevenue, wholesaleRevenue: this.wholesaleRevenue, salesHistory: this.salesHistory, batchesDone: this.batchesDone,
-      nextId: this.nextId, tips: this.tips, giftTaken: this.giftTaken, tour: true, offline: this.offline, announced: [...this.announced],
+      nextId: this.nextId, tips: this.tips, giftTaken: this.giftTaken, welcomeGems: this.welcomeGems, tour: true, offline: this.offline, announced: [...this.announced],
       contests: this.contests, contestNexts: this.contestNexts, contestResults: this.contestResults, salesSlot: this.salesSlot, features: this.features, featuresSeen: this.featuresSeen, missionIndex: this.missionIndex, partners: this.partners, partnersDone: this.partnersDone,
     };
   }
@@ -2485,7 +2509,9 @@ export class Game {
     }
     // la monnaie premium s'appelait « capsules » : elles deviennent des diamants, à nombre égal
     const oldCaps = (g as unknown as { caps?: number }).caps;
-    if ((s as { gems?: number }).gems == null) g.gems = oldCaps ?? GEMS.start;
+    if ((s as { gems?: number }).gems == null) g.gems = oldCaps ?? GEMS.legacyStart;
+    // les parties d'avant recevaient leurs diamants au départ : pas de second cadeau en fin de visite
+    if ((s as { welcomeGems?: boolean }).welcomeGems == null) g.welcomeGems = g.tips >= TUTO_DONE || g.gems > 0;
     delete (g as unknown as { caps?: unknown }).caps;
     // la campagne de pub ne se vend plus au magasin (elle reste dans l'ordinateur)
     delete (g.boosts as Record<string, unknown>).ad;

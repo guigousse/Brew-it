@@ -14,7 +14,10 @@ import { tl } from '../i18n';
  * l'achat avec de l'argent réel viendra plus tard.
  */
 export const GEMS = {
-  start: 25,
+  /** Au départ : rien. Gaston en offre 25 à la fin de la visite guidée (`TUTO_GEMS`). */
+  start: 0,
+  /** Ce que recevaient les anciennes parties au départ. */
+  legacyStart: 25,
   /** En atteignant chaque niveau de la brasserie (indice = niveau atteint). */
   breweryLevel: [0, 0, 15, 25, 40, 60] as readonly number[],
 } as const;

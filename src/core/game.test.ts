@@ -1051,6 +1051,35 @@ describe('diamants', () => {
     expect(back.packAvailable('starter')).toBe(false);
   });
 
+  it('Gaston offre 25 diamants à la fin de la visite, une seule fois (on part de zéro)', () => {
+    const g = new Game();
+    expect(g.gems).toBe(0);
+    expect(g.finishTour()).toBe(25);
+    expect(g.tips).toBe(TUTO_DONE);
+    expect(g.gems).toBe(25);
+    expect(g.finishTour()).toBe(0);
+    expect(Game.fromJSON(JSON.parse(JSON.stringify(g))).finishTour()).toBe(0);
+    // une ancienne partie, déjà servie au départ, n'a pas de second cadeau
+    const raw = JSON.parse(JSON.stringify(new Game()));
+    delete raw.welcomeGems;
+    raw.gems = 25;
+    expect(Game.fromJSON(raw).finishTour()).toBe(0);
+  });
+
+  it('pendant la visite, la première lettre arrive à la demande, et les fûts vont très vite', () => {
+    const g = withBeer(1e4);
+    while (g.batches.length) g.step(0.5); // l'essai finit de s'embouteiller
+    expect(g.orders).toHaveLength(0);
+    g.tourLetter();
+    g.step(0.5);
+    expect(g.orders).toHaveLength(1);
+    expect(g.orders[0]!.qty).toBeLessThanOrEqual(g.beers[0]!.stock); // la blonde de la visite suffit
+    expect(g.planBrew(g.beers[0]!.id, 'keg', 1).ok).toBe(true);
+    let t = 0;
+    while (!g.beers[0]!.kegs.length && t < 600) { g.step(0.5); t += 0.5; }
+    expect(t).toBeLessThan(15);
+  });
+
   it('on en gagne au départ, par commande livrée et par niveau de la brasserie', () => {
     const g = withBeer(1e7);
     expect(g.gems).toBe(GEMS.start);
@@ -1086,7 +1115,7 @@ describe('diamants', () => {
     const g = withBeer(1e6);
     const raw = JSON.parse(JSON.stringify(g.toJSON()));
     delete raw.gems;
-    expect(Game.fromJSON(raw).gems).toBe(GEMS.start);
+    expect(Game.fromJSON(raw).gems).toBe(GEMS.legacyStart);
   });
 
   it('les capsules d\'une sauvegarde deviennent des diamants', () => {
@@ -1141,6 +1170,7 @@ describe('emplacements du tableau des commandes', () => {
 describe('personnel', () => {
   it('le livreur se loue pour 8 h, prolongeable jusqu\'à 24 h', () => {
     const g = withBeer(1e6);
+    g.gems = 25;
     expect(g.hire('courier').ok).toBe(true);
     expect(g.hire('courier').ok).toBe(true);
     expect(g.hire('courier').ok).toBe(true);
@@ -1149,6 +1179,7 @@ describe('personnel', () => {
 
   it('le livreur envoie les commandes remplissables', () => {
     const g = withBeer(1e6);
+    g.gems = 25;
     g.beers[0]!.stock = 500;
     g.orders = [{ ...drawOrder(999, { rng: new Rng(3), time: g.time, breweryLevel: 1, brand: 0, beers: 1, storageCap: g.storageCap, kegLiters: 5, trends: [] }), kind: 'classic', qty: 12, minQuality: 0 } as Order];
     expect(g.readyOrders.length).toBe(1);
