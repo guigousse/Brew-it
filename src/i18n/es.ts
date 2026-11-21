@@ -1061,5 +1061,11 @@ const dict: Record<string, string> = {
   "Il vide seul le surplus quand le stockage est plein. Son prix baisse dans la journée et revient à minuit.": "Vacía solo el excedente cuando el almacén está lleno. Su precio baja durante el día y vuelve a medianoche.",
   "Contrat au maximum (24 h)": "Contrato al máximo (24 h)",
   "Livreur pour 8 h : {0}": "Repartidor por 8 h: {0}",
+  "Missions": "Misiones",
+  "Mission remplie : {0}": "Misión cumplida: {0}",
+  "Toutes les missions sont remplies. Bravo !": "Todas las misiones cumplidas. ¡Bravo!",
+  "Mission {0} sur {1}": "Misión {0} de {1}",
+  "Récompense : {0}": "Recompensa: {0}",
+  "Ensuite": "Después",
 };
 export default dict;

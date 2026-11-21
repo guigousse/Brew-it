@@ -1,4 +1,4 @@
-import { tl } from '../i18n';
+import { locale, tl } from '../i18n';
 
 /**
  * Missions : un objectif à la fois, toujours visible dans un bandeau, avec une récompense. Elles suivent la
@@ -68,3 +68,7 @@ export const missionText = (d: MissionDef) => tl(d.text, d.target);
 /** Les objectifs qui se comptent (commandes, verres…) affichent « 3/10 » ; un palier à atteindre, non. */
 const STEPS = new Set(['garage', 'micro', 'factory', 'lab', 'storage2', 'bar3', 'stars3', 'stars45', 'beers2']);
 export const missionCounted = (d: MissionDef) => d.target > 1 && !STEPS.has(d.id);
+
+/** La récompense en clair : « +500 € +3 💎 ». */
+export const missionReward = (d: MissionDef) =>
+  [d.money ? `+${d.money.toLocaleString(locale)} €` : '', d.gems ? `+${d.gems} 💎` : ''].filter(Boolean).join(' ');

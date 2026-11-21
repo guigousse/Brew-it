@@ -1122,3 +1122,12 @@ button:disabled { cursor: default; opacity: .5; }
 .ws-beer .stock-line { min-width: 0; }
 .ws-beer .ws-quota { font-size: 14px; }
 .btn.courier-hire { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.act.hidden { display: none; }
+.missions-body { display: grid; gap: 8px; }
+.mission-card { display: grid; gap: 6px; padding: 8px 10px; background: var(--panel-2); border: 2px solid var(--ink); box-shadow: inset 0 0 0 2px #5c4a6e; }
+.mission-card.done { box-shadow: inset 0 0 0 2px var(--accent); background: #4a3410; }
+.mission-card .mission-text { font-size: 19px; line-height: 1.15; }
+.mission-card .mission-reward { color: var(--accent); margin-left: 0; }
+.mission-card .mission-foot { display: flex; gap: 8px; align-items: center; }
+.mission-card .mission-bar { height: 10px; }
+.mission-next { color: var(--dim); padding: 4px 6px; border-left: 2px solid #5c4a6e; }

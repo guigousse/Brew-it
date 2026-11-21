@@ -1061,5 +1061,11 @@ const dict: Record<string, string> = {
   "Il vide seul le surplus quand le stockage est plein. Son prix baisse dans la journée et revient à minuit.": "仓库满了时他会自动清走多余的货。他的价格白天下降，午夜恢复。",
   "Contrat au maximum (24 h)": "合同已达上限（24 小时）",
   "Livreur pour 8 h : {0}": "配送员 8 小时：{0}",
+  "Missions": "任务",
+  "Mission remplie : {0}": "任务完成：{0}",
+  "Toutes les missions sont remplies. Bravo !": "所有任务都已完成。太棒了！",
+  "Mission {0} sur {1}": "第 {0} 个任务，共 {1} 个",
+  "Récompense : {0}": "奖励：{0}",
+  "Ensuite": "接下来",
 };
 export default dict;
