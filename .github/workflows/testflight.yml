@@ -16,7 +16,7 @@ name: TestFlight
 on:
   workflow_dispatch:
   push:
-    branches: [main, claude/project-foundation]
+    branches: [main, claude/project-foundation, claude/idle-prototype]
     paths: ['.github/testflight-request']
 
 concurrency:

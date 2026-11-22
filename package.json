@@ -13,7 +13,8 @@
     "roi": "vite-node scripts/roi.ts",
     "typecheck": "tsc --noEmit",
     "ios:sync": "npm run build && npx cap sync ios",
-    "ios:open": "npx cap open ios"
+    "ios:open": "npx cap open ios",
+    "idle-balance": "vite-node scripts/idle-balance.ts"
   },
   "repository": {
     "type": "git",
